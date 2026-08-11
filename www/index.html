@@ -3344,8 +3344,20 @@ termux-reload-settings</div>
         typeof idOrOpts === 'string' ? { providerId: idOrOpts } : (idOrOpts || {})),
       chat: (opts) => call('ai.chat', opts || {}),
       /**
+       * Speech-to-text via host AI (OpenAI Whisper / xAI /stt). Not Gemini.
+       * opts: {
+       *   dataUrl|base64|file|audio,
+       *   mime?, name?, language?|lang?, model?, providerId?,
+       *   encoding?:'pcm_s16le', sampleRate?, channels?  // raw PCM auto-wrapped as WAV
+       * }
+       * -> { ok, text, transcript, provider, providerId, model, language }
+       */
+      transcribe: (opts) => call('ai.transcribe', opts || {}),
+      /** Alias of ai.transcribe */
+      stt: (opts) => call('ai.transcribe', opts || {}),
+      /**
        * TTS via host AI provider (cloud /audio/speech) or on-device engine.
-       * opts: { text, voice?, mode:'auto'|'cloud'|'native', play?, returnAudio?, rate?, lang?, format? }
+       * opts: { text, voice?, mode:'auto'|'cloud'|'native', play?, returnAudio?, rate?, lang?, format?, route? }
        * Cloud uses the same key/provider as ai.chat. Returns { ok, via, dataUrl?, base64?, spoken, ... }.
        */
       tts: (opts) => call('ai.tts', typeof opts === 'string' ? { text: opts } : (opts || {})),
@@ -5370,6 +5382,56 @@ termux-reload-settings</div>
         }
 
 
+        // ——— AI STT (Whisper / xAI) ———
+        case 'ai.transcribe':
+        case 'ai.stt': {
+          const providerId = resolveMiniAppProviderId(params);
+          // Do not override chat model with whisper id — STT model is form-only.
+          const sttModel = params.model || params.sttModel || params.whisperModel || null;
+          return await withAiRuntime(providerId, null, async (rt) => {
+            if (!(rt.key && String(rt.key).trim()) && !rt.allowEmptyKey) {
+              throw new Error(
+                'Host AI key required for transcription. Set a key in Forge AI settings ' +
+                '(OpenAI / Groq / xAI). Gemini chat-only providers are not supported for STT.'
+              );
+            }
+            const backend = backendForRuntime(rt);
+            if (backend === 'gemini') {
+              throw new Error(
+                'ai.transcribe does not support Gemini. Use OpenAI, Groq, xAI, or another Whisper-compatible provider.'
+              );
+            }
+            const part = (params && (params.file || params.audio)) || params || {};
+            const language = params.language || params.lang || part.language || part.lang || null;
+            const result = await transcribeAudioFile({
+              base64: part.base64 || params.base64,
+              dataUrl: part.dataUrl || params.dataUrl || part.dataURL || params.dataURL,
+              mime: part.mime || params.mime,
+              name: part.name || params.name,
+              language,
+              model: sttModel || part.model || null,
+              encoding: part.encoding || params.encoding || null,
+              sampleRate: part.sampleRate || params.sampleRate,
+              channels: part.channels || params.channels,
+              pcm: part.pcm || params.pcm,
+              bitsPerSample: part.bitsPerSample || params.bitsPerSample,
+            });
+            const text = typeof result === 'string' ? result : (result && result.text) || '';
+            return {
+              ok: true,
+              text,
+              transcript: text,
+              language: language || null,
+              provider: rt.provider?.label || '',
+              providerId: rt.providerId,
+              model: (typeof result === 'object' && result && result.model) || sttModel || (isXaiHostProvider() ? 'stt' : 'whisper-1') || '',
+              backend,
+              mime: (typeof result === 'object' && result && result.mime) || null,
+              bytes: (typeof result === 'object' && result && result.bytes) || null,
+            };
+          });
+        }
+
         // ——— AI convenience: TTS + voice list via host AI runtime ———
         // Cloud TTS uses the same provider/key as ai.chat (OpenAI-compatible /audio/speech).
         // mode: 'auto' | 'cloud' | 'native'  (also accepts via: 'cloud'|'native')
@@ -6396,6 +6458,7 @@ Host AI (uses the user's Forge-configured providers/keys — NEVER embed API key
   //  - OpenAI-compatible: same input_file shape; audio via /v1/audio/transcriptions when present
   // input_file example part: { type:'input_file', filename:'doc.pdf', file_data:'data:application/pdf;base64,...' }
   // Check: (await ForgeHost.ai.isAvailable()).backend / .richAttachments / .stt / .providers
+  // STT: ForgeHost.ai.transcribe / ai.stt  (requires .stt true — OpenAI/Groq/xAI)
   Only call after an explicit user action. Cap sizes (~25MB).
 
 Files (ALWAYS use ForgeHost — never <input type=file> inside the mini-app iframe):
@@ -6500,6 +6563,21 @@ Text-to-speech:
   await ForgeHost.tts.stop()
   await ForgeHost.tts.getVoices() / getLanguages() / setLanguage(lang)
   Prefer ForgeHost.ai.tts for voice assistants; use ForgeHost.tts for offline/device voices.
+
+Speech-to-text (cloud STT — Patch 2):
+  // Needs OpenAI / Groq Whisper / xAI /stt (not Gemini). Same keys as ai.chat.
+  await ForgeHost.ai.transcribe({ dataUrl: wav.dataUrl, language:'en' })
+  // -> { ok, text, transcript, provider, providerId, model }
+  // From mic WAV:
+  const wav = await ForgeHost.mic.record({ durationMs:2500, sampleRate:16000 })
+  const { text } = await ForgeHost.ai.transcribe({ dataUrl: wav.dataUrl, mime: wav.mime, language:'es' })
+  // From a mic.pcm chunk (raw s16le → host wraps WAV):
+  await ForgeHost.ai.transcribe({
+    base64: chunk.base64, encoding:'pcm_s16le', sampleRate: chunk.sampleRate || 16000,
+    channels: 1, language:'en'
+  })
+  // Alias: ForgeHost.ai.stt({ ... })
+  // Caps: (await ForgeHost.ai.isAvailable()).stt
 
 Audio output routing (force speaker / earpiece / headset / bluetooth):
   // Routes: auto|default|speaker|earpiece|wired|bluetooth|communication
@@ -6954,28 +7032,106 @@ General:
      * xAI: POST {root}/stt (multipart)
      * OpenAI-compatible: POST {root}/audio/transcriptions (whisper-1)
      */
+        /** Wrap raw PCM s16le base64 into a WAV base64 payload. */
+    function pcmS16leToWavBase64(pcmB64, sampleRate, channels) {
+      const sr = Math.max(8000, Math.min(48000, Number(sampleRate) || 16000));
+      const ch = Math.max(1, Math.min(2, Number(channels) || 1));
+      const clean = String(pcmB64 || '').replace(/\s+/g, '');
+      if (!clean) throw new Error('Empty PCM data');
+      const bin = atob(clean);
+      const pcmLen = bin.length;
+      const buffer = new ArrayBuffer(44 + pcmLen);
+      const view = new DataView(buffer);
+      const writeStr = (off, s) => {
+        for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+      };
+      writeStr(0, 'RIFF');
+      view.setUint32(4, 36 + pcmLen, true);
+      writeStr(8, 'WAVE');
+      writeStr(12, 'fmt ');
+      view.setUint32(16, 16, true); // PCM chunk size
+      view.setUint16(20, 1, true); // audio format PCM
+      view.setUint16(22, ch, true);
+      view.setUint32(24, sr, true);
+      const blockAlign = ch * 2;
+      view.setUint32(28, sr * blockAlign, true);
+      view.setUint16(32, blockAlign, true);
+      view.setUint16(34, 16, true);
+      writeStr(36, 'data');
+      view.setUint32(40, pcmLen, true);
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < pcmLen; i++) bytes[44 + i] = bin.charCodeAt(i);
+      // chunked btoa for large buffers
+      let out = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        const slice = bytes.subarray(i, i + chunk);
+        out += String.fromCharCode.apply(null, slice);
+      }
+      return btoa(out);
+    }
+
+    /**
+     * Cloud STT for a single audio blob.
+     * Accepts base64/dataUrl; raw pcm_s16le is wrapped as WAV.
+     * Returns transcript string (legacy) — callers may also receive structured via ai.transcribe.
+     */
     async function transcribeAudioFile(p) {
+      const rt = getAiRuntime();
+      const backend = backendForRuntime(rt);
+      if (backend === 'gemini') {
+        throw new Error('STT not supported for Gemini provider — use OpenAI/Groq/xAI');
+      }
       const root = providerApiRoot().replace(/\/+$/, '');
-      const key = String(getAiRuntime().key || '').trim();
-      if (!key) throw new Error('API key required for transcription');
-      const mime = p.mime || 'audio/mpeg';
-      const name = p.name || ('audio.' + audioFormatFromMime(mime, p.name));
-      const b64 = extractBase64(p);
-      if (!b64) throw new Error('No audio data');
-      const blob = b64ToBlob(b64, mime);
+      const key = String(rt.key || '').trim();
+      if (!key && !rt.allowEmptyKey) throw new Error('API key required for transcription');
+
+      let mime = p.mime || '';
+      let name = p.name || '';
+      let b64 = extractBase64(p);
+      const encoding = String(p.encoding || '').toLowerCase();
+      const wantsPcm =
+        p.pcm === true ||
+        encoding === 'pcm_s16le' ||
+        encoding === 'pcm' ||
+        /audio\/pcm/i.test(mime) ||
+        /audio\/l16/i.test(mime);
+
+      if (!b64) throw new Error('No audio data (need base64 or dataUrl)');
+
+      if (wantsPcm) {
+        const sr = Number(p.sampleRate) || 16000;
+        const ch = Number(p.channels) || 1;
+        b64 = pcmS16leToWavBase64(b64, sr, ch);
+        mime = 'audio/wav';
+        name = (name || 'audio').replace(/\.[^.]+$/, '') + '.wav';
+      } else {
+        if (!mime) {
+          const du = String(p.dataUrl || '');
+          const m = du.match(/^data:([^;,]+)/i);
+          mime = (m && m[1]) || 'audio/mpeg';
+        }
+        if (!name) name = 'audio.' + audioFormatFromMime(mime, name);
+      }
+
+      const blob = b64ToBlob(b64, mime || 'application/octet-stream');
       const headers = providerAuthHeaders();
+      // multipart: do not force Content-Type (boundary)
+      try { delete headers['Content-Type']; } catch (_) {}
 
       const sttUrl = isXaiHostProvider()
         ? `${root}/stt`
         : `${root}/audio/transcriptions`;
 
       const form = new FormData();
-      form.append('file', blob, name);
+      form.append('file', blob, name || 'audio.wav');
+      const language = p.language || p.lang || null;
       if (isXaiHostProvider()) {
-        form.append('language', 'en');
+        if (language) form.append('language', String(language));
         form.append('format', 'true');
       } else {
-        form.append('model', 'whisper-1');
+        form.append('model', String(p.model || 'whisper-1'));
+        if (language) form.append('language', String(language));
         form.append('response_format', 'json');
       }
 
@@ -6983,17 +7139,20 @@ General:
       const text = await res.text();
       if (!res.ok) throw new Error(`STT ${res.status}: ${text.slice(0, 300)}`);
       let data;
-      try { data = JSON.parse(text); } catch { return text.trim(); }
+      try { data = JSON.parse(text); } catch {
+        const t = text.trim();
+        if (!t) throw new Error('Empty transcript');
+        return t;
+      }
       const transcript =
         data.text ||
         data.transcript ||
         data.result ||
-        (Array.isArray(data.segments) ? data.segments.map(s => s.text).join(' ') : '') ||
+        (Array.isArray(data.segments) ? data.segments.map(s => s.text || '').join(' ') : '') ||
         '';
       if (!String(transcript).trim()) throw new Error('Empty transcript');
       return String(transcript).trim();
     }
-
 
     /** OpenAI-compatible TTS voices (POST {root}/audio/speech). */
     const OPENAI_TTS_VOICES = [

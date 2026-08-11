@@ -268,3 +268,20 @@ await ForgeHost.mic.stopStream()
 ```
 
 Next: Patch 2 `ai.transcribe`.
+
+## ai.transcribe (2026-08-11)
+
+Shipped in host **2.6.4 / versionCode 36** (Patch 2 of live-translate re-land):
+
+- `ForgeHost.ai.transcribe` / `ai.stt`
+- Accepts dataUrl/base64; raw `pcm_s16le` auto-wrapped as WAV
+- language/lang + model; providerId via withAiRuntime
+- Rejects Gemini with clear error
+- Uses existing Whisper / xAI `/stt` path
+
+```js
+const wav = await ForgeHost.mic.record({ durationMs:2000 })
+const { text } = await ForgeHost.ai.transcribe({ dataUrl: wav.dataUrl, language:'en' })
+```
+
+Next: Patch 3 `ai.liveTranslate` session.
