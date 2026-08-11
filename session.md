@@ -228,3 +228,22 @@ await ForgeHost.ai.liveTranslate.stop()
 [ ] Provider has STT (OpenAI/Groq/xAI)
 [ ] Never ship index.html.with-live-backup without diff review
 ```
+
+## Audio output routing (2026-08-11)
+
+Shipped in host **2.6.2 / versionCode 34**:
+
+- Native `AudioRouteBridge` + `AudioRouteHelper`
+- ForgeHost: `audio.getRoute/setRoute/clearRoute/listOutputs/play/stop`
+- `tts.speak` + `ai.tts` accept `route` / `output`
+- Routes: `auto|default|speaker|earpiece|wired|bluetooth|communication`
+- Permissions: `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH` (≤30), `BLUETOOTH_CONNECT`
+- Best-effort; API 31+ communication device. No AEC yet.
+
+Smoke:
+```js
+await ForgeHost.audio.setRoute('speaker')
+await ForgeHost.tts.speak('hello speaker', { route:'speaker' })
+await ForgeHost.audio.clearRoute()
+```
+

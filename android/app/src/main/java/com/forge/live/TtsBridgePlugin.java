@@ -151,9 +151,14 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
         }
         PluginCall c = this.speakingCall;
         this.speakingCall = null;
+        try {
+            AudioRouteHelper.restore(getContext());
+        } catch (Exception ignored) {
+        }
         if (ok) {
             JSObject ret = new JSObject();
             ret.put("spoken", true);
+            ret.put("route", AudioRouteHelper.getLastApplied());
             c.resolve(ret);
             return;
         }
@@ -184,6 +189,12 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
             }
         } else {
             o.put("speaking", false);
+        }
+        try {
+            o.put("route", AudioRouteHelper.getStickyRoute());
+            o.put("routeApplied", AudioRouteHelper.getLastApplied());
+            o.put("supportedRoutes", AudioRouteHelper.supportedRoutesArray());
+        } catch (Exception ignored) {
         }
         return o;
     }
@@ -336,10 +347,15 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
             final double pitchD = call.getDouble("pitch", Double.valueOf(1.0d)).doubleValue();
             final boolean queue = Boolean.TRUE.equals(call.getBoolean("queue", false));
             final boolean wait = !Boolean.FALSE.equals(call.getBoolean("wait", true));
+            String routeRaw = call.getString("route", null);
+            if (routeRaw == null) {
+                routeRaw = call.getString("output", null);
+            }
+            final String route = AudioRouteHelper.resolve(routeRaw);
             enqueueWhenReady(call, new Runnable() {
                 @Override // java.lang.Runnable
                 public final void run() {
-                    TtsBridgePlugin.this.lambda$speak$8(lang, voiceName, rateD, pitchD, queue, call, wait, text2);
+                    TtsBridgePlugin.this.lambda$speak$8(lang, voiceName, rateD, pitchD, queue, call, wait, text2, route);
                 }
             });
             return;
@@ -355,7 +371,13 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
     /*
         Code decompiled incorrectly, please refer to instructions dump.
     */
-    public /* synthetic */ void lambda$speak$8(String str, String str2, double d, double d2, boolean z, PluginCall pluginCall, boolean z2, String str3) {
+    public /* synthetic */ void lambda$speak$8(String str, String str2, double d, double d2, boolean z, PluginCall pluginCall, boolean z2, String str3, String route) {
+        try {
+            String r = route != null ? route : AudioRouteHelper.ROUTE_AUTO;
+            AudioRouteHelper.apply(getContext(), r);
+            AudioRouteHelper.applyToTts(this.tts, r);
+        } catch (Exception ignored) {
+        }
         Exception e;
         PluginCall pluginCall2;
         if (str != null) {
@@ -421,16 +443,23 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
             try {
                 if (this.tts.speak(str3, z ? 1 : 0, new Bundle(), uuid) == -1) {
                     this.speakingCall = null;
+                    try { AudioRouteHelper.restore(getContext()); } catch (Exception ignored) {}
                     pluginCall.reject("TTS speak() returned ERROR");
                 } else if (!z2) {
                     JSObject jSObject2 = new JSObject();
                     jSObject2.put("started", true);
+                    jSObject2.put("route", AudioRouteHelper.getLastApplied());
                     pluginCall.resolve(jSObject2);
+                    try { AudioRouteHelper.restore(getContext()); } catch (Exception ignored) {}
                 }
-            } catch (Exception e5) {                this.speakingCall = null;
+            } catch (Exception e5) {
+                this.speakingCall = null;
+                try { AudioRouteHelper.restore(getContext()); } catch (Exception ignored) {}
                 pluginCall.reject("speak failed: " + e5.getMessage(), e5);
             }
-        } catch (Exception e6) {            this.speakingCall = null;
+        } catch (Exception e6) {
+            this.speakingCall = null;
+            try { AudioRouteHelper.restore(getContext()); } catch (Exception ignored) {}
             pluginCall.reject("speak failed: " + e6.getMessage(), e6);
         }
     }
@@ -457,10 +486,12 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
                 r.put("stopped", true);
                 c.resolve(r);
             }
+            try { AudioRouteHelper.restore(getContext()); } catch (Exception ignored) {}
             JSObject ret = new JSObject();
             ret.put("stopped", true);
             call.resolve(ret);
         } catch (Exception e) {
+            try { AudioRouteHelper.restore(getContext()); } catch (Exception ignored) {}
             call.reject("stop failed: " + e.getMessage(), e);
         }
     }

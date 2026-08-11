@@ -1151,6 +1151,7 @@ termux-reload-settings</div>
     const PhoneBridge = registerPlugin('PhoneBridge');
     const AppsBridge = registerPlugin('AppsBridge');
     const TtsBridge = registerPlugin('TtsBridge');
+    const AudioRouteBridge = registerPlugin('AudioRouteBridge');
     const MicBridge = registerPlugin('MicBridge');
     const CameraBridge = registerPlugin('CameraBridge');
     const FilesBridge = registerPlugin('FilesBridge');
@@ -3408,7 +3409,26 @@ termux-reload-settings</div>
     email: {
       compose: (opts) => call('email.compose', opts || {}),
     },
-    // On-device TTS
+    // Audio output routing (speaker / earpiece / wired / bluetooth)
+    audio: {
+      isAvailable: () => call('audio.isAvailable'),
+      getRoute: () => call('audio.getRoute'),
+      getStatus: () => call('audio.getStatus'),
+      setRoute: (routeOrOpts, maybeOpts) => {
+        if (routeOrOpts != null && typeof routeOrOpts === 'object' && !Array.isArray(routeOrOpts)) {
+          return call('audio.setRoute', routeOrOpts);
+        }
+        const o = Object.assign({}, maybeOpts || {});
+        if (routeOrOpts != null) o.route = routeOrOpts;
+        return call('audio.setRoute', o);
+      },
+      clearRoute: () => call('audio.clearRoute'),
+      listOutputs: () => call('audio.listOutputs'),
+      play: (opts) => call('audio.play', opts || {}),
+      stop: () => call('audio.stop'),
+      isPlaying: () => call('audio.isPlaying'),
+    },
+    // On-device TTS (opts.route: auto|default|speaker|earpiece|wired|bluetooth|communication)
     tts: {
       isAvailable: () => call('tts.isAvailable'),
       speak: (text, opts) => call('tts.speak', Object.assign({ text }, opts || {})),
@@ -4862,7 +4882,7 @@ termux-reload-settings</div>
             dial: false, call: false, contacts: false, location: false,
             vibrate: false, maps: false, email: false,
             apps: false, listApps: false, listActivities: false, launch: false, intents: false,
-            tts: false, mic: false, camera: false, fs: true, termux: false, termuxExec: false,
+            tts: false, audioRoute: false, mic: false, camera: false, fs: true, termux: false, termuxExec: false,
             storage: true, secrets: true, events: true, files: true,
             share: true, shareFiles: true,
             ai: false, keepAwake: Capacitor.isNativePlatform(),
@@ -4903,6 +4923,12 @@ termux-reload-settings</div>
             const t = await TtsBridge.isAvailable();
             base.tts = !!(t && (t.available || t.ready));
           } catch (_) { base.tts = true; }
+          try {
+            const ar = await AudioRouteBridge.isAvailable();
+            base.audioRoute = !!(ar && ar.available !== false);
+            base.audioPlay = !!(ar && ar.play);
+            base.audioRoutes = ar && ar.supportedRoutes ? ar.supportedRoutes : undefined;
+          } catch (_) { base.audioRoute = false; }
           try {
             const m = await MicBridge.isAvailable();
             base.mic = !!(m && m.speechRecognition);
@@ -5330,6 +5356,7 @@ termux-reload-settings</div>
                     await playDataUrlAudio(audio.dataUrl, {
                       rate: params.rate,
                       wait: params.wait !== false,
+                      route: params.route || params.output,
                     });
                     played = true;
                   } catch (playErr) {
@@ -5374,6 +5401,7 @@ termux-reload-settings</div>
                 pitch: params.pitch,
                 queue: params.queue,
                 wait: params.wait !== false,
+                route: params.route || params.output,
               });
               return Object.assign({ ok: true, via: 'native', spoken: true, played: true }, t || {});
             } catch (e) {
@@ -5834,7 +5862,34 @@ termux-reload-settings</div>
             pitch: params.pitch,
             queue: params.queue,
             wait: params.wait,
+            route: params.route || params.output || undefined,
           });
+        case 'audio.isAvailable':
+          return await nativeCall(AudioRouteBridge, 'isAvailable', {});
+        case 'audio.getRoute':
+        case 'audio.getStatus':
+          return await nativeCall(AudioRouteBridge, 'getRoute', {});
+        case 'audio.setRoute':
+          return await nativeCall(AudioRouteBridge, 'setRoute', {
+            route: params.route || params.output || params.device,
+            sticky: params.sticky,
+          });
+        case 'audio.clearRoute':
+          return await nativeCall(AudioRouteBridge, 'clearRoute', {});
+        case 'audio.listOutputs':
+          return await nativeCall(AudioRouteBridge, 'listOutputs', {});
+        case 'audio.play':
+          return await nativeCall(AudioRouteBridge, 'play', {
+            dataUrl: params.dataUrl || params.dataURL,
+            base64: params.base64,
+            mime: params.mime,
+            route: params.route || params.output,
+            wait: params.wait,
+          });
+        case 'audio.stop':
+          return await nativeCall(AudioRouteBridge, 'stop', {});
+        case 'audio.isPlaying':
+          return await nativeCall(AudioRouteBridge, 'isPlaying', {});
         case 'tts.stop':
           return await nativeCall(TtsBridge, 'stop', {});
         case 'tts.getVoices': {
@@ -6374,6 +6429,23 @@ Text-to-speech:
   await ForgeHost.tts.stop()
   await ForgeHost.tts.getVoices() / getLanguages() / setLanguage(lang)
   Prefer ForgeHost.ai.tts for voice assistants; use ForgeHost.tts for offline/device voices.
+
+Audio output routing (force speaker / earpiece / headset / bluetooth):
+  // Routes: auto|default|speaker|earpiece|wired|bluetooth|communication
+  await ForgeHost.audio.listOutputs()   // connected sinks + supportedRoutes
+  await ForgeHost.audio.getRoute()      // sticky + applied + mode
+  await ForgeHost.audio.setRoute('speaker')              // sticky until clear
+  await ForgeHost.audio.setRoute({ route:'earpiece', sticky:true })
+  await ForgeHost.audio.clearRoute()
+  // Per-utterance (no sticky change):
+  await ForgeHost.tts.speak(text, { lang:'en-US', route:'speaker' })
+  await ForgeHost.ai.tts({ text, voice:'alloy', route:'earpiece' })
+  // Play bytes on a forced route (cloud TTS / custom audio):
+  await ForgeHost.audio.play({ dataUrl, route:'speaker', wait:true })
+  await ForgeHost.audio.stop()
+  // Caps: (await ForgeHost.getCapabilities()).audioRoute
+  Note: BT headphones often steal default media audio — use route:'speaker' to force loudspeaker.
+  Routing is best-effort; API 31+ uses communication devices. Echo/AEC not included.
 
 Microphone / speech-to-text + WAV recording:
   await ForgeHost.permissions.request('mic')   // or mic.requestPermission()
@@ -7158,8 +7230,22 @@ General:
       };
     }
 
-    /** Play a data-URL / remote audio in the host WebView. */
+    /** Play a data-URL / remote audio. Uses native routed player when opts.route is set. */
     async function playDataUrlAudio(dataUrl, opts = {}) {
+      const route = opts.route || opts.output || null;
+      if (route && Capacitor.isNativePlatform()) {
+        try {
+          return await nativeCall(AudioRouteBridge, 'play', {
+            dataUrl,
+            mime: opts.mime,
+            route,
+            wait: opts.wait !== false,
+          });
+        } catch (nativeErr) {
+          // fall through to HTMLAudioElement
+          console.warn('audio.play native failed, falling back', nativeErr);
+        }
+      }
       return new Promise((resolve, reject) => {
         try {
           const a = new Audio(dataUrl);
@@ -7168,7 +7254,7 @@ General:
           }
           const done = (ok, err) => {
             try { a.onended = a.onerror = null; } catch (_) {}
-            if (ok) resolve({ played: true });
+            if (ok) resolve({ played: true, via: 'html-audio', route: route || 'default' });
             else reject(err || new Error('Audio playback failed'));
           };
           a.onended = () => done(true);
@@ -7177,7 +7263,7 @@ General:
           if (p && typeof p.then === 'function') {
             p.catch((e) => done(false, e));
           }
-          if (opts.wait === false) resolve({ played: true, async: true, element: a });
+          if (opts.wait === false) resolve({ played: true, async: true, element: a, via: 'html-audio' });
         } catch (e) {
           reject(e);
         }
@@ -7193,6 +7279,7 @@ General:
         pitch: params.pitch,
         queue: params.queue,
         wait: params.wait !== false,
+        route: params.route || params.output || undefined,
       });
     }
 
