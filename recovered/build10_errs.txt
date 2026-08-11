@@ -1,0 +1,25 @@
+SUCCESS=False
+ERRCOUNT=1
+PhoneBridgePlugin.java:572: variable limit might not have been initialized
+imit3 = limit2; c.moveToNext() && byId.size() < limit3; limit3 = limit) {
+                                                                                               ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+1 error
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 1m 42s
+92 actionable tasks: 1 executed, 91 up-to-date

@@ -1,0 +1,28 @@
+package com.google.zxing;
+
+/* loaded from: classes.dex */
+public abstract class ReaderException extends Exception {
+    protected static final StackTraceElement[] NO_TRACE;
+    protected static boolean isStackTrace;
+
+    static {
+        isStackTrace = System.getProperty("surefire.test.class.path") != null;
+        NO_TRACE = new StackTraceElement[0];
+    }
+
+    ReaderException() {
+    }
+
+    ReaderException(Throwable cause) {
+        super(cause);
+    }
+
+    @Override // java.lang.Throwable
+    public final synchronized Throwable fillInStackTrace() {
+        return null;
+    }
+
+    public static void setStackTrace(boolean enabled) {
+        isStackTrace = enabled;
+    }
+}

@@ -1,0 +1,66 @@
+SUCCESS=False
+ERRCOUNT=30
+FILES={'PhoneBridgePlugin.java': 7, 'FilesBridgePlugin.java': 1, 'ForgeJobReceiver.java': 10, 'MicBridgePlugin.java': 5, 'NotifyBridgePlugin.java': 7}
+PhoneBridgePlugin.java:38: cannot find symbol
+FilesBridgePlugin.java:409: cannot find symbol
+ForgeJobReceiver.java:135: cannot find symbol
+ForgeJobReceiver.java:135: cannot find symbol
+ForgeJobReceiver.java:136: cannot find symbol
+ForgeJobReceiver.java:137: cannot find symbol
+ForgeJobReceiver.java:138: cannot find symbol
+ForgeJobReceiver.java:139: cannot find symbol
+ForgeJobReceiver.java:140: cannot find symbol
+ForgeJobReceiver.java:141: cannot find symbol
+ForgeJobReceiver.java:141: cannot find symbol
+ForgeJobReceiver.java:141: cannot find symbol
+MicBridgePlugin.java:469: cannot find symbol
+MicBridgePlugin.java:480: cannot find symbol
+MicBridgePlugin.java:483: cannot find symbol
+MicBridgePlugin.java:486: cannot find symbol
+MicBridgePlugin.java:489: cannot find symbol
+NotifyBridgePlugin.java:257: cannot find symbol
+NotifyBridgePlugin.java:258: cannot find symbol
+NotifyBridgePlugin.java:261: cannot find symbol
+NotifyBridgePlugin.java:262: cannot find symbol
+NotifyBridgePlugin.java:263: cannot find symbol
+NotifyBridgePlugin.java:280: cannot find symbol
+NotifyBridgePlugin.java:285: cannot find symbol
+PhoneBridgePlugin.java:458: cannot find symbol
+PhoneBridgePlugin.java:459: cannot find symbol
+PhoneBridgePlugin.java:459: cannot find symbol
+PhoneBridgePlugin.java:473: cannot find symbol
+PhoneBridgePlugin.java:473: cannot find symbol
+PhoneBridgePlugin.java:782: cannot find symbol
+                                    ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:473: error: cannot find symbol
+                    } catch (SecurityException e3) {                        pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+                                                                                                                                      ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:782: error: cannot find symbol
+        ret.put(BuildConfig.BUILD_TYPE, Build.VERSION.RELEASE);
+                ^
+  symbol:   variable BuildConfig
+  location: class PhoneBridgePlugin
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+30 errors
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 41s
+91 actionable tasks: 1 executed, 90 up-to-date

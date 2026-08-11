@@ -1,0 +1,31 @@
+SUCCESS=False
+ERRCOUNT=6
+FilesBridgePlugin.java:431: unreachable statement
+FilesBridgePlugin.java:389: variable buf might not have been initialized
+FilesBridgePlugin.java:410: variable th2 might not have been initialized
+FilesBridgePlugin.java:417: variable th might not have been initialized
+FilesBridgePlugin.java:419: variable th might not have been initialized
+FilesBridgePlugin.java:424: variable th2 might not have been initialized
+c/main/java/com/forge/live/FilesBridgePlugin.java:424: error: variable th2 might not have been initialized
+                    th2.addSuppressed(th7);
+                    ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+6 errors
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 40s
+92 actionable tasks: 1 executed, 91 up-to-date

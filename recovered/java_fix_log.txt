@@ -1,0 +1,4 @@
+--- remaining ---
+QrScanActivity.java:137:} else if (focus != null && focus.contains(DebugKt.DEBUG_PROPERTY_VALUE_AUTO)) {
+QrScanActivity.java:138:params.setFocusMode(DebugKt.DEBUG_PROPERTY_VALUE_AUTO);
+done

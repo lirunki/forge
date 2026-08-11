@@ -1,0 +1,519 @@
+== Forge build ==
+Project: /data/data/com.termux/files/home/downloads/forge/android
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :app
+WARNING: The option setting 'android.aapt2FromMavenOverride=/data/data/com.termux/files/home/sdk-tools-aarch64/build-tools/aapt2' is experimental.
+
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-android:preBuild UP-TO-DATE
+> Task :capacitor-android:preDebugBuild UP-TO-DATE
+> Task :capacitor-android:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-app:preBuild UP-TO-DATE
+> Task :capacitor-app:preDebugBuild UP-TO-DATE
+> Task :capacitor-app:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-filesystem:preBuild UP-TO-DATE
+> Task :capacitor-filesystem:preDebugBuild UP-TO-DATE
+> Task :capacitor-filesystem:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-keyboard:preBuild UP-TO-DATE
+> Task :capacitor-keyboard:preDebugBuild UP-TO-DATE
+> Task :capacitor-keyboard:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-preferences:preBuild UP-TO-DATE
+> Task :capacitor-preferences:preDebugBuild UP-TO-DATE
+> Task :capacitor-preferences:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-share:preBuild UP-TO-DATE
+> Task :capacitor-share:preDebugBuild UP-TO-DATE
+> Task :capacitor-share:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-status-bar:preBuild UP-TO-DATE
+> Task :capacitor-status-bar:preDebugBuild UP-TO-DATE
+> Task :capacitor-status-bar:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :capacitor-android:generateDebugResValues UP-TO-DATE
+> Task :capacitor-android:generateDebugResources UP-TO-DATE
+> Task :capacitor-android:packageDebugResources UP-TO-DATE
+> Task :capacitor-app:generateDebugResValues UP-TO-DATE
+> Task :capacitor-app:generateDebugResources UP-TO-DATE
+> Task :capacitor-app:packageDebugResources UP-TO-DATE
+> Task :capacitor-filesystem:generateDebugResValues UP-TO-DATE
+> Task :capacitor-filesystem:generateDebugResources UP-TO-DATE
+> Task :capacitor-filesystem:packageDebugResources UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugResValues UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugResources UP-TO-DATE
+> Task :capacitor-keyboard:packageDebugResources UP-TO-DATE
+> Task :capacitor-preferences:generateDebugResValues UP-TO-DATE
+> Task :capacitor-preferences:generateDebugResources UP-TO-DATE
+> Task :capacitor-preferences:packageDebugResources UP-TO-DATE
+> Task :capacitor-share:generateDebugResValues UP-TO-DATE
+> Task :capacitor-share:generateDebugResources UP-TO-DATE
+> Task :capacitor-share:packageDebugResources UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugResValues UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugResources UP-TO-DATE
+> Task :capacitor-status-bar:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :capacitor-android:extractDeepLinksDebug
+> Task :capacitor-app:extractDeepLinksDebug
+> Task :capacitor-android:processDebugManifest
+> Task :capacitor-filesystem:extractDeepLinksDebug
+> Task :capacitor-app:processDebugManifest
+> Task :capacitor-keyboard:extractDeepLinksDebug
+> Task :capacitor-filesystem:processDebugManifest
+> Task :capacitor-preferences:extractDeepLinksDebug
+> Task :capacitor-keyboard:processDebugManifest
+> Task :capacitor-preferences:processDebugManifest
+> Task :capacitor-share:extractDeepLinksDebug
+> Task :app:mergeDebugResources
+> Task :capacitor-status-bar:extractDeepLinksDebug
+> Task :capacitor-share:processDebugManifest
+> Task :capacitor-status-bar:processDebugManifest
+> Task :capacitor-android:compileDebugLibraryResources
+> Task :capacitor-android:parseDebugLocalResources
+
+> Task :app:processDebugMainManifest
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/AndroidManifest.xml:126:16-48 Warning:
+	android:extractNativeLibs should not be specified in this source AndroidManifest.xml file. See https://d.android.com/guide/topics/manifest/application-element#extractNativeLibs for more information.
+The AGP Upgrade Assistant can remove the attribute from the AndroidManifest.xml file and update the build file accordingly. See https://d.android.com/studio/build/agp-upgrade-assistant for more information.
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/AndroidManifest.xml:68:5-60 Warning:
+	Element package#com.google.android.apps.maps at AndroidManifest.xml:68:5-60 duplicated with element declared at AndroidManifest.xml:62:5-60
+
+> Task :app:processDebugManifest
+> Task :capacitor-app:compileDebugLibraryResources
+> Task :app:processDebugManifestForPackage
+> Task :capacitor-app:parseDebugLocalResources
+> Task :capacitor-filesystem:compileDebugLibraryResources
+> Task :capacitor-android:generateDebugRFile
+> Task :capacitor-app:generateDebugRFile
+> Task :capacitor-filesystem:parseDebugLocalResources
+> Task :capacitor-keyboard:compileDebugLibraryResources
+> Task :capacitor-keyboard:parseDebugLocalResources
+> Task :capacitor-filesystem:generateDebugRFile
+> Task :capacitor-preferences:compileDebugLibraryResources
+> Task :capacitor-keyboard:generateDebugRFile
+> Task :capacitor-preferences:parseDebugLocalResources
+> Task :capacitor-share:compileDebugLibraryResources
+> Task :capacitor-preferences:generateDebugRFile
+> Task :capacitor-share:parseDebugLocalResources
+> Task :capacitor-status-bar:compileDebugLibraryResources
+> Task :capacitor-share:generateDebugRFile
+> Task :capacitor-status-bar:parseDebugLocalResources
+> Task :capacitor-android:javaPreCompileDebug
+> Task :capacitor-status-bar:generateDebugRFile
+
+> Task :capacitor-android:compileDebugJavaWithJavac
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :capacitor-app:javaPreCompileDebug
+> Task :capacitor-filesystem:javaPreCompileDebug
+> Task :capacitor-keyboard:javaPreCompileDebug
+> Task :capacitor-preferences:javaPreCompileDebug
+> Task :capacitor-share:javaPreCompileDebug
+> Task :capacitor-status-bar:javaPreCompileDebug
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :capacitor-android:bundleLibCompileToJarDebug
+> Task :capacitor-android:mergeDebugShaders
+> Task :capacitor-app:compileDebugJavaWithJavac
+> Task :capacitor-app:bundleLibCompileToJarDebug
+> Task :capacitor-filesystem:compileDebugJavaWithJavac
+> Task :capacitor-filesystem:bundleLibCompileToJarDebug
+> Task :app:processDebugResources
+> Task :capacitor-keyboard:compileDebugJavaWithJavac
+> Task :capacitor-keyboard:bundleLibCompileToJarDebug
+> Task :capacitor-preferences:compileDebugJavaWithJavac
+> Task :capacitor-preferences:bundleLibCompileToJarDebug
+> Task :capacitor-share:compileDebugJavaWithJavac
+> Task :capacitor-share:bundleLibCompileToJarDebug
+> Task :capacitor-status-bar:compileDebugJavaWithJavac
+> Task :capacitor-android:compileDebugShaders NO-SOURCE
+> Task :capacitor-android:generateDebugAssets UP-TO-DATE
+> Task :capacitor-status-bar:bundleLibCompileToJarDebug
+> Task :capacitor-android:packageDebugAssets
+
+> Task :app:compileDebugJavaWithJavac
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/AppsBridgePlugin.java:14: error: package androidx.webkit.internal does not exist
+import androidx.webkit.internal.AssetHelper;
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:10: error: package androidx.webkit.internal does not exist
+import androidx.webkit.internal.AssetHelper;
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:38: error: cannot find symbol
+import org.apache.cordova.BuildConfig;
+                         ^
+  symbol:   class BuildConfig
+  location: package org.apache.cordova
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/AppsBridgePlugin.java:617: error: cannot find symbol
+        i.setType(AssetHelper.DEFAULT_MIME_TYPE);
+                  ^
+  symbol:   variable AssetHelper
+  location: class AppsBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:248: error: cannot find symbol
+                        e = e2;
+                        ^
+  symbol:   variable e
+  location: class FilesBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:249: error: cannot find symbol
+                        call.reject("pickResult failed: " + e.getMessage(), e);
+                                                            ^
+  symbol:   variable e
+  location: class FilesBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:249: error: cannot find symbol
+                        call.reject("pickResult failed: " + e.getMessage(), e);
+                                                                            ^
+  symbol:   variable e
+  location: class FilesBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:276: error: cannot find symbol
+            e = e3;
+            ^
+  symbol:   variable e
+  location: class FilesBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:414: error: cannot find symbol
+                th2 = th4;
+                      ^
+  symbol:   variable th4
+  location: class FilesBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:490: error: cannot find symbol
+            return AssetHelper.DEFAULT_MIME_TYPE;
+                   ^
+  symbol:   variable AssetHelper
+  location: class FilesBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:670: error: cannot find symbol
+                            out.add(AssetHelper.DEFAULT_MIME_TYPE);
+                                    ^
+  symbol:   variable AssetHelper
+  location: class FilesBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:135: error: cannot find symbol
+                    pend.put("jobId", jobId3);
+                                      ^
+  symbol:   variable jobId3
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:135: error: cannot find symbol
+                    pend.put("jobId", jobId3);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:136: error: cannot find symbol
+                    pend.put(str3, appId);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:137: error: cannot find symbol
+                    pend.put("payload", payload);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:138: error: cannot find symbol
+                    pend.put("title", title);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:139: error: cannot find symbol
+                    pend.put(str2, text);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:140: error: cannot find symbol
+                    pend.put("firedAt", System.currentTimeMillis());
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:141: error: cannot find symbol
+                    pending.edit().putString(appId + "::" + jobId3, pend.toString()).apply();
+                                                            ^
+  symbol:   variable jobId3
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:141: error: cannot find symbol
+                    pending.edit().putString(appId + "::" + jobId3, pend.toString()).apply();
+                    ^
+  symbol:   variable pending
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:141: error: cannot find symbol
+                    pending.edit().putString(appId + "::" + jobId3, pend.toString()).apply();
+                                                                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/JobBridgePlugin.java:227: error: cannot find symbol
+                        e = e4;
+                        ^
+  symbol:   variable e
+  location: class JobBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/JobBridgePlugin.java:229: error: cannot find symbol
+                        pluginCall.reject("schedule failed: " + e.getMessage(), e);
+                                                                ^
+  symbol:   variable e
+  location: class JobBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/JobBridgePlugin.java:229: error: cannot find symbol
+                        pluginCall.reject("schedule failed: " + e.getMessage(), e);
+                                                                                ^
+  symbol:   variable e
+  location: class JobBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/JobBridgePlugin.java:291: error: cannot find symbol
+            e = e5;
+            ^
+  symbol:   variable e
+  location: class JobBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:469: error: cannot find symbol
+                    e = e3;
+                    ^
+  symbol:   variable e
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:480: error: cannot find symbol
+                th = th2;
+                ^
+  symbol:   variable th
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:483: error: cannot find symbol
+                throw th;
+                      ^
+  symbol:   variable th
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:486: error: cannot find symbol
+            e = e5;
+            ^
+  symbol:   variable e
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:488: error: cannot find symbol
+            th = th3;
+            ^
+  symbol:   variable th
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:491: error: cannot find symbol
+            throw th;
+                  ^
+  symbol:   variable th
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:213: error: cannot find symbol
+                                e = e2;
+                                ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:214: error: cannot find symbol
+                                call.reject("notify failed: " + e.getMessage(), e);
+                                                                ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:214: error: cannot find symbol
+                                call.reject("notify failed: " + e.getMessage(), e);
+                                                                                ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:239: error: cannot find symbol
+                                        e = e3;
+                                        ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:240: error: cannot find symbol
+                                        call.reject("notify failed: " + e.getMessage(), e);
+                                                                        ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:240: error: cannot find symbol
+                                        call.reject("notify failed: " + e.getMessage(), e);
+                                                                                        ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:245: error: cannot find symbol
+                                e = e4;
+                                ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:260: error: cannot find symbol
+                    e = e5;
+                    ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:261: error: cannot find symbol
+                    call.reject("notify failed: " + e.getMessage(), e);
+                                                    ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:261: error: cannot find symbol
+                    call.reject("notify failed: " + e.getMessage(), e);
+                                                                    ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:265: error: cannot find symbol
+            ret2.put("ok", true);
+            ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:266: error: cannot find symbol
+            ret2.put("id", id);
+            ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:269: error: cannot find symbol
+            ret2.put("channel", channelId2);
+            ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:270: error: cannot find symbol
+            ret2.put("permission", hasNotificationPermission());
+            ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:271: error: cannot find symbol
+            call.resolve(ret2);
+                         ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:274: error: cannot find symbol
+            e = e6;
+            ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:275: error: cannot find symbol
+            call.reject("notify failed: " + e.getMessage(), e);
+                                            ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:275: error: cannot find symbol
+            call.reject("notify failed: " + e.getMessage(), e);
+                                                            ^
+  symbol:   variable e
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:290: error: cannot find symbol
+        PendingIntent contentIntent2 = PendingIntent.getActivity(ctx, id, launch, piFlags);
+                                                                                  ^
+  symbol:   variable piFlags
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:295: error: cannot find symbol
+        b = new NotificationCompat.Builder(ctx, channelId2).setContentTitle(title == null ? title : str).setContentText(message == null ? message : "").setStyle(new NotificationCompat.BigTextStyle().bigText(message == null ? message : "")).setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(contentIntent2).setAutoCancel(autoCancel).setOngoing(ongoing).setOnlyAlertOnce(true).setPriority(priority).setCategory(NotificationCompat.CATEGORY_MESSAGE).setVisibility(1);
+                                                                                                                                                                                                                                                                                                                                                                                                                  ^
+  symbol:   variable priority
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:458: error: cannot find symbol
+                            se = e;
+                            ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:459: error: cannot find symbol
+                            pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+                                                                     ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:459: error: cannot find symbol
+                            pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+                                                                                      ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:462: error: cannot find symbol
+                            e = e2;
+                            ^
+  symbol:   variable e
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:463: error: cannot find symbol
+                            pluginCall.reject("readSms failed: " + e.getMessage(), e);
+                                                                   ^
+  symbol:   variable e
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:463: error: cannot find symbol
+                            pluginCall.reject("readSms failed: " + e.getMessage(), e);
+                                                                                   ^
+  symbol:   variable e
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:476: error: cannot find symbol
+                        se = e3;
+                        ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:477: error: cannot find symbol
+                        pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+                                                                 ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:477: error: cannot find symbol
+                        pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+                                                                                  ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:480: error: cannot find symbol
+                        e = e4;
+                        ^
+  symbol:   variable e
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:481: error: cannot find symbol
+                        pluginCall.reject("readSms failed: " + e.getMessage(), e);
+                                                               ^
+  symbol:   variable e
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:481: error: cannot find symbol
+                        pluginCall.reject("readSms failed: " + e.getMessage(), e);
+                                                                               ^
+  symbol:   variable e
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:493: error: cannot find symbol
+            se = e5;
+            ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:495: error: cannot find symbol
+            e = e6;
+            ^
+  symbol:   variable e
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:643: error: cannot find symbol
+            e = e2;
+            ^
+  symbol:   variable e
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:794: error: cannot find symbol
+        ret.put(BuildConfig.BUILD_TYPE, Build.VERSION.RELEASE);
+                ^
+  symbol:   variable BuildConfig
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ShortcutBridgePlugin.java:286: error: cannot find symbol
+                            e = e2;
+                            ^
+  symbol:   variable e
+  location: class ShortcutBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ShortcutBridgePlugin.java:287: error: cannot find symbol
+                            call.reject("pin failed: " + e.getMessage(), e);
+                                                         ^
+  symbol:   variable e
+  location: class ShortcutBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ShortcutBridgePlugin.java:287: error: cannot find symbol
+                            call.reject("pin failed: " + e.getMessage(), e);
+                                                                         ^
+  symbol:   variable e
+  location: class ShortcutBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ShortcutBridgePlugin.java:307: error: cannot find symbol
+                e = e3;
+                ^
+  symbol:   variable e
+  location: class ShortcutBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ShortcutBridgePlugin.java:310: error: cannot find symbol
+            e = e4;
+            ^
+  symbol:   variable e
+  location: class ShortcutBridgePlugin
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+72 errors
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 1m 11s
+94 actionable tasks: 70 executed, 24 up-to-date

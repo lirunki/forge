@@ -1,0 +1,3 @@
+-keep class com.forge.live.** { *; }
+-keep class com.getcapacitor.** { *; }
+-keep class com.capacitorjs.plugins.** { *; }

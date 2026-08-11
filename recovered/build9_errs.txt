@@ -1,0 +1,32 @@
+SUCCESS=False
+ERRCOUNT=10
+JobBridgePlugin.java:211: variable payload might not have been initialized
+JobBridgePlugin.java:248: variable payload might not have been initialized
+JobBridgePlugin.java:282: variable inMs might not have been initialized
+JobBridgePlugin.java:371: variable job might not have been initialized
+JobBridgePlugin.java:376: variable job might not have been initialized
+JobBridgePlugin.java:525: variable at might not have been initialized
+JobBridgePlugin.java:526: variable type might not have been initialized
+JobBridgePlugin.java:527: variable job might not have been initialized
+JobBridgePlugin.java:439: unreported exception JSONException; must be caught or declared to be thrown
+JobBridgePlugin.java:530: unreported exception JSONException; must be caught or declared to be thrown
+r override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+10 errors
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 42s
+92 actionable tasks: 1 executed, 91 up-to-date

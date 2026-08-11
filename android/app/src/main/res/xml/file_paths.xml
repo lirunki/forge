@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<paths>
+  <external-path name="my_images"
+                 path="." />
+  <external-files-path name="external_files"
+                       path="." />
+  <cache-path name="my_cache_images"
+              path="." />
+  <cache-path name="camera_cache"
+              path="camera/" />
+  <cache-path name="forge_picks"
+              path="forge_picks/" />
+  <files-path name="internal_files"
+              path="." />
+</paths>

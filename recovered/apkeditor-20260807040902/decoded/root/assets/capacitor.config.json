@@ -1,0 +1,16 @@
+{
+	"appId": "com.forge.live",
+	"appName": "Forge",
+	"webDir": "www",
+	"server": {
+		"androidScheme": "https"
+	},
+	"plugins": {
+		"CapacitorHttp": {
+			"enabled": true
+		},
+		"Keyboard": {
+			"resize": "body"
+		}
+	}
+}

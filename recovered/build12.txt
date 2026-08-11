@@ -1,0 +1,441 @@
+== Forge build ==
+Project: /data/data/com.termux/files/home/downloads/forge/android
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :app
+WARNING: The option setting 'android.aapt2FromMavenOverride=/data/data/com.termux/files/home/sdk-tools-aarch64/build-tools/aapt2' is experimental.
+
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-android:preBuild UP-TO-DATE
+> Task :capacitor-android:preDebugBuild UP-TO-DATE
+> Task :capacitor-android:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-app:preBuild UP-TO-DATE
+> Task :capacitor-app:preDebugBuild UP-TO-DATE
+> Task :capacitor-app:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-filesystem:preBuild UP-TO-DATE
+> Task :capacitor-filesystem:preDebugBuild UP-TO-DATE
+> Task :capacitor-filesystem:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-keyboard:preBuild UP-TO-DATE
+> Task :capacitor-keyboard:preDebugBuild UP-TO-DATE
+> Task :capacitor-keyboard:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-preferences:preBuild UP-TO-DATE
+> Task :capacitor-preferences:preDebugBuild UP-TO-DATE
+> Task :capacitor-preferences:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-share:preBuild UP-TO-DATE
+> Task :capacitor-share:preDebugBuild UP-TO-DATE
+> Task :capacitor-share:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-status-bar:preBuild UP-TO-DATE
+> Task :capacitor-status-bar:preDebugBuild UP-TO-DATE
+> Task :capacitor-status-bar:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :capacitor-android:generateDebugResValues UP-TO-DATE
+> Task :capacitor-android:generateDebugResources UP-TO-DATE
+> Task :capacitor-android:packageDebugResources UP-TO-DATE
+> Task :capacitor-app:generateDebugResValues UP-TO-DATE
+> Task :capacitor-app:generateDebugResources UP-TO-DATE
+> Task :capacitor-app:packageDebugResources UP-TO-DATE
+> Task :capacitor-filesystem:generateDebugResValues UP-TO-DATE
+> Task :capacitor-filesystem:generateDebugResources UP-TO-DATE
+> Task :capacitor-filesystem:packageDebugResources UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugResValues UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugResources UP-TO-DATE
+> Task :capacitor-keyboard:packageDebugResources UP-TO-DATE
+> Task :capacitor-preferences:generateDebugResValues UP-TO-DATE
+> Task :capacitor-preferences:generateDebugResources UP-TO-DATE
+> Task :capacitor-preferences:packageDebugResources UP-TO-DATE
+> Task :capacitor-share:generateDebugResValues UP-TO-DATE
+> Task :capacitor-share:generateDebugResources UP-TO-DATE
+> Task :capacitor-share:packageDebugResources UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugResValues UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugResources UP-TO-DATE
+> Task :capacitor-status-bar:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-android:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-android:processDebugManifest UP-TO-DATE
+> Task :capacitor-app:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-app:processDebugManifest UP-TO-DATE
+> Task :capacitor-filesystem:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-filesystem:processDebugManifest UP-TO-DATE
+> Task :capacitor-keyboard:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-keyboard:processDebugManifest UP-TO-DATE
+> Task :capacitor-preferences:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-preferences:processDebugManifest UP-TO-DATE
+> Task :capacitor-share:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-share:processDebugManifest UP-TO-DATE
+> Task :capacitor-status-bar:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-status-bar:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :capacitor-android:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-android:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-android:generateDebugRFile UP-TO-DATE
+> Task :capacitor-app:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-app:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-app:generateDebugRFile UP-TO-DATE
+> Task :capacitor-filesystem:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-filesystem:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-filesystem:generateDebugRFile UP-TO-DATE
+> Task :capacitor-keyboard:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-keyboard:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugRFile UP-TO-DATE
+> Task :capacitor-preferences:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-preferences:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-preferences:generateDebugRFile UP-TO-DATE
+> Task :capacitor-share:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-share:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-share:generateDebugRFile UP-TO-DATE
+> Task :capacitor-status-bar:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-status-bar:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :capacitor-android:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-android:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-app:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-app:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-filesystem:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-filesystem:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-filesystem:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-keyboard:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-keyboard:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-keyboard:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-preferences:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-preferences:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-preferences:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-share:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-share:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-share:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-status-bar:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-status-bar:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-status-bar:bundleLibCompileToJarDebug UP-TO-DATE
+
+> Task :app:compileDebugJavaWithJavac FAILED
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:600: error: class, interface, enum, or record expected
+    private boolean agentPortOpen(int port) {
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:603: error: class, interface, enum, or record expected
+            try {
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:605: error: class, interface, enum, or record expected
+                s.close();
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:606: error: class, interface, enum, or record expected
+                return true;
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:607: error: class, interface, enum, or record expected
+            } finally {
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:611: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:617: error: class, interface, enum, or record expected
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:618: error: class, interface, enum, or record expected
+            conn.setConnectTimeout(2000);
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:619: error: class, interface, enum, or record expected
+            conn.setReadTimeout(Math.max(timeoutMs, 5000));
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:620: error: class, interface, enum, or record expected
+            conn.setRequestMethod("POST");
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:621: error: class, interface, enum, or record expected
+            conn.setDoOutput(true);
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:622: error: class, interface, enum, or record expected
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:623: error: class, interface, enum, or record expected
+            byte[] payload = job.toString().getBytes(StandardCharsets.UTF_8);
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:624: error: class, interface, enum, or record expected
+            conn.setFixedLengthStreamingMode(payload.length);
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:625: error: class, interface, enum, or record expected
+            OutputStream os = conn.getOutputStream();
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:626: error: class, interface, enum, or record expected
+            try {
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:628: error: class, interface, enum, or record expected
+                if (os != null) {
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:630: error: class, interface, enum, or record expected
+                }
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:632: error: class, interface, enum, or record expected
+                String body = readStream(code >= 400 ? conn.getErrorStream() : conn.getInputStream());
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:633: error: class, interface, enum, or record expected
+                conn.disconnect();
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:634: error: class, interface, enum, or record expected
+                if (body == null || body.isEmpty()) {
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:636: error: class, interface, enum, or record expected
+                }
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:638: error: class, interface, enum, or record expected
+                if (code >= 400 && !result.has(RESULT_STDOUT)) {
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:640: error: class, interface, enum, or record expected
+                }
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:642: error: class, interface, enum, or record expected
+            } catch (Throwable th) {
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:646: error: class, interface, enum, or record expected
+                    } catch (Throwable th2) {
+                    ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:648: error: class, interface, enum, or record expected
+                    }
+                    ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:651: error: class, interface, enum, or record expected
+            }
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:654: error: class, interface, enum, or record expected
+    }
+    ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:658: error: class, interface, enum, or record expected
+        File root = exportAgentFiles(false);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:659: error: class, interface, enum, or record expected
+        File inbox = new File(root, "inbox");
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:660: error: class, interface, enum, or record expected
+        File outbox = new File(root, "outbox");
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:661: error: class, interface, enum, or record expected
+        if (!inbox.exists() && !inbox.mkdirs()) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:663: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:666: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:668: error: class, interface, enum, or record expected
+        if (hb.isFile() && System.currentTimeMillis() - hb.lastModified() < 10000) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:670: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:673: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:675: error: class, interface, enum, or record expected
+        job.put("id", id);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:676: error: class, interface, enum, or record expected
+        File inFile = new File(inbox, id + ".json");
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:677: error: class, interface, enum, or record expected
+        File outFile = new File(outbox, id + ".json");
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:678: error: class, interface, enum, or record expected
+        if (outFile.exists()) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:680: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:682: error: class, interface, enum, or record expected
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:683: error: class, interface, enum, or record expected
+        while (System.currentTimeMillis() < deadline) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:686: error: class, interface, enum, or record expected
+                String raw = readFile(outFile);
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:687: error: class, interface, enum, or record expected
+                outFile.delete();
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:688: error: class, interface, enum, or record expected
+                inFile.delete();
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:689: error: class, interface, enum, or record expected
+                return new JSONObject(raw);
+                ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:690: error: class, interface, enum, or record expected
+            }
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:692: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:694: error: class, interface, enum, or record expected
+        throw new Exception("Timed out waiting for agent file result (" + timeoutMs + "ms)");
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:695: error: class, interface, enum, or record expected
+    }
+    ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:699: error: class, interface, enum, or record expected
+        ret.put("ok", result.optBoolean("ok", result.optInt(RESULT_EXIT_CODE, 1) == 0));
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:700: error: class, interface, enum, or record expected
+        ret.put("bridge", bridge);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:701: error: class, interface, enum, or record expected
+        ret.put(RESULT_STDOUT, result.optString(RESULT_STDOUT, ""));
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:702: error: class, interface, enum, or record expected
+        ret.put(RESULT_STDERR, result.optString(RESULT_STDERR, ""));
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:703: error: class, interface, enum, or record expected
+        if (!result.has(RESULT_EXIT_CODE) || result.isNull(RESULT_EXIT_CODE)) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:705: error: class, interface, enum, or record expected
+        } else {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:707: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:710: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:713: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:716: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:718: error: class, interface, enum, or record expected
+    }
+    ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:722: error: class, interface, enum, or record expected
+        job.put("id", UUID.randomUUID().toString());
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:723: error: class, interface, enum, or record expected
+        job.put("cmdPath", spec.cmdPath);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:724: error: class, interface, enum, or record expected
+        JSONArray args = new JSONArray();
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:725: error: class, interface, enum, or record expected
+        Iterator<String> it = spec.argsList.iterator();
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:726: error: class, interface, enum, or record expected
+        while (it.hasNext()) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:728: error: class, interface, enum, or record expected
+            args.put(a);
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:729: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:731: error: class, interface, enum, or record expected
+        job.put("cwd", spec.cwd != null ? spec.cwd : TERMUX_HOME);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:732: error: class, interface, enum, or record expected
+        job.put("timeoutMs", timeoutMs);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:733: error: class, interface, enum, or record expected
+        job.put("background", background);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:734: error: class, interface, enum, or record expected
+        job.put("label", spec.label);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:735: error: class, interface, enum, or record expected
+        if (spec.argsList.size() == 2 && "-lc".equals(spec.argsList.get(0))) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:737: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:739: error: class, interface, enum, or record expected
+    }
+    ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:743: error: class, interface, enum, or record expected
+        File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:744: error: class, interface, enum, or record expected
+        File dir = new File(dl, BRIDGE_DIR_NAME);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:745: error: class, interface, enum, or record expected
+        if (!dir.exists()) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:747: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:750: error: class, interface, enum, or record expected
+            dir2.mkdirs();
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:751: error: class, interface, enum, or record expected
+            return dir2;
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:752: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:754: error: class, interface, enum, or record expected
+    }
+    ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:758: error: class, interface, enum, or record expected
+        if (!dir.exists() && !dir.mkdirs()) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:760: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:762: error: class, interface, enum, or record expected
+        File outbox = new File(dir, "outbox");
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:763: error: class, interface, enum, or record expected
+        inbox.mkdirs();
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:764: error: class, interface, enum, or record expected
+        outbox.mkdirs();
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:765: error: class, interface, enum, or record expected
+        writeAssetOrBuiltin(dir, "forge-termux-agent", force);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:766: error: class, interface, enum, or record expected
+        writeAssetOrBuiltin(dir, "install.sh", force);
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:767: error: class, interface, enum, or record expected
+        File readme = new File(dir, "README.txt");
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:768: error: class, interface, enum, or record expected
+        if (force || !readme.exists()) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:770: error: class, interface, enum, or record expected
+        }
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:772: error: class, interface, enum, or record expected
+    }
+    ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:776: error: class, interface, enum, or record expected
+        if (!out.exists() || force) {
+        ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:778: error: class, interface, enum, or record expected
+            try {
+            ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java:780: error: class, interface, enum, or record expected
+                content = readStream(in);
+                ^
+100 errors
+only showing the first 100 errors, of 191 total; use -Xmaxerrs if you would like to see more
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 21s
+92 actionable tasks: 1 executed, 91 up-to-date

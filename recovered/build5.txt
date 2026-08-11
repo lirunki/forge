@@ -1,0 +1,319 @@
+== Forge build ==
+Project: /data/data/com.termux/files/home/downloads/forge/android
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :app
+WARNING: The option setting 'android.aapt2FromMavenOverride=/data/data/com.termux/files/home/sdk-tools-aarch64/build-tools/aapt2' is experimental.
+
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-android:preBuild UP-TO-DATE
+> Task :capacitor-android:preDebugBuild UP-TO-DATE
+> Task :capacitor-android:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-app:preBuild UP-TO-DATE
+> Task :capacitor-app:preDebugBuild UP-TO-DATE
+> Task :capacitor-app:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-filesystem:preBuild UP-TO-DATE
+> Task :capacitor-filesystem:preDebugBuild UP-TO-DATE
+> Task :capacitor-filesystem:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-keyboard:preBuild UP-TO-DATE
+> Task :capacitor-keyboard:preDebugBuild UP-TO-DATE
+> Task :capacitor-keyboard:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-preferences:preBuild UP-TO-DATE
+> Task :capacitor-preferences:preDebugBuild UP-TO-DATE
+> Task :capacitor-preferences:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-share:preBuild UP-TO-DATE
+> Task :capacitor-share:preDebugBuild UP-TO-DATE
+> Task :capacitor-share:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-status-bar:preBuild UP-TO-DATE
+> Task :capacitor-status-bar:preDebugBuild UP-TO-DATE
+> Task :capacitor-status-bar:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :capacitor-android:generateDebugResValues UP-TO-DATE
+> Task :capacitor-android:generateDebugResources UP-TO-DATE
+> Task :capacitor-android:packageDebugResources UP-TO-DATE
+> Task :capacitor-app:generateDebugResValues UP-TO-DATE
+> Task :capacitor-app:generateDebugResources UP-TO-DATE
+> Task :capacitor-app:packageDebugResources UP-TO-DATE
+> Task :capacitor-filesystem:generateDebugResValues UP-TO-DATE
+> Task :capacitor-filesystem:generateDebugResources UP-TO-DATE
+> Task :capacitor-filesystem:packageDebugResources UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugResValues UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugResources UP-TO-DATE
+> Task :capacitor-keyboard:packageDebugResources UP-TO-DATE
+> Task :capacitor-preferences:generateDebugResValues UP-TO-DATE
+> Task :capacitor-preferences:generateDebugResources UP-TO-DATE
+> Task :capacitor-preferences:packageDebugResources UP-TO-DATE
+> Task :capacitor-share:generateDebugResValues UP-TO-DATE
+> Task :capacitor-share:generateDebugResources UP-TO-DATE
+> Task :capacitor-share:packageDebugResources UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugResValues UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugResources UP-TO-DATE
+> Task :capacitor-status-bar:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-android:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-android:processDebugManifest UP-TO-DATE
+> Task :capacitor-app:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-app:processDebugManifest UP-TO-DATE
+> Task :capacitor-filesystem:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-filesystem:processDebugManifest UP-TO-DATE
+> Task :capacitor-keyboard:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-keyboard:processDebugManifest UP-TO-DATE
+> Task :capacitor-preferences:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-preferences:processDebugManifest UP-TO-DATE
+> Task :capacitor-share:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-share:processDebugManifest UP-TO-DATE
+> Task :capacitor-status-bar:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-status-bar:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :capacitor-android:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-android:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-android:generateDebugRFile UP-TO-DATE
+> Task :capacitor-app:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-app:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-app:generateDebugRFile UP-TO-DATE
+> Task :capacitor-filesystem:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-filesystem:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-filesystem:generateDebugRFile UP-TO-DATE
+> Task :capacitor-keyboard:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-keyboard:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugRFile UP-TO-DATE
+> Task :capacitor-preferences:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-preferences:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-preferences:generateDebugRFile UP-TO-DATE
+> Task :capacitor-share:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-share:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-share:generateDebugRFile UP-TO-DATE
+> Task :capacitor-status-bar:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-status-bar:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :capacitor-android:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-android:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-app:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-app:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-filesystem:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-filesystem:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-filesystem:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-keyboard:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-keyboard:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-keyboard:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-preferences:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-preferences:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-preferences:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-share:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-share:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-share:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-status-bar:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-status-bar:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-status-bar:bundleLibCompileToJarDebug UP-TO-DATE
+
+> Task :app:compileDebugJavaWithJavac
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:38: error: cannot find symbol
+import org.apache.cordova.BuildConfig;
+                         ^
+  symbol:   class BuildConfig
+  location: package org.apache.cordova
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/AppsBridgePlugin.java:799: error: variable e is already defined in method queryActivities(PackageManager,Intent)
+            } catch (Exception e) {
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/BackgroundForgeService.java:68: error: variable e is already defined in method startAsForeground()
+            } catch (Exception e) {
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/FilesBridgePlugin.java:413: error: cannot find symbol
+                th2 = th4;
+                      ^
+  symbol:   variable th4
+  location: class FilesBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:135: error: cannot find symbol
+                    pend.put("jobId", jobId3);
+                                      ^
+  symbol:   variable jobId3
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:135: error: cannot find symbol
+                    pend.put("jobId", jobId3);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:136: error: cannot find symbol
+                    pend.put(str3, appId);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:137: error: cannot find symbol
+                    pend.put("payload", payload);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:138: error: cannot find symbol
+                    pend.put("title", title);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:139: error: cannot find symbol
+                    pend.put(str2, text);
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:140: error: cannot find symbol
+                    pend.put("firedAt", System.currentTimeMillis());
+                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:141: error: cannot find symbol
+                    pending.edit().putString(appId + "::" + jobId3, pend.toString()).apply();
+                                                            ^
+  symbol:   variable jobId3
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:141: error: cannot find symbol
+                    pending.edit().putString(appId + "::" + jobId3, pend.toString()).apply();
+                    ^
+  symbol:   variable pending
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/ForgeJobReceiver.java:141: error: cannot find symbol
+                    pending.edit().putString(appId + "::" + jobId3, pend.toString()).apply();
+                                                                    ^
+  symbol:   variable pend
+  location: class ForgeJobReceiver
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/JobBridgePlugin.java:363: error: variable e is already defined in method list(PluginCall)
+            } catch (Exception e) {
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/JobBridgePlugin.java:370: error: variable e is already defined in method list(PluginCall)
+                } catch (Exception e) {
+                                   ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/JobBridgePlugin.java:491: error: variable e is already defined in method scheduleAlarm(Context,String,long)
+            } catch (Exception e) {
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/JobBridgePlugin.java:527: error: variable e is already defined in method rescheduleAll(Context)
+            } catch (Exception e) {
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:473: error: variable e is already defined in method lambda$startRecord$3(int,int)
+                        } catch (Exception e) {
+                                           ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:480: error: cannot find symbol
+                th = th2;
+                ^
+  symbol:   variable th
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:483: error: cannot find symbol
+                throw th;
+                      ^
+  symbol:   variable th
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:488: error: cannot find symbol
+            th = th3;
+            ^
+  symbol:   variable th
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/MicBridgePlugin.java:491: error: cannot find symbol
+            throw th;
+                  ^
+  symbol:   variable th
+  location: class MicBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:265: error: cannot find symbol
+            ret2.put("ok", true);
+            ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:266: error: cannot find symbol
+            ret2.put("id", id);
+            ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:269: error: cannot find symbol
+            ret2.put("channel", channelId2);
+            ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:270: error: cannot find symbol
+            ret2.put("permission", hasNotificationPermission());
+            ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:271: error: cannot find symbol
+            call.resolve(ret2);
+                         ^
+  symbol:   variable ret2
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:290: error: cannot find symbol
+        PendingIntent contentIntent2 = PendingIntent.getActivity(ctx, id, launch, piFlags);
+                                                                                  ^
+  symbol:   variable piFlags
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java:295: error: cannot find symbol
+        b = new NotificationCompat.Builder(ctx, channelId2).setContentTitle(title == null ? title : str).setContentText(message == null ? message : "").setStyle(new NotificationCompat.BigTextStyle().bigText(message == null ? message : "")).setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(contentIntent2).setAutoCancel(autoCancel).setOngoing(ongoing).setOnlyAlertOnce(true).setPriority(priority).setCategory(NotificationCompat.CATEGORY_MESSAGE).setVisibility(1);
+                                                                                                                                                                                                                                                                                                                                                                                                                  ^
+  symbol:   variable priority
+  location: class NotifyBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:458: error: cannot find symbol
+                            se = e;
+                            ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:459: error: cannot find symbol
+                            pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+                                                                     ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:459: error: cannot find symbol
+                            pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+                                                                                      ^
+  symbol:   variable se
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:794: error: cannot find symbol
+        ret.put(BuildConfig.BUILD_TYPE, Build.VERSION.RELEASE);
+                ^
+  symbol:   variable BuildConfig
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/QrScanActivity.java:199: error: variable e is already defined in method onPreviewFrame(byte[],Camera)
+            } catch (Exception e) {
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TtsBridgePlugin.java:366: error: variable e is already defined in method lambda$speak$8(String,String,double,double,boolean,PluginCall,boolean,String)
+                    } catch (Exception e) {
+                                       ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TtsBridgePlugin.java:369: error: variable e is already defined in method lambda$speak$8(String,String,double,double,boolean,PluginCall,boolean,String)
+            } catch (Exception e) {
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TtsBridgePlugin.java:391: error: variable e is already defined in method lambda$speak$8(String,String,double,double,boolean,PluginCall,boolean,String)
+                } catch (Exception e) {
+                                   ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TtsBridgePlugin.java:432: error: variable e is already defined in method lambda$speak$8(String,String,double,double,boolean,PluginCall,boolean,String)
+            } catch (Exception e) {
+                               ^
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/TtsBridgePlugin.java:437: error: variable e is already defined in method lambda$speak$8(String,String,double,double,boolean,PluginCall,boolean,String)
+        } catch (Exception e) {
+                           ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+40 errors
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 44s
+91 actionable tasks: 1 executed, 90 up-to-date

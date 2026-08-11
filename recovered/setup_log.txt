@@ -1,0 +1,28 @@
+--- start ---
+AE=/data/data/com.termux/files/home/downloads/forge/recovered/apkeditor-latest/decoded
+layout activity_main.xml
+layout bridge_layout_main.xml
+layout fragment_bridge.xml
+layout no_webview.xml
+layout splash_screen_view.xml
+xml config.xml
+xml file_paths.xml
+manifest bytes=11011
+java JobBridgePlugin.java
+java NotifyBridgePlugin.java
+java ForgeJobReceiver.java
+java MainActivity.java
+java BackgroundForgeService.java
+java AppsBridgePlugin.java
+java TtsBridgePlugin.java
+java TermuxBridgePlugin.java
+java FilesBridgePlugin.java
+java QrScanActivity.java
+java RunActivity.java
+java MicBridgePlugin.java
+java CameraBridgePlugin.java
+java PhoneBridgePlugin.java
+java BackgroundForgePlugin.java
+java ShortcutBridgePlugin.java
+java QrBridgePlugin.java
+DONE res_files=104 java=17

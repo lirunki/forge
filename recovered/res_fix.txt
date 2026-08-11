@@ -1,0 +1,2 @@
+('/data/data/com.termux/files/home/downloads/forge/android/app/src/main/res/drawable-anydpi-v24/$ic_launcher_foreground__0.xml', '/data/data/com.termux/files/home/downloads/forge/android/app/src/main/res/drawable-anydpi-v24/_ic_launcher_foreground__0.xml')
+('edit', '/data/data/com.termux/files/home/downloads/forge/android/app/src/main/res/drawable-anydpi-v24/ic_launcher_foreground.xml')

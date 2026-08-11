@@ -1,0 +1,36 @@
+SUCCESS=False
+ERRCOUNT=3
+FILES={'AppsBridgePlugin.java': 1, 'PhoneBridgePlugin.java': 2}
+AppsBridgePlugin.java:217: exception NameNotFoundException is never thrown in body of corresponding try statement
+PhoneBridgePlugin.java:686: cannot find symbol
+PhoneBridgePlugin.java:686: cannot find symbol
+honeBridgePlugin.java:686: error: cannot find symbol
+            call.reject("Location blocked: " + e3.getMessage(), e3);
+                                               ^
+  symbol:   variable e3
+  location: class PhoneBridgePlugin
+/data/data/com.termux/files/home/downloads/forge/android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java:686: error: cannot find symbol
+            call.reject("Location blocked: " + e3.getMessage(), e3);
+                                                                ^
+  symbol:   variable e3
+  location: class PhoneBridgePlugin
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+3 errors
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 1m 47s
+92 actionable tasks: 2 executed, 90 up-to-date

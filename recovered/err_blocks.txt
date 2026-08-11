@@ -1,0 +1,426 @@
+==== ForgeJobReceiver.java 90-160
+90:                                        prefs2 = prefs;
+91:                                        str2 = "text";
+92:                                        i = 0;
+93:                                        jobId2 = jobId;
+94:                                        str3 = "appId";
+95:                                        try {
+96:                                            NotifyBridgePlugin.showNotification(context, appId2, appTitle, title, text, channel, "job:" + jobId, payload, (nid % 10000) + 53000);
+97:                                        } catch (Exception e2) {
+98:                                            return;
+99:                                        }
+100:                                    } catch (Exception e3) {
+101:                                        return;
+102:                                    }
+103:                                }
+104:                                SharedPreferences pending = context.getSharedPreferences(PENDING_PREFS, i);
+105:                                JSONObject pend = new JSONObject();
+106:                                String jobId3 = jobId2;
+107:                                pend.put("jobId", jobId3);
+108:                                pend.put(str3, appId);
+109:                                pend.put("payload", payload);
+110:                                pend.put("title", title);
+111:                                pend.put(str2, text);
+112:                                pend.put("firedAt", System.currentTimeMillis());
+113:                                pending.edit().putString(appId + "::" + jobId3, pend.toString()).apply();
+114:                                JSONObject job3 = job;
+115:                                type = job3.optString(str, "once");
+116:                                if (!"once".equals(type)) {
+117:                                    prefs2.edit().remove(jobId3).apply();
+118:                                } else if ("interval".equals(type)) {
+119:                                    long intervalMs = job3.optLong("intervalMs", 0L);
+120:                                    if (intervalMs >= 60000) {
+121:                                        long next = System.currentTimeMillis() + intervalMs;
+122:                                        job3.put("atMs", next);
+123:                                        prefs2.edit().putString(jobId3, job3.toString()).apply();
+124:                                        JobBridgePlugin.scheduleAlarm(context, jobId3, next);
+125:                                    } else {
+126:                                        prefs2.edit().remove(jobId3).apply();
+127:                                    }
+128:                                }
+129:                                return;
+130:                            }
+131:                        } catch (Exception e4) {
+132:                            return;
+133:                        }
+134:                    }
+135:                    pend.put("jobId", jobId3);
+136:                    pend.put(str3, appId);
+137:                    pend.put("payload", payload);
+138:                    pend.put("title", title);
+139:                    pend.put(str2, text);
+140:                    pend.put("firedAt", System.currentTimeMillis());
+141:                    pending.edit().putString(appId + "::" + jobId3, pend.toString()).apply();
+142:                    JSONObject job32 = job;
+143:                    type = job32.optString(str, "once");
+144:                    if (!"once".equals(type)) {
+145:                    }
+146:                    return;
+147:                } catch (Exception e5) {
+148:                    return;
+149:                }
+150:                SharedPreferences pending2 = context.getSharedPreferences(PENDING_PREFS, i);
+151:                JSONObject pend2 = new JSONObject();
+152:                String jobId32 = jobId2;
+153:            } catch (Exception e6) {
+154:                return;
+155:            }
+156:            JSONObject p2 = new JSONObject();
+157:            p2.put("jobId", jobId);
+158:            title = title2;
+159:            p2.put("type", "job");
+160:            if (job2.has("data")) {
+==== NotifyBridgePlugin.java 200-310
+200:                            launch.putExtra(ShortcutBridgePlugin.EXTRA_APP_ID, appId);
+201:                        }
+202:                        int piFlags = Build.VERSION.SDK_INT >= 23 ? 134217728 | AccessibilityEventCompat.TYPE_VIEW_TARGETED_BY_SCROLL : 134217728;
+203:                        PendingIntent contentIntent = PendingIntent.getActivity(ctx, id, launch, piFlags);
+204:                        int priority = CHANNEL_ALERTS.equals(channelId2) ? 1 : 0;
+205:                        if (CHANNEL_DEFAULT.equals(channelId2)) {
+206:                            priority = -1;
+207:                        }
+208:                        b = new NotificationCompat.Builder(ctx, channelId2).setContentTitle(title == null ? title : str).setContentText(message == null ? message : "").setStyle(new NotificationCompat.BigTextStyle().bigText(message == null ? message : "")).setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(contentIntent).setAutoCancel(autoCancel).setOngoing(ongoing).setOnlyAlertOnce(true).setPriority(priority).setCategory(NotificationCompat.CATEGORY_MESSAGE).setVisibility(1);
+209:                        if (silent) {
+210:                            try {
+211:                                b.setSilent(true);
+212:                            } catch (Exception e2) {                                call.reject("notify failed: " + e2.getMessage(), e2);
+213:                                return;
+214:                            }
+215:                        }
+216:                        group = call.getString("group", null);
+217:                        if (group != null && !group.isEmpty()) {
+218:                            b.setGroup(group);
+219:                        }
+220:                        NotificationManagerCompat nm = NotificationManagerCompat.from(ctx);
+221:                        if (tag != null) {
+222:                            try {
+223:                                if (!tag.isEmpty()) {
+224:                                    try {
+225:                                        nm.notify(tag, id, b.build());
+226:                                        JSObject ret = new JSObject();
+227:                                        ret.put("ok", true);
+228:                                        ret.put("id", id);
+229:                                        if (tag != null) {
+230:                                            ret.put("tag", tag);
+231:                                        }
+232:                                        ret.put("channel", channelId2);
+233:                                        ret.put("permission", hasNotificationPermission());
+234:                                        call.resolve(ret);
+235:                                        return;
+236:                                    } catch (Exception e3) {                                        call.reject("notify failed: " + e3.getMessage(), e3);
+237:                                        return;
+238:                                    }
+239:                                }
+240:                            } catch (Exception e4) {                            }
+241:                        }
+242:                        nm.notify(id, b.build());
+243:                        JSObject ret2 = new JSObject();
+244:                        ret2.put("ok", true);
+245:                        ret2.put("id", id);
+246:                        if (tag != null) {
+247:                        }
+248:                        ret2.put("channel", channelId2);
+249:                        ret2.put("permission", hasNotificationPermission());
+250:                        call.resolve(ret2);
+251:                        return;
+252:                    }
+253:                } catch (Exception e5) {                    call.reject("notify failed: " + e5.getMessage(), e5);
+254:                    return;
+255:                }
+256:            }
+257:            ret2.put("ok", true);
+258:            ret2.put("id", id);
+259:            if (tag != null) {
+260:            }
+261:            ret2.put("channel", channelId2);
+262:            ret2.put("permission", hasNotificationPermission());
+263:            call.resolve(ret2);
+264:            return;
+265:        } catch (Exception e6) {            call.reject("notify failed: " + e6.getMessage(), e6);
+266:            return;
+267:        }
+268:        launch = new Intent(ctx, (Class<?>) MainActivity.class);
+269:        launch.setAction(ACTION_OPEN_FROM_NOTIFY);
+270:        launch.addFlags(872415232);
+271:        if (payload != null) {
+272:        }
+273:        if (tag != null) {
+274:        }
+275:        launch.putExtra(EXTRA_NOTIFY_ID, id);
+276:        if (appId != null) {
+277:        }
+278:        if (Build.VERSION.SDK_INT >= 23) {
+279:        }
+280:        PendingIntent contentIntent2 = PendingIntent.getActivity(ctx, id, launch, piFlags);
+281:        if (CHANNEL_ALERTS.equals(channelId2)) {
+282:        }
+283:        if (CHANNEL_DEFAULT.equals(channelId2)) {
+284:        }
+285:        b = new NotificationCompat.Builder(ctx, channelId2).setContentTitle(title == null ? title : str).setContentText(message == null ? message : "").setStyle(new NotificationCompat.BigTextStyle().bigText(message == null ? message : "")).setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(contentIntent2).setAutoCancel(autoCancel).setOngoing(ongoing).setOnlyAlertOnce(true).setPriority(priority).setCategory(NotificationCompat.CATEGORY_MESSAGE).setVisibility(1);
+286:        if (silent) {
+287:        }
+288:        group = call.getString("group", null);
+289:        if (group != null) {
+290:            b.setGroup(group);
+291:        }
+292:        NotificationManagerCompat nm2 = NotificationManagerCompat.from(ctx);
+293:        if (tag != null) {
+294:        }
+295:        nm2.notify(id, b.build());
+296:        JSObject ret22 = new JSObject();
+297:    }
+298:
+299:    @PluginMethod
+300:    public void cancel(PluginCall call) {
+301:        try {
+302:            NotificationManagerCompat nm = NotificationManagerCompat.from(getContext());
+303:            String tag = call.getString("tag", null);
+304:            Integer idObj = call.getInt("id");
+305:            if (idObj == null && (tag == null || tag.isEmpty())) {
+306:                call.reject("id or tag required");
+307:                return;
+308:            }
+309:            int id = idObj != null ? idObj.intValue() : 0;
+310:            if (tag != null && !tag.isEmpty()) {
+==== PhoneBridgePlugin.java 430-500
+430:                                } catch (Throwable th2) {
+431:                                    th = th2;
+432:                                    if (c == null) {
+433:                                        throw th;
+434:                                    }
+435:                                    try {
+436:                                        c.close();
+437:                                        throw th;
+438:                                    } catch (Throwable th3) {
+439:                                        th.addSuppressed(th3);
+440:                                        throw th;
+441:                                    }
+442:                                }
+443:                            } catch (Throwable th4) {
+444:                                th = th4;
+445:                            }
+446:                        } catch (Throwable th5) {
+447:                            th = th5;
+448:                        }
+449:                    }
+450:                    int limit3 = limit;
+451:                    String[] selArgs4 = selArgs;
+452:                    String addressFilter3 = addressFilter;
+453:                    String str3 = str;
+454:                    if (c != null) {
+455:                        try {
+456:                            c.close();
+457:                        } catch (SecurityException e) {
+458:                            se = e;
+459:                            pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+460:                            return;
+461:                        } catch (Exception e2) {                            pluginCall.reject("readSms failed: " + e2.getMessage(), e2);
+462:                            return;
+463:                        }
+464:                    }
+465:                    str = str3;
+466:                    limit = limit3;
+467:                    selection = selection3;
+468:                    selArgs = selArgs4;
+469:                    addressFilter = addressFilter3;
+470:                } else if (c != null) {
+471:                    try {
+472:                        c.close();
+473:                    } catch (SecurityException e3) {                        pluginCall.reject("SMS read blocked: " + se.getMessage(), se);
+474:                        return;
+475:                    } catch (Exception e4) {                        pluginCall.reject("readSms failed: " + e4.getMessage(), e4);
+476:                        return;
+477:                    }
+478:                } else {
+479:                    continue;
+480:                }
+481:            }
+482:            JSObject ret = new JSObject();
+483:            ret.put("messages", (Object) messages);
+484:            ret.put("count", messages.length());
+485:            pluginCall.resolve(ret);
+486:        } catch (SecurityException e5) {        } catch (Exception e6) {        }
+487:    }
+488:
+489:    @PluginMethod
+490:    public void dial(PluginCall call) {
+491:        String number = call.getString("number", "");
+492:        try {
+493:            Intent intent = new Intent("android.intent.action.DIAL");
+494:            if (number != null && !number.isEmpty()) {
+495:                intent.setData(Uri.parse("tel:" + number));
+496:            } else {
+497:                intent.setData(Uri.parse("tel:"));
+498:            }
+499:            intent.addFlags(268435456);
+500:            getContext().startActivity(intent);
+==== MicBridgePlugin.java 430-500
+430:        try {
+431:            fos = new FileOutputStream(this.wavFile);
+432:            byte[] header = new byte[44];
+433:            fos.write(header);
+434:        } catch (Exception e) {
+435:            e = e;
+436:        } catch (Throwable th) {
+437:            th = th;
+438:        }
+439:        try {
+440:            byte[] buf = new byte[bufferSize];
+441:            this.audioRecord.startRecording();
+442:            try {
+443:                try {
+444:                    long maxBytes = sampleRate * 2 * ((this.maxRecordMs / 1000) + 1);
+445:                    long written2 = 0;
+446:                    while (this.recording.get()) {
+447:                        int n = this.audioRecord.read(buf, 0, buf.length);
+448:                        if (n > 0) {
+449:                            fos.write(buf, 0, n);
+450:                            written2 += n;
+451:                            if (written2 >= maxBytes) {
+452:                                written = written2;
+453:                                break;
+454:                            }
+455:                        } else if (n < 0) {
+456:                            break;
+457:                        }
+458:                    }
+459:                    written = written2;
+460:                    try {
+461:                        this.audioRecord.stop();
+462:                    } catch (Exception e2) {
+463:                    }
+464:                    fos.flush();
+465:                    fos.close();
+466:                    fos = null;
+467:                    writeWavHeader(this.wavFile, sampleRate, 1, 16, written);
+468:                } catch (Exception e3) {
+469:                    e = e3;
+470:                    if (fos != null) {
+471:                        try {
+472:                            fos.close();
+473:                        } catch (Exception e4) {
+474:                        }
+475:                    }
+476:                    this.recording.set(false);
+477:                    releaseAudioRecord();
+478:                }
+479:            } catch (Throwable th2) {
+480:                th = th2;
+481:                this.recording.set(false);
+482:                releaseAudioRecord();
+483:                throw th;
+484:            }
+485:        } catch (Exception e5) {        } catch (Throwable th3) {
+486:            th = th3;
+487:            this.recording.set(false);
+488:            releaseAudioRecord();
+489:            throw th;
+490:        }
+491:        this.recording.set(false);
+492:        releaseAudioRecord();
+493:    }
+494:
+495:    private void releaseAudioRecord() {
+496:        AudioRecord audioRecord = this.audioRecord;
+497:        if (audioRecord != null) {
+498:            try {
+499:                audioRecord.release();
+500:            } catch (Exception e) {
+==== FilesBridgePlugin.java 380-430
+380:        total = 0;
+381:        try {
+382:            FileOutputStream fos2 = new FileOutputStream(out);
+383:            try {
+384:                buf = new byte[16384];
+385:            } catch (Throwable th3) {
+386:                fos = fos2;
+387:                th2 = th3;
+388:            }
+389:            while (true) {
+390:                byte[] buf2 = buf;
+391:                int n = in.read(buf2);
+392:                if (n < 0) {
+393:                    break;
+394:                }
+395:                long declared2 = declared;
+396:                total += n;
+397:                if (total > maxBytes) {
+398:                    break;
+399:                }
+400:                fos = fos2;
+401:                try {
+402:                    fos.write(buf2, 0, n);
+403:                    fos2 = fos;
+404:                    buf = buf2;
+405:                    declared = declared2;
+406:                } catch (Throwable th4) {
+407:                    th2 = th4;
+408:                }
+409:                th2 = th4;
+410:                try {
+411:                    try {
+412:                        fos.close();
+413:                        throw th2;
+414:                    } catch (Throwable th5) {
+415:                        th = th5;
+416:                        if (in != null) {
+417:                            throw th;
+418:                        }
+419:                        try {
+420:                            in.close();
+421:                            throw th;
+422:                        } catch (Throwable th6) {
+423:                            th.addSuppressed(th6);
+424:                            throw th;
+425:                        }
+426:                    }
+427:                } catch (Throwable th7) {
+428:                    th2.addSuppressed(th7);
+429:                    throw th2;
+430:                }
+==== PhoneBridgePlugin.java 1-45
+1:package com.forge.live;
+2:
+3:import android.content.ContentResolver;
+4:import android.content.Intent;
+5:import android.content.pm.PackageManager;
+6:import android.database.Cursor;
+7:import android.location.Criteria;
+8:import android.location.Location;
+9:import android.location.LocationManager;
+10:import android.net.Uri;
+11:import android.os.Build;
+12:import android.os.VibrationEffect;
+13:import android.os.Vibrator;
+14:import android.os.VibratorManager;
+15:import android.provider.ContactsContract;
+16:import android.provider.Telephony;
+17:import android.telephony.SmsManager;
+18:import android.telephony.TelephonyManager;
+19:import android.widget.Toast;
+20:import androidx.core.app.NotificationCompat;
+21:import androidx.core.content.ContextCompat;
+22:import androidx.core.net.MailTo;
+23:import androidx.vectordrawable.graphics.drawable.PathInterpolatorCompat;
+24:import com.getcapacitor.JSArray;
+25:import com.getcapacitor.JSObject;
+26:import com.getcapacitor.Plugin;
+27:import com.getcapacitor.PluginCall;
+28:import com.getcapacitor.PluginMethod;
+29:import com.getcapacitor.annotation.CapacitorPlugin;
+30:import com.getcapacitor.annotation.Permission;
+31:import com.getcapacitor.annotation.PermissionCallback;
+32:import java.util.ArrayList;
+33:import java.util.Iterator;
+34:import java.util.LinkedHashMap;
+35:import java.util.LinkedHashSet;
+36:import java.util.List;
+37:import java.util.Map;
+38:import org.apache.cordova.BuildConfig;
+39:
+40:@CapacitorPlugin(name = "PhoneBridge", permissions = {@Permission(alias = "sms", strings = {"android.permission.SEND_SMS", "android.permission.READ_SMS", "android.permission.RECEIVE_SMS"}), @Permission(alias = "contacts", strings = {"android.permission.READ_CONTACTS"}), @Permission(alias = "phone", strings = {"android.permission.CALL_PHONE", "android.permission.READ_PHONE_STATE"}), @Permission(alias = "location", strings = {"android.permission.ACCESS_COARSE_LOCATION", "android.permission.ACCESS_FINE_LOCATION"})})
+41:public class PhoneBridgePlugin extends Plugin {
+42:    @PluginMethod
+43:    public void getCapabilities(PluginCall call) {
+44:        JSObject caps = new JSObject();
+45:        PackageManager pm = getContext().getPackageManager();
