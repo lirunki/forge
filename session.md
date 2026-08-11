@@ -247,3 +247,24 @@ await ForgeHost.tts.speak('hello speaker', { route:'speaker' })
 await ForgeHost.audio.clearRoute()
 ```
 
+## Mic PCM stream host wire (2026-08-11)
+
+Shipped in host **2.6.3 / versionCode 35** (Patch 1 of live-translate re-land):
+
+- `ForgeHost.mic.startStream / stopStream / isStreaming`
+- Events to mini-app: `mic.pcm`, `mic.streamStop`, `mic.streamError`
+- Native `MicBridge` listeners forwarded via `postToMiniApp`
+- Auto `stopStream` on exit app mode / preview reload
+- Caps: `micStream`, `micPcm`
+- **Not included:** `ai.transcribe`, `ai.liveTranslate`, STT windows
+
+Smoke:
+```js
+await ForgeHost.permissions.request('mic')
+ForgeHost.on('mic.pcm', d => console.log(d.seq, d.rms, d.bytes))
+await ForgeHost.mic.startStream({ sampleRate:16000, chunkMs:250 })
+// ... speak ...
+await ForgeHost.mic.stopStream()
+```
+
+Next: Patch 2 `ai.transcribe`.

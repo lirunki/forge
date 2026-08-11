@@ -1596,6 +1596,7 @@ termux-reload-settings</div>
       }
       try { await requestMiniAppStateSave('exitAppMode'); } catch (_) {}
       postToMiniApp('pause', { mode: 'chrome', reason: 'exitAppMode', preserve: true, statePreserved: true, automatic: true });
+      try { await stopMicStreamSafe('exitAppMode'); } catch (_) {}
       appMode = false;
       clearTimeout(exitChipTimer);
       el.btnExitApp?.classList.remove('faded', 'show-temp');
@@ -3449,6 +3450,14 @@ termux-reload-settings</div>
       stopRecord: () => call('mic.stopRecord'),
       cancelRecord: () => call('mic.cancelRecord'),
       isRecording: () => call('mic.isRecording'),
+      /**
+       * Continuous PCM stream (native). Chunks via ForgeHost.on('mic.pcm', fn).
+       * Also: mic.streamStop, mic.streamError
+       * opts: { sampleRate?:16000, chunkMs?:250 }
+       */
+      startStream: (opts) => call('mic.startStream', opts || {}),
+      stopStream: () => call('mic.stopStream'),
+      isStreaming: () => call('mic.isStreaming'),
       record: async (opts) => {
         const o = opts || {};
         await call('mic.startRecord', o);
@@ -3671,6 +3680,7 @@ termux-reload-settings</div>
     function loadPreview(app) {
       // Notify previous app instance it's going away
       if (currentApp?.html) postToMiniApp('destroy', { reason: 'reload' });
+      try { stopMicStreamSafe('reload'); } catch (_) {}
       currentApp = app;
       el.previewTitle.textContent = app?.title || 'Untitled app';
       if (app?.carCompatible) {
@@ -4284,6 +4294,52 @@ termux-reload-settings</div>
         throw new Error(e?.message || String(e));
       }
     }
+
+    /** Forward native MicBridge PCM stream events into mini-app host-events. */
+    let micStreamListenersReady = false;
+    async function ensureMicStreamListeners() {
+      if (micStreamListenersReady) return;
+      if (typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform()) return;
+      micStreamListenersReady = true;
+      try {
+        await MicBridge.addListener('micPcm', (data) => {
+          try { postToMiniApp('mic.pcm', data || {}); } catch (_) {}
+        });
+        await MicBridge.addListener('micStreamStop', (data) => {
+          try { postToMiniApp('mic.streamStop', data || {}); } catch (_) {}
+        });
+        await MicBridge.addListener('micStreamError', (data) => {
+          try { postToMiniApp('mic.streamError', data || {}); } catch (_) {}
+        });
+      } catch (e) {
+        console.warn('Mic stream listeners failed', e);
+        micStreamListenersReady = false;
+      }
+    }
+
+    async function stopMicStreamSafe(reason) {
+      try {
+        if (typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform()) return;
+        let streaming = false;
+        try {
+          const st = await nativeCall(MicBridge, 'isStreaming', {});
+          streaming = !!(st && st.streaming);
+        } catch (_) {
+          streaming = true; // try stop anyway
+        }
+        if (!streaming) return;
+        const r = await nativeCall(MicBridge, 'stopStream', {});
+        try {
+          postToMiniApp('mic.streamStop', Object.assign({ reason: reason || 'host' }, r || {}));
+        } catch (_) {}
+      } catch (e) {
+        console.warn('stopMicStreamSafe', e);
+      }
+    }
+
+    // Wire early so first startStream is not racing listener attach (best-effort).
+    try { ensureMicStreamListeners(); } catch (_) {}
+
     async function phoneCall(method, options) {
       return nativeCall(PhoneBridge, method, options);
     }
@@ -4882,7 +4938,7 @@ termux-reload-settings</div>
             dial: false, call: false, contacts: false, location: false,
             vibrate: false, maps: false, email: false,
             apps: false, listApps: false, listActivities: false, launch: false, intents: false,
-            tts: false, audioRoute: false, mic: false, camera: false, fs: true, termux: false, termuxExec: false,
+            tts: false, audioRoute: false, mic: false, micStream: false, camera: false, fs: true, termux: false, termuxExec: false,
             storage: true, secrets: true, events: true, files: true,
             share: true, shareFiles: true,
             ai: false, keepAwake: Capacitor.isNativePlatform(),
@@ -4933,6 +4989,10 @@ termux-reload-settings</div>
             const m = await MicBridge.isAvailable();
             base.mic = !!(m && m.speechRecognition);
             base.micPermission = !!(m && m.permission);
+            base.micStream = !!(m && (m.pcmStream || m.streaming != null));
+            base.micPcm = base.micStream;
+            base.micRecord = !!(m && (m.record || m.wav));
+            if (m && m.formats) base.micFormats = m.formats;
           } catch (_) {}
           try {
             const c = await CameraBridge.isAvailable();
@@ -5936,6 +5996,17 @@ termux-reload-settings</div>
           return await nativeCall(MicBridge, 'cancelRecord', {});
         case 'mic.isRecording':
           return await nativeCall(MicBridge, 'isRecording', {});
+        case 'mic.startStream': {
+          await ensureMicStreamListeners();
+          return await nativeCall(MicBridge, 'startStream', {
+            sampleRate: params.sampleRate,
+            chunkMs: params.chunkMs,
+          });
+        }
+        case 'mic.stopStream':
+          return await nativeCall(MicBridge, 'stopStream', {});
+        case 'mic.isStreaming':
+          return await nativeCall(MicBridge, 'isStreaming', {});
 
         // ——— QR / barcode ———
         case 'qr.isAvailable':
@@ -6458,6 +6529,14 @@ Microphone / speech-to-text + WAV recording:
   await ForgeHost.mic.cancelRecord() / isRecording()
   // Convenience: record N ms then stop
   const clip = await ForgeHost.mic.record({ durationMs:3000, sampleRate:16000 })
+  // Continuous PCM stream (open mic) — chunks while streaming:
+  //   ForgeHost.on('mic.pcm', ({ base64, sampleRate, channels, encoding, rms, seq, bytes, ts }) => { ... })
+  //   ForgeHost.on('mic.streamStop', ...) / ForgeHost.on('mic.streamError', ...)
+  await ForgeHost.mic.startStream({ sampleRate:16000, chunkMs:250 })
+  await ForgeHost.mic.isStreaming()  // { streaming, sampleRate, chunkMs, chunks }
+  await ForgeHost.mic.stopStream()
+  // Caps: getCapabilities().micStream
+  // Note: raw PCM only here — no STT/liveTranslate in this patch. Host stops stream on app exit/reload.
   Use for voice notes; attach wav to ai.chat or share.file. Always request mic permission first.
 
 QR / barcode scan:
