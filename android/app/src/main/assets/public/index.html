@@ -3356,6 +3356,18 @@ termux-reload-settings</div>
       /** Alias of ai.transcribe */
       stt: (opts) => call('ai.transcribe', opts || {}),
       /**
+       * Live streaming translation session (open mic → STT windows → translate).
+       * Events: live.status | live.level | live.partialSource | live.finalSource |
+       *         live.partialTarget | live.finalTarget | live.error
+       * start({ sourceLang?, targetLang, speak?, chunkMs?, windowMs?, providerId?, route? })
+       */
+      liveTranslate: {
+        start: (opts) => call('ai.liveTranslate.start', opts || {}),
+        stop: () => call('ai.liveTranslate.stop'),
+        status: () => call('ai.liveTranslate.status'),
+        configure: (opts) => call('ai.liveTranslate.configure', opts || {}),
+      },
+      /**
        * TTS via host AI provider (cloud /audio/speech) or on-device engine.
        * opts: { text, voice?, mode:'auto'|'cloud'|'native', play?, returnAudio?, rate?, lang?, format?, route? }
        * Cloud uses the same key/provider as ai.chat. Returns { ok, via, dataUrl?, base64?, spoken, ... }.
@@ -4307,6 +4319,475 @@ termux-reload-settings</div>
       }
     }
 
+    // ——— Live translate session (Patch 3) ———
+    const liveTranslate = {
+      running: false,
+      phase: 'idle',
+      sourceLang: 'auto',
+      targetLang: 'en',
+      providerId: null,
+      speak: false,
+      route: '',
+      sampleRate: 16000,
+      chunkMs: 250,
+      windowMs: 1400,
+      overlapMs: 250,
+      silenceMs: 900,
+      rmsThreshold: 0.012,
+      pcmChunks: [],
+      pcmBytes: 0,
+      seq: 0,
+      sourceCommitted: '',
+      sourcePartial: '',
+      lastSpeechAt: 0,
+      sttBusy: false,
+      translateAbort: null,
+      translateTimer: null,
+      windowTimer: null,
+      lastTranslatedSource: '',
+      lastFinalTarget: '',
+      startedAt: 0,
+    };
+
+    function liveEmit(event, data) {
+      try { postToMiniApp(event, data || {}); } catch (_) {}
+    }
+
+    function liveTranslateStatus() {
+      return {
+        running: !!liveTranslate.running,
+        phase: liveTranslate.phase || 'idle',
+        sourceLang: liveTranslate.sourceLang,
+        targetLang: liveTranslate.targetLang,
+        providerId: liveTranslate.providerId,
+        speak: !!liveTranslate.speak,
+        sampleRate: liveTranslate.sampleRate,
+        chunkMs: liveTranslate.chunkMs,
+        windowMs: liveTranslate.windowMs,
+        elapsedMs: liveTranslate.running ? (Date.now() - (liveTranslate.startedAt || Date.now())) : 0,
+        sourcePartial: liveTranslate.sourcePartial || '',
+        sourceCommitted: liveTranslate.sourceCommitted || '',
+      };
+    }
+
+    function liveTranslateConfigure(params) {
+      params = params || {};
+      if (params.sourceLang != null) liveTranslate.sourceLang = String(params.sourceLang || 'auto');
+      if (params.targetLang != null) liveTranslate.targetLang = String(params.targetLang || 'en');
+      if (params.speak != null) liveTranslate.speak = !!params.speak;
+      if (params.route != null) liveTranslate.route = String(params.route || '');
+      if (params.windowMs != null) {
+        const w = Number(params.windowMs);
+        if (w >= 600 && w <= 4000) liveTranslate.windowMs = w;
+      }
+      if (params.silenceMs != null) {
+        const s = Number(params.silenceMs);
+        if (s >= 300 && s <= 4000) liveTranslate.silenceMs = s;
+      }
+      if (params.rmsThreshold != null) {
+        const t = Number(params.rmsThreshold);
+        if (t > 0 && t < 0.5) liveTranslate.rmsThreshold = t;
+      }
+      liveEmit('live.status', liveTranslateStatus());
+      return liveTranslateStatus();
+    }
+
+    function liveB64ToU8(b64) {
+      const bin = atob(String(b64 || '').replace(/\s+/g, ''));
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    function liveU8ToB64(u8) {
+      let s = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < u8.length; i += chunk) {
+        s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+      }
+      return btoa(s);
+    }
+
+    function livePcmToWavB64(pcmU8, sampleRate) {
+      const pcmBytes = pcmU8.length;
+      const buffer = new ArrayBuffer(44 + pcmBytes);
+      const view = new DataView(buffer);
+      const writeStr = (off, str) => {
+        for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
+      };
+      writeStr(0, 'RIFF');
+      view.setUint32(4, 36 + pcmBytes, true);
+      writeStr(8, 'WAVE');
+      writeStr(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeStr(36, 'data');
+      view.setUint32(40, pcmBytes, true);
+      const bytes = new Uint8Array(buffer);
+      bytes.set(pcmU8, 44);
+      return liveU8ToB64(bytes);
+    }
+
+    function liveConcatPcm(chunks) {
+      let total = 0;
+      for (const c of chunks) total += (c.bytes && c.bytes.length) || 0;
+      const out = new Uint8Array(total);
+      let off = 0;
+      for (const c of chunks) {
+        if (!c.bytes || !c.bytes.length) continue;
+        out.set(c.bytes, off);
+        off += c.bytes.length;
+      }
+      return out;
+    }
+
+    function liveMergeTranscript(prev, next) {
+      const a = String(prev || '').trim();
+      const b = String(next || '').trim();
+      if (!b) return a;
+      if (!a) return b;
+      if (b.startsWith(a)) return b;
+      if (a.endsWith(b)) return a;
+      const max = Math.min(a.length, b.length, 100);
+      for (let n = max; n >= 8; n--) {
+        if (a.slice(-n) === b.slice(0, n)) return (a + b.slice(n)).replace(/\s+/g, ' ').trim();
+      }
+      const aw = a.split(/\s+/);
+      const bw = b.split(/\s+/);
+      const maxW = Math.min(aw.length, bw.length, 12);
+      for (let n = maxW; n >= 1; n--) {
+        if (aw.slice(-n).join(' ') === bw.slice(0, n).join(' ')) {
+          return aw.concat(bw.slice(n)).join(' ');
+        }
+      }
+      return (a + ' ' + b).replace(/\s+/g, ' ').trim();
+    }
+
+    function liveRmsOfPcm(u8) {
+      if (!u8 || u8.length < 2) return 0;
+      let sumSq = 0;
+      let samples = 0;
+      for (let i = 0; i + 1 < u8.length; i += 2) {
+        let s = u8[i] | (u8[i + 1] << 8);
+        if (s > 32767) s -= 65536;
+        sumSq += s * s;
+        samples++;
+      }
+      return samples > 0 ? Math.sqrt(sumSq / samples) / 32768 : 0;
+    }
+
+    async function liveChatTranslate(text, opts) {
+      opts = opts || {};
+      const src = liveTranslate.sourceLang || 'auto';
+      const tgt = liveTranslate.targetLang || 'en';
+      const sys =
+        'You are a real-time interpreter. Translate the user speech transcript into the target language only. ' +
+        'Output ONLY the translation — no quotes, labels, or commentary. ' +
+        'Preserve meaning, names, and numbers. If the text is already in the target language, return it unchanged. ' +
+        'Source language: ' + src + '. Target language: ' + tgt + '.';
+      const r = await chatCompletions(
+        [
+          { role: 'system', content: sys },
+          { role: 'user', content: text },
+        ],
+        opts.signal,
+        { jsonMode: 'off' }
+      );
+      if (r == null) return '';
+      if (typeof r === 'string') return r.trim();
+      if (r.content != null) return String(r.content).trim();
+      if (r.message && r.message.content != null) return String(r.message.content).trim();
+      if (r.text != null) return String(r.text).trim();
+      return String(r).trim();
+    }
+
+    async function liveTranslateSegment(sourceText, opts) {
+      opts = opts || {};
+      const final = !!opts.final;
+      const text = String(sourceText || '').trim();
+      if (!text) return;
+      if (!final && text === liveTranslate.lastTranslatedSource) return;
+      try { if (liveTranslate.translateAbort) liveTranslate.translateAbort.abort(); } catch (_) {}
+      const ac = new AbortController();
+      liveTranslate.translateAbort = ac;
+      const seq = ++liveTranslate.seq;
+      liveTranslate.phase = 'translating';
+      liveEmit('live.status', liveTranslateStatus());
+      let out = '';
+      try {
+        await withAiRuntime(liveTranslate.providerId, null, async () => {
+          out = await liveChatTranslate(text, { signal: ac.signal });
+        });
+      } catch (e) {
+        if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) return;
+        liveEmit('live.error', { message: (e && e.message) || String(e), recoverable: true });
+        liveTranslate.phase = liveTranslate.running ? 'listening' : 'idle';
+        liveEmit('live.status', liveTranslateStatus());
+        return;
+      }
+      out = String(out || '').trim();
+      if (!out) {
+        liveTranslate.phase = liveTranslate.running ? 'listening' : 'idle';
+        liveEmit('live.status', liveTranslateStatus());
+        return;
+      }
+      liveTranslate.lastTranslatedSource = text;
+      if (final) {
+        if (out !== liveTranslate.lastFinalTarget) {
+          liveTranslate.lastFinalTarget = out;
+          liveEmit('live.finalTarget', { text: out, seq: seq, source: text });
+          if (liveTranslate.speak) {
+            try {
+              const speakOpts = {
+                text: out,
+                lang: liveTranslate.targetLang || 'en',
+                wait: false,
+              };
+              if (liveTranslate.route) speakOpts.route = liveTranslate.route;
+              await nativeCall(TtsBridge, 'speak', speakOpts);
+            } catch (_) {}
+          }
+        }
+      } else {
+        liveEmit('live.partialTarget', { text: out, seq: seq, source: text, final: false });
+      }
+      liveTranslate.phase = liveTranslate.running ? 'listening' : 'idle';
+      liveEmit('live.status', liveTranslateStatus());
+    }
+
+    function liveSchedulePartialTranslate() {
+      if (!liveTranslate.running) return;
+      clearTimeout(liveTranslate.translateTimer);
+      liveTranslate.translateTimer = setTimeout(() => {
+        const cur = (liveTranslate.sourceCommitted + ' ' + liveTranslate.sourcePartial).trim();
+        if (cur.length >= 2) liveTranslateSegment(cur, { final: false });
+      }, 400);
+    }
+
+    async function liveProcessWindow() {
+      if (!liveTranslate.running || liveTranslate.sttBusy) return;
+      const bytesPerSec = liveTranslate.sampleRate * 2;
+      const windowBytes = Math.floor((liveTranslate.windowMs / 1000) * bytesPerSec);
+      const overlapBytes = Math.floor((liveTranslate.overlapMs / 1000) * bytesPerSec);
+      if (liveTranslate.pcmBytes < Math.min(windowBytes, bytesPerSec * 0.55)) return;
+
+      const all = liveConcatPcm(liveTranslate.pcmChunks);
+      const slice = all.length > windowBytes ? all.subarray(all.length - windowBytes) : all;
+      const rms = liveRmsOfPcm(slice);
+      liveEmit('live.level', { rms: rms });
+
+      const silent = rms < liveTranslate.rmsThreshold;
+      if (silent) {
+        const idleFor = Date.now() - (liveTranslate.lastSpeechAt || liveTranslate.startedAt);
+        if (liveTranslate.sourcePartial && idleFor >= liveTranslate.silenceMs) {
+          const phrase = liveTranslate.sourcePartial.trim();
+          liveTranslate.sourceCommitted = liveMergeTranscript(liveTranslate.sourceCommitted, phrase);
+          liveTranslate.sourcePartial = '';
+          liveEmit('live.finalSource', {
+            text: phrase,
+            committed: liveTranslate.sourceCommitted,
+            seq: ++liveTranslate.seq,
+          });
+          await liveTranslateSegment(phrase, { final: true });
+        }
+        if (liveTranslate.pcmBytes > overlapBytes * 2) {
+          const keep = all.subarray(Math.max(0, all.length - overlapBytes));
+          liveTranslate.pcmChunks = [{ bytes: keep, rms: 0, ts: Date.now() }];
+          liveTranslate.pcmBytes = keep.length;
+        }
+        return;
+      }
+
+      liveTranslate.lastSpeechAt = Date.now();
+      liveTranslate.sttBusy = true;
+      liveTranslate.phase = 'transcribing';
+      liveEmit('live.status', liveTranslateStatus());
+      try {
+        const wavB64 = livePcmToWavB64(slice, liveTranslate.sampleRate);
+        let text = '';
+        await withAiRuntime(liveTranslate.providerId, null, async () => {
+          text = await transcribeAudioFile({
+            base64: wavB64,
+            mime: 'audio/wav',
+            name: 'live.wav',
+            language: liveTranslate.sourceLang && liveTranslate.sourceLang !== 'auto'
+              ? liveTranslate.sourceLang
+              : null,
+          });
+        });
+        const t = String(text || '').trim();
+        if (t) {
+          liveTranslate.sourcePartial = liveMergeTranscript(liveTranslate.sourcePartial, t);
+          const shown = (liveTranslate.sourceCommitted + ' ' + liveTranslate.sourcePartial).trim();
+          liveEmit('live.partialSource', {
+            text: liveTranslate.sourcePartial,
+            full: shown,
+            seq: ++liveTranslate.seq,
+          });
+          liveSchedulePartialTranslate();
+        }
+      } catch (e) {
+        liveEmit('live.error', { message: (e && e.message) || String(e), recoverable: true });
+      } finally {
+        liveTranslate.sttBusy = false;
+        try {
+          const all2 = liveConcatPcm(liveTranslate.pcmChunks);
+          if (all2.length > windowBytes + overlapBytes) {
+            const keep = all2.subarray(all2.length - (windowBytes + overlapBytes));
+            liveTranslate.pcmChunks = [{ bytes: keep, rms: 0, ts: Date.now() }];
+            liveTranslate.pcmBytes = keep.length;
+          }
+        } catch (_) {}
+        if (liveTranslate.running) {
+          liveTranslate.phase = 'listening';
+          liveEmit('live.status', liveTranslateStatus());
+        }
+      }
+    }
+
+    function onLiveMicPcm(data) {
+      if (!liveTranslate.running) return;
+      try {
+        if (!data || !data.base64) return;
+        const bytes = liveB64ToU8(data.base64);
+        if (!bytes.length) return;
+        const rms = Number(data.rms);
+        const entry = {
+          bytes: bytes,
+          rms: Number.isFinite(rms) ? rms : liveRmsOfPcm(bytes),
+          ts: Date.now(),
+        };
+        liveTranslate.pcmChunks.push(entry);
+        liveTranslate.pcmBytes += bytes.length;
+        if (entry.rms >= liveTranslate.rmsThreshold) liveTranslate.lastSpeechAt = entry.ts;
+        const maxBytes = liveTranslate.sampleRate * 2 * 12;
+        while (liveTranslate.pcmBytes > maxBytes && liveTranslate.pcmChunks.length > 1) {
+          const drop = liveTranslate.pcmChunks.shift();
+          liveTranslate.pcmBytes -= (drop && drop.bytes && drop.bytes.length) || 0;
+        }
+        liveEmit('live.level', { rms: entry.rms });
+      } catch (e) {
+        console.warn('onLiveMicPcm', e);
+      }
+    }
+
+    async function liveTranslateStart(params) {
+      params = params || {};
+      if (liveTranslate.running) return liveTranslateStatus();
+
+      const targetLang = String(params.targetLang || params.to || params.target || 'en').trim() || 'en';
+      const sourceLang = String(params.sourceLang || params.from || params.source || 'auto').trim() || 'auto';
+      const providerId = resolveMiniAppProviderId(params);
+      const chunkMs = Math.min(Math.max(Number(params.chunkMs) || 250, 100), 1000);
+      const windowMs = Math.min(Math.max(Number(params.windowMs) || 1400, 700), 3500);
+      const sampleRate = Math.min(Math.max(Number(params.sampleRate) || 16000, 8000), 48000);
+
+      await withAiRuntime(providerId, null, async (rt) => {
+        if (!(rt.key && String(rt.key).trim()) && !rt.allowEmptyKey) {
+          throw new Error(
+            'Host AI not configured. Set a provider key in Forge AI settings (needs STT: OpenAI/Groq/xAI).'
+          );
+        }
+        if (backendForRuntime(rt) === 'gemini') {
+          throw new Error('Live translate STT requires OpenAI/Groq/xAI (not Gemini).');
+        }
+      });
+
+      try { await nativeCall(MicBridge, 'requestPermission', {}); } catch (_) {}
+      await ensureMicStreamListeners();
+
+      liveTranslate.running = true;
+      liveTranslate.phase = 'starting';
+      liveTranslate.sourceLang = sourceLang;
+      liveTranslate.targetLang = targetLang;
+      liveTranslate.providerId = providerId;
+      liveTranslate.speak = !!params.speak;
+      liveTranslate.route = params.route || params.output || '';
+      liveTranslate.sampleRate = sampleRate;
+      liveTranslate.chunkMs = chunkMs;
+      liveTranslate.windowMs = windowMs;
+      liveTranslate.overlapMs = Math.min(Math.max(Number(params.overlapMs) || 250, 0), 800);
+      if (params.silenceMs != null) {
+        const s = Number(params.silenceMs);
+        if (s >= 300 && s <= 4000) liveTranslate.silenceMs = s;
+      }
+      if (params.rmsThreshold != null) {
+        const t = Number(params.rmsThreshold);
+        if (t > 0 && t < 0.5) liveTranslate.rmsThreshold = t;
+      }
+      liveTranslate.pcmChunks = [];
+      liveTranslate.pcmBytes = 0;
+      liveTranslate.sourceCommitted = '';
+      liveTranslate.sourcePartial = '';
+      liveTranslate.lastTranslatedSource = '';
+      liveTranslate.lastFinalTarget = '';
+      liveTranslate.lastSpeechAt = Date.now();
+      liveTranslate.startedAt = Date.now();
+      liveTranslate.sttBusy = false;
+      liveEmit('live.status', liveTranslateStatus());
+
+      try {
+        try { await BackgroundForge.start({ title: 'Live Translate', text: 'Listening…' }); } catch (_) {}
+        await nativeCall(MicBridge, 'startStream', { sampleRate: sampleRate, chunkMs: chunkMs });
+      } catch (e) {
+        liveTranslate.running = false;
+        liveTranslate.phase = 'idle';
+        liveEmit('live.status', liveTranslateStatus());
+        liveEmit('live.error', { message: (e && e.message) || String(e), recoverable: false });
+        throw e;
+      }
+
+      const tick = Math.max(450, Math.floor(windowMs * 0.7));
+      clearInterval(liveTranslate.windowTimer);
+      liveTranslate.windowTimer = setInterval(() => {
+        liveProcessWindow().catch((err) => console.warn('liveProcessWindow', err));
+      }, tick);
+
+      liveTranslate.phase = 'listening';
+      liveEmit('live.status', liveTranslateStatus());
+      return liveTranslateStatus();
+    }
+
+    async function liveTranslateStop() {
+      const was = liveTranslate.running;
+      liveTranslate.running = false;
+      liveTranslate.phase = 'stopping';
+      clearInterval(liveTranslate.windowTimer);
+      liveTranslate.windowTimer = null;
+      clearTimeout(liveTranslate.translateTimer);
+      liveTranslate.translateTimer = null;
+      try { if (liveTranslate.translateAbort) liveTranslate.translateAbort.abort(); } catch (_) {}
+      liveTranslate.translateAbort = null;
+
+      const phrase = String(liveTranslate.sourcePartial || '').trim();
+      if (phrase) {
+        liveTranslate.sourceCommitted = liveMergeTranscript(liveTranslate.sourceCommitted, phrase);
+        liveEmit('live.finalSource', {
+          text: phrase,
+          committed: liveTranslate.sourceCommitted,
+          seq: ++liveTranslate.seq,
+        });
+        try { await liveTranslateSegment(phrase, { final: true }); } catch (_) {}
+        liveTranslate.sourcePartial = '';
+      }
+
+      try { await nativeCall(MicBridge, 'stopStream', {}); } catch (_) {}
+      try { await BackgroundForge.stop(); } catch (_) {}
+
+      liveTranslate.pcmChunks = [];
+      liveTranslate.pcmBytes = 0;
+      liveTranslate.phase = 'idle';
+      liveEmit('live.status', liveTranslateStatus());
+      liveEmit('mic.streamStop', { stopped: true, reason: 'liveTranslateStop' });
+      return Object.assign({ stopped: true, wasRunning: was }, liveTranslateStatus());
+    }
+
+
     /** Forward native MicBridge PCM stream events into mini-app host-events. */
     let micStreamListenersReady = false;
     async function ensureMicStreamListeners() {
@@ -4315,6 +4796,7 @@ termux-reload-settings</div>
       micStreamListenersReady = true;
       try {
         await MicBridge.addListener('micPcm', (data) => {
+          try { onLiveMicPcm(data); } catch (e) { console.warn('micPcm live', e); }
           try { postToMiniApp('mic.pcm', data || {}); } catch (_) {}
         });
         await MicBridge.addListener('micStreamStop', (data) => {
@@ -4322,6 +4804,11 @@ termux-reload-settings</div>
         });
         await MicBridge.addListener('micStreamError', (data) => {
           try { postToMiniApp('mic.streamError', data || {}); } catch (_) {}
+          try {
+            if (liveTranslate && liveTranslate.running) {
+              liveEmit('live.error', { message: (data && data.message) || 'mic stream error', recoverable: true });
+            }
+          } catch (_) {}
         });
       } catch (e) {
         console.warn('Mic stream listeners failed', e);
@@ -4331,6 +4818,10 @@ termux-reload-settings</div>
 
     async function stopMicStreamSafe(reason) {
       try {
+        if (liveTranslate && liveTranslate.running) {
+          try { await liveTranslateStop(); } catch (e) { console.warn('liveTranslateStop', e); }
+          return;
+        }
         if (typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform()) return;
         let streaming = false;
         try {
@@ -4950,7 +5441,7 @@ termux-reload-settings</div>
             dial: false, call: false, contacts: false, location: false,
             vibrate: false, maps: false, email: false,
             apps: false, listApps: false, listActivities: false, launch: false, intents: false,
-            tts: false, audioRoute: false, mic: false, micStream: false, camera: false, fs: true, termux: false, termuxExec: false,
+            tts: false, audioRoute: false, mic: false, micStream: false, liveTranslate: false, camera: false, fs: true, termux: false, termuxExec: false,
             storage: true, secrets: true, events: true, files: true,
             share: true, shareFiles: true,
             ai: false, keepAwake: Capacitor.isNativePlatform(),
@@ -5003,6 +5494,7 @@ termux-reload-settings</div>
             base.micPermission = !!(m && m.permission);
             base.micStream = !!(m && (m.pcmStream || m.streaming != null));
             base.micPcm = base.micStream;
+            base.liveTranslate = !!base.micStream;
             base.micRecord = !!(m && (m.record || m.wav));
             if (m && m.formats) base.micFormats = m.formats;
           } catch (_) {}
@@ -5431,6 +5923,15 @@ termux-reload-settings</div>
             };
           });
         }
+
+        case 'ai.liveTranslate.start':
+          return await liveTranslateStart(params || {});
+        case 'ai.liveTranslate.stop':
+          return await liveTranslateStop();
+        case 'ai.liveTranslate.status':
+          return liveTranslateStatus();
+        case 'ai.liveTranslate.configure':
+          return liveTranslateConfigure(params || {});
 
         // ——— AI convenience: TTS + voice list via host AI runtime ———
         // Cloud TTS uses the same provider/key as ai.chat (OpenAI-compatible /audio/speech).
@@ -6578,6 +7079,21 @@ Speech-to-text (cloud STT — Patch 2):
   })
   // Alias: ForgeHost.ai.stt({ ... })
   // Caps: (await ForgeHost.ai.isAvailable()).stt
+
+Live translation session (open mic → STT windows → translate):
+  // Events via ForgeHost.on(...):
+  //   live.status | live.level | live.partialSource | live.finalSource
+  //   live.partialTarget | live.finalTarget | live.error
+  ForgeHost.on('live.partialTarget', d => console.log(d.text))
+  await ForgeHost.ai.liveTranslate.start({
+    sourceLang:'auto', targetLang:'en', speak:true,
+    chunkMs:250, windowMs:1400, route:'speaker'
+  })
+  await ForgeHost.ai.liveTranslate.status()
+  await ForgeHost.ai.liveTranslate.configure({ speak:false })
+  await ForgeHost.ai.liveTranslate.stop()
+  // Needs STT provider (OpenAI/Groq/xAI). Caps: getCapabilities().liveTranslate
+  // One-direction A→B. Bidirectional conversation UX is mini-app-level.
 
 Audio output routing (force speaker / earpiece / headset / bluetooth):
   // Routes: auto|default|speaker|earpiece|wired|bluetooth|communication

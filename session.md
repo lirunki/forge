@@ -285,3 +285,15 @@ const { text } = await ForgeHost.ai.transcribe({ dataUrl: wav.dataUrl, language:
 ```
 
 Next: Patch 3 `ai.liveTranslate` session.
+
+## ai.liveTranslate (2026-08-11)
+
+Shipped in host **2.6.5 / versionCode 37** (Patch 3):
+
+- `ForgeHost.ai.liveTranslate.start/stop/status/configure`
+- Events: `live.status|level|partialSource|finalSource|partialTarget|finalTarget|error`
+- Pipeline: mic PCM → windowed STT → chat translate → optional TTS (`route` supported)
+- Auto-stop on app exit/reload
+- One-direction A→B only
+
+Next: Patch 4 conversation mini-app / bidirectional UX.
