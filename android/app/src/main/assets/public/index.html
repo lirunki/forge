@@ -894,7 +894,9 @@ termux-reload-settings</div>
         <li><b>Sketches:</b> attach a UI wireframe with 🖼 Image or 📷 Camera (or paste a screenshot).</li>
         <li><b>Iterate:</b> after the first build, ask for changes or use refine chips below.</li>
         <li><b>Library:</b> Save, set an icon, Open (own window), or pin to Home.</li>
-        <li><b>Device powers:</b> mini-apps can use camera, mic WAV, QR, share, notify, jobs via ForgeHost.</li>
+        <li><b>Open / share HTML:</b> From WhatsApp or Files use <b>Open with → Forge</b> or <b>Share → Forge</b> to install a mini-app.</li>
+        <li><b>Kitchen sink lab:</b> Library → Kitchen sink demos every ForgeHost API.</li>
+        <li><b>Device powers:</b> camera, mic/PCM, QR, share, notify, jobs, termux, AI, phone, apps via ForgeHost.</li>
         <li><b>AI tab:</b> connect a free provider (Groq, Gemini…) if you have no key yet.</li>
       </ul>
       <div class="hints-section-label">Refine chips</div>
@@ -973,7 +975,7 @@ termux-reload-settings</div>
           <button class="btn secondary small" id="btnImportLib" type="button">Import</button>
           <button class="btn secondary small" id="btnDriveBackup" type="button" title="Backup library to Google Drive / folder">Backup</button>
           <button class="btn secondary small" id="btnDriveRestore" type="button" title="Restore library from backup folder">Restore</button>
-          <button class="btn secondary small" id="btnKitchenSink" type="button" title="Install API demo app">Demo</button>
+          <button class="btn secondary small" id="btnKitchenSink" type="button" title="Install full ForgeHost kitchen sink">Kitchen sink</button>
           <button class="btn secondary small" id="btnRefreshLib" type="button">Refresh</button>
           <input type="file" id="importFile" accept=".html,.htm,text/html" hidden />
         </div>
@@ -1152,11 +1154,11 @@ termux-reload-settings</div>
         <div class="card">
           <h2>About Forge</h2>
           <p style="color:var(--muted);font-size:0.9rem;">
-            Forge is a host runtime. It generates sandboxed mini-apps and runs them live.
-            Generated apps can use ForgeHost bridges: phone/SMS/contacts/location, on-device TTS,
-            mic STT, camera/gallery, filesystem, Termux run/exec (stdout capture), share, storage, and HTTP.
-            Save an app, then tap <b>Home</b> / <b>Home screen</b> to pin it to your launcher (Nova, Pixel, etc.).
-            Back up the library to a Google Drive folder from Settings → Library backup (or Library → Backup).
+            Forge runs <b>HTML mini-apps</b> on your phone. <b>Open with Forge</b> or <b>Share → Forge</b>
+            from WhatsApp, Files, Drive, etc. to import a .html and run it. You can also Import from Library,
+            generate with AI, or try the Kitchen sink API lab.
+            Bridges: phone/SMS/location, TTS/audio, mic, camera/QR, files, Termux, share, notify/jobs, AI, storage.
+            Pin to Home screen. Backup library under Settings → Library backup.
           </p>
         </div>
       </section>
@@ -1183,6 +1185,7 @@ termux-reload-settings</div>
     const JobBridge = registerPlugin('JobBridge');
     const QrBridge = registerPlugin('QrBridge');
     const DriveBridge = registerPlugin('DriveBridge');
+    const OpenHtmlBridge = registerPlugin('OpenHtmlBridge');
 
     const FS_DIRS = {
       documents: Directory.Documents,
@@ -10127,7 +10130,7 @@ General:
         const empty = document.createElement('div');
         empty.className = 'bubble system';
         empty.style.alignSelf = 'stretch';
-        empty.textContent = 'No saved apps yet. Build one and tap Save, or Import an .html file.';
+        empty.textContent = 'No saved apps yet. Build one and tap Save, Import any .html, or install the Kitchen sink lab.';
         el.libList.appendChild(empty);
         return;
       }
@@ -10491,7 +10494,7 @@ General:
       return String(text || '');
     }
 
-    async function importHtmlFile(file) {
+    async function importHtmlFile(file, opts = {}) {
       if (!file) return;
       const name = file.name || 'import.html';
       const mime = file.type || file.mime || '';
@@ -10539,6 +10542,7 @@ General:
       };
       list.push(app);
       setLibrary(list);
+      try { clearDriveTombstone(app.id); } catch (_) {}
       renderLibrary();
       const hasScript = /<script[\s>]/i.test(html);
       const msg = (renamed
@@ -10550,6 +10554,95 @@ General:
       if (Capacitor.isNativePlatform()) {
         PhoneBridge.toast({ message: msg, long: true }).catch(() => {});
       }
+      if (opts.openAfter !== false && opts.openAfter) {
+        try {
+          loadPreview(app);
+          enterAppMode('library');
+        } catch (_) {}
+      }
+      return app;
+    }
+
+
+    /** Import + open HTML received via Android VIEW/SEND (WhatsApp, Files, …). */
+    let openHtmlBusy = false;
+    async function consumeOpenHtmlIntent(opts = {}) {
+      if (!Capacitor.isNativePlatform() || openHtmlBusy) return null;
+      if (typeof OpenHtmlBridge === 'undefined' || !OpenHtmlBridge) return null;
+      openHtmlBusy = true;
+      try {
+        let pending = false;
+        try {
+          const h = await nativeCall(OpenHtmlBridge, 'hasPending', {});
+          pending = !!h?.pending;
+        } catch (_) {
+          pending = true; // try consume anyway
+        }
+        if (!pending && !opts.force) return null;
+
+        setLibStatus('Opening shared HTML…', '');
+        const r = await nativeCall(OpenHtmlBridge, 'consume', {});
+        if (!r || r.cancelled || (!r.html && !r.base64 && !r.dataUrl)) {
+          return null;
+        }
+        const name = r.name || 'shared.html';
+        const mime = r.mime || r.type || 'text/html';
+        // Prefer direct html string when provided
+        let file = {
+          name,
+          mime,
+          type: mime,
+          base64: r.base64,
+          dataUrl: r.dataUrl,
+          html: r.html,
+          size: r.size,
+        };
+        // decodeImportedHtmlPayload may not know .html field — handle here
+        if (r.html && typeof r.html === 'string') {
+          const fake = {
+            name,
+            mime,
+            type: mime,
+            // synthesize minimal path through importHtmlFile by base64
+            base64: btoa(unescape(encodeURIComponent(r.html))),
+            dataUrl: 'data:text/html;charset=utf-8;base64,' + btoa(unescape(encodeURIComponent(r.html))),
+          };
+          file = fake;
+        }
+        const app = await importHtmlFile(file, { openAfter: opts.openAfter !== false });
+        if (app) {
+          setLibStatus(`Opened “${app.title}” from share`, 'ok');
+          try {
+            switchTab?.('library');
+          } catch (_) {
+            try {
+              document.querySelector('.tab[data-tab="library"]')?.click();
+            } catch (__) {}
+          }
+        }
+        return app;
+      } catch (e) {
+        console.warn('consumeOpenHtmlIntent', e);
+        setLibStatus('Could not open shared HTML: ' + (e?.message || e), 'err');
+        return null;
+      } finally {
+        openHtmlBusy = false;
+      }
+    }
+
+    async function wireOpenHtmlBridge() {
+      if (!Capacitor.isNativePlatform()) return;
+      if (typeof OpenHtmlBridge === 'undefined' || !OpenHtmlBridge) return;
+      try {
+        await OpenHtmlBridge.addListener('htmlOpen', () => {
+          consumeOpenHtmlIntent({ openAfter: true });
+        });
+      } catch (e) {
+        console.warn('htmlOpen listener', e);
+      }
+      // Cold start: intent may already be pending
+      setTimeout(() => { consumeOpenHtmlIntent({ openAfter: true }); }, 400);
+      setTimeout(() => { consumeOpenHtmlIntent({ openAfter: true }); }, 1200);
     }
 
     function safeExportName(title) {
@@ -10833,152 +10926,492 @@ General:
       renderTour();
     }
 
-    // ——— Kitchen-sink demo mini-app ———
+
+    // ——— Kitchen-sink demo mini-app (full ForgeHost surface) ———
     function kitchenSinkHtml() {
       return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Forge API Lab</title>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Forge Kitchen Sink</title>
 <style>
-:root{color-scheme:dark}
-body{font-family:system-ui,sans-serif;margin:0;background:#0b0b12;color:#f2f2f7}
-header{padding:1rem;background:#141422;border-bottom:1px solid #2a2a36;position:sticky;top:0}
-h1{font-size:1.1rem;margin:0 0 .25rem}
-.sub{color:#9a9aab;font-size:.85rem}
-main{padding:1rem;display:grid;gap:.75rem}
-section{background:#141422;border:1px solid #2a2a36;border-radius:14px;padding:.85rem}
-h2{font-size:.95rem;margin:0 0 .55rem}
-.row{display:flex;flex-wrap:wrap;gap:.4rem}
-button{border:0;border-radius:10px;padding:.55rem .75rem;background:#6d28d9;color:#fff;font-weight:600}
-button.sec{background:#222233;border:1px solid #333}
-pre{white-space:pre-wrap;word-break:break-word;background:#0a0a10;border-radius:10px;padding:.65rem;font-size:.78rem;max-height:180px;overflow:auto;margin:.55rem 0 0}
-.ok{color:#34d399}.err{color:#fb7185}
-input,select{width:100%;padding:.5rem;border-radius:8px;border:1px solid #333;background:#0a0a10;color:#fff;margin:.35rem 0}
-</style></head><body>
-<header><h1>Forge API Lab</h1><div class="sub">Kitchen-sink demo for ForgeHost bridges</div></header>
+:root{color-scheme:dark;--bg:#09090f;--panel:#13131d;--border:#2a2a38;--text:#f3f3f7;--muted:#9b9bb0;--accent:#7c3aed;--accent2:#0ea5e9;--ok:#34d399;--err:#fb7185;--warn:#fbbf24}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.35}
+header{position:sticky;top:0;z-index:5;padding:.85rem 1rem;background:rgba(19,19,29,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+header h1{margin:0;font-size:1.05rem}
+header .sub{color:var(--muted);font-size:.8rem;margin-top:.2rem}
+.tabs{display:flex;gap:.35rem;overflow:auto;padding:.55rem 1rem .15rem;position:sticky;top:64px;z-index:4;background:var(--bg)}
+.tabs button{flex:0 0 auto;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:999px;padding:.4rem .7rem;font-size:.78rem;font-weight:600}
+.tabs button.on{background:var(--accent);border-color:transparent;color:#fff}
+main{padding:.75rem 1rem 5.5rem;display:grid;gap:.7rem}
+section{display:none;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:.85rem}
+section.on{display:block}
+section h2{margin:0 0 .55rem;font-size:.92rem}
+.row{display:flex;flex-wrap:wrap;gap:.4rem;margin:.35rem 0}
+button, .btn{border:0;border-radius:10px;padding:.52rem .72rem;background:var(--accent);color:#fff;font-weight:650;font-size:.84rem}
+button.sec,.btn.sec{background:#1c1c2a;border:1px solid var(--border);color:var(--text)}
+button.danger{background:#7f1d1d}
+input,select,textarea{width:100%;padding:.55rem .65rem;border-radius:10px;border:1px solid var(--border);background:#0a0a12;color:var(--text);font:inherit;margin:.3rem 0}
+textarea{min-height:72px;resize:vertical}
+label{display:block;font-size:.75rem;color:var(--muted);font-weight:600;margin-top:.35rem}
+.caps{display:flex;flex-wrap:wrap;gap:.3rem;margin:.4rem 0 .2rem}
+.chip{font-size:.72rem;padding:.2rem .45rem;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:#0c0c14}
+.chip.on{color:#052e1b;background:#34d399;border-color:transparent;font-weight:700}
+.chip.off{opacity:.55}
+pre#log{position:fixed;left:0;right:0;bottom:0;margin:0;max-height:28vh;overflow:auto;background:#05050a;border-top:1px solid var(--border);padding:.55rem .75rem;font-size:.72rem;white-space:pre-wrap;word-break:break-word;z-index:6}
+.ok{color:var(--ok)}.err{color:var(--err)}.muted{color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
+@media(max-width:420px){.grid2{grid-template-columns:1fr}}
+img#pic,video#vid{max-width:100%;border-radius:10px;display:none;margin-top:.45rem}
+audio#aud{width:100%;margin-top:.45rem;display:none}
+.hint{font-size:.78rem;color:var(--muted);margin:.25rem 0 .5rem}
+code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Forge Kitchen Sink</h1>
+  <div class="sub">HTML mini-app lab — every ForgeHost bridge in one place</div>
+</header>
+<nav class="tabs" id="tabs"></nav>
 <main>
-<section><h2>Status</h2><div class="row"><button id="btnCaps">Capabilities</button><button class="sec" id="btnPerms">Permissions</button><button class="sec" id="btnPack">Pack: phone</button></div><pre id="out">Ready.</pre></section>
-<section><h2>State (auto-saves on background)</h2>
-<input id="note" data-forge-persist placeholder="Type something, background the app, return…"/>
-<div class="row"><button id="btnStateSave">state.set</button><button class="sec" id="btnStateGet">state.get</button></div></section>
-<section><h2>AI menu</h2><select id="prov"></select><div class="row"><button id="btnAiList">List providers</button><button class="sec" id="btnAiChat">Chat ping</button></div></section>
-<section><h2>Share / Notify / Jobs</h2><div class="row">
-<button id="btnShare">Share text</button>
-<button class="sec" id="btnNotify">Notify</button>
-<button class="sec" id="btnJob">Job +30s</button>
-</div></section>
-<section><h2>Mic WAV / QR / Camera</h2><div class="row">
-<button id="btnRec">Record 3s WAV</button>
-<button class="sec" id="btnQr">Scan QR</button>
-<button class="sec" id="btnCam">Photo</button>
-</div><audio id="aud" controls style="width:100%;margin-top:.5rem;display:none"></audio>
-<img id="pic" alt="" style="max-width:100%;border-radius:10px;display:none;margin-top:.5rem"/>
+<section id="tab-home" class="on">
+  <h2>Host status</h2>
+  <p class="hint">Forge runs arbitrary HTML as mini-apps with device bridges. Import .html, forge with AI, or use this lab.</p>
+  <div class="row">
+    <button id="btnInfo">App info</button>
+    <button class="sec" id="btnCaps">Capabilities</button>
+    <button class="sec" id="btnRefreshCaps">Probe again</button>
+  </div>
+  <div class="caps" id="caps"></div>
+  <label>Quick log filter</label>
+  <input id="filter" placeholder="type to filter log text…"/>
 </section>
-<section><h2>Apps / intents</h2>
-<input id="appQ" placeholder="filter apps (e.g. whatsapp, maps)"/>
-<div class="row">
-<button id="btnApps">List apps</button>
-<button class="sec" id="btnAppActs">Activities of first</button>
-<button class="sec" id="btnMaps">Maps search</button>
-<button class="sec" id="btnWa">wa.me demo</button>
-</div></section>
+
+<section id="tab-perm">
+  <h2>Permissions</h2>
+  <div class="row">
+    <button id="btnPermGet">Get</button>
+    <button class="sec" id="btnPackPhone">Pack phone</button>
+    <button class="sec" id="btnPackMedia">Pack media</button>
+    <button class="sec" id="btnPackNotify">Pack notify</button>
+    <button class="sec" id="btnPackAll">Pack all</button>
+  </div>
+  <div class="row">
+    <button class="sec" data-perm="mic">mic</button>
+    <button class="sec" data-perm="camera">camera</button>
+    <button class="sec" data-perm="sms">sms</button>
+    <button class="sec" data-perm="contacts">contacts</button>
+    <button class="sec" data-perm="phone">phone</button>
+    <button class="sec" data-perm="location">location</button>
+    <button class="sec" data-perm="notifications">notifications</button>
+  </div>
+</section>
+
+<section id="tab-state">
+  <h2>State · storage · secrets</h2>
+  <p class="hint">Prefer <code>ForgeHost.state</code> over localStorage (srcdoc is flaky).</p>
+  <label>Note (data-forge-persist)</label>
+  <input id="note" data-forge-persist placeholder="Survives backgrounding…"/>
+  <div class="row">
+    <button id="btnStateSave">state.set</button>
+    <button class="sec" id="btnStateGet">state.get</button>
+    <button class="sec" id="btnStateAll">state.getAll</button>
+    <button class="sec" id="btnStateSaveNow">state.save</button>
+  </div>
+  <label>storage key / value</label>
+  <div class="grid2"><input id="sk" placeholder="key" value="demo"/><input id="sv" placeholder="value" value="hello"/></div>
+  <div class="row">
+    <button id="btnStoreSet">storage.set</button>
+    <button class="sec" id="btnStoreGet">storage.get</button>
+    <button class="sec" id="btnStoreList">storage.list</button>
+  </div>
+  <label>secret key / value</label>
+  <div class="grid2"><input id="secK" placeholder="token" value="api"/><input id="secV" placeholder="secret" value="sk-demo"/></div>
+  <div class="row">
+    <button id="btnSecSet">secrets.set</button>
+    <button class="sec" id="btnSecGet">secrets.get</button>
+    <button class="sec" id="btnSecList">secrets.list</button>
+  </div>
+</section>
+
+<section id="tab-ai">
+  <h2>AI</h2>
+  <label>Provider</label>
+  <select id="prov"></select>
+  <label>Prompt</label>
+  <textarea id="prompt">Reply with exactly: pong</textarea>
+  <div class="row">
+    <button id="btnAiList">List providers</button>
+    <button class="sec" id="btnAiAvail">isAvailable</button>
+    <button id="btnAiChat">Chat</button>
+  </div>
+  <div class="row">
+    <button class="sec" id="btnAiTts">AI TTS</button>
+    <button class="sec" id="btnAiVoices">Voices</button>
+    <button class="sec" id="btnAiStt">Transcribe last mic</button>
+  </div>
+  <p class="hint">Live translate needs mic stream + STT provider (OpenAI/Groq/xAI).</p>
+  <div class="row">
+    <button class="sec" id="btnLiveStart">liveTranslate start</button>
+    <button class="sec" id="btnLiveStop">stop</button>
+    <button class="sec" id="btnLiveStatus">status</button>
+  </div>
+</section>
+
+<section id="tab-media">
+  <h2>Mic · camera · QR · audio</h2>
+  <div class="row">
+    <button id="btnRec">Record 2s WAV</button>
+    <button class="sec" id="btnStream">PCM stream 4s</button>
+    <button class="sec" id="btnCam">Camera photo</button>
+    <button class="sec" id="btnGal">Gallery pick</button>
+    <button class="sec" id="btnQr">Scan QR</button>
+  </div>
+  <audio id="aud" controls></audio>
+  <img id="pic" alt=""/>
+  <div class="row">
+    <button id="btnTts">Device TTS</button>
+    <button class="sec" id="btnTtsStop">TTS stop</button>
+    <button class="sec" id="btnRouteSpk">Route speaker</button>
+    <button class="sec" id="btnRouteEar">Route earpiece</button>
+    <button class="sec" id="btnRouteClr">Clear route</button>
+    <button class="sec" id="btnRouteList">List outputs</button>
+  </div>
+</section>
+
+<section id="tab-device">
+  <h2>Phone · device · location</h2>
+  <div class="row">
+    <button id="btnDev">device.info</button>
+    <button class="sec" id="btnVib">Vibrate</button>
+    <button class="sec" id="btnSettings">Open settings</button>
+    <button class="sec" id="btnToast">Toast</button>
+    <button class="sec" id="btnKeepOn">Keep awake on</button>
+    <button class="sec" id="btnKeepOff">Keep awake off</button>
+  </div>
+  <label>Phone / SMS</label>
+  <input id="phone" placeholder="+15551212" inputmode="tel"/>
+  <div class="row">
+    <button id="btnDial">Dial</button>
+    <button class="sec" id="btnSms">SMS compose</button>
+    <button class="sec" id="btnContacts">Contacts list</button>
+    <button class="sec" id="btnLoc">Location</button>
+    <button class="sec" id="btnMaps">Open maps</button>
+    <button class="sec" id="btnEmail">Email compose</button>
+  </div>
+</section>
+
+<section id="tab-apps">
+  <h2>Apps · intents · share · files</h2>
+  <input id="appQ" placeholder="filter apps (whatsapp, maps…)"/>
+  <div class="row">
+    <button id="btnApps">List apps</button>
+    <button class="sec" id="btnActs">Activities</button>
+    <button class="sec" id="btnWa">wa.me</button>
+    <button class="sec" id="btnOpenUrl">openUrl forge</button>
+  </div>
+  <div class="row">
+    <button id="btnShare">Share text</button>
+    <button class="sec" id="btnClipW">Clipboard write</button>
+    <button class="sec" id="btnClipR">Clipboard read</button>
+    <button class="sec" id="btnFiles">Pick file</button>
+  </div>
+  <label>HTTP URL</label>
+  <input id="httpUrl" value="https://httpbin.org/get"/>
+  <div class="row">
+    <button id="btnHttp">http.get</button>
+    <button class="sec" id="btnHttpData">getDataUrl (icon)</button>
+  </div>
+</section>
+
+<section id="tab-notify">
+  <h2>Notify · jobs · termux · fs</h2>
+  <div class="row">
+    <button id="btnNPerm">Notify permission</button>
+    <button class="sec" id="btnNotify">Notify now</button>
+    <button class="sec" id="btnNCh">Channels</button>
+    <button class="sec" id="btnJob">Job +30s</button>
+    <button class="sec" id="btnJobs">List jobs</button>
+  </div>
+  <div class="row">
+    <button id="btnTx">termux.isAvailable</button>
+    <button class="sec" id="btnTxExec">exec echo</button>
+    <button class="sec" id="btnTxOpen">Open Termux</button>
+  </div>
+  <div class="row">
+    <button id="btnFsDirs">fs.dirs</button>
+    <button class="sec" id="btnFsWrite">fs.write demo</button>
+    <button class="sec" id="btnFsRead">fs.read demo</button>
+  </div>
+</section>
 </main>
+<pre id="log" class="muted">Ready. Tap a button — results land here.</pre>
 <script>
-const out = document.getElementById('out');
-const log = (x, cls) => { out.className = cls||''; out.textContent = typeof x==='string'?x:JSON.stringify(x,null,2); };
-const H = () => window.ForgeHost || window.forge;
-async function safe(fn){ try{ return await fn(); } catch(e){ log(e.message||String(e),'err'); throw e; } }
+(function(){
+  const logEl = document.getElementById('log');
+  const filterEl = document.getElementById('filter');
+  let lastRaw = 'Ready.';
+  let lastMic = null;
+  let lastApps = [];
+  let streamTimer = null;
 
-document.getElementById('btnCaps').onclick = () => safe(async()=> log(await H().getCapabilities(),'ok'));
-document.getElementById('btnPerms').onclick = () => safe(async()=> log(await H().permissions.get(),'ok'));
-document.getElementById('btnPack').onclick = () => safe(async()=> log(await H().permissions.requestPack('phone'),'ok'));
+  function H(){ return window.ForgeHost || window.forge; }
+  function fmt(x){
+    if (typeof x === 'string') return x;
+    try { return JSON.stringify(x, null, 2); } catch(_) { return String(x); }
+  }
+  function paint(){
+    const f = (filterEl.value || '').toLowerCase();
+    let t = lastRaw;
+    if (f && t.toLowerCase().indexOf(f) < 0) t = '(filtered — no match)\\n' + t;
+    logEl.textContent = t;
+  }
+  function log(x, cls){
+    lastRaw = fmt(x);
+    logEl.className = cls || '';
+    paint();
+  }
+  async function safe(fn){
+    try { const r = await fn(); return r; }
+    catch(e){ log(e && (e.message || e.stack) || String(e), 'err'); throw e; }
+  }
 
-const note = document.getElementById('note');
-document.getElementById('btnStateSave').onclick = () => safe(async()=>{ await H().state.set('note', note.value); log({saved:note.value},'ok'); });
-document.getElementById('btnStateGet').onclick = () => safe(async()=>{ const v=await H().state.get('note'); note.value=v||''; log({note:v},'ok'); });
-H().on('restored', (d)=>{ log({restored:true, keys:Object.keys(d?.state||{})},'ok'); });
-H().on('pause', ()=>{ /* auto */ });
-H().on('notify', (e)=> log({notify:e},'ok'));
-H().on('job', (e)=> log({job:e},'ok'));
+  // Tabs
+  const TABS = [
+    ['home','Home'],['perm','Perms'],['state','State'],['ai','AI'],
+    ['media','Media'],['device','Device'],['apps','Apps'],['notify','Notify']
+  ];
+  const tabs = document.getElementById('tabs');
+  TABS.forEach(function(pair, i){
+    const b = document.createElement('button');
+    b.textContent = pair[1];
+    b.className = i === 0 ? 'on' : '';
+    b.onclick = function(){
+      document.querySelectorAll('.tabs button').forEach(function(x){ x.classList.remove('on'); });
+      document.querySelectorAll('main > section').forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      document.getElementById('tab-' + pair[0]).classList.add('on');
+    };
+    tabs.appendChild(b);
+  });
+  filterEl.oninput = paint;
 
-async function fillAi(){
-  try{
-    const menu = await H().ai.listProviders();
-    const sel = document.getElementById('prov');
-    sel.innerHTML='';
-    (menu.providers||[]).forEach(p=>{
-      const o=document.createElement('option'); o.value=p.id; o.textContent=(p.available?'● ':'○ ')+p.label+(p.isSelected?' ✓':'');
+  const CAP_KEYS = [
+    'native','ai','aiMultimodal','tts','audioRoute','mic','micStream','liveTranslate','stt',
+    'camera','qr','files','share','notify','jobs','termux','termuxExec','contacts','location',
+    'smsCompose','dial','apps','storage','secrets','keepAwake'
+  ];
+  async function renderCaps(){
+    const box = document.getElementById('caps');
+    box.innerHTML = '';
+    try {
+      const c = await H().getCapabilities();
+      CAP_KEYS.forEach(function(k){
+        const on = !!(c && c[k]);
+        const s = document.createElement('span');
+        s.className = 'chip ' + (on ? 'on' : 'off');
+        s.textContent = k;
+        box.appendChild(s);
+      });
+      log({ capabilities: c }, 'ok');
+    } catch(e) {
+      log(e.message || e, 'err');
+    }
+  }
+
+  document.getElementById('btnInfo').onclick = function(){ safe(async function(){ log(await H().getAppInfo(), 'ok'); }); };
+  document.getElementById('btnCaps').onclick = function(){ renderCaps(); };
+  document.getElementById('btnRefreshCaps').onclick = function(){ renderCaps(); };
+
+  document.getElementById('btnPermGet').onclick = function(){ safe(async function(){ log(await H().permissions.get(), 'ok'); }); };
+  document.getElementById('btnPackPhone').onclick = function(){ safe(async function(){ log(await H().permissions.requestPack('phone'), 'ok'); }); };
+  document.getElementById('btnPackMedia').onclick = function(){ safe(async function(){ log(await H().permissions.requestPack('media'), 'ok'); }); };
+  document.getElementById('btnPackNotify').onclick = function(){ safe(async function(){ log(await H().permissions.requestPack('notify'), 'ok'); }); };
+  document.getElementById('btnPackAll').onclick = function(){ safe(async function(){ log(await H().permissions.requestPack('all'), 'ok'); }); };
+  document.querySelectorAll('[data-perm]').forEach(function(btn){
+    btn.onclick = function(){ safe(async function(){ log(await H().permissions.request(btn.getAttribute('data-perm')), 'ok'); }); };
+  });
+
+  var note = document.getElementById('note');
+  document.getElementById('btnStateSave').onclick = function(){ safe(async function(){ await H().state.set('note', note.value); log({ saved: note.value }, 'ok'); }); };
+  document.getElementById('btnStateGet').onclick = function(){ safe(async function(){ var v = await H().state.get('note'); note.value = v || ''; log({ note: v }, 'ok'); }); };
+  document.getElementById('btnStateAll').onclick = function(){ safe(async function(){ log(await H().state.getAll(), 'ok'); }); };
+  document.getElementById('btnStateSaveNow').onclick = function(){ safe(async function(){ log(await H().state.save(), 'ok'); }); };
+  document.getElementById('btnStoreSet').onclick = function(){ safe(async function(){ await H().storage.set(document.getElementById('sk').value, document.getElementById('sv').value); log({ ok: true }, 'ok'); }); };
+  document.getElementById('btnStoreGet').onclick = function(){ safe(async function(){ log({ value: await H().storage.get(document.getElementById('sk').value) }, 'ok'); }); };
+  document.getElementById('btnStoreList').onclick = function(){ safe(async function(){ log(await H().storage.list(), 'ok'); }); };
+  document.getElementById('btnSecSet').onclick = function(){ safe(async function(){ await H().secrets.set(document.getElementById('secK').value, document.getElementById('secV').value); log({ ok: true }, 'ok'); }); };
+  document.getElementById('btnSecGet').onclick = function(){ safe(async function(){ log({ value: await H().secrets.get(document.getElementById('secK').value) }, 'ok'); }); };
+  document.getElementById('btnSecList').onclick = function(){ safe(async function(){ log(await H().secrets.list(), 'ok'); }); };
+
+  async function fillAi(){
+    var menu = await H().ai.listProviders();
+    var sel = document.getElementById('prov');
+    sel.innerHTML = '';
+    (menu.providers || []).forEach(function(p){
+      var o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = (p.available ? '● ' : '○ ') + p.label + (p.isSelected ? ' ✓' : '');
       sel.appendChild(o);
     });
-    if(menu.selectedId) sel.value=menu.selectedId;
-    sel.onchange = async()=>{ await H().ai.setProvider(sel.value); log({provider:sel.value},'ok'); };
-  }catch(e){ log(e.message,'err'); }
-}
-document.getElementById('btnAiList').onclick = () => fillAi();
-document.getElementById('btnAiChat').onclick = () => safe(async()=>{
-  const r = await H().ai.chat({ prompt:'Reply with exactly: pong', providerId: document.getElementById('prov').value||undefined });
-  log(r,'ok');
-});
+    if (menu.selectedId) sel.value = menu.selectedId;
+    sel.onchange = async function(){ await H().ai.setProvider(sel.value); log({ provider: sel.value }, 'ok'); };
+    log(menu, 'ok');
+  }
+  document.getElementById('btnAiList').onclick = function(){ safe(fillAi); };
+  document.getElementById('btnAiAvail').onclick = function(){ safe(async function(){ log(await H().ai.isAvailable(), 'ok'); }); };
+  document.getElementById('btnAiChat').onclick = function(){ safe(async function(){
+    var r = await H().ai.chat({ prompt: document.getElementById('prompt').value, providerId: document.getElementById('prov').value || undefined });
+    log(r, 'ok');
+  }); };
+  document.getElementById('btnAiTts').onclick = function(){ safe(async function(){
+    log(await H().ai.tts({ text: 'Hello from Forge kitchen sink', mode: 'cloud' }), 'ok');
+  }); };
+  document.getElementById('btnAiVoices').onclick = function(){ safe(async function(){ log(await H().ai.listVoices(), 'ok'); }); };
+  document.getElementById('btnAiStt').onclick = function(){ safe(async function(){
+    if (!lastMic || !lastMic.dataUrl) throw new Error('Record mic WAV first');
+    log(await H().ai.transcribe({ dataUrl: lastMic.dataUrl, language: 'en' }), 'ok');
+  }); };
+  document.getElementById('btnLiveStart').onclick = function(){ safe(async function(){
+    log(await H().ai.liveTranslate.start({ sourceLang: 'auto', targetLang: 'en', speak: false }), 'ok');
+  }); };
+  document.getElementById('btnLiveStop').onclick = function(){ safe(async function(){ log(await H().ai.liveTranslate.stop(), 'ok'); }); };
+  document.getElementById('btnLiveStatus').onclick = function(){ safe(async function(){ log(await H().ai.liveTranslate.status(), 'ok'); }); };
 
-document.getElementById('btnShare').onclick = () => safe(async()=> log(await H().share({ title:'API Lab', text:'Hello from Forge kitchen sink' }),'ok'));
-document.getElementById('btnNotify').onclick = () => safe(async()=>{
-  await H().notifications.requestPermission();
-  log(await H().notify('Kitchen sink hello', { title:'Forge Lab', channel:'alerts', data:{ t:Date.now() } }),'ok');
-});
-document.getElementById('btnJob').onclick = () => safe(async()=>{
-  log(await H().jobs.schedule({ inSeconds:30, title:'Lab job', text:'30s later', data:{ hello:1 } }),'ok');
-});
+  try {
+    H().on('live.partialTarget', function(d){ log({ livePartial: d }, 'ok'); });
+    H().on('live.finalTarget', function(d){ log({ liveFinal: d }, 'ok'); });
+    H().on('live.error', function(d){ log({ liveError: d }, 'err'); });
+    H().on('mic.pcm', function(d){ /* keep quiet — high volume */ });
+    H().on('restored', function(d){ log({ restored: true, keys: Object.keys((d && d.state) || {}) }, 'ok'); });
+    H().on('notify', function(e){ log({ notifyEvent: e }, 'ok'); });
+    H().on('job', function(e){ log({ jobEvent: e }, 'ok'); });
+    H().on('pause', function(){ log('pause', 'muted'); });
+    H().on('resume', function(){ log('resume', 'muted'); });
+  } catch(_){}
 
-document.getElementById('btnRec').onclick = () => safe(async()=>{
-  await H().permissions.request('mic');
-  log('Recording 3s…');
-  const wav = await H().mic.record({ durationMs:3000, sampleRate:16000 });
-  const a=document.getElementById('aud'); a.src=wav.dataUrl; a.style.display='block'; a.play().catch(()=>{});
-  log({ bytes:wav.bytes, durationMs:wav.durationMs, mime:wav.mime },'ok');
-});
-document.getElementById('btnQr').onclick = () => safe(async()=>{
-  await H().qr.requestPermission();
-  log(await H().qr.scan({ title:'Scan something' }),'ok');
-});
-document.getElementById('btnCam').onclick = () => safe(async()=>{
-  await H().permissions.request('camera');
-  const shot = await H().camera.takePhoto({ quality:80 });
-  const img=document.getElementById('pic'); img.src=shot.dataUrl; img.style.display='block';
-  log({ w:shot.width, h:shot.height, bytes:shot.bytes },'ok');
-});
+  document.getElementById('btnRec').onclick = function(){ safe(async function(){
+    await H().permissions.request('mic');
+    log('Recording 2s…');
+    lastMic = await H().mic.record({ durationMs: 2000, sampleRate: 16000 });
+    var a = document.getElementById('aud'); a.src = lastMic.dataUrl; a.style.display = 'block'; a.play().catch(function(){});
+    log({ bytes: lastMic.bytes, mime: lastMic.mime, durationMs: lastMic.durationMs }, 'ok');
+  }); };
+  document.getElementById('btnStream').onclick = function(){ safe(async function(){
+    await H().permissions.request('mic');
+    var n = 0, last = null;
+    var off = H().on('mic.pcm', function(d){ n++; last = d; });
+    await H().mic.startStream({ sampleRate: 16000, chunkMs: 250 });
+    log('Streaming PCM…');
+    await new Promise(function(r){ streamTimer = setTimeout(r, 4000); });
+    var st = await H().mic.stopStream();
+    try { off && off(); } catch(_){}
+    log({ chunks: n, lastSeq: last && last.seq, stop: st }, 'ok');
+  }); };
+  document.getElementById('btnCam').onclick = function(){ safe(async function(){
+    await H().permissions.request('camera');
+    var shot = await H().camera.takePhoto({ quality: 80 });
+    var img = document.getElementById('pic'); img.src = shot.dataUrl; img.style.display = 'block';
+    log({ w: shot.width, h: shot.height, bytes: shot.bytes }, 'ok');
+  }); };
+  document.getElementById('btnGal').onclick = function(){ safe(async function(){
+    var shot = await H().camera.pickPhoto({ quality: 85 });
+    var img = document.getElementById('pic'); img.src = shot.dataUrl || shot.dataURL; img.style.display = 'block';
+    log(shot, 'ok');
+  }); };
+  document.getElementById('btnQr').onclick = function(){ safe(async function(){
+    await H().qr.requestPermission();
+    log(await H().qr.scan({ title: 'Scan something' }), 'ok');
+  }); };
+  document.getElementById('btnTts').onclick = function(){ safe(async function(){ log(await H().tts.speak('Forge kitchen sink on device TTS'), 'ok'); }); };
+  document.getElementById('btnTtsStop').onclick = function(){ safe(async function(){ log(await H().tts.stop(), 'ok'); }); };
+  document.getElementById('btnRouteSpk').onclick = function(){ safe(async function(){ log(await H().audio.setRoute('speaker'), 'ok'); }); };
+  document.getElementById('btnRouteEar').onclick = function(){ safe(async function(){ log(await H().audio.setRoute('earpiece'), 'ok'); }); };
+  document.getElementById('btnRouteClr').onclick = function(){ safe(async function(){ log(await H().audio.clearRoute(), 'ok'); }); };
+  document.getElementById('btnRouteList').onclick = function(){ safe(async function(){ log(await H().audio.listOutputs(), 'ok'); }); };
 
-let lastApps=[];
-document.getElementById('btnApps').onclick = () => safe(async()=>{
-  const q=document.getElementById('appQ').value||'';
-  const r=await H().apps.list({ query:q||undefined, limit:500 });
-  lastApps=r.apps||[];
-  log({ count:r.count, totalMatched:r.totalMatched, truncated:r.truncated, launcherHits:r.launcherHits, installedHits:r.installedHits, intentHits:r.intentHits, knownHits:r.knownHits, apps:(r.apps||[]).slice(0,30).map(a=>({label:a.label,packageName:a.packageName,source:a.source})) },'ok');
-});
-document.getElementById('btnAppActs').onclick = () => safe(async()=>{
-  if(!lastApps.length){ const r=await H().apps.list({limit:5}); lastApps=r.apps||[]; }
-  const pkg=lastApps[0]?.packageName; if(!pkg) throw new Error('No apps');
-  const r=await H().apps.listActivities(pkg);
-  log({ packageName:pkg, count:r.count, activities:(r.activities||[]).slice(0,20) },'ok');
-});
-document.getElementById('btnMaps').onclick = () => safe(async()=>{
-  const q=document.getElementById('appQ').value||'coffee near me';
-  log(await H().apps.launch({ data:'geo:0,0?q='+encodeURIComponent(q) }),'ok');
-});
-document.getElementById('btnWa').onclick = () => safe(async()=>{
-  log(await H().apps.launch({ data:'https://wa.me/?text='+encodeURIComponent('Hello from Forge') }),'ok');
-});
+  document.getElementById('btnDev').onclick = function(){ safe(async function(){ log(await H().device.info(), 'ok'); }); };
+  document.getElementById('btnVib').onclick = function(){ safe(async function(){ log(await H().device.vibrate(80), 'ok'); }); };
+  document.getElementById('btnSettings').onclick = function(){ safe(async function(){ log(await H().device.openSettings(), 'ok'); }); };
+  document.getElementById('btnToast').onclick = function(){ safe(async function(){ log(await H().toast('Kitchen sink toast'), 'ok'); }); };
+  document.getElementById('btnKeepOn').onclick = function(){ safe(async function(){ log(await H().keepAwake.start({ title: 'Forge Lab', text: 'Keeping awake' }), 'ok'); }); };
+  document.getElementById('btnKeepOff').onclick = function(){ safe(async function(){ log(await H().keepAwake.stop(), 'ok'); }); };
+  document.getElementById('btnDial').onclick = function(){ safe(async function(){ log(await H().phone.dial(document.getElementById('phone').value || '100'), 'ok'); }); };
+  document.getElementById('btnSms').onclick = function(){ safe(async function(){ log(await H().sms.compose(document.getElementById('phone').value || '', 'Hi from Forge'), 'ok'); }); };
+  document.getElementById('btnContacts').onclick = function(){ safe(async function(){ log(await H().contacts.list({ limit: 20 }), 'ok'); }); };
+  document.getElementById('btnLoc').onclick = function(){ safe(async function(){ log(await H().location.get(), 'ok'); }); };
+  document.getElementById('btnMaps').onclick = function(){ safe(async function(){ log(await H().location.openMaps({ query: 'coffee' }), 'ok'); }); };
+  document.getElementById('btnEmail').onclick = function(){ safe(async function(){ log(await H().email.compose({ subject: 'Forge', body: 'Hello from kitchen sink' }), 'ok'); }); };
 
-fillAi();
-// restore note from state
-H().state.get('note').then(v=>{ if(v) note.value=String(v); }).catch(()=>{});
-<\/script></body></html>`;
+  document.getElementById('btnApps').onclick = function(){ safe(async function(){
+    var q = document.getElementById('appQ').value || '';
+    var r = await H().apps.list({ query: q || undefined, limit: 400 });
+    lastApps = r.apps || [];
+    log({ count: r.count, sample: lastApps.slice(0, 25).map(function(a){ return { label: a.label, packageName: a.packageName }; }) }, 'ok');
+  }); };
+  document.getElementById('btnActs').onclick = function(){ safe(async function(){
+    if (!lastApps.length) { var r = await H().apps.list({ limit: 5 }); lastApps = r.apps || []; }
+    var pkg = lastApps[0] && lastApps[0].packageName;
+    if (!pkg) throw new Error('No apps');
+    log(await H().apps.listActivities(pkg), 'ok');
+  }); };
+  document.getElementById('btnWa').onclick = function(){ safe(async function(){
+    log(await H().apps.launch({ data: 'https://wa.me/?text=' + encodeURIComponent('Hello from Forge kitchen sink') }), 'ok');
+  }); };
+  document.getElementById('btnOpenUrl').onclick = function(){ safe(async function(){ log(await H().openUrl('https://github.com/lirunki/forge'), 'ok'); }); };
+  document.getElementById('btnShare').onclick = function(){ safe(async function(){ log(await H().share({ title: 'Forge', text: 'Kitchen sink says hi' }), 'ok'); }); };
+  document.getElementById('btnClipW').onclick = function(){ safe(async function(){ log(await H().clipboard.write('Forge clipboard ' + Date.now()), 'ok'); }); };
+  document.getElementById('btnClipR').onclick = function(){ safe(async function(){ log(await H().clipboard.read(), 'ok'); }); };
+  document.getElementById('btnFiles').onclick = function(){ safe(async function(){
+    var f = await H().files.pick({ accept: '*/*', multiple: false });
+    log({ name: f && f.name, mime: f && f.mime, size: f && f.size, hasData: !!(f && (f.dataUrl || f.base64)) }, 'ok');
+  }); };
+  document.getElementById('btnHttp').onclick = function(){ safe(async function(){ log(await H().http.get(document.getElementById('httpUrl').value), 'ok'); }); };
+  document.getElementById('btnHttpData').onclick = function(){ safe(async function(){
+    var r = await H().http.getDataUrl('https://www.google.com/favicon.ico', { maxBytes: 200000 });
+    var img = document.getElementById('pic'); img.src = r.dataUrl; img.style.display = 'block';
+    log({ mime: r.mime, bytes: r.bytes }, 'ok');
+  }); };
+
+  document.getElementById('btnNPerm').onclick = function(){ safe(async function(){ log(await H().notifications.requestPermission(), 'ok'); }); };
+  document.getElementById('btnNotify').onclick = function(){ safe(async function(){
+    log(await H().notify('Kitchen sink hello', { title: 'Forge Lab', channel: 'alerts', data: { t: Date.now() } }), 'ok');
+  }); };
+  document.getElementById('btnNCh').onclick = function(){ safe(async function(){ log(await H().notifications.channels(), 'ok'); }); };
+  document.getElementById('btnJob').onclick = function(){ safe(async function(){
+    log(await H().jobs.schedule({ inSeconds: 30, title: 'Lab job', text: '30s later', data: { hello: 1 } }), 'ok');
+  }); };
+  document.getElementById('btnJobs').onclick = function(){ safe(async function(){ log(await H().jobs.list(), 'ok'); }); };
+
+  document.getElementById('btnTx').onclick = function(){ safe(async function(){ log(await H().termux.isAvailable(), 'ok'); }); };
+  document.getElementById('btnTxExec').onclick = function(){ safe(async function(){ log(await H().termux.exec({ command: 'echo ForgeKitchenSink && uname -a', timeoutMs: 15000 }), 'ok'); }); };
+  document.getElementById('btnTxOpen').onclick = function(){ safe(async function(){ log(await H().termux.open(), 'ok'); }); };
+
+  document.getElementById('btnFsDirs').onclick = function(){ safe(async function(){ log(await H().fs.dirs(), 'ok'); }); };
+  document.getElementById('btnFsWrite').onclick = function(){ safe(async function(){
+    log(await H().fs.write('kitchen-sink-demo.txt', 'hello ' + new Date().toISOString(), { directory: 'CACHE' }), 'ok');
+  }); };
+  document.getElementById('btnFsRead').onclick = function(){ safe(async function(){
+    log(await H().fs.read('kitchen-sink-demo.txt', { directory: 'CACHE' }), 'ok');
+  }); };
+
+  // boot
+  fillAi().catch(function(){});
+  H().state.get('note').then(function(v){ if (v) note.value = String(v); }).catch(function(){});
+  renderCaps();
+})();
+<\/script>
+</body></html>`;
     }
 
     function installKitchenSink() {
       const html = kitchenSinkHtml();
       const app = {
         id: 'app_kitchensink',
-        title: 'Forge API Lab',
-        summary: 'Kitchen-sink demo: AI menu, share, notify, jobs, state, mic WAV, QR, camera, apps/intents',
+        title: 'Forge Kitchen Sink',
+        summary: 'Full ForgeHost lab: AI, media, phone, apps, notify, jobs, termux, fs, state/secrets',
         html,
         iconEmoji: '🧪',
         iconColor: '#0EA5E9',
@@ -10988,10 +11421,11 @@ H().state.get('note').then(v=>{ if(v) note.value=String(v); }).catch(()=>{});
       const list = getLibrary().filter(x => x.id !== app.id);
       list.push(app);
       setLibrary(list);
+      clearDriveTombstone(app.id);
       renderLibrary();
       loadPreview(app);
       enterAppMode('library');
-      setLibStatus('Installed Forge API Lab — try the buttons', 'ok');
+      setLibStatus('Installed Forge Kitchen Sink — open tabs and tap APIs', 'ok');
     }
 
     // ——— Events ———
@@ -11320,6 +11754,7 @@ H().state.get('note').then(v=>{ if(v) note.value=String(v); }).catch(()=>{});
     refreshDriveStatus();
     refreshQuickSetupVisibility();
     consumeShortcutLaunch();
+    wireOpenHtmlBridge();
 
     // First-run / missing key → easy setup (free providers)
     try {

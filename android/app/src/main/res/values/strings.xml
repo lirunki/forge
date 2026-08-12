@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Forge</string>
     <string name="title_activity_main">Forge</string>
+    <string name="open_html_in_forge">Open in Forge</string>
     <string name="package_name">com.forge.live</string>
     <string name="custom_url_scheme">com.forge.live</string>
 </resources>

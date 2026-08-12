@@ -29,8 +29,10 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(JobBridgePlugin.class);
         registerPlugin(QrBridgePlugin.class);
         registerPlugin(DriveBridgePlugin.class);
+        registerPlugin(OpenHtmlBridgePlugin.class);
         super.onCreate(savedInstanceState);
         Intent intent = getIntent();
+        try { OpenHtmlBridgePlugin.captureHtmlIntent(intent); } catch (Exception ignored) {}
         if (!isRunnerInstance() && forwardOpenAppToRunner(intent)) {
             return;
         }
@@ -41,6 +43,7 @@ public class MainActivity extends BridgeActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        try { OpenHtmlBridgePlugin.captureHtmlIntent(intent); } catch (Exception ignored) {}
         if (!isRunnerInstance() && forwardOpenAppToRunner(intent)) {
             return;
         }
@@ -110,6 +113,13 @@ public class MainActivity extends BridgeActivity {
         try {
             if (getBridge() != null && intent != null && (handle = getBridge().getPlugin("ShortcutBridge")) != null && (handle.getInstance() instanceof ShortcutBridgePlugin)) {
                 ((ShortcutBridgePlugin) handle.getInstance()).captureLaunchIntent(intent);
+            }
+        } catch (Exception e) {
+        }
+        try {
+            if (getBridge() != null && (handle = getBridge().getPlugin("OpenHtmlBridge")) != null
+                    && (handle.getInstance() instanceof OpenHtmlBridgePlugin)) {
+                ((OpenHtmlBridgePlugin) handle.getInstance()).notifyPendingIfAny();
             }
         } catch (Exception e) {
         }

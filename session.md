@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.6 / versionCode 38** (Drive library backup) · live-translate baseline was 2.6.5/37 |
+| Version | **2.6.8 / versionCode 40** (Open with / Share HTML → Forge) · live-translate baseline was 2.6.5/37 |
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-12 — Library backup via SAF / Google Drive folder |
+| **Last rebuild** | 2026-08-12 — Full Forge Kitchen Sink mini-app lab |
 
 ### Locked product baseline
 
@@ -319,3 +319,42 @@ Smoke:
 [ ] Delete app locally → Backup → Restore on other device drops it
 [ ] Export still shares .html via WhatsApp
 ```
+
+
+## Kitchen sink HTML lab (2026-08-12)
+
+Shipped in host **2.6.7 / versionCode 39**:
+
+- Library button **Kitchen sink** installs/replaces `app_kitchensink`
+- Full ForgeHost lab tabs: Home/Perms/State/AI/Media/Device/Apps/Notify
+- Covers AI chat/TTS/STT/liveTranslate, mic WAV+PCM, camera/QR, audio routes,
+  phone/SMS/contacts/location, apps/intents, share/clipboard/files/http,
+  notify/jobs, termux, fs, state/storage/secrets, keepAwake
+- Positioning: Forge = kitchen sink runtime for arbitrary HTML mini-apps
+- Import any `.html` or Forge-it with AI; Demo lab documents the surface
+
+Smoke:
+```text
+[ ] Library → Kitchen sink → opens lab
+[ ] Home shows capability chips
+[ ] AI chat ping / Media record / Share text work on device
+```
+
+
+## Open with / Share HTML (2026-08-12)
+
+Shipped in host **2.6.8 / versionCode 40**:
+
+- Android intent-filters on MainActivity: VIEW text/html + .html pathPattern, SEND/SEND_MULTIPLE
+- Label: **Open in Forge**
+- Native `OpenHtmlBridge` captures WhatsApp/Files/Drive shares and cold-start VIEW intents
+- Host `wireOpenHtmlBridge` / `consumeOpenHtmlIntent` → import to library and open immersive
+
+Smoke:
+```text
+[ ] Export a mini-app → WhatsApp to yourself → Open with / Share → Forge appears
+[ ] Forge imports HTML into Library and runs it
+[ ] Files app → open .html → Forge in list
+```
+
+Note: earlier “kitchen sink” work = API lab demo only; this is the real open-with feature.
