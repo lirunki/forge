@@ -28,6 +28,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NotifyBridgePlugin.class);
         registerPlugin(JobBridgePlugin.class);
         registerPlugin(QrBridgePlugin.class);
+        registerPlugin(DriveBridgePlugin.class);
         super.onCreate(savedInstanceState);
         Intent intent = getIntent();
         if (!isRunnerInstance() && forwardOpenAppToRunner(intent)) {

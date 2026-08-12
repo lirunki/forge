@@ -10,15 +10,15 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.1 / versionCode 33** |
+| Version | **2.6.6 / versionCode 38** (Drive library backup) · live-translate baseline was 2.6.5/37 |
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
 | Source | Reconstructed from APK (JADX + assets + Capacitor 6) |
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
-| **Host `www/index.html`** | **Restored** to pre–live-translate size (**~418605 bytes**); AI tools/attachments **kept** |
-| **Last rebuild** | 2026-08-10 — UI fix rebuild after live-translate host regression |
+| **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
+| **Last rebuild** | 2026-08-12 — Library backup via SAF / Google Drive folder |
 
 ### Locked product baseline
 
@@ -297,3 +297,25 @@ Shipped in host **2.6.5 / versionCode 37** (Patch 3):
 - One-direction A→B only
 
 Next: Patch 4 conversation mini-app / bidirectional UX.
+
+## Library backup — Google Drive / folder (2026-08-12)
+
+Shipped in host **2.6.6 / versionCode 38**:
+
+- Native `DriveBridge` (Storage Access Framework — **not** OAuth Drive API)
+- User picks a folder (Google Drive in the system picker works); Forge uses `ForgeLibrary/` inside it
+- Host: Settings → **Library backup** (Choose folder / Backup / Restore / Disconnect)
+- Library tab: **Backup** / **Restore**
+- Layout: `manifest.json` + `apps/<id>/{meta.json,app.html}`
+- Merge restore by `app.id` + `updatedAt` / content hash; local tombstones on delete sync to remote on backup
+- **Does not** upload AI keys; **no** Drive share-links (use Export → WhatsApp)
+- Dep: `androidx.documentfile:documentfile:1.0.1`
+
+Smoke:
+```text
+[ ] Settings → Choose folder → pick Google Drive / ForgeBackup
+[ ] Library has ≥1 app → Backup → see ForgeLibrary/manifest.json in Drive
+[ ] Clear app data or second device → same folder → Restore → apps return
+[ ] Delete app locally → Backup → Restore on other device drops it
+[ ] Export still shares .html via WhatsApp
+```

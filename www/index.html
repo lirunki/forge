@@ -971,6 +971,8 @@ termux-reload-settings</div>
         <div class="lib-bar">
           <div class="preview-title">Saved apps</div>
           <button class="btn secondary small" id="btnImportLib" type="button">Import</button>
+          <button class="btn secondary small" id="btnDriveBackup" type="button" title="Backup library to Google Drive / folder">Backup</button>
+          <button class="btn secondary small" id="btnDriveRestore" type="button" title="Restore library from backup folder">Restore</button>
           <button class="btn secondary small" id="btnKitchenSink" type="button" title="Install API demo app">Demo</button>
           <button class="btn secondary small" id="btnRefreshLib" type="button">Refresh</button>
           <input type="file" id="importFile" accept=".html,.htm,text/html" hidden />
@@ -1109,6 +1111,25 @@ termux-reload-settings</div>
         </div>
 
         <div class="card">
+          <h2>Library backup</h2>
+          <p class="field-hint" style="margin-top:0;">
+            Back up saved mini-apps to a <b>Google Drive</b> folder (or any folder the system picker offers).
+            AI keys stay on this device. Share apps with friends via <b>Export</b> (WhatsApp, etc.).
+          </p>
+          <div id="driveStatusLine" class="status-line" style="margin-bottom:0.55rem;">Checking backup folder…</div>
+          <div class="settings-block" style="margin-top:0.15rem;">
+            <button class="btn small" id="btnDriveConnect" type="button">Choose folder</button>
+            <button class="btn secondary small" id="btnDriveBackupSettings" type="button">Backup now</button>
+            <button class="btn secondary small" id="btnDriveRestoreSettings" type="button">Restore…</button>
+            <button class="btn secondary small" id="btnDriveDisconnect" type="button">Disconnect</button>
+          </div>
+          <p class="field-hint" style="margin-top:0.55rem;margin-bottom:0;">
+            Forge creates a <code>ForgeLibrary</code> subfolder with <code>manifest.json</code> and per-app HTML.
+            Pick the same folder on another phone to sync.
+          </p>
+        </div>
+
+        <div class="card">
           <h2>Device bridges</h2>
           <p class="field-hint" style="margin-top:0;">
             Phone, mic, camera, files — plus optional <b>Termux</b> for real shell power.
@@ -1135,6 +1156,7 @@ termux-reload-settings</div>
             Generated apps can use ForgeHost bridges: phone/SMS/contacts/location, on-device TTS,
             mic STT, camera/gallery, filesystem, Termux run/exec (stdout capture), share, storage, and HTTP.
             Save an app, then tap <b>Home</b> / <b>Home screen</b> to pin it to your launcher (Nova, Pixel, etc.).
+            Back up the library to a Google Drive folder from Settings → Library backup (or Library → Backup).
           </p>
         </div>
       </section>
@@ -1160,6 +1182,7 @@ termux-reload-settings</div>
     const NotifyBridge = registerPlugin('NotifyBridge');
     const JobBridge = registerPlugin('JobBridge');
     const QrBridge = registerPlugin('QrBridge');
+    const DriveBridge = registerPlugin('DriveBridge');
 
     const FS_DIRS = {
       documents: Directory.Documents,
@@ -1190,6 +1213,8 @@ termux-reload-settings</div>
       azureApiVersion: 'forge_azure_api_version',
       azureAuth: 'forge_azure_auth',
       library: 'forge_library_v1',
+      driveMeta: 'forge_drive_meta_v1',
+      driveTombs: 'forge_drive_tombstones_v1',
       draft: 'forge_draft_v1',
       setupDone: 'forge_setup_done_v1',
       setupProvider: 'forge_setup_provider_v1',
@@ -1462,6 +1487,13 @@ termux-reload-settings</div>
       libList: document.getElementById('libList'),
       btnRefreshLib: document.getElementById('btnRefreshLib'),
       btnImportLib: document.getElementById('btnImportLib'),
+      btnDriveBackup: document.getElementById('btnDriveBackup'),
+      btnDriveRestore: document.getElementById('btnDriveRestore'),
+      btnDriveConnect: document.getElementById('btnDriveConnect'),
+      btnDriveBackupSettings: document.getElementById('btnDriveBackupSettings'),
+      btnDriveRestoreSettings: document.getElementById('btnDriveRestoreSettings'),
+      btnDriveDisconnect: document.getElementById('btnDriveDisconnect'),
+      driveStatusLine: document.getElementById('driveStatusLine'),
       importFile: document.getElementById('importFile'),
       libStatus: document.getElementById('libStatus'),
       quickKey: document.getElementById('quickKey'),
@@ -1545,6 +1577,7 @@ termux-reload-settings</div>
         tab.classList.add('active');
         document.getElementById('view-' + tab.dataset.tab).classList.add('active');
         if (tab.dataset.tab === 'library') renderLibrary();
+        if (tab.dataset.tab === 'settings') refreshDriveStatus();
         if (tab.dataset.tab === 'settings') {
           refreshTermuxStatus();
           startTermuxPolling();
@@ -2890,6 +2923,456 @@ termux-reload-settings</div>
     }
     function setLibrary(list) {
       localStorage.setItem(LS.library, JSON.stringify(list));
+    }
+
+    // ——— Drive / cloud folder library backup (SAF) ———
+    const DRIVE_FORMAT = 'forge-drive-library-v1';
+    const DRIVE_APP_FORMAT = 'forge-drive-app-v1';
+
+    function getDriveMeta() {
+      try { return JSON.parse(localStorage.getItem(LS.driveMeta) || '{}') || {}; }
+      catch { return {}; }
+    }
+    function setDriveMeta(meta) {
+      try { localStorage.setItem(LS.driveMeta, JSON.stringify(meta || {})); } catch (_) {}
+    }
+    function getDriveTombs() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(LS.driveTombs) || '[]');
+        return Array.isArray(raw) ? raw : [];
+      } catch { return []; }
+    }
+    function setDriveTombs(list) {
+      try { localStorage.setItem(LS.driveTombs, JSON.stringify(Array.isArray(list) ? list : [])); } catch (_) {}
+    }
+    function addDriveTombstone(appId) {
+      const id = String(appId || '').trim();
+      if (!id) return;
+      const list = getDriveTombs().filter(t => t && t.id !== id);
+      list.push({ id, deletedAt: Date.now() });
+      setDriveTombs(list);
+    }
+    function clearDriveTombstone(appId) {
+      const id = String(appId || '').trim();
+      if (!id) return;
+      setDriveTombs(getDriveTombs().filter(t => t && t.id !== id));
+    }
+    function getDriveDeviceId() {
+      const meta = getDriveMeta();
+      if (meta.deviceId) return meta.deviceId;
+      const id = 'drv_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      setDriveMeta({ ...meta, deviceId: id });
+      return id;
+    }
+
+    async function sha256Hex(text) {
+      const data = new TextEncoder().encode(String(text || ''));
+      if (globalThis.crypto?.subtle?.digest) {
+        const buf = await crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      // Weak fallback — still stable enough for change detection on old WebViews
+      let h = 2166136261;
+      for (let i = 0; i < data.length; i++) {
+        h ^= data[i];
+        h = Math.imul(h, 16777619);
+      }
+      return 'fnv_' + (h >>> 0).toString(16);
+    }
+
+    function setDriveStatus(msg, kind) {
+      if (el.driveStatusLine) {
+        el.driveStatusLine.textContent = msg || '';
+        el.driveStatusLine.className = 'status-line' + (kind ? ' ' + kind : '');
+      }
+    }
+
+    async function driveNative(method, opts) {
+      requireNative('Drive backup');
+      return nativeCall(DriveBridge, method, opts || {});
+    }
+
+    async function refreshDriveStatus() {
+      if (!Capacitor.isNativePlatform()) {
+        setDriveStatus('Backup folder requires the Forge Android app', '');
+        return { connected: false, available: false };
+      }
+      try {
+        const st = await driveNative('status');
+        const meta = getDriveMeta();
+        if (st?.connected) {
+          const when = meta.lastBackupAt ? new Date(meta.lastBackupAt).toLocaleString() : 'never';
+          setDriveStatus(
+            `Connected: ${st.displayName || 'folder'} / ${st.rootDir || 'ForgeLibrary'} · Last backup: ${when}`,
+            'ok'
+          );
+        } else {
+          setDriveStatus('Not connected — choose a Google Drive or local folder', '');
+        }
+        return st || { connected: false };
+      } catch (e) {
+        setDriveStatus(e?.message || String(e), 'err');
+        return { connected: false, error: e?.message || String(e) };
+      }
+    }
+
+    async function ensureDriveConnected(opts = {}) {
+      const force = !!opts.forcePick;
+      let st = await driveNative('status');
+      if (st?.connected && !force) return st;
+      setDriveStatus('Pick a backup folder (Google Drive works great)…', '');
+      st = await driveNative('connect');
+      if (st?.cancelled) {
+        throw new Error('Folder pick cancelled');
+      }
+      if (!st?.connected) {
+        throw new Error('Could not connect backup folder');
+      }
+      await refreshDriveStatus();
+      return st;
+    }
+
+    async function driveReadJson(path, fallback) {
+      try {
+        const r = await driveNative('readText', { path });
+        return JSON.parse(r.data);
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    async function driveWriteJson(path, obj) {
+      const data = JSON.stringify(obj, null, 2);
+      return driveNative('writeText', { path, data });
+    }
+
+    function appContentFingerprint(app) {
+      return JSON.stringify({
+        id: app?.id || '',
+        title: app?.title || '',
+        summary: app?.summary || '',
+        iconEmoji: app?.iconEmoji || '',
+        iconColor: app?.iconColor || '',
+        carCompatible: !!app?.carCompatible,
+        html: String(app?.html || ''),
+      });
+    }
+
+    async function hashApp(app) {
+      return sha256Hex(appContentFingerprint(app));
+    }
+
+    function emptyDriveManifest() {
+      return {
+        format: DRIVE_FORMAT,
+        version: 1,
+        updatedAt: Date.now(),
+        deviceId: getDriveDeviceId(),
+        apps: [],
+        tombstones: [],
+      };
+    }
+
+    function normalizeDriveManifest(raw) {
+      const m = raw && typeof raw === 'object' ? raw : emptyDriveManifest();
+      if (!Array.isArray(m.apps)) m.apps = [];
+      if (!Array.isArray(m.tombstones)) m.tombstones = [];
+      m.format = DRIVE_FORMAT;
+      m.version = 1;
+      return m;
+    }
+
+    function mergeTombstones(a, b) {
+      const map = new Map();
+      for (const t of [...(a || []), ...(b || [])]) {
+        if (!t?.id) continue;
+        const prev = map.get(t.id);
+        const deletedAt = Math.max(Number(prev?.deletedAt) || 0, Number(t.deletedAt) || 0);
+        map.set(t.id, { id: t.id, deletedAt });
+      }
+      return [...map.values()];
+    }
+
+    async function backupLibraryToDrive(opts = {}) {
+      const source = opts.source || 'library';
+      const status = (msg, kind) => {
+        if (source === 'settings') setDriveStatus(msg, kind);
+        else setLibStatus(msg, kind);
+        if (source !== 'settings') setDriveStatus(msg, kind);
+      };
+      try {
+        if (!Capacitor.isNativePlatform()) {
+          status('Backup requires the Forge Android app', 'err');
+          return;
+        }
+        status('Connecting backup folder…', '');
+        await ensureDriveConnected();
+        const localApps = getLibrary().filter(a => a && a.id && a.html);
+        status(`Backing up ${localApps.length} app(s)…`, '');
+
+        let manifest = normalizeDriveManifest(await driveReadJson('manifest.json', null));
+        const localTombs = getDriveTombs();
+        manifest.tombstones = mergeTombstones(manifest.tombstones, localTombs);
+
+        // Drop remote apps that are tombstoned (and newer than last remote update)
+        const tombMap = new Map(manifest.tombstones.map(t => [t.id, t]));
+        const keptRemote = [];
+        for (const entry of manifest.apps) {
+          const tomb = tombMap.get(entry.id);
+          if (tomb && (Number(tomb.deletedAt) || 0) >= (Number(entry.updatedAt) || 0)) {
+            try { await driveNative('remove', { path: 'apps/' + entry.id }); } catch (_) {}
+            continue;
+          }
+          keptRemote.push(entry);
+        }
+        manifest.apps = keptRemote;
+
+        const byId = new Map(manifest.apps.map(e => [e.id, e]));
+        let uploaded = 0;
+        let skipped = 0;
+
+        for (const app of localApps) {
+          clearDriveTombstone(app.id);
+          // Revive: remove tombstone from manifest if we're uploading again
+          manifest.tombstones = manifest.tombstones.filter(t => t.id !== app.id);
+
+          const sha = await hashApp(app);
+          const prev = byId.get(app.id);
+          const needsWrite = !prev || prev.contentSha256 !== sha;
+          if (needsWrite) {
+            await driveNative('ensureDir', { path: 'apps/' + app.id });
+            const meta = {
+              format: DRIVE_APP_FORMAT,
+              id: app.id,
+              title: app.title || 'Untitled',
+              summary: app.summary || '',
+              iconEmoji: app.iconEmoji || '⚡',
+              iconColor: app.iconColor || '',
+              carCompatible: !!app.carCompatible,
+              createdAt: app.createdAt || app.updatedAt || Date.now(),
+              updatedAt: app.updatedAt || Date.now(),
+              contentSha256: sha,
+              htmlFile: 'app.html',
+            };
+            await driveWriteJson('apps/' + app.id + '/meta.json', meta);
+            await driveNative('writeText', { path: 'apps/' + app.id + '/app.html', data: String(app.html) });
+            uploaded++;
+            byId.set(app.id, {
+              id: app.id,
+              title: meta.title,
+              summary: meta.summary,
+              iconEmoji: meta.iconEmoji,
+              iconColor: meta.iconColor,
+              carCompatible: meta.carCompatible,
+              updatedAt: meta.updatedAt,
+              contentSha256: sha,
+              path: 'apps/' + app.id + '/',
+            });
+          } else {
+            skipped++;
+            // Refresh listing fields from local
+            byId.set(app.id, {
+              ...prev,
+              title: app.title || prev.title,
+              summary: app.summary || prev.summary,
+              iconEmoji: app.iconEmoji || prev.iconEmoji,
+              iconColor: app.iconColor || prev.iconColor,
+              carCompatible: !!app.carCompatible,
+              updatedAt: app.updatedAt || prev.updatedAt,
+              path: 'apps/' + app.id + '/',
+            });
+          }
+        }
+
+        manifest.apps = [...byId.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        manifest.updatedAt = Date.now();
+        manifest.deviceId = getDriveDeviceId();
+        try {
+          const dn = (await driveNative('status'))?.displayName;
+          if (dn) manifest.deviceName = dn;
+        } catch (_) {}
+        await driveWriteJson('manifest.json', manifest);
+
+        // Local tombs that were pushed can stay until restore confirms; keep merged list
+        setDriveTombs(manifest.tombstones);
+        setDriveMeta({
+          ...getDriveMeta(),
+          lastBackupAt: Date.now(),
+          lastBackupCount: localApps.length,
+          lastUploaded: uploaded,
+        });
+
+        status(`Backup done — ${uploaded} uploaded, ${skipped} unchanged, ${manifest.apps.length} on Drive`, 'ok');
+        await refreshDriveStatus();
+      } catch (e) {
+        const msg = e?.message || String(e);
+        if (/cancel/i.test(msg)) status('Backup cancelled', '');
+        else status('Backup failed: ' + msg, 'err');
+      }
+    }
+
+    async function restoreLibraryFromDrive(opts = {}) {
+      const source = opts.source || 'library';
+      const status = (msg, kind) => {
+        if (source === 'settings') setDriveStatus(msg, kind);
+        else setLibStatus(msg, kind);
+        if (source !== 'settings') setDriveStatus(msg, kind);
+      };
+      try {
+        if (!Capacitor.isNativePlatform()) {
+          status('Restore requires the Forge Android app', 'err');
+          return;
+        }
+        status('Connecting backup folder…', '');
+        await ensureDriveConnected();
+        status('Reading manifest…', '');
+        const manifest = normalizeDriveManifest(await driveReadJson('manifest.json', null));
+        if (!manifest.apps.length && !manifest.tombstones.length) {
+          // Try listing apps/ if manifest missing
+          try {
+            const listing = await driveNative('list', { path: 'apps' });
+            const entries = listing?.entries || [];
+            for (const ent of entries) {
+              if (ent?.isDirectory && ent.name) {
+                manifest.apps.push({ id: ent.name, path: 'apps/' + ent.name + '/' });
+              }
+            }
+          } catch (_) {}
+        }
+        if (!manifest.apps.length) {
+          status('No apps found in backup folder', 'err');
+          return;
+        }
+
+        const mode = opts.mode || 'merge'; // merge | drive
+        const tombs = mergeTombstones(manifest.tombstones, getDriveTombs());
+        const tombMap = new Map(tombs.map(t => [t.id, t]));
+        let local = getLibrary();
+        const localById = new Map(local.map(a => [a.id, a]));
+
+        let imported = 0;
+        let updated = 0;
+        let skipped = 0;
+        let removed = 0;
+
+        // Apply tombstones to local
+        for (const t of tombs) {
+          const cur = localById.get(t.id);
+          if (!cur) continue;
+          if ((Number(t.deletedAt) || 0) >= (Number(cur.updatedAt) || 0)) {
+            localById.delete(t.id);
+            removed++;
+          }
+        }
+
+        for (const entry of manifest.apps) {
+          const id = entry?.id;
+          if (!id) continue;
+          const tomb = tombMap.get(id);
+          if (tomb && (Number(tomb.deletedAt) || 0) >= (Number(entry.updatedAt) || 0)) {
+            skipped++;
+            continue;
+          }
+
+          status(`Restoring “${entry.title || id}”…`, '');
+          let meta = entry;
+          try {
+            const m = await driveReadJson('apps/' + id + '/meta.json', null);
+            if (m && m.id) meta = { ...entry, ...m };
+          } catch (_) {}
+
+          let html = '';
+          try {
+            const r = await driveNative('readText', { path: 'apps/' + id + '/app.html' });
+            html = r?.data || '';
+          } catch (e) {
+            status(`Skip ${id}: missing app.html`, 'err');
+            skipped++;
+            continue;
+          }
+          if (!html) {
+            skipped++;
+            continue;
+          }
+
+          const remoteApp = {
+            id,
+            title: meta.title || entry.title || id,
+            summary: meta.summary || entry.summary || 'Restored mini-app',
+            html,
+            iconEmoji: meta.iconEmoji || entry.iconEmoji || '⚡',
+            iconColor: meta.iconColor || entry.iconColor || 'rgba(109,40,217,.45)',
+            carCompatible: !!(meta.carCompatible ?? entry.carCompatible),
+            createdAt: meta.createdAt || Date.now(),
+            updatedAt: meta.updatedAt || entry.updatedAt || Date.now(),
+          };
+          const remoteSha = meta.contentSha256 || await hashApp(remoteApp);
+
+          const cur = localById.get(id);
+          if (!cur) {
+            localById.set(id, remoteApp);
+            clearDriveTombstone(id);
+            imported++;
+            continue;
+          }
+
+          const localSha = await hashApp(cur);
+          if (localSha === remoteSha) {
+            skipped++;
+            continue;
+          }
+
+          const localTs = Number(cur.updatedAt) || 0;
+          const remoteTs = Number(remoteApp.updatedAt) || 0;
+          let takeRemote = mode === 'drive' || remoteTs > localTs;
+          if (mode === 'merge' && remoteTs === localTs && localSha !== remoteSha) {
+            // Same timestamp, different content — prefer remote on restore
+            takeRemote = true;
+          }
+          if (takeRemote) {
+            localById.set(id, remoteApp);
+            clearDriveTombstone(id);
+            updated++;
+          } else {
+            skipped++;
+          }
+        }
+
+        local = [...localById.values()];
+        setLibrary(local);
+        setDriveTombs(tombs);
+        setDriveMeta({
+          ...getDriveMeta(),
+          lastRestoreAt: Date.now(),
+          lastRestoreImported: imported,
+          lastRestoreUpdated: updated,
+        });
+        renderLibrary();
+        status(
+          `Restore done — ${imported} new, ${updated} updated, ${skipped} skipped` +
+            (removed ? `, ${removed} removed` : '') +
+            ` · ${local.length} local`,
+          'ok'
+        );
+        await refreshDriveStatus();
+      } catch (e) {
+        const msg = e?.message || String(e);
+        if (/cancel/i.test(msg)) status('Restore cancelled', '');
+        else status('Restore failed: ' + msg, 'err');
+      }
+    }
+
+    async function disconnectDriveFolder() {
+      try {
+        if (!Capacitor.isNativePlatform()) {
+          setDriveStatus('Not available in browser', 'err');
+          return;
+        }
+        await driveNative('disconnect');
+        setDriveStatus('Disconnected — files stay in the folder', 'ok');
+      } catch (e) {
+        setDriveStatus(e?.message || String(e), 'err');
+      }
     }
 
     // ——— UI helpers ———
@@ -9696,6 +10179,7 @@ General:
         delBtn.className = 'btn secondary small';
         delBtn.textContent = 'Delete';
         delBtn.onclick = () => {
+          addDriveTombstone(app.id);
           setLibrary(getLibrary().filter(x => x.id !== app.id));
           renderLibrary();
         };
@@ -9816,6 +10300,7 @@ General:
       currentApp.updatedAt = Date.now();
       list.push(currentApp);
       setLibrary(list);
+      clearDriveTombstone(currentApp.id);
       saveDraft();
       setPreviewStatus(`Saved “${currentApp.title}” to library`, 'ok');
       // Keep existing pinned shortcut labels in sync when possible
@@ -10586,6 +11071,22 @@ H().state.get('note').then(v=>{ if(v) note.value=String(v); }).catch(()=>{});
     el.btnOpenWindow?.addEventListener('click', () => currentApp && openAppInNewWindow(currentApp));
     el.btnExport.addEventListener('click', exportCurrentApp);
     el.btnRefreshLib.addEventListener('click', renderLibrary);
+    el.btnDriveBackup?.addEventListener('click', () => backupLibraryToDrive({ source: 'library' }));
+    el.btnDriveRestore?.addEventListener('click', () => restoreLibraryFromDrive({ source: 'library', mode: 'merge' }));
+    el.btnDriveConnect?.addEventListener('click', async () => {
+      try {
+        await ensureDriveConnected({ forcePick: true });
+        setDriveStatus('Folder connected', 'ok');
+        await refreshDriveStatus();
+      } catch (e) {
+        const msg = e?.message || String(e);
+        if (/cancel/i.test(msg)) setDriveStatus('Cancelled', '');
+        else setDriveStatus(msg, 'err');
+      }
+    });
+    el.btnDriveBackupSettings?.addEventListener('click', () => backupLibraryToDrive({ source: 'settings' }));
+    el.btnDriveRestoreSettings?.addEventListener('click', () => restoreLibraryFromDrive({ source: 'settings', mode: 'merge' }));
+    el.btnDriveDisconnect?.addEventListener('click', () => disconnectDriveFolder());
     el.btnShareAiToAa?.addEventListener('click', shareAiSettingsToAaforge);
     el.btnKitchenSink?.addEventListener('click', () => installKitchenSink());
     el.btnHints?.addEventListener('click', () => openHints());
@@ -10816,6 +11317,7 @@ H().state.get('note').then(v=>{ if(v) note.value=String(v); }).catch(()=>{});
       hasAnyApiKeyConfigured() ? 'ok' : ''
     );
     refreshTermuxStatus();
+    refreshDriveStatus();
     refreshQuickSetupVisibility();
     consumeShortcutLaunch();
 
