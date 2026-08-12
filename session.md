@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.8 / versionCode 40** (Open with / Share HTML → Forge) · live-translate baseline was 2.6.5/37 |
+| Version | **2.6.10 / versionCode 42** (takePhoto Samsung reliability + decode fallback) · was 2.6.9/41 cam preview |
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-12 — Full Forge Kitchen Sink mini-app lab |
+| **Last rebuild** | 2026-08-12 — takePhoto FileProvider grants + JPEG wait + img decode fallback |
 
 ### Locked product baseline
 
@@ -358,3 +358,63 @@ Smoke:
 ```
 
 Note: earlier “kitchen sink” work = API lab demo only; this is the real open-with feature.
+
+## Kitchen sink camera preview (2026-08-12)
+
+Shipped in host **2.6.9 / versionCode 41**:
+
+**Bug:** Media → Camera photo captured OK but image did not appear in the lab.
+
+**Causes addressed:**
+1. Long `data:` URLs often fail to paint on `<img>` inside sandboxed `srcdoc` WebViews
+2. Host posted **both** `base64` + `dataUrl` (2× payload) to the iframe via `postMessage`
+3. Gallery path logged the full shot (multi‑MB base64) into the fixed log panel
+
+**Fix:**
+- Kitchen sink displays via **blob: Object URL** from base64 (fallback dataUrl)
+- Host slims large media results (single copy); mini-app bridge rehydrates `dataUrl` ↔ `base64`
+- Lab uses `maxWidth: 1280`; never dumps full base64 into the log
+- Camera encode includes `mime: image/jpeg`
+
+**Device:** after install, Library → **Kitchen sink** again (reinstalls lab HTML), then Media → Camera photo.
+
+Smoke:
+```text
+[ ] Kitchen sink → Media → Camera photo → image appears above log
+[ ] Log shows w/h/bytes/via:blob (not a multi‑MB base64 dump)
+[ ] Gallery pick also previews
+```
+
+## takePhoto reliability (2026-08-12)
+
+Shipped in host **2.6.10 / versionCode 42**:
+
+**Bug:** `camera.takePhoto` often “succeeded” with meta (`w/h/bytes`) but kitchen sink logged
+`img failed to decode` (e.g. `bytes≈8KB`, `via:blob`). Common on Samsung Fold.
+
+**Causes addressed:**
+1. Camera app not granted FileProvider URI write → empty/partial JPEG at EXTRA_OUTPUT
+2. RESULT_OK before file fully flushed; tiny non-JPEG files still encoded
+3. RESULT_CANCELED even when file was written (OEM quirk)
+4. Kitchen sink used blob only — no `onerror` fallback to `dataUrl`
+5. No JPEG magic validation on capture file or re-encoded output
+
+**Fix (native `CameraBridgePlugin`):**
+- `createNewFile()` before launch; grant URI to all IMAGE_CAPTURE handlers
+- Wait/retry (~1s) for file ≥2KB + JPEG SOI (`FF D8`)
+- Accept written file even if result code cancelled
+- Re-encode clean baseline JPEG; reject invalid compress output
+- Clearer reject: `No image returned… (fileBytes=…, attempts=…)`
+
+**Fix (kitchen sink + ForgeCam.html):**
+- Display chain: blob → dataUrl → forced `image/jpeg` dataUrl on `img.onerror`
+- Log `b64Prefix` (`/9j/` = JPEG) for diagnosis
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk
+[ ] Library → Kitchen sink (reinstall lab) → Media → Camera photo ×5
+[ ] Image paints; log shows shown:true and b64Prefix /9j/
+[ ] bytes typically >> 20KB for real photos (not ~8KB garbage)
+[ ] Cancel camera → clean "Camera cancelled" (or still OK if OEM wrote file)
+```

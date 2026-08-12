@@ -3,14 +3,18 @@ package com.forge.live;
 import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.util.Log;
 import androidx.activity.result.ActivityResult;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -24,17 +28,28 @@ import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 @CapacitorPlugin(name = "CameraBridge", permissions = {@Permission(alias = "camera", strings = {"android.permission.CAMERA"}), @Permission(alias = "photos", strings = {"android.permission.READ_EXTERNAL_STORAGE"})})
 public class CameraBridgePlugin extends Plugin {
+    private static final String TAG = "CameraBridge";
+    private static final int URI_GRANT_FLAGS =
+            Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+    /** Samsung/Fold often returns before the JPEG is fully flushed. */
+    private static final long MIN_CAPTURE_BYTES = 2048L;
+    private static final int FILE_WAIT_ATTEMPTS = 8;
+    private static final long FILE_WAIT_MS = 120L;
+
     private File pendingCaptureFile;
     private Uri pendingCaptureUri;
     private int pendingQuality = 85;
     private int pendingMaxWidth = 1920;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private boolean hasCameraPermission() {
         return ContextCompat.checkSelfPermission(getContext(), "android.permission.CAMERA") == 0;
@@ -125,13 +140,23 @@ public class CameraBridgePlugin extends Plugin {
                 call.reject("Cannot create camera cache dir");
                 return;
             }
-            String name = "forge_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".jpg";
-            this.pendingCaptureFile = new File(dir, name);
-            this.pendingCaptureUri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", this.pendingCaptureFile);
-            Intent intent = new Intent("android.media.action.IMAGE_CAPTURE");
-            intent.putExtra("output", this.pendingCaptureUri);
-            intent.addFlags(3);
+            String name = "forge_" + new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(new Date()) + ".jpg";
+            File out = new File(dir, name);
+            // Many camera apps require the target file to already exist.
+            if (!out.exists() && !out.createNewFile()) {
+                call.reject("Cannot create capture file");
+                return;
+            }
+            this.pendingCaptureFile = out;
+            this.pendingCaptureUri = FileProvider.getUriForFile(
+                    getContext(),
+                    getContext().getPackageName() + ".fileprovider",
+                    out);
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, this.pendingCaptureUri);
+            intent.addFlags(URI_GRANT_FLAGS);
             intent.setClipData(ClipData.newRawUri("output", this.pendingCaptureUri));
+            grantUriToCameraApps(intent, this.pendingCaptureUri);
             if ("front".equalsIgnoreCase(facing)) {
                 intent.putExtra("android.intent.extras.CAMERA_FACING", 1);
                 intent.putExtra("android.intent.extra.USE_FRONT_CAMERA", true);
@@ -141,6 +166,7 @@ public class CameraBridgePlugin extends Plugin {
                 intent.putExtra("android.intent.extras.CAMERA_FACING", 0);
             }
             if (intent.resolveActivity(getContext().getPackageManager()) == null) {
+                cleanupPending();
                 call.reject("No camera app available");
             } else {
                 startActivityForResult(call, intent, "captureResult");
@@ -151,54 +177,134 @@ public class CameraBridgePlugin extends Plugin {
         }
     }
 
+    private void grantUriToCameraApps(Intent intent, Uri uri) {
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            List<ResolveInfo> resList = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            if (resList == null) return;
+            for (ResolveInfo ri : resList) {
+                if (ri.activityInfo == null) continue;
+                String pkg = ri.activityInfo.packageName;
+                try {
+                    getContext().grantUriPermission(pkg, uri, URI_GRANT_FLAGS);
+                } catch (Exception e) {
+                    Log.w(TAG, "grantUriPermission failed for " + pkg + ": " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "grantUriToCameraApps: " + e.getMessage());
+        }
+    }
+
     @ActivityCallback
     private void captureResult(PluginCall call, ActivityResult result) {
         if (call == null) {
             cleanupPending();
             return;
         }
+        final int code = result != null ? result.getResultCode() : 0;
+        final Intent data = result != null ? result.getData() : null;
+        // Wait briefly: OEMs (esp. Samsung) often RESULT_OK before the JPEG is fully written.
+        finishCaptureWithRetry(call, data, code, 0);
+    }
+
+    private void finishCaptureWithRetry(final PluginCall call, final Intent data, final int resultCode, final int attempt) {
         try {
-            if (result.getResultCode() != -1) {
+            File file = this.pendingCaptureFile;
+            boolean fileLooksReady = file != null
+                    && file.exists()
+                    && file.length() >= MIN_CAPTURE_BYTES
+                    && hasJpegMagic(file);
+
+            if (!fileLooksReady && file != null && file.exists() && file.length() > 0 && attempt < FILE_WAIT_ATTEMPTS) {
+                mainHandler.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        finishCaptureWithRetry(call, data, resultCode, attempt + 1);
+                    }
+                }, FILE_WAIT_MS);
+                return;
+            }
+
+            // Samsung quirk: RESULT_CANCELED but full image still written to EXTRA_OUTPUT.
+            if (fileLooksReady) {
+                resolveFromFile(call, file);
+                return;
+            }
+
+            if (resultCode != -1 /* RESULT_OK */) {
                 cleanupPending();
                 call.reject("Camera cancelled");
                 return;
             }
-            File file = this.pendingCaptureFile;
-            if (file != null && file.exists() && file.length() != 0) {
-                JSObject o = encodeFile(file, this.pendingQuality, this.pendingMaxWidth);
-                boolean saveToGallery = Boolean.TRUE.equals(call.getBoolean("saveToGallery", false));
-                if (saveToGallery) {
-                    try {
-                        MediaStore.Images.Media.insertImage(getContext().getContentResolver(), file.getAbsolutePath(), file.getName(), "Forge capture");
-                        o.put("savedToGallery", true);
-                    } catch (Exception e) {
-                        o.put("savedToGallery", false);
-                    }
-                }
-                o.put("path", file.getAbsolutePath());
-                cleanupPendingKeepFile();
-                call.resolve(o);
-                return;
-            }
-            Intent data = result.getData();
+
+            // File missing/too small — try URI or thumbnail extras.
             if (data != null && data.getData() != null) {
                 JSObject o2 = encodeUri(data.getData(), this.pendingQuality, this.pendingMaxWidth);
                 cleanupPending();
                 call.resolve(o2);
-            } else {
-                if (data != null && data.getExtras() != null && (data.getExtras().get("data") instanceof Bitmap)) {
-                    Bitmap thumb = (Bitmap) data.getExtras().get("data");
-                    JSObject o3 = encodeBitmap(thumb, this.pendingQuality, this.pendingMaxWidth, null);
-                    cleanupPending();
-                    call.resolve(o3);
-                    return;
-                }
-                cleanupPending();
-                call.reject("No image returned from camera");
+                return;
             }
+            if (data != null && data.getExtras() != null && (data.getExtras().get("data") instanceof Bitmap)) {
+                Bitmap thumb = (Bitmap) data.getExtras().get("data");
+                JSObject o3 = encodeBitmap(thumb, this.pendingQuality, this.pendingMaxWidth, null);
+                cleanupPending();
+                call.resolve(o3);
+                return;
+            }
+
+            // Last chance: tiny non-magic file that still decodes
+            if (file != null && file.exists() && file.length() > 0) {
+                try {
+                    resolveFromFile(call, file);
+                    return;
+                } catch (Exception ignore) {
+                    Log.w(TAG, "encode small capture failed: " + ignore.getMessage());
+                }
+            }
+
+            long len = file != null && file.exists() ? file.length() : -1L;
+            cleanupPending();
+            call.reject("No image returned from camera (fileBytes=" + len + ", attempts=" + attempt + ")");
         } catch (Exception e2) {
             cleanupPending();
             call.reject("captureResult failed: " + e2.getMessage(), e2);
+        }
+    }
+
+    private void resolveFromFile(PluginCall call, File file) throws Exception {
+        JSObject o = encodeFile(file, this.pendingQuality, this.pendingMaxWidth);
+        boolean saveToGallery = Boolean.TRUE.equals(call.getBoolean("saveToGallery", false));
+        if (saveToGallery) {
+            try {
+                MediaStore.Images.Media.insertImage(
+                        getContext().getContentResolver(),
+                        file.getAbsolutePath(),
+                        file.getName(),
+                        "Forge capture");
+                o.put("savedToGallery", true);
+            } catch (Exception e) {
+                o.put("savedToGallery", false);
+            }
+        }
+        o.put("path", file.getAbsolutePath());
+        cleanupPendingKeepFile();
+        call.resolve(o);
+    }
+
+    private static boolean hasJpegMagic(File file) {
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(file);
+            byte[] magic = new byte[3];
+            int n = in.read(magic);
+            // JPEG SOI FF D8 FF  — also accept FF D8 alone
+            return n >= 2 && (magic[0] & 0xFF) == 0xFF && (magic[1] & 0xFF) == 0xD8;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (in != null) {
+                try { in.close(); } catch (Exception ignored) {}
+            }
         }
     }
 
@@ -247,7 +353,14 @@ public class CameraBridgePlugin extends Plugin {
 
     private JSObject encodeFile(File file, int quality, int maxWidth) throws Exception {
         Bitmap bitmap = decodeBounded(file.getAbsolutePath(), maxWidth);
-        return encodeBitmap(applyExifOrientation(file.getAbsolutePath(), bitmap), quality, maxWidth, file.getAbsolutePath());
+        if (bitmap == null) {
+            throw new Exception("Decode failed (null bitmap, fileBytes=" + file.length() + ")");
+        }
+        Bitmap oriented = applyExifOrientation(file.getAbsolutePath(), bitmap);
+        if (oriented == null) {
+            throw new Exception("EXIF orient failed");
+        }
+        return encodeBitmap(oriented, quality, maxWidth, file.getAbsolutePath());
     }
 
     private JSObject encodeUri(Uri uri, int quality, int maxWidth) throws Exception {
@@ -317,13 +430,23 @@ public class CameraBridgePlugin extends Plugin {
             }
         }
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, bos);
+        // Re-encode ourselves so mini-apps always get a clean baseline JPEG (not OEM partials).
+        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, bos)) {
+            bitmap.recycle();
+            throw new IllegalStateException("JPEG compress failed");
+        }
         byte[] bytes = bos.toByteArray();
-        String b64 = Base64.encodeToString(bytes, 2);
+        if (bytes.length < 24 || (bytes[0] & 0xFF) != 0xFF || (bytes[1] & 0xFF) != 0xD8) {
+            bitmap.recycle();
+            throw new IllegalStateException("Invalid JPEG produced (bytes=" + bytes.length + ")");
+        }
+        // NO_WRAP — safe for data URLs / atob
+        String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
         JSObject o = new JSObject();
         o.put("base64", b64);
         o.put("dataUrl", "data:image/jpeg;base64," + b64);
-        o.put(QrScanActivity.EXTRA_FORMAT, "jpeg");
+        o.put("mime", "image/jpeg");
+        o.put("format", "jpeg");
         o.put("width", bitmap.getWidth());
         o.put("height", bitmap.getHeight());
         o.put("bytes", bytes.length);

@@ -3626,8 +3626,23 @@ termux-reload-settings</div>
       const p = pending.get(d.id);
       if (!p) return;
       pending.delete(d.id);
-      if (d.ok) p.resolve(d.result);
-      else p.reject(new Error(d.error || 'Host error'));
+      if (d.ok) {
+        let r = d.result;
+        // Host may omit duplicate base64 or dataUrl on large media payloads.
+        try {
+          if (r && typeof r === 'object' && !Array.isArray(r)) {
+            const mime = r.mime || r.contentType || 'application/octet-stream';
+            if (!r.dataUrl && !r.dataURL && typeof r.base64 === 'string' && r.base64) {
+              r = Object.assign({}, r, { dataUrl: 'data:' + mime + ';base64,' + r.base64 });
+            } else if ((r.dataUrl || r.dataURL) && !r.base64) {
+              const du = String(r.dataUrl || r.dataURL);
+              const idx = du.indexOf('base64,');
+              if (idx >= 0) r = Object.assign({}, r, { base64: du.slice(idx + 7) });
+            }
+          }
+        } catch (_) {}
+        p.resolve(r);
+      } else p.reject(new Error(d.error || 'Host error'));
       return;
     }
     if (d.type === 'host-event') {
@@ -7274,7 +7289,52 @@ termux-reload-settings</div>
         ok = false;
         error = e.message || String(e);
       }
-      ev.source.postMessage({ __forge: true, type: 'host-result', id: d.id, ok, result, error }, '*');
+      // Large camera/file payloads: avoid sending base64+dataUrl twice over postMessage
+      // (can drop/fail in Android WebView → mini-app gets nothing to show).
+      let resultOut = result;
+      try {
+        if (ok && result && typeof result === 'object' && !Array.isArray(result)) {
+          const b64 = typeof result.base64 === 'string' ? result.base64 : '';
+          const du = typeof result.dataUrl === 'string' ? result.dataUrl : (typeof result.dataURL === 'string' ? result.dataURL : '');
+          if (b64 && du && b64.length > 24 * 1024) {
+            // Prefer single copy: base64 only (bridge rehydrates dataUrl for mini-apps)
+            resultOut = Object.assign({}, result);
+            delete resultOut.dataUrl;
+            delete resultOut.dataURL;
+          } else if (b64 && !du && b64.length > 0) {
+            // small payloads: include dataUrl convenience
+            if (b64.length <= 24 * 1024) {
+              const mime = result.mime || result.contentType || 'application/octet-stream';
+              resultOut = Object.assign({}, result, { dataUrl: `data:${mime};base64,${b64}` });
+            }
+          } else if (du && !b64 && /;base64,/i.test(du)) {
+            const b = du.split(/base64,/i).pop() || '';
+            resultOut = Object.assign({}, result, { base64: b });
+            if (b.length > 24 * 1024) {
+              delete resultOut.dataUrl;
+              delete resultOut.dataURL;
+            }
+          }
+        }
+      } catch (_) { resultOut = result; }
+      try {
+        ev.source.postMessage({ __forge: true, type: 'host-result', id: d.id, ok, result: resultOut, error }, '*');
+      } catch (postErr) {
+        // Fallback: drop binary fields and report size so mini-app doesn't hang forever
+        try {
+          const slim = (result && typeof result === 'object') ? {
+            error: 'payload_too_large',
+            message: (postErr && postErr.message) || 'postMessage failed',
+            width: result.width,
+            height: result.height,
+            bytes: result.bytes,
+            mime: result.mime || result.contentType,
+            path: result.path,
+            name: result.name,
+          } : null;
+          ev.source.postMessage({ __forge: true, type: 'host-result', id: d.id, ok: false, result: null, error: (slim && slim.message) || 'postMessage failed' }, '*');
+        } catch (_) {}
+      }
     });
 
     /** Payload from notification/job tap waiting for mini-app ready */
@@ -11310,16 +11370,115 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     try { off && off(); } catch(_){}
     log({ chunks: n, lastSeq: last && last.seq, stop: st }, 'ok');
   }); };
+  var _picObjectUrl = null;
+  function revokePicUrl(){
+    if (_picObjectUrl) {
+      try { URL.revokeObjectURL(_picObjectUrl); } catch(_){}
+      _picObjectUrl = null;
+    }
+  }
+  function cleanB64(b64){
+    return String(b64 || '').replace(/\s+/g, '').replace(/^data:[^;]+;base64,/i, '');
+  }
+  function b64Prefix(b64){
+    var s = cleanB64(b64);
+    return s ? s.slice(0, 12) : '';
+  }
+  /** JPEG base64 starts with /9j/  PNG with iVBOR  WebP with UklGR */
+  function b64LooksLikeImage(b64){
+    var p = b64Prefix(b64);
+    return p.indexOf('/9j/') === 0 || p.indexOf('iVBOR') === 0 || p.indexOf('UklGR') === 0 || p.indexOf('R0lGO') === 0;
+  }
+  function b64ToBytes(b64){
+    var bin = atob(cleanB64(b64));
+    var len = bin.length;
+    var bytes = new Uint8Array(len);
+    for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  function b64ToBlobUrl(b64, mime){
+    mime = mime || 'image/jpeg';
+    return URL.createObjectURL(new Blob([b64ToBytes(b64)], { type: mime }));
+  }
+  function mediaCandidates(shot){
+    if (!shot || typeof shot !== 'object') return { list: [], meta: { error: 'no shot' } };
+    var mime = shot.mime || shot.contentType || 'image/jpeg';
+    var dataUrl = shot.dataUrl || shot.dataURL || '';
+    var b64 = cleanB64(shot.base64 || '');
+    if (!b64 && dataUrl && /base64,/i.test(dataUrl)) {
+      b64 = cleanB64(dataUrl.split(/base64,/i).pop() || '');
+    }
+    if (!dataUrl && b64) dataUrl = 'data:' + mime + ';base64,' + b64;
+    var list = [];
+    // Prefer blob for large payloads; always keep dataUrl as fallback (srcdoc WebView quirks).
+    if (b64) {
+      try { list.push({ src: b64ToBlobUrl(b64, mime), via: 'blob', revoke: true }); } catch (e) {}
+    }
+    if (dataUrl) list.push({ src: dataUrl, via: 'dataUrl', revoke: false });
+    // Last resort: force jpeg dataUrl even if mime was wrong
+    if (b64 && (!dataUrl || mime !== 'image/jpeg')) {
+      list.push({ src: 'data:image/jpeg;base64,' + b64, via: 'dataUrl-jpeg', revoke: false });
+    }
+    return {
+      list: list,
+      meta: {
+        w: shot.width,
+        h: shot.height,
+        bytes: shot.bytes || (b64 ? Math.floor(b64.length * 0.75) : 0),
+        mime: mime,
+        hasDataUrl: !!dataUrl,
+        hasBase64: !!b64,
+        b64Prefix: b64Prefix(b64),
+        b64Ok: b64LooksLikeImage(b64),
+        path: shot.path || null
+      }
+    };
+  }
+  function showPic(shot){
+    var img = document.getElementById('pic');
+    revokePicUrl();
+    var got = mediaCandidates(shot);
+    if (!got.list.length) {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+      throw new Error('Photo returned no image data (missing dataUrl/base64) meta=' + JSON.stringify(got.meta));
+    }
+    if (got.meta.b64Ok === false && got.meta.hasBase64) {
+      log({ warn: 'base64 does not look like jpeg/png', meta: got.meta }, 'err');
+    }
+    var idx = 0;
+    function tryNext(errVia){
+      if (idx >= got.list.length) {
+        img.removeAttribute('src');
+        img.style.display = 'none';
+        log({ error: 'img failed to decode', tried: got.list.map(function(c){ return c.via; }), lastVia: errVia, meta: got.meta }, 'err');
+        return;
+      }
+      var c = got.list[idx++];
+      revokePicUrl();
+      if (c.revoke) _picObjectUrl = c.src;
+      img.onload = function(){
+        try { img.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch(_){}
+        log({ shown: true, via: c.via, meta: got.meta }, 'ok');
+      };
+      img.onerror = function(){ tryNext(c.via); };
+      img.style.display = 'block';
+      img.src = c.src;
+    }
+    tryNext(null);
+    return Object.assign({ via: got.list[0] && got.list[0].via, srcLen: got.list[0] ? String(got.list[0].src).length : 0 }, got.meta);
+  }
   document.getElementById('btnCam').onclick = function(){ safe(async function(){
     await H().permissions.request('camera');
-    var shot = await H().camera.takePhoto({ quality: 80 });
-    var img = document.getElementById('pic'); img.src = shot.dataUrl; img.style.display = 'block';
-    log({ w: shot.width, h: shot.height, bytes: shot.bytes }, 'ok');
+    var shot = await H().camera.takePhoto({ quality: 80, maxWidth: 1280 });
+    // showPic logs success/failure (with blob→dataUrl fallback)
+    log({ takePhoto: true, w: shot && shot.width, h: shot && shot.height, bytes: shot && shot.bytes, b64Prefix: shot && shot.base64 ? String(shot.base64).slice(0, 8) : null }, 'ok');
+    showPic(shot);
   }); };
   document.getElementById('btnGal').onclick = function(){ safe(async function(){
-    var shot = await H().camera.pickPhoto({ quality: 85 });
-    var img = document.getElementById('pic'); img.src = shot.dataUrl || shot.dataURL; img.style.display = 'block';
-    log(shot, 'ok');
+    var shot = await H().camera.pickPhoto({ quality: 85, maxWidth: 1280 });
+    log({ pickPhoto: true, w: shot && shot.width, h: shot && shot.height, bytes: shot && shot.bytes }, 'ok');
+    showPic(shot);
   }); };
   document.getElementById('btnQr').onclick = function(){ safe(async function(){
     await H().qr.requestPermission();

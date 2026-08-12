@@ -1,0 +1,1377 @@
+<!-- AAForge:mini-app-v1 app_car_assist -->
+<!-- carCompatible: true -->
+<!DOCTYPE html>
+<html lang="en" data-car-compatible="true" data-aaforge="1">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="forge-car-compatible" content="true">
+<title>Car Assist</title>
+<style>
+:root {
+  --bg: #0b1220;
+  --panel: #121a2b;
+  --panel2: #1a2438;
+  --line: #2a3650;
+  --text: #e8eefc;
+  --muted: #93a0b8;
+  --accent: #3b82f6;
+  --good: #16a34a;
+  --stop: #dc2626;
+  --warn: #f59e0b;
+  --user: #2563eb;
+  --ai: #243047;
+  --danger-bg: #3f1d1d;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand h1 { font-size: 20px; font-weight: 700; letter-spacing: 0.2px; }
+.brand .sub { font-size: 13px; color: var(--muted); margin-top: 2px; max-width: 70vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel2); color: var(--text); font-size: 20px; cursor: pointer;
+}
+.status {
+  margin: 10px 16px 0;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+.status.live { color: #86efac; border-color: #166534; background: #052e1a; }
+.status.busy { color: #93c5fd; border-color: #1d4ed8; background: #0b1f44; }
+.status.err { color: #fecaca; border-color: #7f1d1d; background: var(--danger-bg); }
+
+.chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.msg {
+  max-width: 92%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  line-height: 1.45;
+  font-size: 17px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.msg.user {
+  align-self: flex-end;
+  background: var(--user);
+  border-bottom-right-radius: 5px;
+}
+.msg.ai {
+  align-self: flex-start;
+  background: var(--ai);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 5px;
+  width: min(100%, 520px);
+}
+.msg .tag { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+.msg .tools { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.msg.err { background: var(--danger-bg); border-color: #7f1d1d; }
+.empty {
+  margin: auto;
+  text-align: center;
+  color: var(--muted);
+  padding: 24px 12px;
+  max-width: 320px;
+}
+.empty strong { display: block; color: var(--text); font-size: 18px; margin-bottom: 8px; }
+
+.footer {
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent, var(--bg) 28%);
+  border-top: 1px solid var(--line);
+}
+.listen-btn {
+  width: 100%;
+  min-height: 72px;
+  border: none;
+  border-radius: 20px;
+  font-size: 24px;
+  font-weight: 800;
+  cursor: pointer;
+  color: white;
+  background: linear-gradient(180deg, #22c55e, #15803d);
+  box-shadow: 0 10px 24px rgba(22, 163, 74, 0.25);
+}
+.listen-btn.on {
+  background: linear-gradient(180deg, #f87171, #b91c1c);
+  box-shadow: 0 10px 24px rgba(220, 38, 38, 0.25);
+}
+.listen-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: flex-end;
+}
+.type-toggle {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 2px;
+  text-decoration: underline;
+}
+.type-box { display: none; flex: 1; gap: 8px; align-items: flex-end; }
+.type-box.show { display: flex; }
+#typeInput {
+  flex: 1;
+  min-height: 46px;
+  max-height: 110px;
+  resize: none;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 16px;
+}
+.send-btn {
+  width: 48px; height: 48px; border-radius: 14px; border: none;
+  background: var(--accent); color: white; font-size: 18px; font-weight: 700; cursor: pointer;
+}
+.send-btn:disabled { opacity: 0.5; }
+
+.modal {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(2, 6, 23, 0.88);
+  z-index: 50;
+  overflow-y: auto;
+  padding: 24px 16px;
+}
+.modal.show { display: block; }
+.sheet {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 20px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+.sheet h2 { font-size: 20px; margin-bottom: 14px; }
+.field { margin-bottom: 14px; }
+.field label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 6px; font-weight: 600; }
+.field select, .field input[type="text"], .field input[type="number"] {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--text);
+  font-size: 16px;
+}
+.field .hint { font-size: 12px; color: var(--muted); margin-top: 5px; }
+.check {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0;
+  color: var(--text);
+  font-size: 15px;
+}
+.check input { width: 20px; height: 20px; }
+.actions { display: flex; gap: 10px; margin-top: 18px; }
+.actions button {
+  flex: 1; padding: 14px; border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.btn-save { background: var(--accent); color: white; }
+.btn-cancel { background: var(--panel2); color: var(--text); border: 1px solid var(--line) !important; }
+
+.confirm {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(2,6,23,.9);
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.confirm.show { display: flex; }
+.confirm .box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 20px;
+  width: min(420px, 100%);
+}
+.confirm h3 { margin-bottom: 8px; }
+.confirm p { color: var(--muted); margin-bottom: 16px; font-size: 15px; line-height: 1.4; }
+</style>
+</head>
+<body>
+  <header class="header">
+    <div class="brand">
+      <h1>🚗 Car Assist</h1>
+      <div class="sub" id="providerSub">Starting…</div>
+    </div>
+    <button class="icon-btn" id="btnSettings" type="button" title="Settings" aria-label="Settings">⚙️</button>
+  </header>
+
+  <div class="status" id="status">Idle</div>
+
+  <main class="chat" id="chat" aria-live="polite">
+    <div class="empty" id="empty">
+      <strong>Hands-free car assistant</strong>
+      Tap <b>Listen</b> and speak. I’ll answer in text and voice, and I can open apps for you.
+    </div>
+  </main>
+
+  <footer class="footer">
+    <button class="listen-btn" id="btnListen" type="button">🎤 Listen</button>
+    <button class="type-toggle" id="btnTypeToggle" type="button">Type instead</button>
+    <div class="row">
+      <div class="type-box" id="typeBox">
+        <textarea id="typeInput" rows="1" placeholder="Type a request…"></textarea>
+        <button class="send-btn" id="btnSend" type="button" title="Send">➤</button>
+      </div>
+    </div>
+  </footer>
+
+  <div class="modal" id="settingsModal" role="dialog" aria-modal="true">
+    <div class="sheet">
+      <h2>Settings</h2>
+      <div class="field">
+        <label for="selProvider">LLM provider</label>
+        <select id="selProvider"></select>
+        <div class="hint">Uses AI profiles already configured in Forge / shared to AAForge. No keys here.</div>
+      </div>
+      <div class="field">
+        <label for="selVoice">Voice</label>
+        <select id="selVoice"></select>
+        <div class="hint">Cloud voice when available; otherwise Android TTS.</div>
+      </div>
+      <div class="field">
+        <label for="inpLang">Language (STT / TTS)</label>
+        <input id="inpLang" type="text" value="en-US" placeholder="en-US">
+      </div>
+      <label class="check"><input type="checkbox" id="chkSpeak" checked> Speak answers</label>
+      <label class="check"><input type="checkbox" id="chkTools" checked> Enable app / phone tools</label>
+      <label class="check"><input type="checkbox" id="chkAutoLaunch"> Auto-launch apps (no confirm)</label>
+      <div class="field">
+        <label for="inpRounds">Max tool rounds</label>
+        <input id="inpRounds" type="number" min="1" max="6" value="4">
+      </div>
+      <div class="actions">
+        <button class="btn-cancel" id="btnSettingsCancel" type="button">Cancel</button>
+        <button class="btn-save" id="btnSettingsSave" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="confirm" id="confirmLaunch">
+    <div class="box">
+      <h3>Launch app?</h3>
+      <p id="confirmLaunchText">Open this app?</p>
+      <div class="actions">
+        <button class="btn-cancel" id="btnLaunchNo" type="button">No</button>
+        <button class="btn-save" id="btnLaunchYes" type="button">Yes</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  const H = () => window.ForgeHost || window.forge || null;
+  const STORAGE_KEY = 'car_assist_settings_v1';
+  const HISTORY_KEY = 'car_assist_history_v1';
+
+  const DEFAULTS = {
+    providerId: '',
+    voiceId: 'native:default',
+    lang: 'en-US',
+    speak: true,
+    enableTools: true,
+    autoLaunch: false,
+    maxToolRounds: 4
+  };
+
+  let settings = Object.assign({}, DEFAULTS);
+  let caps = {};
+  let providers = [];
+  let voices = [];
+  let uiHistory = []; // {role, content, tools?}
+  let sessionOn = false;
+  let abortGen = 0;
+  let turnBusy = false;
+  let launchConfirmResolver = null;
+  let lastTranscript = { text: '', at: 0 };
+  let micLimited = false;
+
+  const el = {
+    chat: document.getElementById('chat'),
+    empty: document.getElementById('empty'),
+    status: document.getElementById('status'),
+    providerSub: document.getElementById('providerSub'),
+    btnListen: document.getElementById('btnListen'),
+    btnSettings: document.getElementById('btnSettings'),
+    btnTypeToggle: document.getElementById('btnTypeToggle'),
+    typeBox: document.getElementById('typeBox'),
+    typeInput: document.getElementById('typeInput'),
+    btnSend: document.getElementById('btnSend'),
+    settingsModal: document.getElementById('settingsModal'),
+    selProvider: document.getElementById('selProvider'),
+    selVoice: document.getElementById('selVoice'),
+    inpLang: document.getElementById('inpLang'),
+    chkSpeak: document.getElementById('chkSpeak'),
+    chkTools: document.getElementById('chkTools'),
+    chkAutoLaunch: document.getElementById('chkAutoLaunch'),
+    inpRounds: document.getElementById('inpRounds'),
+    btnSettingsCancel: document.getElementById('btnSettingsCancel'),
+    btnSettingsSave: document.getElementById('btnSettingsSave'),
+    confirmLaunch: document.getElementById('confirmLaunch'),
+    confirmLaunchText: document.getElementById('confirmLaunchText'),
+    btnLaunchYes: document.getElementById('btnLaunchYes'),
+    btnLaunchNo: document.getElementById('btnLaunchNo')
+  };
+
+  function toast(msg) {
+    try { const h = H(); if (h && h.toast) return h.toast(String(msg)); } catch (_) {}
+  }
+
+  function setStatus(text, kind) {
+    el.status.textContent = text || 'Idle';
+    el.status.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function safeJson(obj, max) {
+    try {
+      const s = JSON.stringify(obj);
+      return s.length > (max || 10000) ? s.slice(0, max) + '…' : s;
+    } catch (_) {
+      return String(obj);
+    }
+  }
+
+  async function storageGet(key) {
+    try {
+      const h = H();
+      if (h && h.storage && h.storage.get) {
+        const v = await h.storage.get(key);
+        return v;
+      }
+    } catch (_) {}
+    try { return localStorage.getItem(key); } catch (_) {}
+    return null;
+  }
+
+  async function storageSet(key, val) {
+    try {
+      const h = H();
+      if (h && h.storage && h.storage.set) {
+        await h.storage.set(key, val);
+        return;
+      }
+    } catch (_) {}
+    try { localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val)); } catch (_) {}
+  }
+
+  async function loadSettings() {
+    try {
+      const raw = await storageGet(STORAGE_KEY);
+      if (!raw) return;
+      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      settings = Object.assign({}, DEFAULTS, obj || {});
+    } catch (_) {}
+  }
+
+  async function saveSettings() {
+    await storageSet(STORAGE_KEY, JSON.stringify(settings));
+  }
+
+  async function loadHistory() {
+    try {
+      const raw = await storageGet(HISTORY_KEY);
+      if (!raw) return;
+      const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(arr)) {
+        uiHistory = arr.slice(-40);
+        renderAll();
+      }
+    } catch (_) {}
+  }
+
+  async function saveHistory() {
+    await storageSet(HISTORY_KEY, JSON.stringify(uiHistory.slice(-40)));
+  }
+
+  function hideEmpty() {
+    if (el.empty) el.empty.style.display = 'none';
+  }
+
+  function appendBubble(role, content, toolsUsed) {
+    hideEmpty();
+    const div = document.createElement('div');
+    div.className = 'msg ' + (role === 'user' ? 'user' : 'ai');
+    const tag = role === 'user' ? 'You' : 'Assist';
+    let html = '<div class="tag">' + escapeHtml(tag) + '</div>' + escapeHtml(content || '');
+    if (toolsUsed && toolsUsed.length) {
+      html += '<div class="tools">Used: ' + escapeHtml(toolsUsed.join(', ')) + '</div>';
+    }
+    div.innerHTML = html;
+    el.chat.appendChild(div);
+    el.chat.scrollTop = el.chat.scrollHeight;
+  }
+
+  function appendError(msg) {
+    hideEmpty();
+    const div = document.createElement('div');
+    div.className = 'msg ai err';
+    div.innerHTML = '<div class="tag">Error</div>' + escapeHtml(msg || 'Error');
+    el.chat.appendChild(div);
+    el.chat.scrollTop = el.chat.scrollHeight;
+  }
+
+  function renderAll() {
+    el.chat.innerHTML = '';
+    if (!uiHistory.length) {
+      el.chat.appendChild(el.empty);
+      el.empty.style.display = '';
+      return;
+    }
+    uiHistory.forEach(m => appendBubble(m.role, m.content, m.tools));
+  }
+
+  function updateListenButton() {
+    el.btnListen.classList.toggle('on', sessionOn);
+    el.btnListen.textContent = sessionOn ? '⏹ Stop' : '🎤 Listen';
+  }
+
+  function updateProviderSub() {
+    const p = providers.find(x => x.id === settings.providerId) || providers.find(x => x.selected) || providers[0];
+    const label = p ? ((p.label || p.name || p.id) + (p.model ? ' · ' + p.model : '')) : 'No provider';
+    const host = (caps && (caps.host || caps.platform)) || 'forge';
+    el.providerSub.textContent = label + ' · ' + host + (micLimited ? ' · typed voice' : '');
+  }
+
+  /* ——— Host discovery ——— */
+  async function refreshCaps() {
+    const h = H();
+    caps = {};
+    if (!h) return;
+    try {
+      if (h.getCapabilities) caps = (await h.getCapabilities()) || {};
+    } catch (_) {}
+    try {
+      if ((!caps || !Object.keys(caps).length) && h.ai && h.ai.isAvailable) {
+        const a = await h.ai.isAvailable();
+        caps = Object.assign({ ai: !!(a && (a.available || a.ok || a.provider)) }, a || {});
+      }
+    } catch (_) {}
+  }
+
+  async function refreshProviders() {
+    providers = [];
+    const h = H();
+    if (!h || !h.ai) return;
+    try {
+      const menu = h.ai.listProviders ? await h.ai.listProviders()
+        : (h.ai.menu ? await h.ai.menu() : null);
+      const list = (menu && (menu.providers || menu.items || menu)) || [];
+      providers = Array.isArray(list) ? list : [];
+      let current = null;
+      try { current = h.ai.getProvider ? await h.ai.getProvider() : null; } catch (_) {}
+      const curId = current && typeof current === 'object' ? (current.id || current.providerId) : current;
+      if (!settings.providerId && curId) settings.providerId = curId;
+      if (!settings.providerId && providers[0]) settings.providerId = providers[0].id;
+    } catch (e) {
+      console.warn('listProviders', e);
+    }
+  }
+
+  function normalizeVoices(vs) {
+    const out = [{ id: 'native:default', label: 'System default (Android TTS)', engine: 'native' }];
+    if (!vs) return out;
+    const seen = new Set(['native:default']);
+    const add = (id, label, engine) => {
+      id = String(id || '').trim();
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      out.push({ id, label: String(label || id), engine: engine || 'cloud' });
+    };
+    if (Array.isArray(vs.options)) {
+      vs.options.forEach(o => add(o.value || o.id, o.label || o.name || o.value, o.engine));
+    }
+    if (Array.isArray(vs.voices)) {
+      vs.voices.forEach(v => add(v.id || v.value || v.name, v.label || v.name || v.id, v.engine || v.source));
+    }
+    if (Array.isArray(vs.ids) && Array.isArray(vs.labels)) {
+      vs.ids.forEach((id, i) => add(id, vs.labels[i] || id));
+    }
+    if (Array.isArray(vs.list) && !vs.options) {
+      vs.list.forEach((label, i) => {
+        const id = (vs.ids && vs.ids[i]) || label;
+        add(id, label);
+      });
+    }
+    if (Array.isArray(vs)) {
+      vs.forEach(v => {
+        if (typeof v === 'string') add(v, v);
+        else if (v) add(v.id || v.value || v.name, v.label || v.name || v.id, v.engine);
+      });
+    }
+    return out;
+  }
+
+  async function refreshVoices() {
+    const h = H();
+    voices = normalizeVoices(null);
+    if (!h) return;
+    let vs = null;
+    try {
+      if (h.ai && h.ai.listVoices) vs = await h.ai.listVoices({ source: 'all' });
+    } catch (_) {}
+    if (!vs) {
+      try { if (h.ai && h.ai.voices) vs = await h.ai.voices({ source: 'all' }); } catch (_) {}
+    }
+    if (!vs) {
+      try { if (h.tts && h.tts.listVoices) vs = await h.tts.listVoices({}); } catch (_) {}
+    }
+    voices = normalizeVoices(vs);
+    if (!voices.some(v => v.id === settings.voiceId)) settings.voiceId = 'native:default';
+  }
+
+  function fillSelect(sel, items, valueKey, labelKey, current) {
+    sel.innerHTML = '';
+    items.forEach(it => {
+      const opt = document.createElement('option');
+      opt.value = it[valueKey];
+      opt.textContent = String(it[labelKey] || it[valueKey] || '');
+      if (it.available === false || it.configured === false) opt.textContent += ' (unavailable)';
+      if (String(it[valueKey]) === String(current)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!items.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'None configured';
+      sel.appendChild(opt);
+    }
+  }
+
+  async function openSettings() {
+    await refreshProviders();
+    await refreshVoices();
+    fillSelect(el.selProvider, providers.map(p => ({
+      id: p.id,
+      label: (p.label || p.name || p.id) + (p.model ? ' · ' + p.model : ''),
+      configured: p.configured,
+      available: p.available
+    })), 'id', 'label', settings.providerId);
+    fillSelect(el.selVoice, voices, 'id', 'label', settings.voiceId);
+    el.inpLang.value = settings.lang || 'en-US';
+    el.chkSpeak.checked = settings.speak !== false;
+    el.chkTools.checked = settings.enableTools !== false;
+    el.chkAutoLaunch.checked = !!settings.autoLaunch;
+    el.inpRounds.value = String(settings.maxToolRounds || 4);
+    el.settingsModal.classList.add('show');
+  }
+
+  async function applySettingsFromForm() {
+    settings.providerId = el.selProvider.value || '';
+    settings.voiceId = el.selVoice.value || 'native:default';
+    settings.lang = (el.inpLang.value || 'en-US').trim();
+    settings.speak = !!el.chkSpeak.checked;
+    settings.enableTools = !!el.chkTools.checked;
+    settings.autoLaunch = !!el.chkAutoLaunch.checked;
+    settings.maxToolRounds = Math.max(1, Math.min(6, parseInt(el.inpRounds.value, 10) || 4));
+    await saveSettings();
+    const h = H();
+    if (h && h.ai && h.ai.setProvider && settings.providerId) {
+      try { await h.ai.setProvider(settings.providerId); } catch (_) {
+        try { await h.ai.setProvider({ providerId: settings.providerId }); } catch (_) {}
+      }
+    }
+    updateProviderSub();
+    el.settingsModal.classList.remove('show');
+    toast('Settings saved');
+  }
+
+  /* ——— STT ——— */
+  async function captureUtterance() {
+    const h = H();
+    if (!h) return { text: '', via: 'none' };
+    const lang = settings.lang || 'en-US';
+
+    // 1) mic.listen
+    if (h.mic && typeof h.mic.listen === 'function') {
+      try {
+        const r = await h.mic.listen({ lang, language: lang, partial: false, maxResults: 3 });
+        const text = String((r && (r.transcript || r.text || r.result)) || '').trim();
+        const err = r && r.error ? String(r.error) : '';
+        if (err && /AAForge|car Search|not|unsupported|Use car/i.test(err)) {
+          micLimited = true;
+          updateProviderSub();
+        }
+        if (text) return { text, via: 'mic.listen' };
+        if (err && !/empty|no.?match|speech.?timeout|didn't understand/i.test(err) && !text) {
+          // hard error from stub
+          if (/AAForge|Use car/i.test(err)) throw new Error('Voice input limited on this host. Use Type instead.');
+        }
+      } catch (e) {
+        const msg = e && e.message ? e.message : String(e);
+        if (/AAForge|Use car|limited/i.test(msg)) {
+          micLimited = true;
+          updateProviderSub();
+          throw e;
+        }
+        // else try fallbacks
+      }
+    }
+
+    // 2) record + transcribe
+    try {
+      let avail = {};
+      try { avail = (h.ai && h.ai.isAvailable) ? (await h.ai.isAvailable()) || {} : {}; } catch (_) {}
+      const canStt = !!(avail.stt || avail.transcribe || (h.ai && h.ai.transcribe));
+      if (canStt && h.mic && (h.mic.record || h.mic.startRecord)) {
+        let wav = null;
+        if (h.mic.record) {
+          wav = await h.mic.record({ durationMs: 4000, sampleRate: 16000 });
+        } else {
+          await h.mic.startRecord({ sampleRate: 16000, maxMs: 4000 });
+          await sleep(4000);
+          wav = await h.mic.stopRecord();
+        }
+        if (wav && (wav.dataUrl || wav.base64)) {
+          const stt = await h.ai.transcribe({
+            dataUrl: wav.dataUrl || wav.dataURL,
+            base64: wav.base64,
+            mime: wav.mime || 'audio/wav',
+            language: String(lang).slice(0, 2),
+            lang: String(lang).slice(0, 2),
+            providerId: settings.providerId || undefined
+          });
+          const text = String((stt && (stt.text || stt.transcript)) || '').trim();
+          if (text) return { text, via: 'ai.transcribe' };
+        }
+      }
+    } catch (e) {
+      console.warn('stt fallback', e);
+    }
+
+    return { text: '', via: 'none' };
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  /* ——— TTS ——— */
+  async function speakAnswer(text) {
+    if (settings.speak === false) return;
+    const h = H();
+    if (!h) return;
+    const spoken = String(text || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 800);
+    if (!spoken) return;
+    const lang = settings.lang || 'en-US';
+    const voiceId = settings.voiceId || 'native:default';
+    const isNative = /^native:/i.test(voiceId) || voiceId === 'default';
+
+    const tryCloud = async () => {
+      if (!h.ai || !h.ai.tts) return false;
+      const r = await h.ai.tts({
+        text: spoken,
+        voice: isNative ? undefined : voiceId,
+        language: lang,
+        lang,
+        mode: isNative ? 'native' : 'auto',
+        play: true,
+        route: 'speaker'
+      });
+      return !!(r && r.ok !== false);
+    };
+
+    const tryNative = async () => {
+      if (h.tts && h.tts.speak) {
+        await h.tts.speak(spoken, { lang, language: lang, rate: 1.0 });
+        return true;
+      }
+      if (h.ai && h.ai.tts) {
+        await h.ai.tts({ text: spoken, mode: 'native', lang, language: lang, play: true });
+        return true;
+      }
+      return false;
+    };
+
+    try {
+      if (!isNative) {
+        const ok = await tryCloud();
+        if (ok) return;
+        toast('Cloud voice unavailable — Android TTS');
+      }
+      await tryNative();
+    } catch (e1) {
+      try { await tryNative(); } catch (e2) {
+        console.warn('tts failed', e2);
+      }
+    }
+  }
+
+  async function stopSpeechAndMic() {
+    const h = H();
+    if (!h) return;
+    try { if (h.mic && h.mic.stop) await h.mic.stop(); } catch (_) {}
+    try { if (h.tts && h.tts.stop) await h.tts.stop(); } catch (_) {}
+  }
+
+  /* ——— Tools ——— */
+  function fn(name, description, properties, required) {
+    return {
+      type: 'function',
+      function: {
+        name,
+        description,
+        parameters: {
+          type: 'object',
+          properties: properties || {},
+          required: required || []
+        }
+      }
+    };
+  }
+
+  function buildToolList(c) {
+    c = c || {};
+    const t = [];
+    t.push(fn('list_apps', 'Search installed apps on the phone.', {
+      query: { type: 'string', description: 'Filter by name or package' },
+      limit: { type: 'number' }
+    }));
+    t.push(fn('list_activities', 'List activities for a package.', {
+      packageName: { type: 'string' }
+    }, ['packageName']));
+    t.push(fn('launch_app', 'Launch an app, activity, or URI (maps, tel, https, wa.me, geo).', {
+      packageName: { type: 'string' },
+      activity: { type: 'string' },
+      component: { type: 'string' },
+      data: { type: 'string' },
+      action: { type: 'string' },
+      chooser: { type: 'boolean' },
+      chooserTitle: { type: 'string' }
+    }));
+
+    if (c.phone !== false) {
+      t.push(fn('phone_dial', 'Open dialer with a number (safe).', {
+        number: { type: 'string' }
+      }, ['number']));
+      if (c.call) {
+        t.push(fn('phone_call', 'Place a phone call only if user clearly asked to call.', {
+          number: { type: 'string' }
+        }, ['number']));
+      }
+    }
+    if (c.contacts) {
+      t.push(fn('contacts_search', 'Search contacts by name.', {
+        query: { type: 'string' },
+        limit: { type: 'number' }
+      }, ['query']));
+    }
+    if (c.sms || c.smsCompose) {
+      t.push(fn('sms_compose', 'Open SMS composer.', {
+        number: { type: 'string' },
+        body: { type: 'string' }
+      }));
+    }
+    if (c.smsSend) {
+      t.push(fn('sms_send', 'Send SMS only if user explicitly asked to send.', {
+        number: { type: 'string' },
+        body: { type: 'string' }
+      }, ['number', 'body']));
+    }
+    if (c.smsRead) {
+      t.push(fn('sms_read', 'Read recent SMS (summarize; be discreet).', {
+        limit: { type: 'number' }
+      }));
+    }
+    if (c.http !== false) {
+      t.push(fn('http_get', 'GET an https URL; return truncated text.', {
+        url: { type: 'string' },
+        maxChars: { type: 'number' }
+      }, ['url']));
+    }
+    t.push(fn('get_time', 'Current local time.', {}));
+    t.push(fn('notify', 'Show a short toast/notification.', {
+      message: { type: 'string' }
+    }, ['message']));
+    return t;
+  }
+
+  function knownToolNames(tools) {
+    return new Set((tools || []).map(t => t.function && t.function.name).filter(Boolean));
+  }
+
+  function confirmLaunchUI(args) {
+    return new Promise(resolve => {
+      launchConfirmResolver = resolve;
+      const label = args.packageName || args.component || args.data || args.activity || 'app';
+      el.confirmLaunchText.textContent = 'Open ' + label + '?';
+      el.confirmLaunch.classList.add('show');
+    });
+  }
+
+  function resolveLaunchConfirm(yes) {
+    el.confirmLaunch.classList.remove('show');
+    const r = launchConfirmResolver;
+    launchConfirmResolver = null;
+    if (r) r(!!yes);
+  }
+
+  async function maybeConfirmLaunch(args) {
+    if (settings.autoLaunch) return true;
+    // While hands-free session is on, prefer quick auto if user said "open X" — still confirm in UI when possible
+    try {
+      return await confirmLaunchUI(args);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function executeTool(name, args) {
+    const h = H();
+    args = args && typeof args === 'object' ? args : {};
+    if (!h) return { ok: false, error: 'No ForgeHost' };
+    try {
+      switch (name) {
+        case 'list_apps': {
+          const limit = Math.min(100, Math.max(1, Number(args.limit) || 30));
+          const r = await h.apps.list({ query: args.query || undefined, limit });
+          const apps = (r && (r.apps || r.options || r.list)) || [];
+          const list = (Array.isArray(apps) ? apps : []).slice(0, limit).map(a => ({
+            packageName: a.packageName || a.package || a.id,
+            label: a.label || a.name || a.title || a.packageName
+          }));
+          return { ok: true, count: list.length, apps: list };
+        }
+        case 'list_activities': {
+          const pkg = args.packageName || args.package || args.pkg;
+          if (!pkg) return { ok: false, error: 'packageName required' };
+          let r;
+          try { r = await h.apps.listActivities(pkg); }
+          catch (_) { r = await h.apps.listActivities({ packageName: pkg }); }
+          const acts = (r && (r.activities || r.options || r)) || [];
+          const list = (Array.isArray(acts) ? acts : []).slice(0, 40).map(x => ({
+            name: x.name || x.activity || x.className || x.label,
+            label: x.label || x.name
+          }));
+          return { ok: true, packageName: pkg, count: list.length, activities: list };
+        }
+        case 'launch_app': {
+          if (!(await maybeConfirmLaunch(args))) return { ok: false, cancelled: true, error: 'User declined launch' };
+          const r = await h.apps.launch({
+            packageName: args.packageName || args.package,
+            activity: args.activity,
+            component: args.component,
+            data: args.data || args.uri || args.url,
+            action: args.action,
+            type: args.mimeType || args.type,
+            extras: args.extras,
+            chooser: args.chooser,
+            chooserTitle: args.chooserTitle
+          });
+          return { ok: true, launched: true, result: r || null };
+        }
+        case 'phone_dial': {
+          if (!h.phone || !h.phone.dial) return { ok: false, error: 'phone.dial unsupported' };
+          return { ok: true, result: await h.phone.dial(args.number) };
+        }
+        case 'phone_call': {
+          if (!h.phone || !h.phone.call) return { ok: false, error: 'phone.call unsupported' };
+          return { ok: true, result: await h.phone.call(args.number) };
+        }
+        case 'contacts_search': {
+          if (!h.contacts || !h.contacts.list) return { ok: false, error: 'contacts unsupported' };
+          return { ok: true, result: await h.contacts.list({ query: args.query, limit: args.limit || 10 }) };
+        }
+        case 'sms_compose': {
+          if (!h.sms) return { ok: false, error: 'sms unsupported' };
+          if (h.sms.compose) return { ok: true, result: await h.sms.compose(args.number, args.body || '') };
+          return { ok: false, error: 'sms.compose unsupported' };
+        }
+        case 'sms_send': {
+          if (!h.sms || !h.sms.send) return { ok: false, error: 'sms.send unsupported' };
+          return { ok: true, result: await h.sms.send({ number: args.number, body: args.body }) };
+        }
+        case 'sms_read': {
+          if (!h.sms || !h.sms.read) return { ok: false, error: 'sms.read unsupported' };
+          return { ok: true, result: await h.sms.read({ limit: args.limit || 10 }) };
+        }
+        case 'http_get': {
+          if (!h.http || !h.http.get) return { ok: false, error: 'http unsupported' };
+          const r = await h.http.get(args.url);
+          let body = typeof r === 'string' ? r : (r && (r.body || r.text || r.data));
+          if (body && typeof body !== 'string') body = JSON.stringify(body);
+          body = String(body || '').slice(0, Math.min(8000, Number(args.maxChars) || 4000));
+          return { ok: true, body };
+        }
+        case 'get_time': {
+          const d = new Date();
+          return { ok: true, iso: d.toISOString(), human: d.toLocaleString() };
+        }
+        case 'notify': {
+          try { if (h.toast) await h.toast(args.message); } catch (_) {}
+          try { if (h.notify && h.notify.show) await h.notify.show({ title: 'Car Assist', body: args.message }); } catch (_) {}
+          return { ok: true };
+        }
+        default:
+          return { ok: false, error: 'Unknown tool: ' + name };
+      }
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  }
+
+  /* ——— Tool result normalization (multi-LLM) ——— */
+  function scrapeToolsFromText(text, allowed) {
+    const calls = [];
+    let cleaned = String(text || '');
+
+    cleaned = cleaned.replace(/```(?:tool|function|json)\s*([\s\S]*?)```/gi, (full, body) => {
+      try {
+        const j = JSON.parse(String(body).trim());
+        const name = j.name || j.tool || j.function?.name || j.function_name;
+        const args = j.arguments || j.parameters || j.input || j.args || {};
+        if (name && allowed.has(name)) {
+          calls.push({ name, args, id: 'call_txt_' + calls.length });
+          return '';
+        }
+      } catch (_) {}
+      return full;
+    });
+
+    cleaned = cleaned.replace(/<tool(?:_call)?\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/tool(?:_call)?>/gi, (full, name, body) => {
+      if (!allowed.has(name)) return full;
+      let args = {};
+      try { args = JSON.parse(String(body).trim() || '{}'); } catch (_) { args = { _raw: String(body).trim() }; }
+      calls.push({ name, args, id: 'call_xml_' + calls.length });
+      return '';
+    });
+
+    // {"name":"list_apps","arguments":{...}} bare line
+    cleaned = cleaned.replace(/^\s*(\{\s*"name"\s*:\s*"[a-z0-9_]+"[\s\S]*?\})\s*$/gim, (full, body) => {
+      try {
+        const j = JSON.parse(body);
+        const name = j.name;
+        if (name && allowed.has(name)) {
+          calls.push({ name, args: j.arguments || j.parameters || {}, id: 'call_line_' + calls.length });
+          return '';
+        }
+      } catch (_) {}
+      return full;
+    });
+
+    return { calls, cleanedText: cleaned.trim() };
+  }
+
+  function normalizeChatResult(raw, tools) {
+    const allowed = knownToolNames(tools);
+    if (raw == null) return { content: '', tool_calls: [], parsed: [] };
+    if (typeof raw === 'string') {
+      if (tools && tools.length) {
+        const scraped = scrapeToolsFromText(raw, allowed);
+        if (scraped.calls.length) {
+          return finalizeNormalized(scraped.cleanedText, scraped.calls);
+        }
+      }
+      return { content: raw, tool_calls: [], parsed: [] };
+    }
+
+    let content = raw.content ?? raw.text ?? raw.message ?? '';
+    if (content && typeof content !== 'string') {
+      if (Array.isArray(content)) {
+        content = content.map(p => {
+          if (typeof p === 'string') return p;
+          if (p && (p.type === 'text' || p.text)) return p.text || '';
+          return '';
+        }).filter(Boolean).join('\n');
+      } else if (typeof content === 'object' && content.content) {
+        content = String(content.content);
+      } else {
+        content = String(content);
+      }
+    }
+    content = content || '';
+
+    const out = [];
+    const push = (id, name, args) => {
+      if (!name) return;
+      if (allowed.size && !allowed.has(name)) return;
+      let parsed = args;
+      if (typeof args === 'string') {
+        try { parsed = args.trim() ? JSON.parse(args) : {}; }
+        catch (_) { parsed = { _raw: args }; }
+      } else if (!args || typeof args !== 'object') {
+        parsed = {};
+      }
+      out.push({
+        id: id || ('call_' + name + '_' + Math.random().toString(36).slice(2, 9)),
+        name,
+        args: parsed,
+        _rawArgs: args
+      });
+    };
+
+    const tcs = raw.tool_calls || raw.toolCalls || raw.functions || [];
+    if (Array.isArray(tcs)) {
+      for (const tc of tcs) {
+        if (!tc) continue;
+        const name = tc.function?.name || tc.name || tc.tool_name || tc.toolName;
+        const args = tc.function?.arguments ?? tc.arguments ?? tc.args ?? tc.input ?? tc.parameters ?? '{}';
+        const id = tc.id || tc.tool_call_id || tc.toolCallId;
+        push(id, name, args);
+      }
+    }
+
+    if (!out.length && raw.function_call) {
+      push(raw.function_call.id, raw.function_call.name, raw.function_call.arguments);
+    }
+
+    const parts = raw.content_parts || raw.parts || (Array.isArray(raw.message?.content) ? raw.message.content : null);
+    if (!out.length && Array.isArray(parts)) {
+      for (const p of parts) {
+        if (!p) continue;
+        if (p.type === 'tool_use' || p.type === 'function_call' || p.type === 'toolCall') {
+          push(p.id, p.name || p.function?.name, p.input ?? p.arguments ?? p.function?.arguments);
+        }
+        if (p.type === 'text' && p.text && !content) content += p.text;
+      }
+    }
+
+    if (!out.length && raw.choices && raw.choices[0] && raw.choices[0].message) {
+      return normalizeChatResult(raw.choices[0].message, tools);
+    }
+
+    if (!out.length && tools && tools.length && content) {
+      const scraped = scrapeToolsFromText(content, allowed);
+      if (scraped.calls.length) {
+        content = scraped.cleanedText;
+        scraped.calls.forEach(c => push(c.id, c.name, c.args));
+      }
+    }
+
+    return finalizeNormalized(content, out);
+  }
+
+  function finalizeNormalized(content, parsed) {
+    const tool_calls = parsed.map(tc => ({
+      id: tc.id,
+      type: 'function',
+      function: {
+        name: tc.name,
+        arguments: typeof tc._rawArgs === 'string' ? tc._rawArgs : JSON.stringify(tc.args || {})
+      }
+    }));
+    return { content: content || '', tool_calls, parsed };
+  }
+
+  function buildSystemPrompt(withTools) {
+    let s = 'You are Car Assist, a brief hands-free assistant for driving. '
+      + 'Answer in 1–3 short spoken sentences unless the user asks for detail. '
+      + 'No markdown, no HTML, no bullet walls. ';
+    if (withTools) {
+      s += 'You can call tools to help: list_apps, list_activities, launch_app, phone_dial, contacts_search, sms_compose, http_get, get_time, notify. '
+        + 'Never invent package names — list_apps first. '
+        + 'For maps/nav/whatsapp links prefer launch_app with data URI. '
+        + 'After tools, give a short confirmation. '
+        + 'If you cannot use native tools, you may emit a single fenced tool block: ```tool\\n{"name":"list_apps","arguments":{"query":"maps"}}\\n```';
+    }
+    return s;
+  }
+
+  function getRecentHistoryMessages(n) {
+    const finals = uiHistory.filter(m => m.role === 'user' || m.role === 'assistant').slice(-(n || 6));
+    return finals.map(m => ({ role: m.role, content: m.content || '' }));
+  }
+
+  async function runAssistantTurn(userText, gen) {
+    const h = H();
+    if (!h || !h.ai || !h.ai.chat) throw new Error('AI chat unavailable. Configure providers in Forge and share to AAForge.');
+
+    if (settings.providerId && h.ai.setProvider) {
+      try { await h.ai.setProvider(settings.providerId); } catch (_) {
+        try { await h.ai.setProvider({ providerId: settings.providerId }); } catch (_) {}
+      }
+    }
+
+    const tools = settings.enableTools === false ? null : buildToolList(caps);
+    const messages = [
+      { role: 'system', content: buildSystemPrompt(!!tools) },
+      ...getRecentHistoryMessages(6),
+      { role: 'user', content: userText }
+    ];
+
+    let finalText = '';
+    const maxRounds = settings.maxToolRounds || 4;
+    const used = [];
+    let toolsEnabled = !!tools;
+
+    for (let round = 0; round < maxRounds; round++) {
+      if (gen != null && gen !== abortGen) throw new Error('cancelled');
+
+      const payload = {
+        messages: messages.slice(),
+        providerId: settings.providerId || undefined
+      };
+      if (toolsEnabled && tools) {
+        payload.tools = tools;
+        payload.tool_choice = 'auto';
+      }
+
+      setStatus(round ? ('🔧 tools · round ' + (round + 1)) : 'Thinking…', 'busy');
+
+      let raw;
+      try {
+        raw = await h.ai.chat(payload);
+      } catch (e) {
+        const msg = e && e.message ? e.message : String(e);
+        if (toolsEnabled && /tool/i.test(msg)) {
+          toolsEnabled = false;
+          setStatus('No native tools — text protocol', 'busy');
+          round--; // retry same round without tools
+          continue;
+        }
+        throw e;
+      }
+
+      const n = normalizeChatResult(raw, toolsEnabled ? tools : null);
+
+      if (n.tool_calls.length) {
+        messages.push({
+          role: 'assistant',
+          content: n.content || null,
+          tool_calls: n.tool_calls
+        });
+        for (const tc of n.parsed) {
+          if (gen != null && gen !== abortGen) throw new Error('cancelled');
+          used.push(tc.name);
+          setStatus('🔧 ' + tc.name, 'busy');
+          const result = await executeTool(tc.name, tc.args);
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.name,
+            content: safeJson(result, 10000)
+          });
+        }
+        continue;
+      }
+
+      finalText = String(n.content || '').trim();
+      break;
+    }
+
+    if (!finalText) finalText = used.length ? 'Done.' : 'I did not get a response.';
+    return { text: finalText, tools: used };
+  }
+
+  async function handleUserText(text, fromSession, gen) {
+    text = String(text || '').trim();
+    if (!text || turnBusy) return;
+    turnBusy = true;
+    el.btnSend.disabled = true;
+    try {
+      uiHistory.push({ role: 'user', content: text });
+      appendBubble('user', text);
+      await saveHistory();
+
+      const result = await runAssistantTurn(text, fromSession ? gen : abortGen);
+      if (fromSession && gen !== abortGen) return;
+
+      uiHistory.push({ role: 'assistant', content: result.text, tools: result.tools });
+      appendBubble('assistant', result.text, result.tools);
+      await saveHistory();
+
+      if (settings.speak !== false) {
+        setStatus('Speaking…', 'busy');
+        await speakAnswer(result.text);
+      }
+      setStatus(sessionOn ? 'Listening…' : 'Idle', sessionOn ? 'live' : '');
+    } catch (e) {
+      if (String(e.message || e) === 'cancelled') return;
+      const msg = e.message || String(e);
+      appendError(msg);
+      setStatus(msg, 'err');
+      toast(msg);
+    } finally {
+      turnBusy = false;
+      el.btnSend.disabled = false;
+    }
+  }
+
+  /* ——— Listen loop ——— */
+  async function toggleListen() {
+    if (sessionOn) {
+      sessionOn = false;
+      abortGen++;
+      await stopSpeechAndMic();
+      updateListenButton();
+      setStatus('Idle');
+      try {
+        const h = H();
+        if (h && h.keepAwake && h.keepAwake.stop) await h.keepAwake.stop();
+      } catch (_) {}
+      return;
+    }
+
+    const h = H();
+    if (!h) {
+      setStatus('ForgeHost missing', 'err');
+      return;
+    }
+
+    sessionOn = true;
+    const myGen = ++abortGen;
+    updateListenButton();
+    setStatus('Listening…', 'live');
+
+    try {
+      if (h.permissions && h.permissions.request) await h.permissions.request('mic');
+    } catch (_) {}
+    try {
+      if (h.keepAwake && h.keepAwake.start) await h.keepAwake.start({ title: 'Car Assist', text: 'Listening' });
+    } catch (_) {}
+
+    while (sessionOn && myGen === abortGen) {
+      try {
+        setStatus('Listening…', 'live');
+        const utt = await captureUtterance();
+        if (!sessionOn || myGen !== abortGen) break;
+
+        if (!utt.text) continue;
+
+        const now = Date.now();
+        if (utt.text === lastTranscript.text && now - lastTranscript.at < 1500) continue;
+        lastTranscript = { text: utt.text, at: now };
+
+        await handleUserText(utt.text, true, myGen);
+      } catch (e) {
+        if (!sessionOn || myGen !== abortGen) break;
+        const msg = e.message || String(e);
+        setStatus(msg, 'err');
+        if (/limited on this host|Use Type instead/i.test(msg)) {
+          // Stop auto loop; user can type
+          sessionOn = false;
+          updateListenButton();
+          toast(msg);
+          break;
+        }
+        await sleep(600);
+      }
+    }
+
+    try {
+      if (h.keepAwake && h.keepAwake.stop) await h.keepAwake.stop();
+    } catch (_) {}
+    if (abortGen === myGen) {
+      sessionOn = false;
+      updateListenButton();
+      if (el.status.classList.contains('live') || el.status.textContent === 'Listening…') setStatus('Idle');
+    }
+  }
+
+  /* ——— Events ——— */
+  el.btnListen.addEventListener('click', () => { toggleListen(); });
+  el.btnSettings.addEventListener('click', () => { openSettings(); });
+  el.btnSettingsCancel.addEventListener('click', () => el.settingsModal.classList.remove('show'));
+  el.btnSettingsSave.addEventListener('click', () => { applySettingsFromForm(); });
+  el.btnLaunchYes.addEventListener('click', () => resolveLaunchConfirm(true));
+  el.btnLaunchNo.addEventListener('click', () => resolveLaunchConfirm(false));
+
+  el.btnTypeToggle.addEventListener('click', () => {
+    el.typeBox.classList.toggle('show');
+    if (el.typeBox.classList.contains('show')) el.typeInput.focus();
+  });
+
+  el.btnSend.addEventListener('click', async () => {
+    const t = el.typeInput.value.trim();
+    if (!t) return;
+    el.typeInput.value = '';
+    await handleUserText(t, false, abortGen);
+  });
+
+  el.typeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      el.btnSend.click();
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && sessionOn) toggleListen();
+  });
+
+  window.addEventListener('message', (ev) => {
+    const d = ev.data;
+    if (!d || !d.__forge) return;
+    if (d.type === 'host-event' && (d.event === 'pause' || d.event === 'destroy')) {
+      if (sessionOn) toggleListen();
+    }
+  });
+
+  /* ——— Boot ——— */
+  async function boot() {
+    if (!H()) {
+      setStatus('Open inside Forge / AAForge', 'err');
+      el.providerSub.textContent = 'No host bridge';
+      return;
+    }
+    await loadSettings();
+    await refreshCaps();
+    await refreshProviders();
+    await refreshVoices();
+    updateProviderSub();
+    await loadHistory();
+
+    // Probe mic limitation early on AAForge
+    if (caps && (caps.host === 'aaforge' || caps.platform === 'android-auto')) {
+      micLimited = true;
+      updateProviderSub();
+      setStatus('Idle · AA host — type or try Listen');
+    } else {
+      setStatus('Idle');
+    }
+  }
+
+  boot().catch(e => setStatus(e.message || String(e), 'err'));
+})();
+</script>
+</body>
+</html>
