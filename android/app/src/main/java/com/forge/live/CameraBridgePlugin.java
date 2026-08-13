@@ -1,23 +1,19 @@
 package com.forge.live;
 
-import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
+import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 import androidx.activity.result.ActivityResult;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -30,38 +26,63 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.List;
-import java.util.Locale;
 
-@CapacitorPlugin(name = "CameraBridge", permissions = {@Permission(alias = "camera", strings = {"android.permission.CAMERA"}), @Permission(alias = "photos", strings = {"android.permission.READ_EXTERNAL_STORAGE"})})
+/**
+ * Camera bridge — CameraX in-process capture (v2.6.16+).
+ *
+ * takePhoto launches {@link CameraXCaptureActivity} (no OEM camera intent).
+ * pickPhoto still uses the system gallery picker.
+ *
+ * Result shape (back-compat):
+ *   base64, dataUrl, mime, format, width, height, bytes, quality, path?, tempName?
+ */
+@CapacitorPlugin(
+        name = "CameraBridge",
+        permissions = {
+            @Permission(alias = "camera", strings = {"android.permission.CAMERA"}),
+            @Permission(alias = "photos", strings = {"android.permission.READ_EXTERNAL_STORAGE"})
+        })
 public class CameraBridgePlugin extends Plugin {
     private static final String TAG = "CameraBridge";
-    private static final int URI_GRANT_FLAGS =
-            Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
-    /** Samsung/Fold often returns before the JPEG is fully flushed. */
-    private static final long MIN_CAPTURE_BYTES = 2048L;
-    private static final int FILE_WAIT_ATTEMPTS = 8;
-    private static final long FILE_WAIT_MS = 120L;
+    public static final String TEMP_PREFIX = "camerax_";
 
     private File pendingCaptureFile;
-    private Uri pendingCaptureUri;
     private int pendingQuality = 85;
-    private int pendingMaxWidth = 1920;
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private int pendingMaxWidth = 1280;
 
     private boolean hasCameraPermission() {
         return ContextCompat.checkSelfPermission(getContext(), "android.permission.CAMERA") == 0;
     }
 
     private boolean hasGalleryPermission() {
-        return Build.VERSION.SDK_INT >= 33 ? ContextCompat.checkSelfPermission(getContext(), "android.permission.READ_MEDIA_IMAGES") == 0 || ContextCompat.checkSelfPermission(getContext(), "android.permission.READ_EXTERNAL_STORAGE") == 0 : Build.VERSION.SDK_INT >= 29 || ContextCompat.checkSelfPermission(getContext(), "android.permission.READ_EXTERNAL_STORAGE") == 0;
+        if (Build.VERSION.SDK_INT >= 33) {
+            return ContextCompat.checkSelfPermission(getContext(), "android.permission.READ_MEDIA_IMAGES") == 0
+                    || ContextCompat.checkSelfPermission(getContext(), "android.permission.READ_EXTERNAL_STORAGE") == 0;
+        }
+        return Build.VERSION.SDK_INT >= 29
+                || ContextCompat.checkSelfPermission(getContext(), "android.permission.READ_EXTERNAL_STORAGE") == 0;
     }
 
     private boolean deviceHasCamera() {
         PackageManager pm = getContext().getPackageManager();
-        return pm.hasSystemFeature("android.hardware.camera.any") || pm.hasSystemFeature("android.hardware.camera");
+        return pm.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+                || pm.hasSystemFeature(PackageManager.FEATURE_CAMERA);
+    }
+
+    private File tempCaptureDir() {
+        File base = null;
+        try {
+            base = getContext().getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        } catch (Exception ignore) {}
+        if (base == null) {
+            base = new File(getContext().getCacheDir(), "camera");
+        }
+        File dir = new File(base, "ForgeCam");
+        if (!dir.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            dir.mkdirs();
+        }
+        return dir;
     }
 
     @PluginMethod
@@ -71,6 +92,8 @@ public class CameraBridgePlugin extends Plugin {
         o.put("permission", hasCameraPermission());
         o.put("galleryPermission", hasGalleryPermission());
         o.put("facingModes", deviceHasCamera());
+        o.put("engine", "camerax");
+        o.put("tempPrefix", TEMP_PREFIX);
         call.resolve(o);
     }
 
@@ -78,21 +101,14 @@ public class CameraBridgePlugin extends Plugin {
     public void requestPermission(PluginCall call) {
         String which = call.getString("alias", "camera");
         if ("photos".equals(which) || "gallery".equals(which)) {
-            if (Build.VERSION.SDK_INT >= 33 && hasGalleryPermission()) {
+            if (hasGalleryPermission()) {
                 JSObject o = new JSObject();
                 o.put("granted", true);
                 o.put("alias", "photos");
                 call.resolve(o);
                 return;
             }
-            if (!hasGalleryPermission()) {
-                requestPermissionForAlias("photos", call, "photosPermCallback");
-                return;
-            }
-            JSObject o2 = new JSObject();
-            o2.put("granted", true);
-            o2.put("alias", "photos");
-            call.resolve(o2);
+            requestPermissionForAlias("photos", call, "photosPermCallback");
             return;
         }
         if (hasCameraPermission()) {
@@ -121,6 +137,45 @@ public class CameraBridgePlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** Delete camerax_* / legacy forge_* / cameratempix_* temps. Host may call on mini-app exit. */
+    @PluginMethod
+    public void cleanupTempPhotos(PluginCall call) {
+        int n = 0;
+        try {
+            n += deleteTempsIn(tempCaptureDir());
+        } catch (Exception e) {
+            Log.w(TAG, "cleanup external: " + e.getMessage());
+        }
+        try {
+            n += deleteTempsIn(new File(getContext().getCacheDir(), "camera"));
+        } catch (Exception e) {
+            Log.w(TAG, "cleanup cache: " + e.getMessage());
+        }
+        JSObject o = new JSObject();
+        o.put("ok", true);
+        o.put("deletedFiles", n);
+        o.put("prefix", TEMP_PREFIX);
+        call.resolve(o);
+    }
+
+    private int deleteTempsIn(File dir) {
+        if (dir == null || !dir.isDirectory()) return 0;
+        File[] list = dir.listFiles();
+        if (list == null) return 0;
+        int n = 0;
+        for (File f : list) {
+            if (f == null || !f.isFile()) continue;
+            String name = f.getName();
+            if (name == null) continue;
+            if (name.startsWith(TEMP_PREFIX)
+                    || name.startsWith("forge_")
+                    || name.startsWith("cameratempix_")) {
+                if (f.delete()) n++;
+            }
+        }
+        return n;
+    }
+
     @PluginMethod
     public void takePhoto(PluginCall call) {
         if (!deviceHasCamera()) {
@@ -131,143 +186,57 @@ public class CameraBridgePlugin extends Plugin {
             call.reject("CAMERA permission not granted. Call requestPermission first.");
             return;
         }
-        this.pendingQuality = clamp(call.getInt("quality", 85).intValue(), 1, 100);
-        this.pendingMaxWidth = Math.max(0, call.getInt("maxWidth", 1920).intValue());
-        String facing = call.getString("facing", "back");
-        try {
-            File dir = new File(getContext().getCacheDir(), "camera");
-            if (!dir.exists() && !dir.mkdirs()) {
-                call.reject("Cannot create camera cache dir");
-                return;
-            }
-            String name = "forge_" + new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(new Date()) + ".jpg";
-            File out = new File(dir, name);
-            // Many camera apps require the target file to already exist.
-            if (!out.exists() && !out.createNewFile()) {
-                call.reject("Cannot create capture file");
-                return;
-            }
-            this.pendingCaptureFile = out;
-            this.pendingCaptureUri = FileProvider.getUriForFile(
-                    getContext(),
-                    getContext().getPackageName() + ".fileprovider",
-                    out);
-            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, this.pendingCaptureUri);
-            intent.addFlags(URI_GRANT_FLAGS);
-            intent.setClipData(ClipData.newRawUri("output", this.pendingCaptureUri));
-            grantUriToCameraApps(intent, this.pendingCaptureUri);
-            if ("front".equalsIgnoreCase(facing)) {
-                intent.putExtra("android.intent.extras.CAMERA_FACING", 1);
-                intent.putExtra("android.intent.extra.USE_FRONT_CAMERA", true);
-                intent.putExtra("camerafacing", "front");
-                intent.putExtra("previous_mode", "front");
-            } else {
-                intent.putExtra("android.intent.extras.CAMERA_FACING", 0);
-            }
-            if (intent.resolveActivity(getContext().getPackageManager()) == null) {
-                cleanupPending();
-                call.reject("No camera app available");
-            } else {
-                startActivityForResult(call, intent, "captureResult");
-            }
-        } catch (Exception e) {
-            cleanupPending();
-            call.reject("takePhoto failed: " + e.getMessage(), e);
-        }
-    }
 
-    private void grantUriToCameraApps(Intent intent, Uri uri) {
+        this.pendingQuality = clamp(call.getInt("quality", 85).intValue(), 1, 100);
+        int mw = call.getInt("maxWidth", 1280).intValue();
+        if (mw <= 0) mw = 1280;
+        if (mw > 2048) mw = 2048;
+        this.pendingMaxWidth = mw;
+        String facing = call.getString("facing", "back");
+        this.pendingCaptureFile = null;
+
         try {
-            PackageManager pm = getContext().getPackageManager();
-            List<ResolveInfo> resList = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
-            if (resList == null) return;
-            for (ResolveInfo ri : resList) {
-                if (ri.activityInfo == null) continue;
-                String pkg = ri.activityInfo.packageName;
-                try {
-                    getContext().grantUriPermission(pkg, uri, URI_GRANT_FLAGS);
-                } catch (Exception e) {
-                    Log.w(TAG, "grantUriPermission failed for " + pkg + ": " + e.getMessage());
-                }
-            }
+            Intent intent = new Intent(getContext(), CameraXCaptureActivity.class);
+            intent.putExtra(CameraXCaptureActivity.EXTRA_FACING, facing != null ? facing : "back");
+            startActivityForResult(call, intent, "captureResult");
         } catch (Exception e) {
-            Log.w(TAG, "grantUriToCameraApps: " + e.getMessage());
+            Log.e(TAG, "takePhoto launch failed", e);
+            call.reject("takePhoto failed: " + e.getMessage(), e);
         }
     }
 
     @ActivityCallback
     private void captureResult(PluginCall call, ActivityResult result) {
-        if (call == null) {
-            cleanupPending();
-            return;
-        }
-        final int code = result != null ? result.getResultCode() : 0;
-        final Intent data = result != null ? result.getData() : null;
-        // Wait briefly: OEMs (esp. Samsung) often RESULT_OK before the JPEG is fully written.
-        finishCaptureWithRetry(call, data, code, 0);
-    }
-
-    private void finishCaptureWithRetry(final PluginCall call, final Intent data, final int resultCode, final int attempt) {
+        if (call == null) return;
         try {
-            File file = this.pendingCaptureFile;
-            boolean fileLooksReady = file != null
-                    && file.exists()
-                    && file.length() >= MIN_CAPTURE_BYTES
-                    && hasJpegMagic(file);
+            int code = result != null ? result.getResultCode() : 0;
+            Intent data = result != null ? result.getData() : null;
 
-            if (!fileLooksReady && file != null && file.exists() && file.length() > 0 && attempt < FILE_WAIT_ATTEMPTS) {
-                mainHandler.postDelayed(new Runnable() {
-                    @Override public void run() {
-                        finishCaptureWithRetry(call, data, resultCode, attempt + 1);
-                    }
-                }, FILE_WAIT_MS);
-                return;
-            }
-
-            // Samsung quirk: RESULT_CANCELED but full image still written to EXTRA_OUTPUT.
-            if (fileLooksReady) {
-                resolveFromFile(call, file);
-                return;
-            }
-
-            if (resultCode != -1 /* RESULT_OK */) {
-                cleanupPending();
-                call.reject("Camera cancelled");
-                return;
-            }
-
-            // File missing/too small — try URI or thumbnail extras.
-            if (data != null && data.getData() != null) {
-                JSObject o2 = encodeUri(data.getData(), this.pendingQuality, this.pendingMaxWidth);
-                cleanupPending();
-                call.resolve(o2);
-                return;
-            }
-            if (data != null && data.getExtras() != null && (data.getExtras().get("data") instanceof Bitmap)) {
-                Bitmap thumb = (Bitmap) data.getExtras().get("data");
-                JSObject o3 = encodeBitmap(thumb, this.pendingQuality, this.pendingMaxWidth, null);
-                cleanupPending();
-                call.resolve(o3);
-                return;
-            }
-
-            // Last chance: tiny non-magic file that still decodes
-            if (file != null && file.exists() && file.length() > 0) {
-                try {
-                    resolveFromFile(call, file);
-                    return;
-                } catch (Exception ignore) {
-                    Log.w(TAG, "encode small capture failed: " + ignore.getMessage());
+            if (code != -1 /* RESULT_OK */) {
+                String err = data != null ? data.getStringExtra(CameraXCaptureActivity.EXTRA_ERROR) : null;
+                if (err != null && !err.isEmpty()) {
+                    call.reject(err);
+                } else {
+                    call.reject("Camera cancelled");
                 }
+                return;
             }
 
-            long len = file != null && file.exists() ? file.length() : -1L;
-            cleanupPending();
-            call.reject("No image returned from camera (fileBytes=" + len + ", attempts=" + attempt + ")");
-        } catch (Exception e2) {
-            cleanupPending();
-            call.reject("captureResult failed: " + e2.getMessage(), e2);
+            String path = data != null ? data.getStringExtra(CameraXCaptureActivity.EXTRA_PATH) : null;
+            if (path == null || path.isEmpty()) {
+                call.reject("No image path from camera");
+                return;
+            }
+            File file = new File(path);
+            if (!file.exists() || file.length() < 32) {
+                call.reject("Capture file missing or empty");
+                return;
+            }
+            this.pendingCaptureFile = file;
+            resolveFromFile(call, file);
+        } catch (Exception e) {
+            Log.e(TAG, "captureResult failed", e);
+            call.reject("captureResult failed: " + e.getMessage(), e);
         }
     }
 
@@ -287,40 +256,29 @@ public class CameraBridgePlugin extends Plugin {
             }
         }
         o.put("path", file.getAbsolutePath());
-        cleanupPendingKeepFile();
+        o.put("tempName", file.getName());
+        o.put("tempPrefix", TEMP_PREFIX);
+        o.put("engine", "camerax");
+        this.pendingCaptureFile = null;
         call.resolve(o);
-    }
-
-    private static boolean hasJpegMagic(File file) {
-        FileInputStream in = null;
-        try {
-            in = new FileInputStream(file);
-            byte[] magic = new byte[3];
-            int n = in.read(magic);
-            // JPEG SOI FF D8 FF  — also accept FF D8 alone
-            return n >= 2 && (magic[0] & 0xFF) == 0xFF && (magic[1] & 0xFF) == 0xD8;
-        } catch (Exception e) {
-            return false;
-        } finally {
-            if (in != null) {
-                try { in.close(); } catch (Exception ignored) {}
-            }
-        }
     }
 
     @PluginMethod
     public void pickPhoto(PluginCall call) {
-        Intent intent;
         this.pendingQuality = clamp(call.getInt("quality", 85).intValue(), 1, 100);
-        this.pendingMaxWidth = Math.max(0, call.getInt("maxWidth", 1920).intValue());
+        int mw = call.getInt("maxWidth", 1280).intValue();
+        if (mw <= 0) mw = 1280;
+        if (mw > 2048) mw = 2048;
+        this.pendingMaxWidth = mw;
         try {
+            Intent intent;
             if (Build.VERSION.SDK_INT >= 33) {
-                intent = new Intent("android.provider.action.PICK_IMAGES");
+                intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
                 intent.setType("image/*");
             } else {
-                intent = new Intent("android.intent.action.GET_CONTENT");
+                intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.setType("image/*");
-                intent.addCategory("android.intent.category.OPENABLE");
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
             }
             Intent chooser = Intent.createChooser(intent, "Pick photo");
             startActivityForResult(call, chooser, "pickResult");
@@ -331,9 +289,7 @@ public class CameraBridgePlugin extends Plugin {
 
     @ActivityCallback
     private void pickResult(PluginCall call, ActivityResult result) {
-        if (call == null) {
-            return;
-        }
+        if (call == null) return;
         try {
             if (result.getResultCode() != -1) {
                 call.reject("Pick cancelled");
@@ -344,7 +300,9 @@ public class CameraBridgePlugin extends Plugin {
             if (uri == null) {
                 call.reject("No image selected");
             } else {
-                call.resolve(encodeUri(uri, this.pendingQuality, this.pendingMaxWidth));
+                JSObject o = encodeUri(uri, this.pendingQuality, this.pendingMaxWidth);
+                o.put("engine", "gallery");
+                call.resolve(o);
             }
         } catch (Exception e) {
             call.reject("pickResult failed: " + e.getMessage(), e);
@@ -367,44 +325,32 @@ public class CameraBridgePlugin extends Plugin {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
         InputStream is = getContext().getContentResolver().openInputStream(uri);
-        if (is == null) {
-            throw new Exception("Cannot open image");
-        }
+        if (is == null) throw new Exception("Cannot open image");
         BitmapFactory.decodeStream(is, null, bounds);
         is.close();
+
         int sample = 1;
         if (maxWidth > 0) {
             int w = Math.max(bounds.outWidth, bounds.outHeight);
-            while (w / sample > maxWidth * 2) {
-                sample *= 2;
-            }
+            while (w / sample > maxWidth * 2) sample *= 2;
         }
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inSampleSize = sample;
         InputStream is2 = getContext().getContentResolver().openInputStream(uri);
-        if (is2 == null) {
-            throw new Exception("Cannot open image");
-        }
+        if (is2 == null) throw new Exception("Cannot open image");
         Bitmap bitmap = BitmapFactory.decodeStream(is2, null, opts);
         is2.close();
-        if (bitmap == null) {
-            throw new Exception("Decode failed");
-        }
+        if (bitmap == null) throw new Exception("Decode failed");
+
         if (Build.VERSION.SDK_INT >= 24) {
             try {
                 InputStream exifStream = getContext().getContentResolver().openInputStream(uri);
                 if (exifStream != null) {
                     ExifInterface exif = new ExifInterface(exifStream);
-                    Bitmap bitmap2 = rotateFromExif(bitmap, exif.getAttributeInt("Orientation", 1));
-                    try {
-                        exifStream.close();
-                        bitmap = bitmap2;
-                    } catch (Exception e) {
-                        bitmap = bitmap2;
-                    }
+                    bitmap = rotateFromExif(bitmap, exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, 1));
+                    try { exifStream.close(); } catch (Exception ignore) {}
                 }
-            } catch (Exception e2) {
-            }
+            } catch (Exception ignore) {}
         }
         JSObject o = encodeBitmap(bitmap, quality, maxWidth, null);
         o.put("uri", uri.toString());
@@ -412,14 +358,12 @@ public class CameraBridgePlugin extends Plugin {
     }
 
     private JSObject encodeBitmap(Bitmap bitmap, int quality, int maxWidth, String path) {
-        int w;
-        int h;
-        int longEdge;
-        if (bitmap == null) {
-            throw new IllegalArgumentException("null bitmap");
-        }
-        if (maxWidth > 0 && (longEdge = Math.max((w = bitmap.getWidth()), (h = bitmap.getHeight()))) > maxWidth) {
-            // Must cast: int/int truncates to 0 when image is larger than maxWidth → 1×1 JPEG.
+        if (bitmap == null) throw new IllegalArgumentException("null bitmap");
+
+        int w = bitmap.getWidth();
+        int h = bitmap.getHeight();
+        int longEdge = Math.max(w, h);
+        if (maxWidth > 0 && longEdge > maxWidth) {
             float scale = maxWidth / (float) longEdge;
             int nw = Math.max(1, Math.round(w * scale));
             int nh = Math.max(1, Math.round(h * scale));
@@ -429,8 +373,8 @@ public class CameraBridgePlugin extends Plugin {
                 bitmap = scaled;
             }
         }
+
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        // Re-encode ourselves so mini-apps always get a clean baseline JPEG (not OEM partials).
         if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, bos)) {
             bitmap.recycle();
             throw new IllegalStateException("JPEG compress failed");
@@ -440,7 +384,7 @@ public class CameraBridgePlugin extends Plugin {
             bitmap.recycle();
             throw new IllegalStateException("Invalid JPEG produced (bytes=" + bytes.length + ")");
         }
-        // NO_WRAP — safe for data URLs / atob
+
         String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
         JSObject o = new JSObject();
         o.put("base64", b64);
@@ -451,9 +395,7 @@ public class CameraBridgePlugin extends Plugin {
         o.put("height", bitmap.getHeight());
         o.put("bytes", bytes.length);
         o.put("quality", quality);
-        if (path != null) {
-            o.put("path", path);
-        }
+        if (path != null) o.put("path", path);
         bitmap.recycle();
         return o;
     }
@@ -465,9 +407,7 @@ public class CameraBridgePlugin extends Plugin {
         int sample = 1;
         if (maxWidth > 0) {
             int w = Math.max(bounds.outWidth, bounds.outHeight);
-            while (w / sample > maxWidth * 2) {
-                sample *= 2;
-            }
+            while (w / sample > maxWidth * 2) sample *= 2;
         }
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inSampleSize = sample;
@@ -475,12 +415,10 @@ public class CameraBridgePlugin extends Plugin {
     }
 
     private Bitmap applyExifOrientation(String path, Bitmap bitmap) {
-        if (bitmap == null) {
-            return null;
-        }
+        if (bitmap == null) return null;
         try {
             ExifInterface exif = new ExifInterface(path);
-            int orientation = exif.getAttributeInt("Orientation", 1);
+            int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
             return rotateFromExif(bitmap, orientation);
         } catch (Exception e) {
             return bitmap;
@@ -490,41 +428,16 @@ public class CameraBridgePlugin extends Plugin {
     private Bitmap rotateFromExif(Bitmap bitmap, int orientation) {
         int degrees;
         switch (orientation) {
-            case 3:
-                degrees = 180;
-                break;
-            case 6:
-                degrees = 90;
-                break;
-            case 8:
-                degrees = 270;
-                break;
-            default:
-                return bitmap;
+            case ExifInterface.ORIENTATION_ROTATE_180: degrees = 180; break;
+            case ExifInterface.ORIENTATION_ROTATE_90:  degrees = 90;  break;
+            case ExifInterface.ORIENTATION_ROTATE_270: degrees = 270; break;
+            default: return bitmap;
         }
         Matrix m = new Matrix();
         m.postRotate(degrees);
         Bitmap rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), m, true);
-        if (rotated != bitmap) {
-            bitmap.recycle();
-        }
+        if (rotated != bitmap) bitmap.recycle();
         return rotated;
-    }
-
-    private void cleanupPending() {
-        File file = this.pendingCaptureFile;
-        if (file != null && file.exists()) {
-            try {
-                this.pendingCaptureFile.delete();
-            } catch (Exception e) {
-            }
-        }
-        cleanupPendingKeepFile();
-    }
-
-    private void cleanupPendingKeepFile() {
-        this.pendingCaptureFile = null;
-        this.pendingCaptureUri = null;
     }
 
     private static int clamp(int v, int lo, int hi) {

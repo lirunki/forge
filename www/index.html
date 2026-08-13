@@ -277,6 +277,10 @@
     .preview-bar, .lib-bar, .settings-block {
       display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center;
     }
+    .preview-bar .icon-btn {
+      width: 40px; height: 40px; min-width: 40px;
+      flex: 0 0 auto; font-size: 1.1rem; line-height: 1; padding: 0;
+    }
     .preview-title {
       flex: 1;
       min-width: 120px;
@@ -436,8 +440,47 @@
       border: 1px solid var(--border);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
     }
-    .lib-item .lib-main { min-width: 0; }
-    .lib-item .lib-actions { grid-column: 1 / -1; }
+        .lib-item .lib-main { min-width: 0; cursor: pointer; }
+    .lib-item .lib-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 0.15rem;
+    }
+    .lib-item .lib-icon {
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      transition: transform 0.08s ease;
+    }
+    .lib-item .lib-icon:active,
+    .lib-item .lib-main:active { transform: scale(0.98); }
+    .lib-item .lib-icon:focus-visible {
+      outline: 2px solid rgba(139, 92, 246, 0.7);
+      outline-offset: 2px;
+    }
+    /* Use host icon-btn chrome — do not fight .btn padding/gradient */
+    .lib-actions .icon-btn {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+      flex: 0 0 auto;
+      font-size: 1.15rem;
+      line-height: 1;
+      padding: 0;
+    }
+    .lib-actions .icon-btn.lib-del {
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.12);
+    }
+    .lib-actions .btn.lib-export {
+      min-height: 40px;
+      padding: 0.35rem 0.75rem;
+    }
+
     .icon-btn.bulb {
       color: #38bdf8;
       border-color: rgba(56,189,248,.35);
@@ -954,12 +997,9 @@ termux-reload-settings</div>
       <section id="view-preview" class="view">
         <div class="preview-bar">
           <div class="preview-title" id="previewTitle">No app yet</div>
-          <button class="btn secondary small" id="btnReload" type="button">Reload</button>
-          <button class="btn secondary small" id="btnSave" type="button">Save</button>
-          <button class="btn secondary small" id="btnIcon" type="button" title="App icon">Icon</button>
-          <button class="btn secondary small" id="btnHome" type="button" title="Add launcher shortcut">Home</button>
-          <button class="btn secondary small" id="btnOpenWindow" type="button" title="Open this app in its own window">Open window</button>
-          <button class="btn secondary small" id="btnExport" type="button">Export</button>
+          <button class="icon-btn" id="btnReload" type="button" title="Reload app" aria-label="Reload app">🔄</button>
+          <button class="icon-btn hidden" id="btnDiscardReforge" type="button" title="Discard reforge" aria-label="Discard reforge">↩️</button>
+          <button class="icon-btn" id="btnSave" type="button" title="Save to library" aria-label="Save to library">💾</button>
         </div>
         <div class="preview-frame-wrap">
           <div class="preview-empty" id="previewEmpty">Describe an app in Chat and tap <b>Forge it</b>.</div>
@@ -1478,6 +1518,7 @@ termux-reload-settings</div>
       previewTitle: document.getElementById('previewTitle'),
       previewStatus: document.getElementById('previewStatus'),
       btnReload: document.getElementById('btnReload'),
+      btnDiscardReforge: document.getElementById('btnDiscardReforge'),
       btnSave: document.getElementById('btnSave'),
       btnHome: document.getElementById('btnHome'),
       btnIcon: document.getElementById('btnIcon'),
@@ -1635,6 +1676,7 @@ termux-reload-settings</div>
       try { await requestMiniAppStateSave('exitAppMode'); } catch (_) {}
       postToMiniApp('pause', { mode: 'chrome', reason: 'exitAppMode', preserve: true, statePreserved: true, automatic: true });
       try { await stopMicStreamSafe('exitAppMode'); } catch (_) {}
+      try { await cleanupCameraTempSafe('exitAppMode'); } catch (_) {}
       appMode = false;
       clearTimeout(exitChipTimer);
       el.btnExitApp?.classList.remove('faded', 'show-temp');
@@ -3880,7 +3922,7 @@ termux-reload-settings</div>
       const id = _id++;
       pending.set(id, { resolve, reject });
       parent.postMessage({ __forge: true, type: 'host-call', id, method, params: params || {} }, '*');
-      const ms = /^(ai\.|termux\.|files\.|http\.|permissions\.requestPack)/.test(method) ? 180000 : 60000;
+      const ms = /^(ai\.|termux\.|files\.|http\.|permissions\.requestPack|camera\.)/.test(method) ? 180000 : 60000;
       setTimeout(() => {
         if (pending.has(id)) {
           pending.delete(id);
@@ -3905,17 +3947,10 @@ termux-reload-settings</div>
       pending.delete(d.id);
       if (d.ok) {
         let r = d.result;
-        // Host may omit duplicate base64 or dataUrl on large media payloads.
+        // Host normalizes camera/gallery payloads for all mini-apps (back-compat).
         try {
           if (r && typeof r === 'object' && !Array.isArray(r)) {
-            const mime = r.mime || r.contentType || 'application/octet-stream';
-            if (!r.dataUrl && !r.dataURL && typeof r.base64 === 'string' && r.base64) {
-              r = Object.assign({}, r, { dataUrl: 'data:' + mime + ';base64,' + r.base64 });
-            } else if ((r.dataUrl || r.dataURL) && !r.base64) {
-              const du = String(r.dataUrl || r.dataURL);
-              const idx = du.indexOf('base64,');
-              if (idx >= 0) r = Object.assign({}, r, { base64: du.slice(idx + 7) });
-            }
+            r = (window.__forgeNormalizeMediaResult || function(x){ return x; })(r);
           }
         } catch (_) {}
         p.resolve(r);
@@ -4274,6 +4309,8 @@ termux-reload-settings</div>
       requestPermission: (alias) => call('camera.requestPermission', { alias: alias || 'camera' }),
       takePhoto: (opts) => call('camera.takePhoto', opts || {}),
       pickPhoto: (opts) => call('camera.pickPhoto', opts || {}),
+      cleanupTempPhotos: () => call('camera.cleanupTempPhotos'),
+      cleanupTemp: () => call('camera.cleanupTempPhotos'),
     },
     // QR / barcode scan (live camera or decode image)
     qr: {
@@ -4312,6 +4349,127 @@ termux-reload-settings</div>
   };
   // convenience alias
   window.forge = window.ForgeHost;
+
+  // ——— Camera/media normalization (host-owned; mini-apps stay thin) ———
+  (function forgeMediaHostHelpers(){
+    function cleanB64(b){
+      return String(b || '').replace(/\s+/g, '').replace(/^data:[^;]+;base64,/i, '');
+    }
+    function b64ToBlobUrl(b64, mime){
+      mime = mime || 'image/jpeg';
+      var bin = atob(cleanB64(b64));
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return URL.createObjectURL(new Blob([bytes], { type: mime }));
+    }
+    window.__forgeNormalizeMediaResult = function(r){
+      if (!r || typeof r !== 'object' || Array.isArray(r)) return r;
+      var mime = r.mime || r.contentType || '';
+      var b64 = typeof r.base64 === 'string' ? cleanB64(r.base64) : '';
+      var du = typeof r.dataUrl === 'string' ? r.dataUrl : (typeof r.dataURL === 'string' ? r.dataURL : '');
+      if (du && /^blob:/i.test(du)) du = '';
+      if (!b64 && du && /base64,/i.test(du)) b64 = cleanB64(du.split(/base64,/i).pop() || '');
+      if ((!mime || mime === 'application/octet-stream') && (r.width || r.height || r.format === 'jpeg' || (b64 && b64.indexOf('/9j/') === 0))) {
+        mime = 'image/jpeg';
+      }
+      if (!mime && du && /^data:/i.test(du)) mime = (du.slice(5).split(';')[0] || 'image/jpeg');
+      if (!mime) mime = 'application/octet-stream';
+      if (!du && b64) du = 'data:' + mime + ';base64,' + b64;
+      var blobUrl = r.blobUrl || '';
+      if (!blobUrl && b64 && /^image\//i.test(mime)) {
+        try { blobUrl = b64ToBlobUrl(b64, mime); } catch (_) { blobUrl = ''; }
+      }
+      var out = Object.assign({}, r, {
+        mime: mime,
+        contentType: mime,
+        base64: b64 || r.base64 || null,
+        dataUrl: du || null,
+        dataURL: du || null,
+        rawDataUrl: du || null,
+        blobUrl: blobUrl || r.blobUrl || null,
+        previewUrl: blobUrl || r.previewUrl || du || null,
+        displayUrl: blobUrl || r.displayUrl || du || null,
+      });
+      return out;
+    };
+
+    // Large data:image assignments often fail inside srcdoc — rewrite to blob transparently.
+    try {
+      var proto = window.HTMLImageElement && HTMLImageElement.prototype;
+      if (proto) {
+        var desc = Object.getOwnPropertyDescriptor(proto, 'src');
+        if (desc && typeof desc.set === 'function') {
+          var THRESH = 24 * 1024;
+          Object.defineProperty(proto, 'src', {
+            configurable: true,
+            enumerable: !!desc.enumerable,
+            get: desc.get ? function(){ return desc.get.call(this); } : function(){ return this.getAttribute('src'); },
+            set: function(v){
+              try {
+                if (typeof v === 'string' && v.length > THRESH && /^data:image\//i.test(v) && /;base64,/i.test(v)) {
+                  var parts = v.split(/base64,/i);
+                  var header = parts[0] || '';
+                  var b64 = cleanB64(parts[1] || '');
+                  var mm = /^data:([^;,]+)/i.exec(header);
+                  var mime = (mm && mm[1]) || 'image/jpeg';
+                  if (b64) v = b64ToBlobUrl(b64, mime);
+                }
+              } catch (_) {}
+              return desc.set.call(this, v);
+            }
+          });
+        }
+      }
+    } catch (_) {}
+
+    // Wrap camera API: defaults + normalize (back-compat same method names).
+    try {
+      if (window.ForgeHost && window.ForgeHost.camera) {
+        var cam = window.ForgeHost.camera;
+        function withDefaults(opts){
+          opts = opts && typeof opts === 'object' ? Object.assign({}, opts) : {};
+          if (opts.quality == null) opts.quality = 85;
+          if (opts.maxWidth == null || opts.maxWidth === 0) opts.maxWidth = 1280;
+          else if (opts.maxWidth > 2048) opts.maxWidth = 2048;
+          return opts;
+        }
+        var _take = cam.takePhoto && cam.takePhoto.bind(cam);
+        var _pick = cam.pickPhoto && cam.pickPhoto.bind(cam);
+        var _clean = cam.cleanupTempPhotos || cam.cleanupTemp;
+        if (_take) {
+          cam.takePhoto = function(opts){
+            return _take(withDefaults(opts)).then(function(r){
+              return window.__forgeNormalizeMediaResult(r);
+            });
+          };
+        }
+        if (_pick) {
+          cam.pickPhoto = function(opts){
+            return _pick(withDefaults(opts)).then(function(r){
+              return window.__forgeNormalizeMediaResult(r);
+            });
+          };
+        }
+        // Optional helpers — old apps can ignore
+        cam.normalize = function(r){ return window.__forgeNormalizeMediaResult(r); };
+        cam.setImg = function(img, shot){
+          if (!img) return false;
+          var n = window.__forgeNormalizeMediaResult(shot || {});
+          var src = n.previewUrl || n.blobUrl || n.displayUrl || n.dataUrl || '';
+          if (!src && n.base64) {
+            try { src = b64ToBlobUrl(n.base64, n.mime || 'image/jpeg'); } catch (_) {}
+          }
+          if (!src) return false;
+          img.src = src;
+          return true;
+        };
+        if (!_clean) {
+          cam.cleanupTempPhotos = function(){ return call('camera.cleanupTempPhotos'); };
+          cam.cleanupTemp = cam.cleanupTempPhotos;
+        }
+      }
+    } catch (_) {}
+  })();
 
   // ——— Transparent state preservation ———
   const AUTO_STATE_KEY = '__forge_auto_v1';
@@ -5591,6 +5749,15 @@ termux-reload-settings</div>
       } catch (e) {
         console.warn('Mic stream listeners failed', e);
         micStreamListenersReady = false;
+      }
+    }
+
+    async function cleanupCameraTempSafe(reason) {
+      try {
+        if (typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform()) return;
+        await nativeCall(CameraBridge, 'cleanupTempPhotos', {});
+      } catch (e) {
+        console.warn('cleanupCameraTempSafe', e);
       }
     }
 
@@ -7375,18 +7542,31 @@ termux-reload-settings</div>
           return await nativeCall(CameraBridge, 'isAvailable', {});
         case 'camera.requestPermission':
           return await nativeCall(CameraBridge, 'requestPermission', { alias: params.alias || 'camera' });
-        case 'camera.takePhoto':
+        case 'camera.takePhoto': {
+          const q = params.quality != null ? params.quality : 85;
+          let mw = params.maxWidth != null ? params.maxWidth : 1280;
+          if (!mw) mw = 1280;
+          if (mw > 2048) mw = 2048;
           return await nativeCall(CameraBridge, 'takePhoto', {
-            quality: params.quality,
-            maxWidth: params.maxWidth,
+            quality: q,
+            maxWidth: mw,
             facing: params.facing,
             saveToGallery: params.saveToGallery,
           });
-        case 'camera.pickPhoto':
+        }
+        case 'camera.pickPhoto': {
+          const q = params.quality != null ? params.quality : 85;
+          let mw = params.maxWidth != null ? params.maxWidth : 1280;
+          if (!mw) mw = 1280;
+          if (mw > 2048) mw = 2048;
           return await nativeCall(CameraBridge, 'pickPhoto', {
-            quality: params.quality,
-            maxWidth: params.maxWidth,
+            quality: q,
+            maxWidth: mw,
           });
+        }
+        case 'camera.cleanupTempPhotos':
+        case 'camera.cleanupTemp':
+          return await nativeCall(CameraBridge, 'cleanupTempPhotos', {});
 
         // ——— Filesystem ———
         case 'fs.dirs':
@@ -10338,6 +10518,276 @@ General:
       return true;
     }
 
+
+    /** Snapshot of library app before a Reforge preview (for Discard). */
+    let pendingReforgeOriginal = null;
+
+    function setReforgeDirty(isDirty) {
+      try {
+        el.btnDiscardReforge?.classList.toggle('hidden', !isDirty);
+      } catch (_) {}
+    }
+
+    function clearReforgePending() {
+      pendingReforgeOriginal = null;
+      setReforgeDirty(false);
+    }
+
+    /**
+     * User prompt that inducts the LLM to reforge an existing mini-app
+     * against the latest ForgeHost (CameraX, thin media, etc.) while
+     * preserving functionality and UI.
+     */
+    function buildReforgeUserPrompt(app) {
+      const title = app?.title || 'Untitled';
+      const summary = app?.summary || '';
+      const html = String(app?.html || '');
+      return (
+`REFORGE TASK (not a new app from scratch).
+
+## NON-NEGOTIABLE: behavior lock
+Functionality must NOT change at all. This is a host-API modernization, not a redesign or feature edit.
+
+You MUST preserve 100%:
+- Every user-visible feature, screen, mode, and flow (including edge cases and empty states)
+- Every control and what it does: buttons, menus, toggles, inputs, sliders, attaches, sends, deletes, settings saves, navigation — same labels, same actions, same side effects
+- Event handlers / onclick / onchange wiring intent (rename vars only if needed; do not drop or repurpose handlers)
+- Data model: message shapes, attachment shape, settings object fields, localStorage / ForgeHost.storage keys and value meanings
+- AI prompts, tool names, tool schemas, and tool-loop behavior if present
+- Permissions requested and when they are requested
+- Error/status text purpose (wording may clarify, not remove)
+
+You must NOT:
+- Remove, merge, or "simplify away" any control or feature
+- Change what a control does (e.g. Attach must still attach; Send must still send; Settings must still persist the same options)
+- Replace custom UI with a generic chat shell
+- Add unrelated features or demos
+- Change storage keys (breaks existing user data)
+- Alter tool names the model already knows unless you keep backward-compatible aliases
+
+Self-check before you answer (do this mentally, then ship complete html):
+1. List every interactive control in the source HTML.
+2. Confirm each still exists with the same user-facing purpose.
+3. Confirm camera/gallery/files/AI paths still fulfill the same user jobs — only the ForgeHost call style may change.
+4. If unsure about any behavior, keep the original logic verbatim.
+
+Allowed changes ONLY:
+- Update ForgeHost usage to the latest contract (especially camera/media/AI attachments)
+- Bugfixes required for that host contract (e.g. blob vs dataUrl for upload)
+- Minimal glue so old UI keeps working on new host
+- Light visual polish ONLY if something is clearly broken — do not restyle the app
+
+But update ALL host integration to the LATEST ForgeHost contract.
+
+## Latest ForgeHost rules (must follow)
+
+### Camera (CameraX — host-owned)
+- ONLY use ForgeHost.camera.takePhoto / pickPhoto / requestPermission.
+- Do NOT use getUserMedia, <input capture>, navigator.mediaDevices, or Capacitor Camera.
+- Do NOT invent OEM camera / FileProvider / MediaStore workarounds.
+- Host uses in-process CameraX shutter UI. Host applies defaults (quality≈85, maxWidth≈1280).
+- Result shape (always normalize defensively):
+  { base64, dataUrl, mime, width, height, bytes, path?, engine?, previewUrl?, blobUrl?, displayUrl?, rawDataUrl? }
+- Prefer host helpers when present:
+  - ForgeHost.camera.normalize(shot)
+  - ForgeHost.camera.setImg(imgEl, shot)
+- For AI attachments / upload: send real data: URL and/or base64 — NEVER blob: URLs.
+- Example:
+\`\`\`js
+try { await ForgeHost.permissions.request('camera'); } catch (_) {}
+const shot = await ForgeHost.camera.takePhoto({ quality: 85, maxWidth: 1280, facing: 'back' });
+const media = (ForgeHost.camera.normalize ? ForgeHost.camera.normalize(shot) : shot);
+// thumbnails:
+if (ForgeHost.camera.setImg) ForgeHost.camera.setImg(imgEl, media);
+else imgEl.src = media.previewUrl || media.blobUrl || media.dataUrl || '';
+// AI:
+const part = {
+  type: 'image',
+  mime: media.mime || 'image/jpeg',
+  name: 'photo.jpg',
+  dataUrl: (media.rawDataUrl || media.dataUrl || '').startsWith('blob:') ? null : (media.rawDataUrl || media.dataUrl),
+  base64: media.base64 || null,
+};
+if (!part.dataUrl && part.base64) part.dataUrl = 'data:' + part.mime + ';base64,' + part.base64;
+\`\`\`
+
+### AI
+- ForgeHost.ai.chat({ messages, providerId?, temperature?, tools?, tool_choice?, attachments? })
+- ForgeHost.ai.listProviders() for provider picker — NO API keys in HTML.
+- Attachments: [{ type:'image', dataUrl, base64?, mime, name }]
+- Tool loop is owned by the mini-app; parse tool_calls defensively (arguments may be JSON strings).
+
+### Other common bridges
+- ForgeHost.storage.get/set, secrets, files.pick, apps.list/launch, tts, mic, http.inlineHtml, toast, permissions.
+- All APIs are async — await + try/catch. Status line instead of alert().
+
+### Output
+Return ONLY valid JSON (no markdown fences):
+{
+  "title": "keep or lightly improve",
+  "summary": "keep or lightly improve",
+  "message": "1-2 sentences: only what host/API wiring you updated — confirm behavior/controls unchanged",
+  "html": "<!DOCTYPE html>... complete standalone mini-app ..."
+}
+
+html must be a full self-contained document (inline CSS/JS). Preserve the app identity.
+In message, explicitly state that features and controls are unchanged.
+
+## Existing app metadata
+Title: ${title}
+Summary: ${summary}
+carCompatible: ${app?.carCompatible ? 'true' : 'false'}
+
+## Existing app HTML (source of truth — reforge this)
+\`\`\`html
+${html}
+\`\`\`
+`
+      );
+    }
+
+    async function reforgeAppWithAi(app) {
+      // System: factory rules + reforge emphasis (SYSTEM_PROMPT already documents host API)
+      let system = SYSTEM_PROMPT;
+      system += `
+
+REFORGE MODE (active):
+You are updating an EXISTING mini-app the user already uses.
+ABSOLUTE RULE: functionality must not change at all. Every control must keep doing exactly what it does today.
+Preserve all features, handlers, settings keys, tools, and UX flows. Preserve visual design language.
+Modernize ONLY ForgeHost usage to current best practices (especially camera/media/AI attachments).
+Do not strip, merge, or repurpose controls. Do not add unrelated features. Do not replace the product with a generic demo.
+If a host API call must change, keep the surrounding user-facing behavior identical.
+Return complete html, not a diff.`;
+
+      const userText = buildReforgeUserPrompt(app);
+      const msgs = [
+        { role: 'system', content: system },
+        { role: 'user', content: userText },
+      ];
+
+      await bgStart('Reforge', `Updating “${app.title || 'app'}” for latest ForgeHost…`);
+
+      let raw;
+      // Prefer JSON mode; Gemini path when host provider is Gemini (long HTML ok either way)
+      if (isGeminiHostProvider()) {
+        try {
+          raw = await geminiGenerateContent(msgs, abortController?.signal);
+        } catch (_) {
+          raw = await chatCompletions(msgs, abortController?.signal, { jsonMode: true });
+        }
+      } else {
+        raw = await chatCompletions(msgs, abortController?.signal, { jsonMode: true });
+      }
+      const parsed = extractJson(raw);
+      if (!parsed?.html) throw new Error('Reforge payload missing html');
+
+      const next = {
+        id: app.id, // keep identity for Save overwrite
+        title: String(parsed.title || app.title || 'Untitled app').slice(0, 80),
+        summary: String(parsed.summary || app.summary || '').slice(0, 240),
+        html: String(parsed.html),
+        iconEmoji: app.iconEmoji || '⚡',
+        iconColor: app.iconColor || '',
+        carCompatible: !!app.carCompatible,
+        createdAt: app.createdAt || Date.now(),
+        updatedAt: Date.now(),
+        reforgedAt: Date.now(),
+      };
+      const message = String(
+        parsed.message || `Reforged “${next.title}” for the latest ForgeHost. Save to keep, or Discard reforge.`
+      );
+      return { app: next, message };
+    }
+
+    async function reforgeLibraryApp(app) {
+      if (!app?.html) {
+        setLibStatus('Nothing to reforge', 'err');
+        return;
+      }
+      if (busy) {
+        setLibStatus('Already working…', 'err');
+        return;
+      }
+      // Need AI configured
+      if (!el.apiKey?.value?.trim() && !providerAllowsEmptyKey()) {
+        setLibStatus('Configure an AI provider first (Settings / Easy setup)', 'err');
+        try { openSetupWizard({ force: true, start: hasAnyApiKeyConfigured() ? 'pick' : 'welcome' }); } catch (_) {}
+        showTab('settings');
+        return;
+      }
+
+      // Snapshot for discard (deep enough for html)
+      pendingReforgeOriginal = {
+        id: app.id,
+        title: app.title,
+        summary: app.summary,
+        html: app.html,
+        iconEmoji: app.iconEmoji,
+        iconColor: app.iconColor,
+        carCompatible: !!app.carCompatible,
+        createdAt: app.createdAt,
+        updatedAt: app.updatedAt,
+      };
+      setReforgeDirty(false);
+
+      // Load original into preview so user sees starting point
+      try { showTab('preview'); } catch (_) {}
+      loadPreview({ ...app });
+      setLibStatus(`Reforging “${app.title || 'app'}”…`, '');
+      setPreviewStatus('Reforging with latest ForgeHost (camera, AI, bridges)…', '');
+      setBusy(true);
+      abortController = new AbortController();
+
+      try {
+        savePrefs();
+        const { app: next, message } = await reforgeAppWithAi(app);
+        // Preview only — library row unchanged until Save
+        currentApp = next;
+        loadPreview(next);
+        setReforgeDirty(true);
+        setPreviewStatus(message + ' · Save to keep · Discard reforge to restore', 'ok');
+        setLibStatus(`Reforged “${next.title}” — preview ready (not saved yet)`, 'ok');
+        try { setPreviewStatus('Reforge ready — Save or Discard', 'ok'); } catch (_) {}
+        // Also drop a short note in Chat for transparency
+        try {
+          addMessage(
+            'assistant',
+            `🔨 Reforged “${next.title}”. Review the App tab, then **Save** to overwrite the library copy, or **Discard reforge** to restore the previous version.`
+          );
+        } catch (_) {}
+      } catch (e) {
+        const msg = e?.name === 'AbortError' ? 'Reforge cancelled' : (e?.message || String(e));
+        setPreviewStatus(msg, 'err');
+        setLibStatus(msg, 'err');
+        // Restore snapshot into preview if we still have original
+        if (pendingReforgeOriginal?.html) {
+          loadPreview({ ...pendingReforgeOriginal });
+          currentApp = { ...pendingReforgeOriginal };
+        }
+        clearReforgePending();
+        try { addMessage('assistant', 'Reforge failed: ' + msg); } catch (_) {}
+      } finally {
+        setBusy(false);
+        abortController = null;
+        try { await bgStop(); } catch (_) {}
+      }
+    }
+
+    function discardReforgePreview() {
+      if (!pendingReforgeOriginal?.html) {
+        setPreviewStatus('No reforge to discard', '');
+        setReforgeDirty(false);
+        return;
+      }
+      const orig = pendingReforgeOriginal;
+      clearReforgePending();
+      currentApp = { ...orig };
+      loadPreview(currentApp);
+      setPreviewStatus(`Restored “${orig.title || 'app'}” (reforge discarded)`, 'ok');
+      setLibStatus('Reforge discarded', '');
+    }
+
     async function forgeApp(userText, attachments = []) {
       savePrefs();
       // One system message only, and it must be first (provider requirement).
@@ -10460,7 +10910,65 @@ General:
     }
 
     // ——— Library ———
-    function renderLibrary() {
+    
+    function renameLibraryApp(app) {
+      if (!app?.id) return;
+      const curTitle = app.title || 'Untitled';
+      const curSummary = app.summary || '';
+      let title;
+      try {
+        title = prompt('Rename app', curTitle);
+      } catch (_) {
+        title = null;
+      }
+      if (title == null) return; // cancelled
+      title = String(title).trim().slice(0, 80);
+      if (!title) {
+        setLibStatus('Name cannot be empty', 'err');
+        return;
+      }
+      let summary = curSummary;
+      try {
+        const sIn = prompt('Summary (optional)', curSummary);
+        if (sIn != null) summary = String(sIn).trim().slice(0, 240);
+      } catch (_) {}
+
+      const list = getLibrary();
+      const idx = list.findIndex(x => x.id === app.id);
+      if (idx < 0) {
+        setLibStatus('App not found in library', 'err');
+        return;
+      }
+      const next = {
+        ...list[idx],
+        title,
+        summary,
+        updatedAt: Date.now(),
+      };
+      list[idx] = next;
+      setLibrary(list);
+      clearDriveTombstone(next.id);
+      if (currentApp?.id === next.id) {
+        currentApp = { ...currentApp, title, summary, updatedAt: next.updatedAt };
+        try {
+          el.previewTitle.textContent = currentApp.title + (currentApp.carCompatible ? ' ⚓' : '');
+          el.subtitle.textContent = currentApp.title ? `Running: ${currentApp.title}` : 'Tell me what app you want';
+        } catch (_) {}
+      }
+      // Keep pinned shortcut label in sync when possible
+      if (Capacitor.isNativePlatform()) {
+        try {
+          ShortcutBridge.updatePinned({
+            id: next.id,
+            title: next.title || 'Forge app',
+          }).catch(() => {});
+        } catch (_) {}
+      }
+      renderLibrary();
+      setLibStatus(`Renamed to “${title}”`, 'ok');
+    }
+
+function renderLibrary() {
       const list = getLibrary().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       el.libList.innerHTML = '';
       if (!list.length) {
@@ -10471,64 +10979,146 @@ General:
         el.libList.appendChild(empty);
         return;
       }
+
+      const openApp = (app) => {
+        try {
+          loadPreview(app);
+          enterAppMode('library');
+        } catch (e) {
+          try { openAppInNewWindow(app); } catch (_) {
+            setLibStatus(e?.message || 'Could not open app', 'err');
+          }
+        }
+      };
+
+      const bindIconOpenAndEdit = (elIcon, app) => {
+        elIcon.title = 'Tap to open · Long-press to change icon';
+        elIcon.setAttribute('role', 'button');
+        elIcon.tabIndex = 0;
+        elIcon.setAttribute(
+          'aria-label',
+          'Open ' + (app.title || 'app') + '. Long-press to change icon.'
+        );
+        let timer = null;
+        let longPress = false;
+        let startX = 0;
+        let startY = 0;
+        const clear = () => {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+        };
+        elIcon.addEventListener('pointerdown', (e) => {
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          longPress = false;
+          startX = e.clientX;
+          startY = e.clientY;
+          clear();
+          timer = setTimeout(() => {
+            timer = null;
+            longPress = true;
+            try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+            editAppIcon(app, { fromLibrary: true });
+          }, 500);
+        });
+        elIcon.addEventListener('pointermove', (e) => {
+          if (!timer) return;
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          if (dx * dx + dy * dy > 100) clear();
+        });
+        elIcon.addEventListener('pointerup', (e) => {
+          const wasLong = longPress;
+          clear();
+          if (wasLong) {
+            longPress = false;
+            e.preventDefault();
+            return;
+          }
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          openApp(app);
+        });
+        elIcon.addEventListener('pointercancel', clear);
+        elIcon.addEventListener('pointerleave', clear);
+        elIcon.addEventListener('contextmenu', (e) => e.preventDefault());
+        elIcon.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openApp(app);
+          }
+        });
+      };
+
       for (const app of list) {
         const item = document.createElement('div');
         item.className = 'lib-item';
+
         const icon = document.createElement('div');
         icon.className = 'lib-icon';
         icon.textContent = app.iconEmoji || '⚡';
         icon.style.background = app.iconColor || 'rgba(109,40,217,.45)';
+        bindIconOpenAndEdit(icon, app);
+
         const main = document.createElement('div');
         main.className = 'lib-main';
+        main.title = 'Tap to open';
         const h3 = document.createElement('h3');
         h3.textContent = app.title || 'Untitled';
         const p = document.createElement('p');
         p.textContent = app.summary || 'Saved mini-app';
         main.appendChild(h3);
         main.appendChild(p);
-        item.appendChild(icon);
-        item.appendChild(main);
+        main.addEventListener('click', () => openApp(app));
+
         const actions = document.createElement('div');
         actions.className = 'lib-actions';
-        const openBtn = document.createElement('button');
-        openBtn.className = 'btn small';
-        openBtn.textContent = 'Open';
-        openBtn.title = 'Open in its own window (split-screen friendly)';
-        openBtn.onclick = () => openAppInNewWindow(app);
-        const homeBtn = document.createElement('button');
-        homeBtn.className = 'btn secondary small';
-        homeBtn.textContent = 'Home screen';
-        homeBtn.onclick = () => pinAppToLauncher(app);
-        const iconBtn = document.createElement('button');
-        iconBtn.className = 'btn secondary small';
-        iconBtn.textContent = 'Icon';
-        iconBtn.onclick = () => editAppIcon(app, { fromLibrary: true });
-        const exportBtn = document.createElement('button');
-        exportBtn.className = 'btn secondary small';
-        exportBtn.textContent = 'Export';
-        exportBtn.onclick = () => exportApp(app, { source: 'library' });
 
-        // Share to AAForge (Android Auto host)
-        const shareAaBtn = document.createElement('button');
-        shareAaBtn.className = 'btn secondary small';
-        shareAaBtn.textContent = app.carCompatible ? 'Share to AA ⚓' : 'Share to AA';
-        shareAaBtn.title = 'Share this mini-app to AAForge (Android Auto)';
-        shareAaBtn.onclick = () => shareAppToAaforge(app);
+        const mkIconBtn = (emoji, title, onClick, extraClass) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'icon-btn' + (extraClass ? (' ' + extraClass) : '');
+          b.textContent = emoji;
+          b.title = title;
+          b.setAttribute('aria-label', title);
+          b.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            onClick();
+          });
+          return b;
+        };
 
-        const delBtn = document.createElement('button');
-        delBtn.className = 'btn secondary small';
-        delBtn.textContent = 'Delete';
-        delBtn.onclick = () => {
+        const homeBtn = mkIconBtn('🏠', 'Add to Home screen', () => pinAppToLauncher(app));
+        const reforgeBtn = mkIconBtn('⚒️', 'Reforge with latest ForgeHost (preview, then Save or discard)', () => reforgeLibraryApp(app));
+        const shareAaBtn = mkIconBtn(
+          '🚗',
+          app.carCompatible ? 'Share to AAForge (car-compatible)' : 'Share to AAForge (Android Auto)',
+          () => shareAppToAaforge(app)
+        );
+        const delBtn = mkIconBtn('🗑️', 'Delete from library', () => {
+          const name = app.title || 'this app';
+          if (!confirm('Delete "' + name + '" from the library?\n\nThis removes it from this device. Undo is not available.')) {
+            return;
+          }
           addDriveTombstone(app.id);
           setLibrary(getLibrary().filter(x => x.id !== app.id));
           renderLibrary();
-        };
-        actions.appendChild(openBtn);
+          try { setLibStatus('Deleted "' + name + '"', 'ok'); } catch (_) {}
+        }, 'lib-del');
+
+        const exportBtn = mkIconBtn('📤', 'Export HTML', () => exportApp(app, { source: 'library' }));
+        const renameBtn = mkIconBtn('✏️', 'Rename app', () => renameLibraryApp(app));
+
         actions.appendChild(homeBtn);
-        actions.appendChild(iconBtn);
+        actions.appendChild(renameBtn);
         actions.appendChild(exportBtn);
+        actions.appendChild(reforgeBtn);
         actions.appendChild(shareAaBtn);
         actions.appendChild(delBtn);
+
+        item.appendChild(icon);
+        item.appendChild(main);
         item.appendChild(actions);
         el.libList.appendChild(item);
       }
@@ -10642,7 +11232,9 @@ General:
       setLibrary(list);
       clearDriveTombstone(currentApp.id);
       saveDraft();
+      clearReforgePending();
       setPreviewStatus(`Saved “${currentApp.title}” to library`, 'ok');
+      try { setLibStatus(`Saved “${currentApp.title}”`, 'ok'); renderLibrary(); } catch (_) {}
       // Keep existing pinned shortcut labels in sync when possible
       if (Capacitor.isNativePlatform()) {
         ShortcutBridge.updatePinned({
@@ -11936,6 +12528,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.btnExitApp?.addEventListener('mouseenter', () => showExitChipBriefly());
     el.btnReload.addEventListener('click', () => currentApp && loadPreview(currentApp));
     el.btnSave.addEventListener('click', saveCurrentApp);
+    el.btnDiscardReforge?.addEventListener('click', discardReforgePreview);
     el.btnHome.addEventListener('click', () => pinAppToLauncher(currentApp));
     el.btnIcon?.addEventListener('click', () => editAppIcon(currentApp));
     el.btnOpenWindow?.addEventListener('click', () => currentApp && openAppInNewWindow(currentApp));

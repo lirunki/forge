@@ -278,5 +278,13 @@
         <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
       </intent-filter>
     </receiver>
-  </application>
+  
+    <activity
+        android:name="com.forge.live.CameraXCaptureActivity"
+        android:exported="false"
+        android:screenOrientation="fullUser"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+        android:theme="@style/AppTheme.NoActionBar"
+        android:windowSoftInputMode="stateAlwaysHidden" />
+</application>
 </manifest>

@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.15 / versionCode 47** (Drive backup includes AI settings + API keys) · was 2.6.11/43
+| Version | **2.6.22 / versionCode 54** (Library rename/export icons; App tab Reload/Save icons only) · was 2.6.21/53
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-13 — version bump to 2.6.15/47; Drive backup includes AI settings + API keys
+| **Last rebuild** | 2026-08-13 — Library ✏️/📤; App tab only 🔄/💾 (+ ↩️ when reforge dirty)
 
 ### Locked product baseline
 
@@ -442,3 +442,21 @@ Smoke:
 [ ] Settings show same provider; Test connection works
 [ ] Library apps still restore
 ```
+
+## CameraX in-process capture (2026-08-13)
+
+Shipped in host **2.6.16 / versionCode 48**:
+
+**Native:** `CameraXCaptureActivity` + CameraX Preview/ImageCapture (no OEM `ACTION_IMAGE_CAPTURE`).
+- `CameraBridge.takePhoto` → in-app shutter UI → JPEG under app `Pictures/ForgeCam/camerax_*.jpg`
+- Encode/scale/EXIF in plugin; result still `{base64,dataUrl,mime,width,height,bytes,…}`
+- `cleanupTempPhotos` on mini-app exit
+- `pickPhoto` unchanged (system gallery)
+
+**Host (injected bridge — mini-apps stay thin):**
+- Default `quality:85`, `maxWidth:1280` (cap 2048)
+- 180s timeout for `camera.*`
+- `__forgeNormalizeMediaResult` → always `base64` + real `dataUrl` + `previewUrl`/`blobUrl`
+- Transparent `img.src = large data:image…` → blob rewrite
+- Optional `ForgeHost.camera.setImg(img, shot)` / `.normalize(shot)`
+- Back-compat: same method names and core result fields
