@@ -1115,8 +1115,9 @@ termux-reload-settings</div>
         <div class="card">
           <h2>Library backup</h2>
           <p class="field-hint" style="margin-top:0;">
-            Back up saved mini-apps to a <b>Google Drive</b> folder (or any folder the system picker offers).
-            AI keys stay on this device. Share apps with friends via <b>Export</b> (WhatsApp, etc.).
+            Back up saved mini-apps <b>and AI settings</b> (providers + API keys) to a <b>Google Drive</b> folder
+            (or any folder the system picker offers). Treat the backup folder as private — it will contain secrets.
+            Share apps with friends via <b>Export</b> (WhatsApp, etc.), not the backup folder.
           </p>
           <div id="driveStatusLine" class="status-line" style="margin-bottom:0.55rem;">Checking backup folder…</div>
           <div class="settings-block" style="margin-top:0.15rem;">
@@ -1126,8 +1127,9 @@ termux-reload-settings</div>
             <button class="btn secondary small" id="btnDriveDisconnect" type="button">Disconnect</button>
           </div>
           <p class="field-hint" style="margin-top:0.55rem;margin-bottom:0;">
-            Forge creates a <code>ForgeLibrary</code> subfolder with <code>manifest.json</code> and per-app HTML.
-            Pick the same folder on another phone to sync.
+            Forge creates a <code>ForgeLibrary</code> subfolder with <code>manifest.json</code>,
+            <code>settings.json</code> (AI providers/keys), and per-app HTML.
+            Pick the same folder on another phone to sync apps + AI setup.
           </p>
         </div>
 
@@ -2931,6 +2933,8 @@ termux-reload-settings</div>
     // ——— Drive / cloud folder library backup (SAF) ———
     const DRIVE_FORMAT = 'forge-drive-library-v1';
     const DRIVE_APP_FORMAT = 'forge-drive-app-v1';
+    const DRIVE_SETTINGS_FORMAT = 'forge-drive-settings-v1';
+    const DRIVE_SETTINGS_PATH = 'settings.json';
 
     function getDriveMeta() {
       try { return JSON.parse(localStorage.getItem(LS.driveMeta) || '{}') || {}; }
@@ -3096,6 +3100,226 @@ termux-reload-settings</div>
       return [...map.values()];
     }
 
+
+    /** Snapshot AI settings + keys for Drive backup (private folder). */
+    function collectSettingsForBackup() {
+      const lsGet = (k) => {
+        try { return localStorage.getItem(k); } catch (_) { return null; }
+      };
+      const profiles = getProfiles();
+      const customProviders = getCustomProviders();
+      const knownKeys = getKnownKeys();
+      // Also pull any legacy single-slot keys still on device
+      const legacy = {};
+      for (const k of ['key', 'base', 'model', 'temp', 'jsonMode', 'azureResource', 'azureDeployment', 'azureApiVersion', 'azureAuth']) {
+        const v = lsGet(LS[k]);
+        if (v != null && v !== '') legacy[k] = v;
+      }
+      return {
+        format: DRIVE_SETTINGS_FORMAT,
+        version: 1,
+        exportedAt: Date.now(),
+        deviceId: getDriveDeviceId(),
+        activeProviderId: (typeof activeProviderId !== 'undefined' && activeProviderId)
+          || lsGet(LS.provider)
+          || DEFAULT_PROVIDER,
+        rememberKey: lsGet(LS.remember) !== '0',
+        profiles: profiles && typeof profiles === 'object' ? profiles : {},
+        customProviders: Array.isArray(customProviders) ? customProviders : [],
+        knownKeys: Array.isArray(knownKeys) ? knownKeys : [],
+        setupDone: lsGet(LS.setupDone) || '',
+        setupProvider: lsGet(LS.setupProvider) || '',
+        termuxSetupDone: lsGet(LS.termuxSetupDone) || '',
+        legacy,
+      };
+    }
+
+    function settingsBackupFingerprint(bundle) {
+      try {
+        return JSON.stringify({
+          activeProviderId: bundle?.activeProviderId || '',
+          rememberKey: !!bundle?.rememberKey,
+          profiles: bundle?.profiles || {},
+          customProviders: bundle?.customProviders || [],
+          knownKeys: (bundle?.knownKeys || []).map(e => ({
+            key: e?.key || '',
+            providers: e?.providers || e?.providerIds || [],
+            base: e?.base || '',
+          })),
+          setupDone: bundle?.setupDone || '',
+          setupProvider: bundle?.setupProvider || '',
+          legacy: bundle?.legacy || {},
+        });
+      } catch (_) {
+        return String(Date.now());
+      }
+    }
+
+    /**
+     * Apply a settings.json bundle from Drive.
+     * mode: 'merge' (default) keeps local keys/providers and overlays remote;
+     *       'drive' prefers remote wholesale for AI settings.
+     */
+    async function applySettingsFromBackup(bundle, opts = {}) {
+      if (!bundle || typeof bundle !== 'object') {
+        return { ok: false, reason: 'empty' };
+      }
+      // Accept our format; also tolerate a bare profiles dump
+      const mode = opts.mode || 'merge';
+      const remoteProfiles = (bundle.profiles && typeof bundle.profiles === 'object') ? bundle.profiles : {};
+      const remoteCustoms = Array.isArray(bundle.customProviders) ? bundle.customProviders : [];
+      const remoteKeys = Array.isArray(bundle.knownKeys) ? bundle.knownKeys : [];
+
+      // --- custom OpenAI providers ---
+      let customs = getCustomProviders();
+      if (mode === 'drive') {
+        customs = remoteCustoms.slice();
+      } else {
+        const byId = new Map(customs.map(c => [c.id, c]));
+        for (const c of remoteCustoms) {
+          if (!c || !c.id) continue;
+          // remote wins on id collision for merge of provider defs (label/base/models)
+          byId.set(c.id, { ...(byId.get(c.id) || {}), ...c });
+        }
+        customs = [...byId.values()];
+      }
+      setCustomProviders(customs);
+
+      // --- per-provider profiles (includes API keys when remember is on) ---
+      let profiles = getProfiles();
+      if (mode === 'drive') {
+        profiles = { ...remoteProfiles };
+      } else {
+        profiles = { ...profiles };
+        for (const [id, prof] of Object.entries(remoteProfiles)) {
+          if (!id || !prof || typeof prof !== 'object') continue;
+          const local = profiles[id] || {};
+          // Prefer non-empty remote key; keep local key if remote empty
+          const merged = { ...local, ...prof };
+          if (!String(prof.key || '').trim() && String(local.key || '').trim()) {
+            merged.key = local.key;
+          }
+          profiles[id] = merged;
+        }
+      }
+      setProfiles(profiles);
+
+      // --- known key vault ---
+      let vault = getKnownKeys();
+      if (mode === 'drive') {
+        vault = remoteKeys
+          .filter(e => e && typeof e.key === 'string' && e.key.trim())
+          .map(e => ({ ...e, key: String(e.key).trim() }));
+      } else {
+        const byKey = new Map();
+        for (const e of vault) {
+          if (e?.key) byKey.set(String(e.key).trim(), e);
+        }
+        for (const e of remoteKeys) {
+          if (!e || typeof e.key !== 'string' || !e.key.trim()) continue;
+          const k = e.key.trim();
+          const prev = byKey.get(k) || {};
+          // merge provider bindings
+          const provs = new Set([
+            ...(Array.isArray(prev.providers) ? prev.providers : []),
+            ...(Array.isArray(prev.providerIds) ? prev.providerIds : []),
+            ...(Array.isArray(e.providers) ? e.providers : []),
+            ...(Array.isArray(e.providerIds) ? e.providerIds : []),
+            ...(e.providerId ? [e.providerId] : []),
+          ].filter(Boolean).map(String));
+          byKey.set(k, {
+            ...prev,
+            ...e,
+            key: k,
+            providers: [...provs],
+            lastUsedAt: Math.max(Number(prev.lastUsedAt) || 0, Number(e.lastUsedAt) || 0, Date.now()),
+          });
+        }
+        vault = [...byKey.values()];
+      }
+      setKnownKeys(vault);
+
+      // --- active provider + remember flag (before vault ensure — rememberKeyInVault checks the box) ---
+      const remember = bundle.rememberKey !== false && bundle.rememberKey !== '0' && bundle.rememberKey !== 0;
+      try { localStorage.setItem(LS.remember, remember ? '1' : '0'); } catch (_) {}
+      if (el.rememberKey) el.rememberKey.checked = !!remember;
+
+      // Ensure every profile key is also in the vault (force even if UI gate would skip)
+      try {
+        const v2 = getKnownKeys();
+        const byKey = new Map(v2.map(e => [String(e.key).trim(), e]));
+        for (const [pid, prof] of Object.entries(profiles)) {
+          const k = String(prof?.key || '').trim();
+          if (!k) continue;
+          const prev = byKey.get(k) || {
+            id: 'k_' + Math.random().toString(36).slice(2, 10),
+            key: k,
+            addedAt: Date.now(),
+            providers: [],
+          };
+          const provs = new Set([...(prev.providers || []), ...(prev.providerIds || []), pid].filter(Boolean).map(String));
+          byKey.set(k, {
+            ...prev,
+            key: k,
+            providers: [...provs],
+            base: prev.base || prof.base || '',
+            lastUsedAt: Date.now(),
+          });
+        }
+        setKnownKeys([...byKey.values()]);
+      } catch (_) {}
+
+      let wantProvider = String(bundle.activeProviderId || '').trim();
+      const map = getProviderMap();
+      if (!wantProvider || !map[wantProvider]) {
+        // fall back to first profile with a key, else default
+        wantProvider = Object.keys(profiles).find(id => map[id] && String(profiles[id]?.key || '').trim()) || DEFAULT_PROVIDER;
+      }
+      try { localStorage.setItem(LS.provider, wantProvider); } catch (_) {}
+      activeProviderId = wantProvider;
+
+      // setup flags (optional)
+      if (bundle.setupDone) {
+        try { localStorage.setItem(LS.setupDone, String(bundle.setupDone)); } catch (_) {}
+      }
+      if (bundle.setupProvider) {
+        try { localStorage.setItem(LS.setupProvider, String(bundle.setupProvider)); } catch (_) {}
+      }
+
+      // legacy single-slot (only fill if missing)
+      if (bundle.legacy && typeof bundle.legacy === 'object') {
+        for (const [k, v] of Object.entries(bundle.legacy)) {
+          const lsKey = LS[k];
+          if (!lsKey || v == null || v === '') continue;
+          try {
+            if (mode === 'drive' || localStorage.getItem(lsKey) == null || localStorage.getItem(lsKey) === '') {
+              localStorage.setItem(lsKey, String(v));
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Refresh settings UI if present
+      try {
+        renderProviderSelect(wantProvider);
+        if (el.rememberKey) el.rememberKey.checked = remember;
+        applyProfileToUI(wantProvider, { quiet: true });
+      } catch (e) {
+        console.warn('applySettingsFromBackup UI', e);
+      }
+
+      const keyCount = getKnownKeys().length;
+      const profWithKey = Object.values(getProfiles()).filter(p => p && String(p.key || '').trim()).length;
+      return {
+        ok: true,
+        providerId: wantProvider,
+        customProviders: getCustomProviders().length,
+        profiles: Object.keys(getProfiles()).length,
+        profilesWithKey: profWithKey,
+        knownKeys: keyCount,
+      };
+    }
+
     async function backupLibraryToDrive(opts = {}) {
       const source = opts.source || 'library';
       const status = (msg, kind) => {
@@ -3196,6 +3420,28 @@ termux-reload-settings</div>
         } catch (_) {}
         await driveWriteJson('manifest.json', manifest);
 
+        // AI settings + API keys (private backup folder)
+        let settingsNote = '';
+        try {
+          status('Backing up AI settings & keys…', '');
+          // Flush current UI into profiles first
+          try { saveCurrentProfile(); } catch (_) {}
+          const settingsBundle = collectSettingsForBackup();
+          settingsBundle.contentSha256 = await sha256Hex(settingsBackupFingerprint(settingsBundle));
+          await driveWriteJson(DRIVE_SETTINGS_PATH, settingsBundle);
+          const keyN = (settingsBundle.knownKeys || []).length;
+          const profN = Object.keys(settingsBundle.profiles || {}).length;
+          settingsNote = `, settings ✓ (${profN} profiles, ${keyN} keys)`;
+          setDriveMeta({
+            ...getDriveMeta(),
+            lastSettingsBackupAt: Date.now(),
+            lastSettingsSha: settingsBundle.contentSha256,
+          });
+        } catch (se) {
+          console.warn('settings backup', se);
+          settingsNote = ', settings ✗ ' + (se?.message || se);
+        }
+
         // Local tombs that were pushed can stay until restore confirms; keep merged list
         setDriveTombs(manifest.tombstones);
         setDriveMeta({
@@ -3205,7 +3451,7 @@ termux-reload-settings</div>
           lastUploaded: uploaded,
         });
 
-        status(`Backup done — ${uploaded} uploaded, ${skipped} unchanged, ${manifest.apps.length} on Drive`, 'ok');
+        status(`Backup done — ${uploaded} uploaded, ${skipped} unchanged, ${manifest.apps.length} on Drive` + settingsNote, 'ok');
         await refreshDriveStatus();
       } catch (e) {
         const msg = e?.message || String(e);
@@ -3242,9 +3488,15 @@ termux-reload-settings</div>
             }
           } catch (_) {}
         }
-        if (!manifest.apps.length) {
-          status('No apps found in backup folder', 'err');
+        const settingsProbe = await driveReadJson(DRIVE_SETTINGS_PATH, null);
+        const hasSettings = !!(settingsProbe && (settingsProbe.profiles || settingsProbe.knownKeys || settingsProbe.customProviders));
+        if (!manifest.apps.length && !hasSettings) {
+          status('No apps or settings found in backup folder', 'err');
           return;
+        }
+        if (!manifest.apps.length && hasSettings) {
+          // Settings-only backup — still apply settings below after empty app loop
+          status('No apps in backup — restoring AI settings only…', '');
         }
 
         const mode = opts.mode || 'merge'; // merge | drive
@@ -3351,10 +3603,35 @@ termux-reload-settings</div>
           lastRestoreUpdated: updated,
         });
         renderLibrary();
+
+        // Restore AI settings + API keys from settings.json (if present)
+        let settingsNote = '';
+        try {
+          status('Restoring AI settings & keys…', '');
+          const settingsBundle = await driveReadJson(DRIVE_SETTINGS_PATH, null);
+          if (settingsBundle && (settingsBundle.profiles || settingsBundle.knownKeys || settingsBundle.customProviders)) {
+            const sr = await applySettingsFromBackup(settingsBundle, { mode });
+            if (sr?.ok) {
+              settingsNote = `, settings ✓ (${sr.profilesWithKey || 0} keys in profiles, ${sr.knownKeys || 0} vault)`;
+              setDriveMeta({
+                ...getDriveMeta(),
+                lastSettingsRestoreAt: Date.now(),
+              });
+            } else {
+              settingsNote = ', settings (empty)';
+            }
+          } else {
+            settingsNote = ', settings (none in backup)';
+          }
+        } catch (se) {
+          console.warn('settings restore', se);
+          settingsNote = ', settings ✗ ' + (se?.message || se);
+        }
+
         status(
           `Restore done — ${imported} new, ${updated} updated, ${skipped} skipped` +
             (removed ? `, ${removed} removed` : '') +
-            ` · ${local.length} local`,
+            ` · ${local.length} local` + settingsNote,
           'ok'
         );
         await refreshDriveStatus();

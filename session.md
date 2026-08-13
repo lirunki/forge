@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.10 / versionCode 42** (takePhoto Samsung reliability + decode fallback) · was 2.6.9/41 cam preview |
+| Version | **2.6.15 / versionCode 47** (Drive backup includes AI settings + API keys) · was 2.6.11/43
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-12 — takePhoto FileProvider grants + JPEG wait + img decode fallback |
+| **Last rebuild** | 2026-08-13 — version bump to 2.6.15/47; Drive backup includes AI settings + API keys
 
 ### Locked product baseline
 
@@ -308,7 +308,9 @@ Shipped in host **2.6.6 / versionCode 38**:
 - Library tab: **Backup** / **Restore**
 - Layout: `manifest.json` + `apps/<id>/{meta.json,app.html}`
 - Merge restore by `app.id` + `updatedAt` / content hash; local tombstones on delete sync to remote on backup
-- **Does not** upload AI keys; **no** Drive share-links (use Export → WhatsApp)
+- **Also** backs up AI settings: providers, custom OAI endpoints, API key vault (`settings.json`)
+- **Private folder** — keys are included; do not share the backup folder
+- **no** Drive share-links for apps (use Export → WhatsApp)
 - Dep: `androidx.documentfile:documentfile:1.0.1`
 
 Smoke:
@@ -417,4 +419,26 @@ Smoke:
 [ ] Image paints; log shows shown:true and b64Prefix /9j/
 [ ] bytes typically >> 20KB for real photos (not ~8KB garbage)
 [ ] Cancel camera → clean "Camera cancelled" (or still OK if OEM wrote file)
+```
+
+## Drive backup includes AI settings (2026-08-13)
+
+Shipped in host **2.6.11 / versionCode 43**:
+
+Backup / Restore now also writes/reads `ForgeLibrary/settings.json`:
+- active provider + remember-key flag
+- per-provider profiles (models, bases, **API keys**)
+- custom OpenAI-compatible providers
+- known-key vault
+- easy-setup flags
+
+Merge restore overlays remote onto local (keeps local keys if remote empty).
+`mode: 'drive'` (if used) prefers remote wholesale for settings.
+
+Smoke:
+```text
+[ ] Configure provider + API key → Backup
+[ ] Clear app data / other device → same folder → Restore
+[ ] Settings show same provider; Test connection works
+[ ] Library apps still restore
 ```
