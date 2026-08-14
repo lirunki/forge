@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.27 / versionCode 59** (Reforge mode picker: Standard / AA-compat) · was 2.6.26/58
+| Version | **2.6.28 / versionCode 60** (Camera takePhoto: harden media normalize) · was 2.6.27/59
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -522,4 +522,23 @@ Smoke:
 [ ] Reforge non-AA app → sheet defaults Standard → Cancel leaves library unchanged
 [ ] Choose AA-compat → preview carCompatible; HTML aims for aaforge-car
 [ ] Reforge AA app → defaults AA-compat; can switch to Standard
+```
+
+## Camera takePhoto “i is not defined” (2026-08-14)
+
+Shipped in host **2.6.28 / versionCode 60**:
+
+Mini-apps (e.g. Forge AI Chat) surface `Camera error: i is not defined` when the
+post-capture media normalize path throws while building a blob preview from base64.
+
+**Host fix (all mini-apps):**
+- `b64ToBlobUrl` uses a `while` loop (no `i` binding) + full try/catch
+- `camera.takePhoto` / `pickPhoto` wrappers never reject on normalize failure — return raw shot
+- host-result normalize already non-fatal; kept defensive
+
+Smoke:
+```text
+[ ] Kitchen Sink Media → Take Photo → image shows, no Camera error
+[ ] Forge AI Chat / ForgeCam → Take Photo attaches/previews
+[ ] Cancel camera still cancels cleanly
 ```

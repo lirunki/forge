@@ -3987,9 +3987,11 @@ termux-reload-settings</div>
       if (d.ok) {
         let r = d.result;
         // Host normalizes camera/gallery payloads for all mini-apps (back-compat).
+        // Never reject the host call if normalize fails — return raw result.
         try {
-          if (r && typeof r === 'object' && !Array.isArray(r)) {
-            r = (window.__forgeNormalizeMediaResult || function(x){ return x; })(r);
+          if (r && typeof r === 'object' && !Array.isArray(r) && typeof window.__forgeNormalizeMediaResult === 'function') {
+            var nr = window.__forgeNormalizeMediaResult(r);
+            if (nr != null) r = nr;
           }
         } catch (_) {}
         p.resolve(r);
@@ -4396,10 +4398,16 @@ termux-reload-settings</div>
     }
     function b64ToBlobUrl(b64, mime){
       mime = mime || 'image/jpeg';
-      var bin = atob(cleanB64(b64));
-      var bytes = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return URL.createObjectURL(new Blob([bytes], { type: mime }));
+      try {
+        var bin = atob(cleanB64(b64));
+        var len = bin.length | 0;
+        var bytes = new Uint8Array(len);
+        var n = 0;
+        while (n < len) { bytes[n] = bin.charCodeAt(n); n++; }
+        return URL.createObjectURL(new Blob([bytes], { type: mime }));
+      } catch (err) {
+        return '';
+      }
     }
     window.__forgeNormalizeMediaResult = function(r){
       if (!r || typeof r !== 'object' || Array.isArray(r)) return r;
@@ -4475,18 +4483,28 @@ termux-reload-settings</div>
         var _take = cam.takePhoto && cam.takePhoto.bind(cam);
         var _pick = cam.pickPhoto && cam.pickPhoto.bind(cam);
         var _clean = cam.cleanupTempPhotos || cam.cleanupTemp;
+        function safeNormalizeMedia(r){
+          try {
+            if (typeof window.__forgeNormalizeMediaResult === 'function') {
+              return window.__forgeNormalizeMediaResult(r);
+            }
+          } catch (err) {
+            try { console.warn('[ForgeHost] media normalize failed', err); } catch (_) {}
+          }
+          return r;
+        }
         if (_take) {
           cam.takePhoto = function(opts){
-            return _take(withDefaults(opts)).then(function(r){
-              return window.__forgeNormalizeMediaResult(r);
-            });
+            return Promise.resolve()
+              .then(function(){ return _take(withDefaults(opts)); })
+              .then(function(r){ return safeNormalizeMedia(r); });
           };
         }
         if (_pick) {
           cam.pickPhoto = function(opts){
-            return _pick(withDefaults(opts)).then(function(r){
-              return window.__forgeNormalizeMediaResult(r);
-            });
+            return Promise.resolve()
+              .then(function(){ return _pick(withDefaults(opts)); })
+              .then(function(r){ return safeNormalizeMedia(r); });
           };
         }
         // Optional helpers — old apps can ignore
@@ -12636,9 +12654,10 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
   }
   function b64ToBytes(b64){
     var bin = atob(cleanB64(b64));
-    var len = bin.length;
+    var len = bin.length | 0;
     var bytes = new Uint8Array(len);
-    for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+    var n = 0;
+    while (n < len) { bytes[n] = bin.charCodeAt(n); n++; }
     return bytes;
   }
   function b64ToBlobUrl(b64, mime){

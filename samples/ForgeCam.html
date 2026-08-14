@@ -84,7 +84,7 @@ function setImgWithFallback(img, shot) {
       try {
         const bin = atob(s.b64);
         const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        var __n = 0; while (__n < bin.length) { bytes[__n] = bin.charCodeAt(__n); __n++; }
         blobUrl = URL.createObjectURL(new Blob([bytes], { type: s.mime || 'image/jpeg' }));
         img.dataset.tried = 'blob';
         img.src = blobUrl;
@@ -99,7 +99,7 @@ function setImgWithFallback(img, shot) {
     try {
       const bin = atob(s.b64);
       const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var __n = 0; while (__n < bin.length) { bytes[__n] = bin.charCodeAt(__n); __n++; }
       img.src = URL.createObjectURL(new Blob([bytes], { type: s.mime || 'image/jpeg' }));
     } catch (e) {
       return false;
