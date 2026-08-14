@@ -476,6 +476,16 @@
       border-color: rgba(239, 68, 68, 0.4);
       background: rgba(239, 68, 68, 0.12);
     }
+    .lib-actions .icon-btn.lib-aa-ok {
+      border-color: rgba(52, 211, 153, 0.55);
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+    }
+    .lib-actions .icon-btn.lib-aa-bad {
+      border-color: rgba(244, 63, 94, 0.5);
+      background: rgba(244, 63, 94, 0.16);
+      color: #fda4af;
+    }
     .lib-actions .btn.lib-export {
       min-height: 40px;
       padding: 0.35rem 0.75rem;
@@ -571,6 +581,22 @@
     }
     .tour-card h2 { font-size: 1.05rem; margin-bottom: 0.35rem; }
     .tour-card p { color: var(--muted); font-size: 0.9rem; margin-bottom: 0.85rem; }
+    .tour-mode-list { display: grid; gap: 0.45rem; margin: 0.15rem 0 0.95rem; }
+    .tour-mode-opt {
+      display: flex; gap: 0.6rem; align-items: flex-start;
+      padding: 0.65rem 0.75rem; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--bg);
+      cursor: pointer; user-select: none;
+    }
+    .tour-mode-opt:has(input:checked),
+    .tour-mode-opt.on {
+      border-color: rgba(139,92,246,.55);
+      background: rgba(139,92,246,.12);
+      box-shadow: 0 0 0 1px rgba(139,92,246,.2) inset;
+    }
+    .tour-mode-opt input { margin-top: 0.2rem; width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--accent); }
+    .tour-mode-opt .tm-title { font-weight: 700; font-size: 0.92rem; color: var(--text); }
+    .tour-mode-opt .tm-hint { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 0.15rem; line-height: 1.35; }
     .tour-actions { display: flex; gap: 0.45rem; justify-content: flex-end; flex-wrap: wrap; }
     .tour-dots { display: flex; gap: 0.3rem; margin-bottom: 0.65rem; }
     .tour-dots span {
@@ -1955,6 +1981,7 @@ termux-reload-settings</div>
     }
 
     function setAiStatus(msg, kind = '') {
+      if (!el.aiStatus) return;
       el.aiStatus.textContent = msg || '';
       el.aiStatus.className = 'status-line' + (kind ? ' ' + kind : '');
     }
@@ -1963,6 +1990,7 @@ termux-reload-settings</div>
       const map = getProviderMap();
       const customs = getCustomProviders();
       const builtins = Object.values(BUILTIN_PROVIDERS);
+      if (!el.provider) return;
       el.provider.innerHTML = '';
 
       const g1 = document.createElement('optgroup');
@@ -1996,8 +2024,8 @@ termux-reload-settings</div>
     function updateCustomProviderButtons() {
       const p = currentProvider();
       const isCustom = !!p.custom;
-      el.btnEditOai.classList.toggle('hidden', !isCustom);
-      el.btnDelOai.classList.toggle('hidden', !isCustom);
+      el.btnEditOai?.classList.toggle('hidden', !isCustom);
+      el.btnDelOai?.classList.toggle('hidden', !isCustom);
     }
 
     function collectProfileFromUI() {
@@ -2845,6 +2873,7 @@ termux-reload-settings</div>
 
     function openOaiEditor(mode) {
       oaiEditorMode = mode;
+      if (!el.blockOaiEditor) return;
       el.blockOaiEditor.classList.remove('hidden');
       if (mode === 'edit') {
         const p = currentProvider();
@@ -3418,6 +3447,7 @@ termux-reload-settings</div>
               iconEmoji: app.iconEmoji || '⚡',
               iconColor: app.iconColor || '',
               carCompatible: !!app.carCompatible,
+              aaScan: app.aaScan || null,
               createdAt: app.createdAt || app.updatedAt || Date.now(),
               updatedAt: app.updatedAt || Date.now(),
               contentSha256: sha,
@@ -3592,7 +3622,7 @@ termux-reload-settings</div>
             continue;
           }
 
-          const remoteApp = {
+          let remoteApp = {
             id,
             title: meta.title || entry.title || id,
             summary: meta.summary || entry.summary || 'Restored mini-app',
@@ -3603,6 +3633,8 @@ termux-reload-settings</div>
             createdAt: meta.createdAt || Date.now(),
             updatedAt: meta.updatedAt || entry.updatedAt || Date.now(),
           };
+          // AA readiness HTML scan only runs on restore (not library load).
+          try { remoteApp = applyAaScanToApp(remoteApp).app; } catch (_) {}
           const remoteSha = meta.contentSha256 || await hashApp(remoteApp);
 
           const cur = localById.get(id);
@@ -3615,6 +3647,13 @@ termux-reload-settings</div>
 
           const localSha = await hashApp(cur);
           if (localSha === remoteSha) {
+            // Same content — still attach aaScan if local never had a restore scan.
+            if (!cur.aaScan || cur.aaScan.v !== AA_SCAN_VERSION) {
+              try {
+                const scanned = applyAaScanToApp(cur).app;
+                localById.set(id, scanned);
+              } catch (_) {}
+            }
             skipped++;
             continue;
           }
@@ -10519,6 +10558,24 @@ General:
     }
 
 
+
+    /** Same car contract instructions used by Chat “Forge it” when 🚗 is on. */
+    const CAR_COMPAT_SYSTEM_ADDON =
+      'CAR-COMPATIBLE MODE: Target Android Auto via AAForge (Car App Library templates — NOT a full WebView). ' +
+      'Produce simple, voice-first UIs with LARGE buttons. Prefer ForgeHost.ai.chat, ForgeHost.ai.tts (cloud+native via ai.listVoices), ForgeHost.mic, ForgeHost.storage (persisted per app on AAForge), ForgeHost.notify, ForgeHost.http. ' +
+      'Avoid or gracefully stub: camera, files.pick, QR, visual media pickers, rich vision attachments. ' +
+      'Phone/SMS/dial/etc may be declared but must be voice or AI triggered only (no direct visual buttons required). ' +
+      'Use large tap targets and minimal screens. The output must also run reasonably inside normal Forge. ' +
+      'REQUIRED: Embed exactly one AAForge car contract HTML comment in the document: ' +
+      '<!-- aaforge-car: {"version":1,"title":"App Title","summary":"One line","system":"Optional persona for in-car AI","actions":[{"id":"a1","title":"Button label","type":"ai","prompt":"User message sent to AI"},{"id":"ask","title":"Ask","type":"ask"},{"id":"about","title":"About","type":"speak","prompt":"Short spoken blurb"}]} --> ' +
+      'Action types: ai (host AI with prompt), ask (voice/text search), speak (TTS the prompt/text), ' +
+      'call/dial/sms/compose (phone — use to/number fields), launch/app/open (Android intent — packageName and/or data uri). ' +
+      'Example launch actions: {"id":"wa","title":"WhatsApp","type":"launch","data":"https://wa.me/15551212?text=Hi"}, ' +
+      '{"id":"nav","title":"Navigate","type":"launch","data":"google.navigation:q=Home"}, ' +
+      '{"id":"maps","title":"Maps","type":"launch","packageName":"com.google.android.apps.maps"}. ' +
+      'Max 6–8 actions. Keep prompts short for driving. ' +
+      'Also set data-aa-action="Title|prompt" on important <button>s as a fallback if the comment is stripped.';
+
     /** Snapshot of library app before a Reforge preview (for Discard). */
     let pendingReforgeOriginal = null;
 
@@ -10538,12 +10595,18 @@ General:
      * against the latest ForgeHost (CameraX, thin media, etc.) while
      * preserving functionality and UI.
      */
-    function buildReforgeUserPrompt(app) {
+    function buildReforgeUserPrompt(app, opts = {}) {
       const title = app?.title || 'Untitled';
       const summary = app?.summary || '';
       const html = String(app?.html || '');
+      const wantCar = !!opts.wantCar;
+      const modeLine = wantCar
+        ? 'TARGET MODE: AA-COMPAT (Android Auto / AAForge). Embed aaforge-car contract; prefer voice-first + large actions; stub phone-only APIs (camera/files/qr).'
+        : 'TARGET MODE: STANDARD (full Forge phone UI). Keep rich UI; do not force aaforge-car unless already present and still valid.';
       return (
 `REFORGE TASK (not a new app from scratch).
+${modeLine}
+
 
 ## NON-NEGOTIABLE: behavior lock
 Functionality must NOT change at all. This is a host-API modernization, not a redesign or feature edit.
@@ -10636,7 +10699,8 @@ In message, explicitly state that features and controls are unchanged.
 ## Existing app metadata
 Title: ${title}
 Summary: ${summary}
-carCompatible: ${app?.carCompatible ? 'true' : 'false'}
+previousCarCompatible: ${app?.carCompatible ? 'true' : 'false'}
+targetCarCompatible: ${wantCar ? 'true' : 'false'}
 
 ## Existing app HTML (source of truth — reforge this)
 \`\`\`html
@@ -10646,21 +10710,29 @@ ${html}
       );
     }
 
-    async function reforgeAppWithAi(app) {
+    async function reforgeAppWithAi(app, opts = {}) {
+      const wantCar = !!opts.wantCar;
       // System: factory rules + reforge emphasis (SYSTEM_PROMPT already documents host API)
       let system = SYSTEM_PROMPT;
       system += `
 
 REFORGE MODE (active):
 You are updating an EXISTING mini-app the user already uses.
-ABSOLUTE RULE: functionality must not change at all. Every control must keep doing exactly what it does today.
-Preserve all features, handlers, settings keys, tools, and UX flows. Preserve visual design language.
-Modernize ONLY ForgeHost usage to current best practices (especially camera/media/AI attachments).
-Do not strip, merge, or repurpose controls. Do not add unrelated features. Do not replace the product with a generic demo.
-If a host API call must change, keep the surrounding user-facing behavior identical.
+ABSOLUTE RULE: core product purpose and user jobs must stay the same.
+Preserve settings keys, tool names, and data model where possible.
+Modernize ForgeHost usage to current best practices (especially camera/media/AI attachments).
+Do not add unrelated demo features. Do not replace the product with a generic shell.
 Return complete html, not a diff.`;
+      if (wantCar) {
+        system += '\n\n' + CAR_COMPAT_SYSTEM_ADDON;
+        system += '\n\nAA REFORGE NOTE: User chose AA-COMPAT mode. Adapt the same product for AAForge/driving: keep the job-to-be-done, ' +
+          'add/refresh the aaforge-car contract, prefer large actions + voice/AI; gracefully stub or gate camera/files/qr if present.';
+      } else {
+        system += '\n\nSTANDARD REFORGE NOTE: User chose STANDARD mode. Full Forge phone UI is OK. ' +
+          'Do not require aaforge-car. Keep phone features (camera/files/etc.) working when the original app has them.';
+      }
 
-      const userText = buildReforgeUserPrompt(app);
+      const userText = buildReforgeUserPrompt(app, { wantCar });
       const msgs = [
         { role: 'system', content: system },
         { role: 'user', content: userText },
@@ -10689,15 +10761,85 @@ Return complete html, not a diff.`;
         html: String(parsed.html),
         iconEmoji: app.iconEmoji || '⚡',
         iconColor: app.iconColor || '',
-        carCompatible: !!app.carCompatible,
+        carCompatible: !!wantCar,
         createdAt: app.createdAt || Date.now(),
         updatedAt: Date.now(),
         reforgedAt: Date.now(),
       };
+      // Drop stale AA scan — restore/share will recompute when needed
+      if (next.aaScan) delete next.aaScan;
       const message = String(
         parsed.message || `Reforged “${next.title}” for the latest ForgeHost. Save to keep, or Discard reforge.`
       );
       return { app: next, message };
+    }
+
+
+    function appIsAaMode(app) {
+      if (!app) return false;
+      if (app.aaScan && typeof app.aaScan.ready === 'boolean') return !!app.aaScan.ready;
+      return !!app.carCompatible;
+    }
+
+    /**
+     * Reforge mode chooser: Standard | AA-compat | Cancel.
+     * @returns {Promise<null | { wantCar: boolean }>}
+     */
+    function confirmReforgeMode(app) {
+      return new Promise((resolve) => {
+        const name = app?.title || 'this app';
+        const currentAa = appIsAaMode(app);
+        const wrap = document.createElement('div');
+        wrap.className = 'tour-overlay';
+        wrap.setAttribute('role', 'dialog');
+        wrap.setAttribute('aria-modal', 'true');
+        wrap.innerHTML =
+          '<div class="tour-card">' +
+            '<h2>Reforge mode</h2>' +
+            '<p>Update host APIs for <strong></strong>. Keep the current mode, switch, or cancel.</p>' +
+            '<div class="tour-mode-list" role="radiogroup" aria-label="Reforge target mode">' +
+              '<label class="tour-mode-opt' + (!currentAa ? ' on' : '') + '">' +
+                '<input type="radio" name="reforgeMode" value="standard"' + (!currentAa ? ' checked' : '') + ' />' +
+                '<span><span class="tm-title">Standard</span>' +
+                '<span class="tm-hint">Full Forge phone UI. Camera, files, rich layouts OK.</span></span>' +
+              '</label>' +
+              '<label class="tour-mode-opt' + (currentAa ? ' on' : '') + '">' +
+                '<input type="radio" name="reforgeMode" value="aa"' + (currentAa ? ' checked' : '') + ' />' +
+                '<span><span class="tm-title">AA-compat</span>' +
+                '<span class="tm-hint">Android Auto via AAForge — car contract, large actions, stub phone-only APIs.</span></span>' +
+              '</label>' +
+            '</div>' +
+            '<div class="tour-actions">' +
+              '<button class="btn secondary small" type="button" data-act="cancel">Cancel</button>' +
+              '<button class="btn small" type="button" data-act="ok">Reforge</button>' +
+            '</div>' +
+          '</div>';
+        const strong = wrap.querySelector('strong');
+        if (strong) strong.textContent = '"' + name + '"';
+        const opts = wrap.querySelectorAll('.tour-mode-opt');
+        const syncOn = () => {
+          opts.forEach((lab) => {
+            const on = !!lab.querySelector('input')?.checked;
+            lab.classList.toggle('on', on);
+          });
+        };
+        opts.forEach((lab) => lab.addEventListener('click', () => setTimeout(syncOn, 0)));
+        const finish = (val) => {
+          try { wrap.remove(); } catch (_) {}
+          resolve(val);
+        };
+        wrap.addEventListener('click', (ev) => {
+          if (ev.target === wrap) finish(null);
+        });
+        wrap.querySelector('[data-act="cancel"]').onclick = () => finish(null);
+        wrap.querySelector('[data-act="ok"]').onclick = () => {
+          const picked = wrap.querySelector('input[name="reforgeMode"]:checked');
+          const wantCar = picked && picked.value === 'aa';
+          finish({ wantCar: !!wantCar });
+        };
+        document.body.appendChild(wrap);
+        try { wrap.querySelector('[data-act="ok"]').focus(); } catch (_) {}
+      });
     }
 
     async function reforgeLibraryApp(app) {
@@ -10717,6 +10859,19 @@ Return complete html, not a diff.`;
         return;
       }
 
+      // Mode chooser: Standard | AA-compat | Cancel (default = current app mode)
+      let modeChoice = null;
+      try {
+        modeChoice = await confirmReforgeMode(app);
+      } catch (_) {
+        modeChoice = null;
+      }
+      if (!modeChoice) {
+        setLibStatus('Reforge cancelled', '');
+        return;
+      }
+      const wantCar = !!modeChoice.wantCar;
+
       // Snapshot for discard (deep enough for html)
       pendingReforgeOriginal = {
         id: app.id,
@@ -10726,6 +10881,7 @@ Return complete html, not a diff.`;
         iconEmoji: app.iconEmoji,
         iconColor: app.iconColor,
         carCompatible: !!app.carCompatible,
+        aaScan: app.aaScan || null,
         createdAt: app.createdAt,
         updatedAt: app.updatedAt,
       };
@@ -10734,14 +10890,15 @@ Return complete html, not a diff.`;
       // Load original into preview so user sees starting point
       try { showTab('preview'); } catch (_) {}
       loadPreview({ ...app });
-      setLibStatus(`Reforging “${app.title || 'app'}”…`, '');
-      setPreviewStatus('Reforging with latest ForgeHost (camera, AI, bridges)…', '');
+      const modeLabel = wantCar ? 'AA-compat' : 'Standard';
+      setLibStatus(`Reforging “${app.title || 'app'}” (${modeLabel})…`, '');
+      setPreviewStatus(`Reforging (${modeLabel}) with latest ForgeHost…`, '');
       setBusy(true);
       abortController = new AbortController();
 
       try {
         savePrefs();
-        const { app: next, message } = await reforgeAppWithAi(app);
+        const { app: next, message } = await reforgeAppWithAi(app, { wantCar });
         // Preview only — library row unchanged until Save
         currentApp = next;
         loadPreview(next);
@@ -10753,7 +10910,7 @@ Return complete html, not a diff.`;
         try {
           addMessage(
             'assistant',
-            `🔨 Reforged “${next.title}”. Review the App tab, then **Save** to overwrite the library copy, or **Discard reforge** to restore the previous version.`
+            `🔨 Reforged “${next.title}” (${wantCar ? 'AA-compat' : 'Standard'}). Review the App tab, then **Save** to overwrite the library copy, or **Discard reforge** to restore the previous version.`
           );
         } catch (_) {}
       } catch (e) {
@@ -10796,20 +10953,7 @@ Return complete html, not a diff.`;
       // Car-compatible mode (for AAForge / Android Auto)
       const wantCar = !!(el.btnCar && el.btnCar.getAttribute('aria-pressed') === 'true');
       if (wantCar) {
-        system += '\n\nCAR-COMPATIBLE MODE: Target Android Auto via AAForge (Car App Library templates — NOT a full WebView). ' +
-          'Produce simple, voice-first UIs with LARGE buttons. Prefer ForgeHost.ai.chat, ForgeHost.ai.tts (cloud+native via ai.listVoices), ForgeHost.mic, ForgeHost.storage (persisted per app on AAForge), ForgeHost.notify, ForgeHost.http. ' +
-          'Avoid or gracefully stub: camera, files.pick, QR, visual media pickers, rich vision attachments. ' +
-          'Phone/SMS/dial/etc may be declared but must be voice or AI triggered only (no direct visual buttons required). ' +
-          'Use large tap targets and minimal screens. The output must also run reasonably inside normal Forge. ' +
-          'REQUIRED: Embed exactly one AAForge car contract HTML comment in the document: ' +
-          '<!-- aaforge-car: {"version":1,"title":"App Title","summary":"One line","system":"Optional persona for in-car AI","actions":[{"id":"a1","title":"Button label","type":"ai","prompt":"User message sent to AI"},{"id":"ask","title":"Ask","type":"ask"},{"id":"about","title":"About","type":"speak","prompt":"Short spoken blurb"}]} --> ' +
-          'Action types: ai (host AI with prompt), ask (voice/text search), speak (TTS the prompt/text), ' +
-          'call/dial/sms/compose (phone — use to/number fields), launch/app/open (Android intent — packageName and/or data uri). ' +
-          'Example launch actions: {"id":"wa","title":"WhatsApp","type":"launch","data":"https://wa.me/15551212?text=Hi"}, ' +
-          '{"id":"nav","title":"Navigate","type":"launch","data":"google.navigation:q=Home"}, ' +
-          '{"id":"maps","title":"Maps","type":"launch","packageName":"com.google.android.apps.maps"}. ' +
-          'Max 6–8 actions. Keep prompts short for driving. ' +
-          'Also set data-aa-action="Title|prompt" on important <button>s as a fallback if the comment is stripped.';
+        system += '\n\n' + CAR_COMPAT_SYSTEM_ADDON;
       }
 
       if (attachments?.length) {
@@ -10911,6 +11055,233 @@ Return complete html, not a diff.`;
 
     // ——— Library ———
     
+
+    // ——— AAForge readiness (library car button green/red; HTML scan on Drive restore only) ———
+    const AA_SCAN_VERSION = 1;
+    const AA_HARD_API_PATTERNS = [
+      { id: 'camera', re: /ForgeHost\s*\.\s*camera\b/, label: 'ForgeHost.camera' },
+      { id: 'qr', re: /ForgeHost\s*\.\s*qr\b/, label: 'ForgeHost.qr' },
+      { id: 'barcode', re: /ForgeHost\s*\.\s*barcode\b/, label: 'ForgeHost.barcode' },
+      { id: 'termux', re: /ForgeHost\s*\.\s*termux\b/, label: 'ForgeHost.termux' },
+      { id: 'files', re: /ForgeHost\s*\.\s*files\b/, label: 'ForgeHost.files' },
+      { id: 'fsPick', re: /ForgeHost\s*\.\s*fs\s*\.\s*(pick|open|choose|select)\b/, label: 'ForgeHost.fs picker' },
+      { id: 'liveTranslate', re: /ForgeHost\s*\.\s*ai\s*\.\s*liveTranslate\b/, label: 'ai.liveTranslate' },
+      { id: 'micStream', re: /ForgeHost\s*\.\s*mic\s*\.\s*(startStream|stopStream|isStreaming)\b/, label: 'mic PCM stream' },
+      { id: 'audio', re: /ForgeHost\s*\.\s*audio\b/, label: 'ForgeHost.audio' },
+      { id: 'background', re: /ForgeHost\s*\.\s*background\b/, label: 'ForgeHost.background' },
+      { id: 'jobs', re: /ForgeHost\s*\.\s*jobs\b/, label: 'ForgeHost.jobs' },
+      { id: 'shortcut', re: /ForgeHost\s*\.\s*shortcuts?\b/, label: 'ForgeHost.shortcut' },
+      { id: 'getDisplayMedia', re: /getDisplayMedia\s*\(/, label: 'getDisplayMedia' },
+      { id: 'videoGum', re: /getUserMedia\s*\(\s*\{[\s\S]{0,160}?video\s*:/, label: 'getUserMedia(video)' },
+    ];
+
+    function aaSimpleHash(text) {
+      // Fast sync fingerprint for cache keys (not cryptographic).
+      const s = String(text || '');
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return (h >>> 0).toString(16) + ':' + s.length.toString(36);
+    }
+
+    function htmlWithoutComments(html) {
+      return String(html || '').replace(/<!--[\s\S]*?-->/g, ' ');
+    }
+
+    /** Parse <!-- aaforge-car: {...} --> the same way AAForge CarAppModel does. */
+    function extractAaforgeCarManifest(html) {
+      const s = String(html || '');
+      if (!s) return null;
+      const lower = s.toLowerCase();
+      const idx = lower.indexOf('aaforge-car');
+      if (idx < 0) return null;
+      const brace = s.indexOf('{', idx);
+      if (brace < 0) return null;
+      let depth = 0;
+      for (let i = brace; i < s.length; i++) {
+        const c = s[i];
+        if (c === '{') depth++;
+        else if (c === '}') {
+          depth--;
+          if (depth === 0) {
+            try {
+              const obj = JSON.parse(s.slice(brace, i + 1));
+              return obj && typeof obj === 'object' ? obj : null;
+            } catch (_) {
+              return null;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    function isValidAaforgeCarManifest(manifest) {
+      if (!manifest || typeof manifest !== 'object') return false;
+      const actions = manifest.actions || manifest.items;
+      if (!Array.isArray(actions) || !actions.length) return false;
+      return actions.some((a) => a && (a.title || a.id || a.prompt || a.type));
+    }
+
+    function detectCarMarkers(html) {
+      const s = String(html || '');
+      return {
+        commentTrue: /<!--\s*carCompatible\s*:\s*true\s*-->/i.test(s),
+        commentFalse: /<!--\s*carCompatible\s*:\s*false\s*-->/i.test(s),
+        dataAttr: /data-car-compatible\s*=\s*["']true["']/i.test(s) || /data-aaforge\s*=\s*["']1["']/i.test(s),
+        meta: /<meta[^>]+name\s*=\s*["']forge-car-compatible["'][^>]*content\s*=\s*["']true["']/i.test(s)
+          || /<meta[^>]+content\s*=\s*["']true["'][^>]*name\s*=\s*["']forge-car-compatible["']/i.test(s),
+        dataAaAction: /data-aa-action\s*=/i.test(s),
+        miniAppMarker: /AAForge\s*:\s*mini-app-v1/i.test(s),
+      };
+    }
+
+    function scanIncompatibleApis(html) {
+      const body = htmlWithoutComments(html);
+      const hits = [];
+      const seen = new Set();
+      for (const p of AA_HARD_API_PATTERNS) {
+        if (p.re.test(body) && !seen.has(p.id)) {
+          seen.add(p.id);
+          hits.push(p.label);
+        }
+      }
+      return hits;
+    }
+
+    /**
+     * Green = no hard phone-only APIs (100% callable on AAForge reduced host).
+     * Gold signal = valid aaforge-car contract (better HU templates).
+     * Missing boolean marker is retrofitted when green; we never invent aaforge-car JSON.
+     */
+    function assessAaforgeReadiness(html) {
+      const raw = String(html || '');
+      const reasons = [];
+      const manifest = extractAaforgeCarManifest(raw);
+      const hasManifest = isValidAaforgeCarManifest(manifest);
+      const markers = detectCarMarkers(raw);
+      const incompat = scanIncompatibleApis(raw);
+
+      if (incompat.length) {
+        reasons.push('phone-only API: ' + incompat.slice(0, 4).join(', '));
+      } else if (!hasManifest) {
+        // Still runnable on AA via heuristics / Ask — note missing contract as soft info only
+        // (does not block green).
+      }
+
+      const ready = incompat.length === 0;
+      if (ready) {
+        // Keep optional soft hint for tooltip when no contract
+        if (!hasManifest && !(markers.commentTrue || markers.dataAttr || markers.meta || markers.dataAaAction)) {
+          // no reasons — fully green on API basis
+        }
+        reasons.length = 0;
+      }
+      return {
+        ready,
+        hasManifest,
+        manifest,
+        markers,
+        incompat,
+        reasons,
+      };
+    }
+
+    /** Inject a cheap boolean marker when green and missing (never invent aaforge-car). */
+    function ensureCarCompatibleHtmlMarker(html, ready) {
+      if (!ready) return String(html || '');
+      let h = String(html || '');
+      const markers = detectCarMarkers(h);
+      if (markers.commentTrue || markers.dataAttr || markers.meta) return h;
+      const marker = '<!-- carCompatible: true -->\n';
+      const trimmed = h.replace(/^\uFEFF/, '');
+      if (/^<!DOCTYPE\s/i.test(trimmed)) {
+        const nl = h.indexOf('\n');
+        if (nl >= 0) return h.slice(0, nl + 1) + marker + h.slice(nl + 1);
+      }
+      if (/^<html[\s>]/i.test(trimmed)) {
+        return marker + h;
+      }
+      return marker + h;
+    }
+
+    function applyAaScanToApp(app) {
+      if (!app || typeof app !== 'object') return { app, changed: false };
+      const html = String(app.html || '');
+      const sha = aaSimpleHash(html);
+      if (
+        app.aaScan
+        && app.aaScan.v === AA_SCAN_VERSION
+        && app.aaScan.sha === sha
+        && typeof app.aaScan.ready === 'boolean'
+        && !!app.carCompatible === !!app.aaScan.ready
+      ) {
+        return { app, changed: false };
+      }
+
+      const assessment = assessAaforgeReadiness(html);
+      let nextHtml = html;
+      let htmlChanged = false;
+      if (assessment.ready) {
+        const marked = ensureCarCompatibleHtmlMarker(html, true);
+        if (marked !== html) {
+          nextHtml = marked;
+          htmlChanged = true;
+        }
+      }
+
+      const nextSha = aaSimpleHash(nextHtml);
+      const next = {
+        ...app,
+        html: nextHtml,
+        carCompatible: !!assessment.ready,
+        aaScan: {
+          v: AA_SCAN_VERSION,
+          ready: !!assessment.ready,
+          sha: nextSha,
+          hasManifest: !!assessment.hasManifest,
+          incompat: (assessment.incompat || []).slice(0, 8),
+          reasons: (assessment.reasons || []).slice(0, 6),
+          at: Date.now(),
+        },
+      };
+      if (htmlChanged) next.updatedAt = Date.now();
+
+      const changed =
+        htmlChanged
+        || !!app.carCompatible !== !!next.carCompatible
+        || !app.aaScan
+        || app.aaScan.sha !== next.aaScan.sha
+        || app.aaScan.ready !== next.aaScan.ready
+        || app.aaScan.v !== next.aaScan.v;
+      return { app: next, changed };
+    }
+
+    /** AA HTML scan is restore-only — keep helper for batch restore paths. */
+    function ensureLibraryAaScans(list) {
+      const src = Array.isArray(list) ? list : getLibrary();
+      let dirty = false;
+      const next = src.map((a) => {
+        const r = applyAaScanToApp(a);
+        if (r.changed) dirty = true;
+        return r.app;
+      });
+      return { list: next, changed: dirty };
+    }
+
+    function aaReadyTitle(app) {
+      const scan = app?.aaScan;
+      if (scan?.ready) {
+        if (scan.hasManifest) return 'AAForge-ready (car contract) — Share to AAForge';
+        return 'AAForge-ready (no phone-only APIs) — Share to AAForge';
+      }
+      const why = (scan?.reasons && scan.reasons[0]) || 'phone-only APIs detected';
+      return 'Not fully AAForge-ready — ' + why + ' (share anyway)';
+    }
+
+
     function renameLibraryApp(app) {
       if (!app?.id) return;
       const curTitle = app.title || 'Untitled';
@@ -11091,10 +11462,12 @@ function renderLibrary() {
 
         const homeBtn = mkIconBtn('🏠', 'Add to Home screen', () => pinAppToLauncher(app));
         const reforgeBtn = mkIconBtn('⚒️', 'Reforge with latest ForgeHost (preview, then Save or discard)', () => reforgeLibraryApp(app));
+        const aaReady = !!(app.aaScan?.ready ?? app.carCompatible);
         const shareAaBtn = mkIconBtn(
           '🚗',
-          app.carCompatible ? 'Share to AAForge (car-compatible)' : 'Share to AAForge (Android Auto)',
-          () => shareAppToAaforge(app)
+          aaReadyTitle(app),
+          () => shareAppToAaforge(app),
+          aaReady ? 'lib-aa-ok' : 'lib-aa-bad'
         );
         const delBtn = mkIconBtn('🗑️', 'Delete from library', () => {
           const name = app.title || 'this app';
@@ -11712,9 +12085,10 @@ function renderLibrary() {
         setLibStatus('Nothing to share', 'err');
         return;
       }
-      const filename = safeExportName(app.title) + '.html';
+      const payload = app;
+      const filename = safeExportName(payload.title || app.title) + '.html';
       // Add a small marker comment so AAForge can detect the payload
-      const markedHtml = '<!-- AAForge:mini-app-v1 ' + (app.id || '') + ' -->\n' + String(app.html);
+      const markedHtml = '<!-- AAForge:mini-app-v1 ' + (payload.id || app.id || '') + ' -->\n' + String(payload.html);
 
       if (Capacitor.isNativePlatform()) {
         try {
@@ -11733,7 +12107,8 @@ function renderLibrary() {
             files: [uri],
             dialogTitle: 'Share to AAForge',
           });
-          setLibStatus(`Shared “${app.title || 'app'}” to AAForge`, 'ok');
+          const readyNote = payload.carCompatible ? ' · AA-ready ✓' : ' · not fully AA-ready';
+          setLibStatus(`Shared “${payload.title || app.title || 'app'}” to AAForge` + readyNote, 'ok');
           return;
         } catch (e) {
           if (e?.message && /cancel|abort|dismiss/i.test(String(e.message))) {
@@ -11753,7 +12128,8 @@ function renderLibrary() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
-      setLibStatus(`Downloaded ${filename} (open on device for AAForge)`, 'ok');
+      const readyNote2 = payload.carCompatible ? ' · AA-ready ✓' : ' · not fully AA-ready';
+      setLibStatus(`Downloaded ${filename} (open on device for AAForge)` + readyNote2, 'ok');
     }
 
     // ——— Background service (optional native) ———
@@ -12457,8 +12833,8 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     }
 
     // ——— Events ———
-    el.btnSend.addEventListener('click', onSend);
-    el.btnStop.addEventListener('click', () => abortController?.abort());
+    el.btnSend?.addEventListener('click', onSend);
+    el.btnStop?.addEventListener('click', () => abortController?.abort());
     el.btnAttachImage?.addEventListener('click', () => { if (!busy) pickChatImages(); });
     el.btnAttachCamera?.addEventListener('click', () => { if (!busy) captureChatImage(); });
     el.chatImageInput?.addEventListener('change', async () => {
@@ -12466,14 +12842,14 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       try { await addChatImagesFromFiles(files); }
       finally { el.chatImageInput.value = ''; }
     });
-    el.promptInput.addEventListener('keydown', (e) => {
+    el.promptInput?.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         onSend();
       }
     });
     // Paste screenshots / UI schematics directly into the composer
-    el.promptInput.addEventListener('paste', (e) => {
+    el.promptInput?.addEventListener('paste', (e) => {
       try {
         const items = Array.from(e.clipboardData?.items || []);
         const imageItems = items.filter(it => it.kind === 'file' && /^image\//i.test(it.type));
@@ -12499,7 +12875,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       e.preventDefault();
       addChatImagesFromFiles(files);
     });
-    el.btnNew.addEventListener('click', () => {
+    el.btnNew?.addEventListener('click', () => {
       if (busy) return;
       chat = [];
       currentApp = null;
@@ -12513,7 +12889,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       saveDraft();
       exitAppMode('chat');
     });
-    el.btnExitApp.addEventListener('click', () => exitAppMode());
+    el.btnExitApp?.addEventListener('click', () => exitAppMode());
     // Reveal faded ← Forge chip on edge tap / touch near top-left
     document.addEventListener('touchstart', (e) => {
       if (!appMode) return;
@@ -12526,14 +12902,14 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       if (e.clientX < 80 && e.clientY < 100) showExitChipBriefly();
     }, { passive: true });
     el.btnExitApp?.addEventListener('mouseenter', () => showExitChipBriefly());
-    el.btnReload.addEventListener('click', () => currentApp && loadPreview(currentApp));
-    el.btnSave.addEventListener('click', saveCurrentApp);
+    el.btnReload?.addEventListener('click', () => currentApp && loadPreview(currentApp));
+    el.btnSave?.addEventListener('click', saveCurrentApp);
     el.btnDiscardReforge?.addEventListener('click', discardReforgePreview);
-    el.btnHome.addEventListener('click', () => pinAppToLauncher(currentApp));
+    el.btnHome?.addEventListener('click', () => pinAppToLauncher(currentApp));
     el.btnIcon?.addEventListener('click', () => editAppIcon(currentApp));
     el.btnOpenWindow?.addEventListener('click', () => currentApp && openAppInNewWindow(currentApp));
-    el.btnExport.addEventListener('click', exportCurrentApp);
-    el.btnRefreshLib.addEventListener('click', renderLibrary);
+    el.btnExport?.addEventListener('click', exportCurrentApp);
+    el.btnRefreshLib?.addEventListener('click', renderLibrary);
     el.btnDriveBackup?.addEventListener('click', () => backupLibraryToDrive({ source: 'library' }));
     el.btnDriveRestore?.addEventListener('click', () => restoreLibraryFromDrive({ source: 'library', mode: 'merge' }));
     el.btnDriveConnect?.addEventListener('click', async () => {
@@ -12570,7 +12946,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.hintsOverlay?.addEventListener('click', (e) => {
       if (e.target === el.hintsOverlay) closeHints();
     });
-    el.btnImportLib.addEventListener('click', async () => {
+    el.btnImportLib?.addEventListener('click', async () => {
       setLibStatus('Pick an .html mini-app…', '');
       try {
         // Native picker via pickFilesHost (*/* + hydrate). Narrow MIME filters hide many .html files.
@@ -12616,15 +12992,15 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
         setLibStatus('Import failed: ' + (e?.message || e), 'err');
       }
     });
-    el.importFile.addEventListener('change', async () => {
+    el.importFile?.addEventListener('change', async () => {
       const file = el.importFile.files && el.importFile.files[0];
       try {
         await importHtmlFile(file);
       } finally {
-        el.importFile.value = '';
+        if (el.importFile) el.importFile.value = '';
       }
     });
-    el.btnForgetKey.addEventListener('click', () => {
+    el.btnForgetKey?.addEventListener('click', () => {
       const id = currentProviderId();
       const key = el.apiKey.value.trim() || getProfiles()[id]?.key || '';
       el.apiKey.value = '';
@@ -12644,7 +13020,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
         'ok'
       );
     });
-    el.btnTestAi.addEventListener('click', testConnection);
+    el.btnTestAi?.addEventListener('click', testConnection);
     el.btnTestTermux?.addEventListener('click', testTermux);
     el.btnTermuxSetup?.addEventListener('click', () => openTermuxSetupWizard({ force: true }));
     el.btnInstallAgent?.addEventListener('click', () => installTermuxAgent({ openTermux: false }));
@@ -12653,19 +13029,19 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       setTermuxOut('');
       refreshTermuxStatus();
     });
-    wireTermuxSetupWizard();
+    try { wireTermuxSetupWizard(); } catch (e) { console.warn('wireTermuxSetupWizard', e); }
 
-    el.btnAddOai.addEventListener('click', () => openOaiEditor('add'));
-    el.btnEditOai.addEventListener('click', () => openOaiEditor('edit'));
-    el.btnDelOai.addEventListener('click', deleteCurrentOai);
-    el.btnSaveOai.addEventListener('click', saveOaiEditor);
-    el.btnCancelOai.addEventListener('click', closeOaiEditor);
+    el.btnAddOai?.addEventListener('click', () => openOaiEditor('add'));
+    el.btnEditOai?.addEventListener('click', () => openOaiEditor('edit'));
+    el.btnDelOai?.addEventListener('click', deleteCurrentOai);
+    el.btnSaveOai?.addEventListener('click', saveOaiEditor);
+    el.btnCancelOai?.addEventListener('click', closeOaiEditor);
 
-    el.provider.addEventListener('change', () => {
+    el.provider?.addEventListener('change', () => {
       switchProvider(el.provider.value, { fromUser: true });
     });
 
-    el.azureDeployment.addEventListener('change', () => {
+    el.azureDeployment?.addEventListener('change', () => {
       if (currentProvider().azure) {
         el.model.value = el.azureDeployment.value.trim();
         applyProviderUI({ keepModel: true });
@@ -12675,10 +13051,10 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
 
     ['apiBase','apiKey','model','temperature','jsonMode',
      'azureResource','azureDeployment','azureApiVersion','azureAuth'].forEach(id => {
-      el[id].addEventListener('change', savePrefs);
-      el[id].addEventListener('blur', savePrefs);
+      el[id]?.addEventListener('change', savePrefs);
+      el[id]?.addEventListener('blur', savePrefs);
     });
-    el.rememberKey.addEventListener('change', () => {
+    el.rememberKey?.addEventListener('change', () => {
       if (!el.rememberKey.checked) {
         // turning off: wipe profile keys + vault
         const profiles = getProfiles();

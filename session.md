@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.22 / versionCode 54** (Library rename/export icons; App tab Reload/Save icons only) · was 2.6.21/53
+| Version | **2.6.27 / versionCode 59** (Reforge mode picker: Standard / AA-compat) · was 2.6.26/58
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-13 — Library ✏️/📤; App tab only 🔄/💾 (+ ↩️ when reforge dirty)
+| **Last rebuild** | 2026-08-13 — AA HTML scan on Drive restore only; delete → tombstone
 
 ### Locked product baseline
 
@@ -460,3 +460,66 @@ Shipped in host **2.6.16 / versionCode 48**:
 - Transparent `img.src = large data:image…` → blob rewrite
 - Optional `ForgeHost.camera.setImg(img, shot)` / `.normalize(shot)`
 - Back-compat: same method names and core result fields
+
+## Library AAForge readiness light (2026-08-13)
+
+Shipped in host **2.6.23 / versionCode 55**, refined **2.6.24 / 56**:
+
+Library 🚗 button is **green** or **red** from stored `aaScan` / `carCompatible`.
+
+**Green** = no hard phone-only APIs (AAForge reduced host can call everything used).  
+**Red** = uses camera / qr / files / termux / liveTranslate / mic stream / audio route / etc.
+
+Also parses `<!-- aaforge-car: {…} -->` for a richer tooltip when present.  
+Does **not** invent a fake car contract.
+
+**HTML scan runs only on Drive/folder Restore** (not library load / import / save / share):
+- Sets `app.carCompatible` + `app.aaScan` (content-hash cached)
+- If green and missing boolean marker, injects `<!-- carCompatible: true -->`
+
+### Delete → tombstones (unchanged product path)
+
+Library 🗑️ uses simple confirm; always `addDriveTombstone(id)` so the next **Backup** purges `apps/<id>/` from the folder. No per-delete backup checkbox.
+
+Smoke:
+```text
+[ ] Restore backup → apps get aaScan; 🚗 green/red updates
+[ ] Open Library without restore → no rescan / no HTML rewrite
+[ ] Delete app → local gone + tombstone; next Backup drops remote copy
+```
+
+## Fix AI tab buttons dead after App-bar trim (2026-08-14)
+
+Shipped in host **2.6.26 / versionCode 58**:
+
+**Bug:** App tab chrome was reduced to Reload/Save only (2.6.22), but boot still did
+`el.btnHome.addEventListener(...)` / `el.btnExport.addEventListener(...)` without `?.`.
+Those nodes are gone → throw mid-wiring → **all later listeners never attached**, including
+AI settings (Test, Forget key, Add provider, Drive, Termux, Easy setup, …).
+
+**Fix:** optional-chain App/Library/AI control wiring; null-safe provider/status helpers.
+
+Smoke:
+```text
+[ ] AI tab → Easy setup / Save & test / Test connection / Add OpenAI provider respond
+[ ] Library Import / Refresh still work
+[ ] App tab Reload + Save still work
+```
+
+## Reforge mode picker (2026-08-14)
+
+Shipped in host **2.6.27 / versionCode 59**:
+
+Library ⚒️ **Reforge** opens a sheet before calling the model:
+- **Standard** — full Forge phone UI (default if app is not AA)
+- **AA-compat** — injects the same CAR-COMPATIBLE contract rules as Chat 🚗 (default if app is AA / `aaScan.ready` / `carCompatible`)
+- **Cancel** — abort, no API call
+
+Result `carCompatible` follows the chosen mode (not the global header 🚗 toggle).
+
+Smoke:
+```text
+[ ] Reforge non-AA app → sheet defaults Standard → Cancel leaves library unchanged
+[ ] Choose AA-compat → preview carCompatible; HTML aims for aaforge-car
+[ ] Reforge AA app → defaults AA-compat; can switch to Standard
+```
