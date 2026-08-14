@@ -610,6 +610,28 @@
       display: inline-flex; align-items: center; justify-content: center;
     }
     .icon-pick.on { outline: 2px solid var(--accent); }
+    .mini-console-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 1.25rem; height: 1.25rem; padding: 0 0.3rem;
+      margin-left: 0.3rem; border-radius: 999px;
+      font-size: 0.7rem; font-weight: 700;
+      background: rgba(244,63,94,.22); color: #fda4af;
+      border: 1px solid rgba(244,63,94,.4); vertical-align: middle;
+    }
+    .mini-console-badge.hidden { display: none !important; }
+    #miniConsoleOut {
+      margin: 0.35rem 0 0.75rem; padding: 0.65rem 0.7rem;
+      border-radius: 12px; background: #0a0a0f; border: 1px solid var(--border);
+      color: #d4d4d8; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word;
+      max-height: 50vh; overflow: auto; -webkit-overflow-scrolling: touch;
+    }
+    #miniConsoleOut .mc-ts { color: #71717a; }
+    #miniConsoleOut .mc-lvl { font-weight: 700; margin: 0 0.25rem; color: #a5b4fc; }
+    #miniConsoleOut .mc-lvl.warn { color: #fbbf24; }
+    #miniConsoleOut .mc-lvl.error { color: #fb7185; }
+    #miniConsoleOut .mc-src { color: #67e8f9; }
+    #miniConsoleOut .mc-empty { color: var(--muted); font-style: italic; }
     body.app-mode .app-exit { display: inline-flex; }
     body.app-mode {
       background: #000;
@@ -885,6 +907,20 @@ termux-reload-settings</div>
     </div>
   </div>
 
+  <!-- Mini-app console (debug sheet) -->
+  <div id="miniConsoleOverlay" class="setup-overlay hidden" aria-hidden="true">
+    <div class="setup-sheet" role="dialog" aria-labelledby="miniConsoleTitle">
+      <h2 id="miniConsoleTitle">Mini-app console</h2>
+      <p class="setup-lead" style="margin-bottom:0.45rem;">Newest at bottom. Mini-app console, uncaught errors, failed host calls.</p>
+      <div id="miniConsoleOut"><div class="mc-empty">No output yet. Run a mini-app, then open Console.</div></div>
+      <div class="settings-block" style="margin:0;">
+        <button class="btn small" id="btnMiniConsoleCopySheet" type="button">Copy</button>
+        <button class="btn secondary small" id="btnMiniConsoleClearSheet" type="button">Clear</button>
+        <button class="btn secondary small" id="btnMiniConsoleClose" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Easy AI setup wizard -->
   <div id="setupOverlay" class="setup-overlay hidden" aria-modal="true" role="dialog" aria-labelledby="setupTitle">
     <div class="setup-sheet">
@@ -1057,6 +1093,13 @@ termux-reload-settings</div>
             <b>Easiest:</b> paste any API key below — Forge picks the provider from the key shape.
             Advanced options stay available if you need them.
           </p>
+
+          <div class="settings-block" style="margin:0 0 0.75rem;padding-bottom:0.65rem;border-bottom:1px solid var(--border);">
+            <button class="btn secondary small" id="btnMiniConsole" type="button">Console<span class="mini-console-badge hidden" id="miniConsoleBadge">0</span></button>
+            <button class="btn secondary small" id="btnMiniConsoleClear" type="button">Clear</button>
+            <button class="btn secondary small" id="btnMiniConsoleCopy" type="button">Copy</button>
+          </div>
+          <p class="field-hint" style="margin-top:-0.35rem;margin-bottom:0.65rem;">Debug mini-app, bridge, and ForgeHost errors.</p>
 
           <div id="aiQuickSetup" style="border:1px solid var(--border);border-radius:12px;padding:0.75rem 0.85rem;margin-bottom:0.9rem;background:var(--bg);">
             <div class="settings-block" style="margin:0 0 0.55rem;">
@@ -1598,6 +1641,15 @@ termux-reload-settings</div>
       azureAuth: document.getElementById('azureAuth'),
       btnForgetKey: document.getElementById('btnForgetKey'),
       btnTestAi: document.getElementById('btnTestAi'),
+      btnMiniConsole: document.getElementById('btnMiniConsole'),
+      btnMiniConsoleClear: document.getElementById('btnMiniConsoleClear'),
+      btnMiniConsoleCopy: document.getElementById('btnMiniConsoleCopy'),
+      btnMiniConsoleClearSheet: document.getElementById('btnMiniConsoleClearSheet'),
+      btnMiniConsoleCopySheet: document.getElementById('btnMiniConsoleCopySheet'),
+      btnMiniConsoleClose: document.getElementById('btnMiniConsoleClose'),
+      miniConsoleBadge: document.getElementById('miniConsoleBadge'),
+      miniConsoleOverlay: document.getElementById('miniConsoleOverlay'),
+      miniConsoleOut: document.getElementById('miniConsoleOut'),
       btnTestTermux: document.getElementById('btnTestTermux'),
       btnTermuxSetup: document.getElementById('btnTermuxSetup'),
       btnInstallAgent: document.getElementById('btnInstallAgent'),
@@ -1621,6 +1673,113 @@ termux-reload-settings</div>
       aiStatus: document.getElementById('aiStatus'),
       btnExitApp: document.getElementById('btnExitApp'),
     };
+
+    // ——— Mini-app / bridge debug console (AI tab) ———
+    const MINI_CONSOLE_MAX = 500;
+    let miniConsoleLines = [];
+    let miniConsoleUnread = 0;
+    let miniConsoleOpen = false;
+    function mcEsc(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function mcTime(ts) {
+      try {
+        const d = new Date(ts || Date.now());
+        return d.toLocaleTimeString(undefined, { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+      } catch (_) { return ''; }
+    }
+    function mcPlain() {
+      return miniConsoleLines.map(function (L) {
+        return '[' + mcTime(L.ts) + '] ' + String(L.level || 'log').toUpperCase() +
+          (L.source ? ' (' + L.source + ')' : '') + ' ' + (L.text || '');
+      }).join('\n');
+    }
+    function renderMiniConsole() {
+      const box = el.miniConsoleOut;
+      if (!box) return;
+      if (!miniConsoleLines.length) {
+        box.innerHTML = '<div class="mc-empty">No output yet. Run a mini-app, then open Console.</div>';
+        return;
+      }
+      box.innerHTML = miniConsoleLines.map(function (L) {
+        const lvl = String(L.level || 'log').toLowerCase();
+        return '<div class="mc-line"><span class="mc-ts">' + mcEsc(mcTime(L.ts)) +
+          '</span><span class="mc-lvl ' + mcEsc(lvl) + '">' + mcEsc(lvl) + '</span>' +
+          (L.source ? '<span class="mc-src">[' + mcEsc(L.source) + ']</span> ' : ' ') +
+          mcEsc(L.text) + '</div>';
+      }).join('');
+      try { box.scrollTop = box.scrollHeight; } catch (_) {}
+    }
+    function updateMiniConsoleBadge() {
+      const b = el.miniConsoleBadge;
+      if (!b) return;
+      b.classList.remove('hidden');
+      if (!miniConsoleLines.length) {
+        b.classList.add('hidden');
+        b.textContent = '0';
+        return;
+      }
+      const n = miniConsoleUnread > 0 ? miniConsoleUnread : miniConsoleLines.length;
+      b.textContent = String(Math.min(n, 99));
+    }
+    function pushMiniConsole(level, text, source) {
+      let s = text == null ? '' : String(text);
+      if (s.length > 8000) s = s.slice(0, 8000) + '\u2026';
+      let lvl = String(level || 'log').toLowerCase();
+      if (lvl === 'warning') lvl = 'warn';
+      miniConsoleLines.push({
+        ts: Date.now(),
+        level: lvl,
+        source: source ? String(source) : '',
+        text: s,
+      });
+      if (miniConsoleLines.length > MINI_CONSOLE_MAX) {
+        miniConsoleLines = miniConsoleLines.slice(-MINI_CONSOLE_MAX);
+      }
+      if (!miniConsoleOpen) miniConsoleUnread += 1;
+      updateMiniConsoleBadge();
+      if (miniConsoleOpen) renderMiniConsole();
+    }
+    function clearMiniConsole() {
+      miniConsoleLines = [];
+      miniConsoleUnread = 0;
+      updateMiniConsoleBadge();
+      renderMiniConsole();
+    }
+    async function copyMiniConsole() {
+      const text = mcPlain() || '(empty)';
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+      } catch (e) {
+        try { console.warn('copyMiniConsole', e); } catch (_) {}
+      }
+    }
+    function openMiniConsole() {
+      miniConsoleOpen = true;
+      miniConsoleUnread = 0;
+      updateMiniConsoleBadge();
+      renderMiniConsole();
+      if (el.miniConsoleOverlay) {
+        el.miniConsoleOverlay.classList.remove('hidden');
+        el.miniConsoleOverlay.setAttribute('aria-hidden', 'false');
+      }
+    }
+    function closeMiniConsole() {
+      miniConsoleOpen = false;
+      if (el.miniConsoleOverlay) {
+        el.miniConsoleOverlay.classList.add('hidden');
+        el.miniConsoleOverlay.setAttribute('aria-hidden', 'true');
+      }
+    }
 
     /** When true, Forge chrome is hidden and only the mini-app is shown. */
     let appMode = false;
@@ -4676,8 +4835,33 @@ termux-reload-settings</div>
       if (!/<!doctype html>/i.test(html) && !/<html[\s>]/i.test(html)) {
         html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title || 'App')}</title></head><body>${html}</body></html>`;
       }
-      if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, bridge + '</head>');
-      else if (/<body[\s>]/i.test(html)) html = html.replace(/<body([^>]*)>/i, '<head>' + bridge + '</head><body$1>');
+      // Console hook is a separate script string (bridge template stays pristine).
+      const consoleHook = ''
+        + '<script>(function(){'
+        + 'function fmt(a){try{if(a==null)return String(a);if(typeof a==="string")return a;'
+        + 'if(typeof a==="number"||typeof a==="boolean")return String(a);'
+        + 'if(a instanceof Error)return a.stack||a.message||String(a);'
+        + 'if(typeof a==="function")return "[function "+(a.name||"anonymous")+"]";'
+        + 'return JSON.stringify(a);}catch(e){try{return String(a);}catch(e2){return "[unprintable]";}}}'
+        + 'function send(level,args){try{var list=[],i=0,n=args&&args.length?args.length:0;'
+        + 'while(i<n){list.push(fmt(args[i]));i++;}'
+        + 'parent.postMessage({__forge:true,type:"host-console",level:level||"log",args:list,ts:Date.now()},"*");'
+        + '}catch(e){}}'
+        + 'try{["log","info","warn","error","debug"].forEach(function(level){'
+        + 'var orig=null;try{orig=console[level]?console[level].bind(console):null;}catch(e){}'
+        + 'console[level]=function(){try{send(level,arguments);}catch(e){}'
+        + 'if(orig){try{return orig.apply(console,arguments);}catch(e2){}}};});}catch(e){}'
+        + 'try{window.addEventListener("error",function(ev){try{'
+        + 'var msg=(ev&&ev.message)?ev.message:"Script error";'
+        + 'var where=(ev&&(ev.filename||ev.lineno))?(" @ "+(ev.filename||"")+":"+(ev.lineno||"")):"";'
+        + 'var extra=(ev&&ev.error&&ev.error.stack)?("\\n"+ev.error.stack):"";'
+        + 'send("error",[msg+where+extra]);}catch(e){}});'
+        + 'window.addEventListener("unhandledrejection",function(ev){try{'
+        + 'var r=ev&&ev.reason;var s=r&&r.stack?r.stack:(r&&r.message?r.message:String(r));'
+        + 'send("error",["Unhandled rejection: "+s]);}catch(e){}});}catch(e){}'
+        + '})();</scr' + 'ipt>';
+      if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, bridge + consoleHook + '</head>');
+      else if (/<body[\s>]/i.test(html)) html = html.replace(/<body([^>]*)>/i, '<head>' + bridge + consoleHook + '</head><body$1>');
       else html = bridge + html;
       return html;
     }
@@ -4712,6 +4896,9 @@ termux-reload-settings</div>
       el.previewEmpty.classList.add('hide');
       const doc = wrapGeneratedHtml(app.html, app.title);
       el.previewFrame.srcdoc = doc;
+      try {
+        pushMiniConsole('info', '— loaded ' + (app.title || 'Untitled') + ' —', 'host');
+      } catch (_) {}
       setPreviewStatus('Live preview ready', 'ok');
       saveDraft();
     }
@@ -7766,7 +7953,20 @@ termux-reload-settings</div>
       const expected = el && el.previewFrame ? el.previewFrame.contentWindow : null;
       if (expected && ev.source !== expected) return;
 
+      if (d.type === 'host-console') {
+        try {
+          const args = Array.isArray(d.args) ? d.args : [d.message || ''];
+          const appLabel = (currentApp && (currentApp.title || currentApp.id)) || 'mini-app';
+          pushMiniConsole(d.level || 'log', args.join(' '), appLabel);
+        } catch (_) {}
+        return;
+      }
+
       if (d.type === 'host-ready') {
+        try {
+          const appLabel = (currentApp && (currentApp.title || currentApp.id)) || 'mini-app';
+          pushMiniConsole('info', '— ready —', appLabel);
+        } catch (_) {}
         const appId = currentApp?.id || 'draft';
         const stateBag = readAppStateBag(appId);
         postToMiniApp('ready', {
@@ -7802,6 +8002,12 @@ termux-reload-settings</div>
       } catch (e) {
         ok = false;
         error = e.message || String(e);
+      }
+      if (!ok) {
+        try {
+          const appLabel = (currentApp && (currentApp.title || currentApp.id)) || 'mini-app';
+          pushMiniConsole('error', 'Host ' + (d.method || '?') + ': ' + error, appLabel);
+        } catch (_) {}
       }
       // Large camera/file payloads: avoid sending base64+dataUrl twice over postMessage
       // (can drop/fail in Android WebView → mini-app gets nothing to show).
@@ -13040,6 +13246,15 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       );
     });
     el.btnTestAi?.addEventListener('click', testConnection);
+    el.btnMiniConsole?.addEventListener('click', openMiniConsole);
+    el.btnMiniConsoleClose?.addEventListener('click', closeMiniConsole);
+    el.btnMiniConsoleClear?.addEventListener('click', clearMiniConsole);
+    el.btnMiniConsoleClearSheet?.addEventListener('click', clearMiniConsole);
+    el.btnMiniConsoleCopy?.addEventListener('click', function () { copyMiniConsole(); });
+    el.btnMiniConsoleCopySheet?.addEventListener('click', function () { copyMiniConsole(); });
+    el.miniConsoleOverlay?.addEventListener('click', function (ev) {
+      if (ev.target === el.miniConsoleOverlay) closeMiniConsole();
+    });
     el.btnTestTermux?.addEventListener('click', testTermux);
     el.btnTermuxSetup?.addEventListener('click', () => openTermuxSetupWizard({ force: true }));
     el.btnInstallAgent?.addEventListener('click', () => installTermuxAgent({ openTermux: false }));

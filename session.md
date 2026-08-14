@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.28 / versionCode 60** (Camera takePhoto: harden media normalize) · was 2.6.27/59
+| Version | **2.6.41 / versionCode 71** (mini-app console, safe re-land) · was 2.6.40/70 restore
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-13 — AA HTML scan on Drive restore only; delete → tombstone
+| **Last rebuild** | 2026-08-14 — **2.6.41/71** mini-app console (bridge template untouched)
 
 ### Locked product baseline
 
@@ -29,6 +29,7 @@
 | **`styles.xml` / `colors.xml`** | APK-shaped themes (`Light.DarkActionBar` + `DayNight.NoActionBar` + splash) | No `ForgeAlertDialog` overlay theme |
 | **`index.html` (shell + ForgeHost)** | APK UI/selects **+** AI tools/attachments host fix | Do not wipe AI fix when touching UI; do not reintroduce select “fixes”; **do not bulk-inject large WIP features into host without isolated landing** |
 | **AI Chat samples** | `~/downloads/Forge_AI_Chat.*.html` pass `attachments` + correct tool bind | Re-import on device if old mini-app HTML still installed |
+| **Menu Translator sample** | `~/downloads/Menu_Translator.html` + prompt `Forge_Prompt_Menu_Translator.md` | Camera thumbs via setImg/fallback; AI attachments never blob:; re-import if device HTML stale |
 | **Original binary** | `Forge-debug.apk` never modified | Prefer for absolute binary identity |
 | **`recovered/`** | JADX / APKEditor reference | **Never delete** without explicit user OK naming the folder |
 
@@ -67,6 +68,8 @@ forge/
 ~/downloads/Forge_AI_Chat.fixeddropdown.html
 ~/downloads/Forge_AI_Chat.brokendropdown.html
 ~/downloads/Forge_Live_Translate.html   ← mini-app draft (needs host APIs; not live yet)
+~/downloads/Menu_Translator.html        ← menu vision mini-app (camera/gallery fixed 2026-08-14)
+~/downloads/Forge_Prompt_Menu_Translator.md  ← Forge-it prompt (fresh generate)
 ```
 
 ---
@@ -542,3 +545,95 @@ Smoke:
 [ ] Forge AI Chat / ForgeCam → Take Photo attaches/previews
 [ ] Cancel camera still cancels cleanly
 ```
+
+## Mini-app console in AI settings (2026-08-14)
+
+Shipped in host **2.6.31 / versionCode 63** (console; clean re-land after 2.6.29 UI break):
+
+**AI tab → Mini-app console** card:
+- **Show console** — sheet with live log (newest at bottom)
+- **Clear** / **Copy** (inline on card + inside sheet)
+- Unread badge on Show console
+
+**Capture sources:**
+1. Mini-app bridge wraps `console.log|info|warn|error|debug` → `postMessage` `host-console`
+2. `window.onerror` + `unhandledrejection` in mini-app iframe
+3. Failed `ForgeHost` / host-call errors (method + message)
+4. Markers on preview load + mini-app `host-ready`
+
+Ring buffer 500 lines; lines capped ~8KB (avoids base64 dumps). Host `www/index.html` ≡ assets.
+
+Smoke:
+```text
+[ ] bash ~/downloads/build_forge.sh && adb install -r ~/downloads/Forge-debug-rebuilt.apk
+[ ] Run a mini-app that console.log / throws → AI tab → Show console sees lines
+[ ] Copy puts plain text on clipboard; Clear empties + badge resets
+[ ] Host call failure (e.g. bad AI key from mini-app) appears as error line
+```
+
+## Menu Translator mini-app — camera/gallery + vision attach (2026-08-14)
+
+**Mini-app only** (host was **2.6.28 / 60** at fix; console is separate host bump). Locked samples:
+
+| File | Role |
+|------|------|
+| `~/downloads/Menu_Translator.html` | Fixed mini-app |
+| `~/downloads/Forge_Prompt_Menu_Translator.md` | Fresh **Forge it** prompt (phone mode, not AA) |
+
+**Bugs in prior HTML:**
+1. Thumbs via `innerHTML` + single `previewUrl \|\| dataUrl` — blank in srcdoc; no `setImg` / onerror chain
+2. AI `attachments` used `rawDataUrl \|\| dataUrl` without rebuilding from `base64` (host may slim to base64-only) and could pass weak vision input
+3. Remove × was `opacity-0 group-hover` — invisible on touch
+4. No empty-payload reject after capture
+
+**Fix (mini-app contract — match AI Chat / ForgeCam / host docs):**
+- `normalizeMedia` + optional `ForgeHost.camera.normalize`
+- `setImgWithFallback`: host `setImg` → preview/blob/dataUrl → blob-from-base64 → dataUrl-from-base64; `createElement('img')` + `.src` (never huge data: in innerHTML attrs)
+- `toAiImagePart`: real `data:` and/or `base64` only — **never `blob:`**
+- Always-visible remove ×; toast on empty capture; revoke object URLs on Clear All
+- Translate: filter attachments with bytes; `result.content \|\| result.text`
+
+**Not a host regression:** camera take/pick APIs were fine; display + attach packaging were wrong.
+
+Smoke:
+```text
+[ ] Re-import Menu_Translator.html into Library (replace stale device copy)
+[ ] Take Photo → thumbnail paints; toast size; × removes on tap
+[ ] From Gallery → same
+[ ] Translate Menu (vision provider) → item cards; tap → original + Sound it
+[ ] Copy / Share / Clear All
+[ ] Optional: paste Forge_Prompt_Menu_Translator.md fenced block → Forge it → same behavior
+```
+
+## Host UI restore — roll back mini-app console (2026-08-14)
+
+**2.6.40 / versionCode 70** was a pure git HEAD restore after 2.6.29–2.6.31 console attempts broke shell/UI.
+Confirmed good by user, then console re-landed safely in **2.6.41**.
+
+## Mini-app console (safe re-land) (2026-08-14)
+
+**2.6.41 / versionCode 71**
+
+**Design rule that keeps mini-apps alive:** do **not** edit the `const bridge = \`...\`` template body.
+Console capture is a **separate** `consoleHook` string concatenated after `bridge` in `wrapGeneratedHtml`.
+
+**AI tab (top of AI settings):** Console · Clear · Copy (+ sheet with same actions)
+
+**Captures:**
+1. Mini-app `console.log|info|warn|error|debug` via postMessage `host-console`
+2. Mini-app `error` + `unhandledrejection`
+3. Failed host-calls (`Host method: message`)
+4. Load / ready markers
+
+**Validated before ship:** node --check; bridge backticks == 2; unique IDs; overlay hidden CSS present.
+APK: `/sdcard/Download/Forge-2.6.41-console.apk`
+
+Smoke:
+```text
+[ ] Tabs + mini-apps still work (regression)
+[ ] AI tab → Console opens sheet
+[ ] Run mini-app with console.log / throw → lines appear; badge updates
+[ ] Failed ForgeHost call shows as error line
+[ ] Clear / Copy work
+```
+
