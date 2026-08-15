@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.42 / versionCode 72** (contacts.find regex + radio wifi/bt/gps/hotspot) · was 2.6.41/71
+| Version | **2.6.43 / versionCode 73** (bridge String.raw — media normalize `i is not defined`) · was 2.6.42/72
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-14 — 2.6.42 contacts.find + radio toggles
+| **Last rebuild** | 2026-08-15 — 2.6.43 bridge template regex escapes (camera normalize)
 
 ### Locked product baseline
 
@@ -635,6 +635,29 @@ Smoke:
 [ ] Run mini-app with console.log / throw → lines appear; badge updates
 [ ] Failed ForgeHost call shows as error line
 [ ] Clear / Copy work
+```
+
+## Bridge media normalize `i is not defined` (2026-08-15)
+
+**2.6.43 / versionCode 73**
+
+**Bug:** Mini-app console WARN `[ForgeHost] media normalize failed ReferenceError: i is not defined`
+at `__forgeNormalizeMediaResult` after `camera.takePhoto` (Forge Chat and any vision app).
+Photo still often worked because `safeNormalizeMedia` swallowed the error and returned raw shot.
+
+**Cause:** Mini-app bridge is built from a JS **template literal**. Escapes inside it are cooked:
+- `/^image\//i` → `/^image//i` → parsed as `(/^image/) / i.test(mime)` → **`i is not defined`**
+- `/\s+/g` → `/s+/g` (whitespace strip broken)
+- `ai\.` → `ai.` (dot matches any char)
+
+**Fix:** `const bridge = String.raw\`...\` + '</scr' + 'ipt>'` so regex backslashes reach srcdoc intact.
+Do **not** put `</script>` raw inside host `index.html` script (breaks HTML parse).
+
+Smoke:
+```text
+[ ] bash ~/downloads/build_forge.sh && adb install -r ~/downloads/Forge-debug-rebuilt.apk
+[ ] Open Forge Chat → Take photo → no `i is not defined` in Mini-app console
+[ ] Thumbnail / attach still works; Translate/vision path OK
 ```
 
 ## Contacts find + radio controls (2026-08-14)

@@ -4108,8 +4108,11 @@ termux-reload-settings</div>
     }
 
     function wrapGeneratedHtml(appHtml, title) {
-      // Inject bridge preamble before </head> or at start of document
-      const bridge = `
+      // Inject bridge preamble before </head> or at start of document.
+      // String.raw keeps regex escapes (\s, \/, \.) intact — a normal template
+      // literal cooks \/ → / and breaks e.g. /^image\//i into /^image//i
+      // which parses as (/^image/) / i.test(...) → ReferenceError: i is not defined.
+      const bridge = String.raw`
 <script>
 (function(){
   const pending = new Map();
@@ -4839,7 +4842,7 @@ termux-reload-settings</div>
   }
   bootLifecycle();
 })();
-<\/script>`;
+` + '</scr' + 'ipt>';
       let html = String(appHtml || '').trim();
       if (!html) html = '<!DOCTYPE html><html><body><p>Empty app</p></body></html>';
       if (!/<!doctype html>/i.test(html) && !/<html[\s>]/i.test(html)) {
