@@ -4361,7 +4361,7 @@ termux-reload-settings</div>
       const id = _id++;
       pending.set(id, { resolve, reject });
       parent.postMessage({ __forge: true, type: 'host-call', id, method, params: params || {} }, '*');
-      const ms = /^(ai\.|termux\.|files\.|http\.|permissions\.requestPack|camera\.)/.test(method) ? 180000 : 60000;
+      const ms = /^(ai\.|termux\.|files\.|http\.|tools\.|web\.|permissions\.requestPack|camera\.)/.test(method) ? 180000 : 60000;
       setTimeout(() => {
         if (pending.has(id)) {
           pending.delete(id);
@@ -4621,6 +4621,25 @@ termux-reload-settings</div>
         status: () => call('ai.liveTranslate.status'),
         configure: (opts) => call('ai.liveTranslate.configure', opts || {}),
       },
+      /* === FORGE_HOST_TOOLS_API_BEGIN === */
+      tools: {
+        list: (opts) => call('tools.list', opts || {}),
+        catalog: (opts) => call('tools.catalog', opts || {}),
+        groups: () => call('tools.groups'),
+        run: (nameOrOpts, args, opts) => call('tools.run', (function(n,a,o){
+          if (n && typeof n === 'object' && !Array.isArray(n)) return n;
+          var x = { name: n, args: a || {} }; if (o && typeof o === 'object') for (var k in o) x[k]=o[k]; return x;
+        })(nameOrOpts, args, opts)),
+        execute: (nameOrOpts, args, opts) => call('tools.run', (function(n,a,o){
+          if (n && typeof n === 'object' && !Array.isArray(n)) return n;
+          var x = { name: n, args: a || {} }; if (o && typeof o === 'object') for (var k in o) x[k]=o[k]; return x;
+        })(nameOrOpts, args, opts)),
+        call: (method, args) => call('tools.call', { method: method, args: args || {} }),
+        hint: (opts) => call('tools.hint', opts || {}),
+        systemHint: (opts) => call('tools.hint', opts || {}),
+        registry: () => call('tools.registry'),
+      },
+      /* === FORGE_HOST_TOOLS_API_END === */
       /**
        * TTS via host AI provider (cloud /audio/speech) or on-device engine.
        * opts: { text, voice?, mode:'auto'|'cloud'|'native', play?, returnAudio?, rate?, lang?, format?, route? }
@@ -4797,6 +4816,29 @@ termux-reload-settings</div>
       run: (opts) => call('termux.run', opts || {}),
       exec: (opts) => call('termux.exec', opts || {}),
     },
+    /* === FORGE_HOST_TOOLS_API_BEGIN === */
+    tools: {
+      list: (opts) => call('tools.list', opts || {}),
+      catalog: (opts) => call('tools.catalog', opts || {}),
+      groups: () => call('tools.groups'),
+      run: (nameOrOpts, args, opts) => call('tools.run', (function(n,a,o){
+        if (n && typeof n === 'object' && !Array.isArray(n)) return n;
+        var x = { name: n, args: a || {} }; if (o && typeof o === 'object') for (var k in o) x[k]=o[k]; return x;
+      })(nameOrOpts, args, opts)),
+      execute: (nameOrOpts, args, opts) => call('tools.run', (function(n,a,o){
+        if (n && typeof n === 'object' && !Array.isArray(n)) return n;
+        var x = { name: n, args: a || {} }; if (o && typeof o === 'object') for (var k in o) x[k]=o[k]; return x;
+      })(nameOrOpts, args, opts)),
+      call: (method, args) => call('tools.call', { method: method, args: args || {} }),
+      hint: (opts) => call('tools.hint', opts || {}),
+      systemHint: (opts) => call('tools.hint', opts || {}),
+      registry: () => call('tools.registry'),
+    },
+    web: {
+      search: (opts) => call('web.search', typeof opts === 'string' ? { query: opts } : (opts || {})),
+      fetch: (opts) => call('web.fetch', typeof opts === 'string' ? { url: opts } : (opts || {})),
+    },
+    /* === FORGE_HOST_TOOLS_API_END === */
   };
   // convenience alias
   window.forge = window.ForgeHost;
@@ -6935,6 +6977,928 @@ termux-reload-settings</div>
       });
     }
 
+
+    /* === FORGE_HOST_TOOLS_BEGIN === */
+    /**
+     * Generic LLM tool registry over ForgeHost bridges.
+     * Add entries to HOST_TOOL_REGISTRY when new bridge APIs ship — mini-apps
+     * call ForgeHost.tools.list()/run() and models gain capabilities automatically.
+     *
+     * Risk levels: safe | sensitive | confirm | danger
+     *  - safe: read-only / low impact
+     *  - sensitive: personal data (SMS/contacts/location/clipboard)
+     *  - confirm: side effects mini-apps should confirm
+     *  - danger: irreversible / costly (send SMS, call, termux exec)
+     */
+    const HOST_TOOL_RISK_RANK = { safe: 0, sensitive: 1, confirm: 2, danger: 3 };
+
+    function toolRiskRank(r) {
+      return HOST_TOOL_RISK_RANK[String(r || 'safe')] != null
+        ? HOST_TOOL_RISK_RANK[String(r || 'safe')]
+        : 0;
+    }
+
+    async function toolsEnsurePerms(perms) {
+      const list = Array.isArray(perms) ? perms : (perms ? [perms] : []);
+      const out = {};
+      for (const p of list) {
+        try { out[p] = await requestPermissionAlias(p); } catch (e) {
+          out[p] = { error: e && e.message ? e.message : String(e) };
+        }
+      }
+      return out;
+    }
+
+    function toolsClampText(s, max) {
+      const t = String(s == null ? '' : s);
+      const n = Math.max(200, Math.min(200000, max || 12000));
+      if (t.length <= n) return t;
+      return t.slice(0, n) + '\n…[truncated ' + (t.length - n) + ' chars]';
+    }
+
+    function toolsStripHtml(html) {
+      let s = String(html || '');
+      s = s.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ');
+      s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
+      s = s.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ');
+      s = s.replace(/<!--[\s\S]*?-->/g, ' ');
+      s = s.replace(/<\/(p|div|br|li|tr|h[1-6]|section|article)>/gi, '\n');
+      s = s.replace(/<br\s*\/?>/gi, '\n');
+      s = s.replace(/<[^>]+>/g, ' ');
+      s = s.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'");
+      s = s.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ');
+      return s.trim();
+    }
+
+    async function toolsHttpRequest(url, opts) {
+      opts = opts || {};
+      if (!/^https?:\/\//i.test(url || '')) throw new Error('Only http(s) URLs allowed');
+      const method = String(opts.method || 'GET').toUpperCase();
+      const headers = Object.assign({ 'Accept': 'application/json, text/plain, text/html, */*' }, opts.headers || {});
+      if (Capacitor.isNativePlatform()) {
+        const res = await CapacitorHttp.request({
+          url,
+          method,
+          headers,
+          data: opts.body,
+          connectTimeout: opts.timeoutMs || 25000,
+          readTimeout: opts.timeoutMs || 25000,
+          responseType: 'text',
+        });
+        return { status: res.status, data: res.data, headers: res.headers || {} };
+      }
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: opts.body != null
+          ? (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body))
+          : undefined,
+      });
+      const text = await res.text();
+      return { status: res.status, data: text, headers: Object.fromEntries(res.headers.entries()) };
+    }
+
+    function toolsParseJsonMaybe(data) {
+      if (data != null && typeof data === 'object') return data;
+      const s = String(data == null ? '' : data).trim();
+      if (!s) return null;
+      try { return JSON.parse(s); } catch (_) { return null; }
+    }
+
+    async function toolsWebSearch(args) {
+      const query = String((args && (args.query || args.q)) || '').trim();
+      if (!query) throw new Error('query required');
+      const limit = Math.max(1, Math.min(10, Number((args && args.limit) || 5) || 5));
+      const results = [];
+      const notes = [];
+
+      // 1) Wikipedia OpenSearch (no key, reliable titles + urls)
+      try {
+        const wurl = 'https://en.wikipedia.org/w/api.php?action=opensearch&limit=' + limit +
+          '&namespace=0&format=json&origin=*&search=' + encodeURIComponent(query);
+        const wr = await toolsHttpRequest(wurl, { headers: { 'Accept': 'application/json' } });
+        const wj = toolsParseJsonMaybe(wr.data);
+        if (Array.isArray(wj) && Array.isArray(wj[1])) {
+          const titles = wj[1] || [];
+          const descs = wj[2] || [];
+          const urls = wj[3] || [];
+          for (let i = 0; i < titles.length && results.length < limit; i++) {
+            results.push({
+              title: String(titles[i] || ''),
+              url: String(urls[i] || ''),
+              snippet: String(descs[i] || ''),
+              source: 'wikipedia',
+            });
+          }
+        } else {
+          notes.push('wikipedia: unexpected response');
+        }
+      } catch (e) {
+        notes.push('wikipedia: ' + (e && e.message ? e.message : e));
+      }
+
+      // 2) DuckDuckGo Instant Answer API
+      try {
+        const durl = 'https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1&q=' +
+          encodeURIComponent(query);
+        const dr = await toolsHttpRequest(durl, { headers: { 'Accept': 'application/json' } });
+        const dj = toolsParseJsonMaybe(dr.data) || {};
+        if (dj.AbstractText || dj.AbstractURL) {
+          results.push({
+            title: String(dj.Heading || query),
+            url: String(dj.AbstractURL || dj.AbstractSource || ''),
+            snippet: String(dj.AbstractText || ''),
+            source: 'duckduckgo_abstract',
+          });
+        }
+        const related = Array.isArray(dj.RelatedTopics) ? dj.RelatedTopics : [];
+        const flat = [];
+        const walk = (arr) => {
+          for (const it of arr) {
+            if (!it) continue;
+            if (it.FirstURL && it.Text) flat.push(it);
+            if (Array.isArray(it.Topics)) walk(it.Topics);
+          }
+        };
+        walk(related);
+        for (const it of flat) {
+          if (results.length >= limit + 4) break;
+          results.push({
+            title: String(it.Text || '').split(' - ')[0].slice(0, 120),
+            url: String(it.FirstURL || ''),
+            snippet: String(it.Text || ''),
+            source: 'duckduckgo_related',
+          });
+        }
+      } catch (e) {
+        notes.push('duckduckgo: ' + (e && e.message ? e.message : e));
+      }
+
+      // 3) DuckDuckGo HTML lite (best-effort titles)
+      if (results.length < Math.min(3, limit)) {
+        try {
+          const hurl = 'https://duckduckgo.com/html/?q=' + encodeURIComponent(query);
+          const hr = await toolsHttpRequest(hurl, {
+            headers: { 'Accept': 'text/html', 'User-Agent': 'ForgeHost/1.0' },
+          });
+          const html = String(hr.data || '');
+          const re = /<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+          let m;
+          while ((m = re.exec(html)) && results.length < limit + 5) {
+            const url = toolsStripHtml(m[1]).trim();
+            const title = toolsStripHtml(m[2]).trim();
+            if (!url || !title) continue;
+            if (results.some((r) => r.url === url)) continue;
+            results.push({ title, url, snippet: '', source: 'duckduckgo_html' });
+          }
+        } catch (e) {
+          notes.push('duckduckgo_html: ' + (e && e.message ? e.message : e));
+        }
+      }
+
+      // de-dupe by url/title
+      const seen = new Set();
+      const uniq = [];
+      for (const r of results) {
+        const key = (r.url || r.title || '').toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        uniq.push(r);
+        if (uniq.length >= limit) break;
+      }
+      return {
+        ok: true,
+        query,
+        count: uniq.length,
+        results: uniq,
+        notes: notes.length ? notes : undefined,
+      };
+    }
+
+    async function toolsWebFetch(args) {
+      const url = String((args && (args.url || args.href)) || '').trim();
+      if (!url) throw new Error('url required');
+      if (!/^https?:\/\//i.test(url)) throw new Error('Only http(s) URLs allowed');
+      const maxChars = Math.max(500, Math.min(100000, Number((args && (args.maxChars || args.max)) || 12000) || 12000));
+      const as = String((args && args.as) || 'text').toLowerCase();
+      const res = await toolsHttpRequest(url, {
+        headers: Object.assign({ 'User-Agent': 'ForgeHost/1.0' }, (args && args.headers) || {}),
+      });
+      const raw = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+      const ct = String((res.headers && (res.headers['content-type'] || res.headers['Content-Type'])) || '');
+      let body;
+      if (as === 'json') {
+        body = toolsParseJsonMaybe(raw);
+        if (body == null) body = { parseError: true, text: toolsClampText(raw, maxChars) };
+      } else if (as === 'raw' || as === 'html') {
+        body = toolsClampText(raw, maxChars);
+      } else {
+        // text: strip html when content looks like markup
+        const looksHtml = /<html[\s>]|<body[\s>]|<div[\s>]/i.test(raw) || /html/i.test(ct);
+        body = toolsClampText(looksHtml ? toolsStripHtml(raw) : raw, maxChars);
+      }
+      return {
+        ok: true,
+        url,
+        status: res.status,
+        contentType: ct || undefined,
+        length: typeof body === 'string' ? body.length : undefined,
+        body,
+      };
+    }
+
+    function toolsSlimMessages(raw, limit) {
+      const list = (raw && (raw.messages || raw.items || raw)) || [];
+      const arr = Array.isArray(list) ? list : [];
+      const n = Math.max(1, Math.min(100, limit || 30));
+      return arr.slice(0, n).map((m) => ({
+        id: m.id,
+        address: m.address,
+        body: toolsClampText(m.body, 500),
+        date: m.date,
+        type: m.type,
+        read: m.read,
+      }));
+    }
+
+    function toolsSlimContacts(raw, limit) {
+      const list = (raw && raw.contacts) || [];
+      const n = Math.max(1, Math.min(50, limit || 25));
+      return (Array.isArray(list) ? list : []).slice(0, n).map((c) => ({
+        id: c.id,
+        name: c.name,
+        phones: (c.phones || []).map((p) => (p && (p.number || p)) || null).filter(Boolean),
+      }));
+    }
+
+    function toolsSlimApps(raw, limit) {
+      const list = (raw && raw.apps) || [];
+      const n = Math.max(1, Math.min(50, limit || 20));
+      return (Array.isArray(list) ? list : []).slice(0, n).map((a) => ({
+        name: a.name || a.label,
+        packageName: a.packageName || a.package,
+      }));
+    }
+
+    /** Registry: add rows here when ForgeHost grows. */
+    const HOST_TOOL_REGISTRY = [
+      // —— Meta / web ——
+      {
+        name: 'web_search',
+        description: 'Search the public web (Wikipedia + DuckDuckGo). Returns titles, urls, snippets. No API key required.',
+        group: 'web', risk: 'safe',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query' },
+            limit: { type: 'number', description: 'Max results 1-10 (default 5)' },
+          },
+          required: ['query'],
+        },
+        run: async (a) => toolsWebSearch(a),
+      },
+      {
+        name: 'web_fetch',
+        description: 'Fetch an http(s) URL and return text (HTML stripped by default). Use after web_search to read a page.',
+        group: 'web', risk: 'safe',
+        parameters: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+            maxChars: { type: 'number', description: 'Max characters (default 12000)' },
+            as: { type: 'string', description: 'text|html|json|raw (default text)' },
+          },
+          required: ['url'],
+        },
+        run: async (a) => toolsWebFetch(a),
+      },
+      {
+        name: 'get_time',
+        description: 'Current device date/time ISO and locale string.',
+        group: 'device', risk: 'safe',
+        parameters: { type: 'object', properties: {} },
+        run: async () => {
+          const d = new Date();
+          return { ok: true, iso: d.toISOString(), local: d.toLocaleString(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, epochMs: d.getTime() };
+        },
+      },
+      {
+        name: 'device_info',
+        description: 'Device / app info snapshot.',
+        group: 'device', risk: 'safe',
+        parameters: { type: 'object', properties: {} },
+        run: async () => ({ ok: true, ...(await phoneCall('getDeviceInfo', {})) }),
+      },
+      {
+        name: 'clipboard_read',
+        description: 'Read text from the clipboard.',
+        group: 'device', risk: 'sensitive',
+        parameters: { type: 'object', properties: {} },
+        run: async () => {
+          let text = '';
+          if (navigator.clipboard?.readText) text = await navigator.clipboard.readText();
+          else throw new Error('Clipboard read not available');
+          return { ok: true, text: toolsClampText(text, 8000) };
+        },
+      },
+      {
+        name: 'clipboard_write',
+        description: 'Write text to the clipboard.',
+        group: 'device', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: { text: { type: 'string' } },
+          required: ['text'],
+        },
+        run: async (a) => {
+          const text = String(a.text ?? '');
+          if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+          else throw new Error('Clipboard write not available');
+          return { ok: true, bytes: text.length };
+        },
+      },
+      {
+        name: 'toast',
+        description: 'Show a short Android toast message.',
+        group: 'device', risk: 'safe',
+        parameters: {
+          type: 'object',
+          properties: { message: { type: 'string' }, long: { type: 'boolean' } },
+          required: ['message'],
+        },
+        run: async (a) => phoneCall('toast', { message: a.message || '', long: !!a.long }),
+      },
+      {
+        name: 'open_url',
+        description: 'Open a URL in the browser or handler app.',
+        group: 'device', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: { url: { type: 'string' } },
+          required: ['url'],
+        },
+        run: async (a) => phoneCall('openUrl', { url: a.url }),
+      },
+      {
+        name: 'notify',
+        description: 'Show a local notification.',
+        group: 'notify', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            body: { type: 'string' },
+            id: { type: 'string' },
+          },
+          required: ['title'],
+        },
+        run: async (a) => {
+          try { await nativeCall(NotifyBridge, 'requestPermission', {}); } catch (_) {}
+          return await handleHostCall('notify', {
+            title: a.title || 'Forge',
+            body: a.body || a.message || '',
+            message: a.body || a.message || '',
+            tag: a.id || a.tag || null,
+          });
+        },
+      },
+
+      // —— Location ——
+      {
+        name: 'get_location',
+        description: 'Get GPS/network coordinates (lat/lng/accuracy). Requests location permission.',
+        group: 'location', risk: 'sensitive', permissions: ['location'],
+        parameters: { type: 'object', properties: {} },
+        run: async () => {
+          await toolsEnsurePerms(['location']);
+          const r = await phoneCall('getLocation', {});
+          return { ok: true, ...r };
+        },
+      },
+      {
+        name: 'open_maps',
+        description: 'Open maps at coordinates or query.',
+        group: 'location', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: {
+            latitude: { type: 'number' },
+            longitude: { type: 'number' },
+            query: { type: 'string' },
+            label: { type: 'string' },
+          },
+        },
+        run: async (a) => phoneCall('openMaps', {
+          latitude: a.latitude, longitude: a.longitude, query: a.query || null, label: a.label || null,
+        }),
+      },
+
+      // —— SMS / phone ——
+      {
+        name: 'sms_list',
+        description: 'List recent SMS messages (inbox/sent/all). Optional address filter. Requests SMS permission. Be discreet with contents.',
+        group: 'sms', risk: 'sensitive', permissions: ['sms'],
+        parameters: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number', description: 'Max messages (default 30, max 100)' },
+            box: { type: 'string', description: 'inbox|sent|all' },
+            address: { type: 'string', description: 'Filter by phone fragment' },
+          },
+        },
+        run: async (a) => {
+          await toolsEnsurePerms(['sms']);
+          const limit = Math.max(1, Math.min(100, Number(a.limit || 30) || 30));
+          const raw = await phoneCall('readSms', {
+            limit,
+            box: a.box || 'inbox',
+            address: a.address || null,
+          });
+          const messages = toolsSlimMessages(raw, limit);
+          return { ok: true, count: messages.length, messages };
+        },
+      },
+      {
+        name: 'sms_compose',
+        description: 'Open the SMS composer with optional number and body (user sends manually).',
+        group: 'sms', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: {
+            to: { type: 'string' },
+            body: { type: 'string' },
+          },
+        },
+        run: async (a) => phoneCall('composeSms', { to: a.to || a.number || '', body: a.body || '' }),
+      },
+      {
+        name: 'sms_send',
+        description: 'SEND an SMS silently. Only when the user explicitly asked to send. Requests SMS permission.',
+        group: 'sms', risk: 'danger', permissions: ['sms'],
+        parameters: {
+          type: 'object',
+          properties: {
+            to: { type: 'string' },
+            body: { type: 'string' },
+          },
+          required: ['to', 'body'],
+        },
+        run: async (a) => {
+          await toolsEnsurePerms(['sms']);
+          return phoneCall('sendSms', { to: a.to || a.number || '', body: a.body || '' });
+        },
+      },
+      {
+        name: 'phone_dial',
+        description: 'Open the dialer with a number (does not place the call).',
+        group: 'phone', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: { number: { type: 'string' } },
+          required: ['number'],
+        },
+        run: async (a) => phoneCall('dial', { number: a.number || a.to || '' }),
+      },
+      {
+        name: 'phone_call',
+        description: 'Place a phone call. Only when user explicitly asked to call. Requests phone permission.',
+        group: 'phone', risk: 'danger', permissions: ['phone'],
+        parameters: {
+          type: 'object',
+          properties: { number: { type: 'string' } },
+          required: ['number'],
+        },
+        run: async (a) => {
+          await toolsEnsurePerms(['phone']);
+          return phoneCall('call', { number: a.number || a.to || '' });
+        },
+      },
+
+      // —— Contacts ——
+      {
+        name: 'list_contacts',
+        description: 'List phone contacts with optional substring query. Requests contacts permission.',
+        group: 'contacts', risk: 'sensitive', permissions: ['contacts'],
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' },
+            limit: { type: 'number' },
+          },
+        },
+        run: async (a) => {
+          await toolsEnsurePerms(['contacts']);
+          const raw = await phoneCall('getContacts', { query: a.query || '', limit: a.limit || 40 });
+          const contacts = toolsSlimContacts(raw, a.limit || 25);
+          return { ok: true, count: contacts.length, contacts };
+        },
+      },
+      {
+        name: 'find_contact',
+        description: 'Find contacts by JS regex over name and phone numbers.',
+        group: 'contacts', risk: 'sensitive', permissions: ['contacts'],
+        parameters: {
+          type: 'object',
+          properties: {
+            regex: { type: 'string' },
+            flags: { type: 'string' },
+            query: { type: 'string' },
+            limit: { type: 'number' },
+          },
+          required: ['regex'],
+        },
+        run: async (a) => {
+          await toolsEnsurePerms(['contacts']);
+          // host contacts.find path
+          const raw = await handleHostCall('contacts.find', {
+            regex: a.regex || a.pattern,
+            flags: a.flags || 'i',
+            query: a.query || undefined,
+            limit: a.limit || 15,
+          });
+          const contacts = toolsSlimContacts(raw, a.limit || 15);
+          return {
+            ok: true,
+            contact: contacts[0] || null,
+            contacts,
+            count: contacts.length,
+            scanned: raw && raw.scanned,
+            regex: raw && raw.regex,
+          };
+        },
+      },
+
+      // —— Apps ——
+      {
+        name: 'list_apps',
+        description: 'Search installed Android apps by name/package.',
+        group: 'apps', risk: 'safe',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' },
+            limit: { type: 'number' },
+          },
+        },
+        run: async (a) => {
+          const raw = await handleHostCall('apps.list', { query: a.query, limit: a.limit || 40 });
+          return { ok: true, apps: toolsSlimApps(raw, a.limit || 20) };
+        },
+      },
+      {
+        name: 'list_activities',
+        description: 'List activities for a package name.',
+        group: 'apps', risk: 'safe',
+        parameters: {
+          type: 'object',
+          properties: { packageName: { type: 'string' } },
+          required: ['packageName'],
+        },
+        run: async (a) => {
+          const raw = await handleHostCall('apps.listActivities', { packageName: a.packageName });
+          const acts = (raw && raw.activities) || [];
+          return { ok: true, activities: (Array.isArray(acts) ? acts : []).slice(0, 30) };
+        },
+      },
+      {
+        name: 'launch_app',
+        description: 'Launch an app, activity, or deep link (packageName / activity / data uri).',
+        group: 'apps', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: {
+            packageName: { type: 'string' },
+            activity: { type: 'string' },
+            data: { type: 'string' },
+            chooser: { type: 'boolean' },
+          },
+        },
+        run: async (a) => {
+          await handleHostCall('apps.launch', a || {});
+          return { ok: true, launched: true };
+        },
+      },
+
+      // —— Radio ——
+      {
+        name: 'radio_status',
+        description: 'Wi-Fi, Bluetooth, GPS, hotspot status.',
+        group: 'radio', risk: 'safe',
+        parameters: { type: 'object', properties: {} },
+        run: async () => {
+          const r = await phoneCall('getRadioStatus', {});
+          return { ok: true, ...r };
+        },
+      },
+      {
+        name: 'radio_set',
+        description: 'Enable/disable wifi/bluetooth/gps/hotspot. OS may require Settings UI.',
+        group: 'radio', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: {
+            wifi: { type: 'boolean' },
+            bluetooth: { type: 'boolean' },
+            gps: { type: 'boolean' },
+            hotspot: { type: 'boolean' },
+          },
+        },
+        run: async (a) => {
+          const o = {};
+          if (a.wifi !== undefined) o.wifi = !!a.wifi;
+          if (a.bluetooth !== undefined) o.bluetooth = !!a.bluetooth;
+          if (a.gps !== undefined) o.gps = !!a.gps;
+          if (a.hotspot !== undefined) o.hotspot = !!a.hotspot;
+          if (!Object.keys(o).length) throw new Error('provide wifi/bluetooth/gps/hotspot');
+          return phoneCall('setRadio', o);
+        },
+      },
+      {
+        name: 'radio_open_settings',
+        description: 'Open system settings for wifi|bluetooth|gps|hotspot|wireless.',
+        group: 'radio', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: { which: { type: 'string' } },
+        },
+        run: async (a) => phoneCall('openRadioSettings', { which: a.which || a.panel || 'wireless' }),
+      },
+
+      // —— TTS ——
+      {
+        name: 'tts_speak',
+        description: 'Speak text with on-device TTS (optional route).',
+        group: 'media', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: {
+            text: { type: 'string' },
+            lang: { type: 'string' },
+            rate: { type: 'number' },
+            route: { type: 'string' },
+          },
+          required: ['text'],
+        },
+        run: async (a) => handleHostCall('tts.speak', {
+          text: a.text, lang: a.lang, rate: a.rate, route: a.route || a.output,
+        }),
+      },
+
+      // —— Capabilities ——
+      {
+        name: 'get_capabilities',
+        description: 'List ForgeHost capability flags for this device/session.',
+        group: 'meta', risk: 'safe',
+        parameters: { type: 'object', properties: {} },
+        run: async () => ({ ok: true, ...(await handleHostCall('getCapabilities', {})) }),
+      },
+
+      // —— Generic bridge escape hatch (allowlisted host call methods) ——
+      {
+        name: 'bridge_call',
+        description: 'Call a low-level Forge host method by dotted name when no specialized tool fits. Prefer named tools. Allowed methods listed in tools.catalog bridgeMethods.',
+        group: 'meta', risk: 'confirm',
+        parameters: {
+          type: 'object',
+          properties: {
+            method: {
+              type: 'string',
+              description: 'Host method id, e.g. sms.read, location.get, apps.list, http.get',
+            },
+            args: { type: 'object', description: 'Arguments object for the method' },
+          },
+          required: ['method'],
+        },
+        run: async (a) => toolsBridgeCall(a.method, a.args || a.params || {}),
+      },
+    ];
+
+    /** Allowlist for bridge_call — keep in sync when adding host methods. */
+    const HOST_BRIDGE_ALLOW = new Set([
+      'getAppInfo', 'getCapabilities',
+      'permissions.get', 'permissions.request', 'permissions.requestPack',
+      'sms.compose', 'sms.send', 'sms.read',
+      'phone.dial', 'phone.call',
+      'contacts.list', 'contacts.find', 'contacts.search',
+      'location.get', 'location.openMaps',
+      'apps.list', 'apps.find', 'apps.get', 'apps.listActivities', 'apps.resolve', 'apps.launch',
+      'radio.getStatus', 'radio.set', 'radio.openSettings',
+      'device.info', 'device.vibrate', 'device.openSettings',
+      'http.get', 'http.post',
+      'clipboard.read', 'clipboard.write',
+      'share', 'toast', 'openUrl',
+      'notify',
+      'tts.speak', 'tts.stop', 'tts.getVoices',
+      'audio.getRoute', 'audio.setRoute', 'audio.clearRoute', 'audio.listOutputs',
+      'email.compose',
+      'fs.readdir', 'fs.stat', 'fs.read',
+      'termux.isAvailable', 'termux.open',
+      // note: termux.run/exec intentionally omitted from default allow — use danger tools later if needed
+    ]);
+
+    const HOST_BRIDGE_DANGER = new Set([
+      'sms.send', 'phone.call', 'termux.run', 'termux.exec',
+    ]);
+
+    async function toolsBridgeCall(method, args) {
+      const m = String(method || '').trim();
+      if (!m) throw new Error('method required');
+      if (!HOST_BRIDGE_ALLOW.has(m) && !HOST_BRIDGE_ALLOW.has(m.replace(/^host\./, ''))) {
+        throw new Error('bridge method not allowlisted: ' + m + ' (use tools.list / specialized tools)');
+      }
+      const id = m.replace(/^host\./, '');
+      if (HOST_BRIDGE_DANGER.has(id)) {
+        // still allowed if tools.run invoked this path with danger tier enabled by caller filter
+      }
+      // auto perms for common sensitive methods
+      if (id.startsWith('sms.')) await toolsEnsurePerms(['sms']);
+      if (id.startsWith('phone.call')) await toolsEnsurePerms(['phone']);
+      if (id.startsWith('contacts.')) await toolsEnsurePerms(['contacts']);
+      if (id.startsWith('location.')) await toolsEnsurePerms(['location']);
+      const result = await handleHostCall(id, args || {});
+      // slim bulky payloads
+      if (id === 'sms.read') {
+        return { ok: true, count: (result && result.count) || 0, messages: toolsSlimMessages(result, 40) };
+      }
+      if (id === 'contacts.list' || id === 'contacts.find') {
+        return { ok: true, contacts: toolsSlimContacts(result, 25), scanned: result && result.scanned };
+      }
+      if (id === 'apps.list') {
+        return { ok: true, apps: toolsSlimApps(result, 25) };
+      }
+      if (id === 'http.get' || id === 'http.post') {
+        const data = result && result.data;
+        const text = typeof data === 'string' ? data : JSON.stringify(data);
+        return {
+          ok: true,
+          status: result && result.status,
+          data: toolsClampText(text, 12000),
+        };
+      }
+      return { ok: true, result };
+    }
+
+    function toolsGetRegistry() {
+      return HOST_TOOL_REGISTRY.slice();
+    }
+
+    function toolsToOpenAI(entry) {
+      return {
+        type: 'function',
+        function: {
+          name: entry.name,
+          description: entry.description + (entry.risk && entry.risk !== 'safe' ? ' [risk:' + entry.risk + ']' : ''),
+          parameters: entry.parameters || { type: 'object', properties: {} },
+        },
+      };
+    }
+
+    function toolsFilterEntries(opts) {
+      opts = opts || {};
+      const maxRisk = String(opts.riskMax || opts.maxRisk || (opts.includeDangerous ? 'danger' : 'confirm'));
+      const maxRank = toolRiskRank(maxRisk);
+      const group = opts.group ? String(opts.group).toLowerCase() : '';
+      const names = Array.isArray(opts.names) ? new Set(opts.names.map(String)) : null;
+      const exclude = Array.isArray(opts.exclude)
+        ? new Set(opts.exclude.map(String))
+        : new Set(opts.excludeDangerous === false ? [] : []);
+      return HOST_TOOL_REGISTRY.filter((e) => {
+        if (!e || !e.name) return false;
+        if (names && !names.has(e.name)) return false;
+        if (exclude.has(e.name)) return false;
+        if (group && String(e.group || '') !== group) return false;
+        if (toolRiskRank(e.risk) > maxRank) return false;
+        if (opts.includeDangerous === false && e.risk === 'danger') return false;
+        return true;
+      });
+    }
+
+    function toolsList(opts) {
+      const entries = toolsFilterEntries(opts);
+      return {
+        ok: true,
+        count: entries.length,
+        tools: entries.map(toolsToOpenAI),
+        catalog: entries.map((e) => ({
+          name: e.name,
+          group: e.group || 'misc',
+          risk: e.risk || 'safe',
+          permissions: e.permissions || [],
+          description: e.description,
+        })),
+        bridgeMethods: [...HOST_BRIDGE_ALLOW].sort(),
+        riskMax: (opts && (opts.riskMax || opts.maxRisk)) || (opts && opts.includeDangerous ? 'danger' : 'confirm'),
+      };
+    }
+
+    async function toolsRun(nameOrOpts, maybeArgs, runOpts) {
+      let name = nameOrOpts;
+      let args = maybeArgs;
+      let opts = runOpts || {};
+      if (nameOrOpts && typeof nameOrOpts === 'object' && !Array.isArray(nameOrOpts)) {
+        name = nameOrOpts.name || nameOrOpts.tool || nameOrOpts.id;
+        args = nameOrOpts.arguments != null ? nameOrOpts.arguments : (nameOrOpts.args || nameOrOpts.params || {});
+        opts = nameOrOpts;
+      }
+      name = String(name || '').trim();
+      if (!name) throw new Error('tool name required');
+      // parse JSON args if string
+      if (typeof args === 'string') {
+        try { args = JSON.parse(args || '{}'); } catch (_) { args = {}; }
+      }
+      args = args || {};
+
+      const entry = HOST_TOOL_REGISTRY.find((e) => e.name === name);
+      if (!entry) throw new Error('Unknown tool: ' + name + ' (ForgeHost.tools.list())');
+
+      const maxRisk = String(opts.riskMax || opts.maxRisk || 'danger');
+      if (toolRiskRank(entry.risk) > toolRiskRank(maxRisk)) {
+        throw new Error('Tool ' + name + ' blocked by riskMax=' + maxRisk + ' (tool risk=' + entry.risk + ')');
+      }
+
+      try {
+        if (entry.permissions && entry.permissions.length) {
+          await toolsEnsurePerms(entry.permissions);
+        }
+        const result = await entry.run(args || {});
+        return result == null ? { ok: true } : result;
+      } catch (e) {
+        return {
+          ok: false,
+          error: e && e.message ? e.message : String(e),
+          code: e && e.code ? e.code : undefined,
+          needsSettings: !!(e && e.needsSettings),
+          tool: name,
+        };
+      }
+    }
+
+    function toolsSystemHint(opts) {
+      const listed = toolsList(opts);
+      const lines = listed.catalog.map((c) =>
+        '- ' + c.name + ' (' + c.risk + (c.group ? ', ' + c.group : '') + '): ' + c.description
+      );
+      return [
+        'You can call Forge device tools via function calls.',
+        'Prefer specialized tools. Use bridge_call only when needed.',
+        'Do not exfiltrate SMS/contacts/location unless the user asked.',
+        'Never sms_send / phone_call unless the user explicitly requested it.',
+        'Tools:',
+        ...lines,
+      ].join('\n');
+    }
+
+    // handleCall is defined later — tools that need it call at runtime
+    // We bind tools handlers into the main switch via toolsHandle(method, params)
+    async function toolsHandle(method, params) {
+      switch (method) {
+        case 'tools.list':
+        case 'ai.tools.list':
+          return toolsList(params || {});
+        case 'tools.catalog':
+        case 'ai.tools.catalog':
+          return { ok: true, catalog: toolsList(params || {}).catalog, bridgeMethods: [...HOST_BRIDGE_ALLOW].sort() };
+        case 'tools.groups':
+        case 'ai.tools.groups': {
+          const g = {};
+          for (const e of HOST_TOOL_REGISTRY) {
+            const k = e.group || 'misc';
+            g[k] = g[k] || [];
+            g[k].push(e.name);
+          }
+          return { ok: true, groups: g };
+        }
+        case 'tools.run':
+        case 'tools.execute':
+        case 'tools.invoke':
+        case 'ai.tools.run':
+        case 'ai.tools.execute':
+          return await toolsRun(params || {});
+        case 'tools.call':
+        case 'ai.tools.call':
+        case 'bridge.call':
+          return await toolsBridgeCall((params || {}).method || (params || {}).path, (params || {}).args || (params || {}).params || params || {});
+        case 'tools.hint':
+        case 'tools.systemHint':
+        case 'ai.tools.hint':
+          return { ok: true, hint: toolsSystemHint(params || {}) };
+        case 'tools.registry':
+          return {
+            ok: true,
+            names: HOST_TOOL_REGISTRY.map((e) => e.name),
+            count: HOST_TOOL_REGISTRY.length,
+          };
+        case 'web.search':
+          return await toolsWebSearch(params || {});
+        case 'web.fetch':
+          return await toolsWebFetch(params || {});
+        default:
+          throw new Error('Unknown tools method ' + method);
+      }
+    }
+    /* === FORGE_HOST_TOOLS_END === */
+
     async function handleHostCall(method, params) {
       const appId = currentApp?.id || 'draft';
       const prefix = `forge_app_${appId}_`;
@@ -6956,6 +7920,7 @@ termux-reload-settings</div>
             tts: false, audioRoute: false, mic: false, micStream: false, liveTranslate: false, camera: false, fs: true, termux: false, termuxExec: false,
             storage: true, secrets: true, events: true, files: true,
             share: true, shareFiles: true,
+            tools: true, webSearch: true, webFetch: true,
             ai: false, keepAwake: Capacitor.isNativePlatform(),
             permissions: {},
           };
@@ -7900,6 +8865,29 @@ termux-reload-settings</div>
           window.open(url, '_blank', 'noopener,noreferrer');
           return { opened: true };
         }
+
+        // ——— LLM tools registry / web ———
+        case 'tools.list':
+        case 'tools.catalog':
+        case 'tools.groups':
+        case 'tools.run':
+        case 'tools.execute':
+        case 'tools.invoke':
+        case 'tools.call':
+        case 'tools.hint':
+        case 'tools.systemHint':
+        case 'tools.registry':
+        case 'ai.tools.list':
+        case 'ai.tools.catalog':
+        case 'ai.tools.groups':
+        case 'ai.tools.run':
+        case 'ai.tools.execute':
+        case 'ai.tools.call':
+        case 'ai.tools.hint':
+        case 'bridge.call':
+        case 'web.search':
+        case 'web.fetch':
+          return await toolsHandle(method, params);
 
         // ——— SMS ———
         case 'sms.compose':

@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.47 / versionCode 77** (SMS perm auto-request) · was 2.6.46/76
+| Version | **2.6.48 / versionCode 78** (generic LLM tools + web/gps/sms) · was 2.6.47/77
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -789,4 +789,51 @@ Smoke:
 [ ] Grant SMS → Load threads → pick thread → Copy conversation
 [ ] Deny once → error mentions Settings; App settings opens Forge details
 [ ] After manual allow in Settings → Load works
+```
+
+
+## Generic LLM tools registry (2026-08-15)
+
+**2.6.48 / versionCode 78**
+
+Host exposes a growing tool catalog over ForgeHost bridges so chat/agents gain power as the host grows.
+
+### API
+```js
+const { tools, catalog, bridgeMethods } = await ForgeHost.tools.list({ riskMax: 'confirm' })
+await ForgeHost.ai.chat({ messages, tools, tool_choice: 'auto' })
+// on tool_calls:
+await ForgeHost.tools.run('web_search', { query: '...' })
+await ForgeHost.tools.run('web_fetch', { url })
+await ForgeHost.tools.run('get_location')
+await ForgeHost.tools.run('sms_list', { box: 'all', limit: 30 })
+await ForgeHost.tools.call('apps.list', { query: 'maps' })  // allowlisted bridge_call
+const { hint } = await ForgeHost.tools.hint()
+// aliases: ForgeHost.ai.tools.* , ForgeHost.web.search/fetch
+```
+
+### Included tools (initial registry)
+web_search, web_fetch, get_time, device_info, clipboard_read/write, toast, open_url, notify,
+get_location, open_maps, sms_list, sms_compose, sms_send, phone_dial, phone_call,
+list_contacts, find_contact, list_apps, list_activities, launch_app,
+radio_status/set/open_settings, tts_speak, get_capabilities, bridge_call
+
+Risk tiers: `safe | sensitive | confirm | danger` (danger off by default in Forge Chat).
+
+### Extend later
+1. Implement ForgeHost / handleCall method  
+2. Append `HOST_TOOL_REGISTRY` entry (+ `HOST_BRIDGE_ALLOW` if using bridge_call)  
+3. Mini-apps using `tools.list` pick it up automatically  
+
+### Forge Chat
+Uses `ForgeHost.tools.list/run` instead of a hardcoded 8-tool list. Settings: enable tools, confirm side effects, allow dangerous.
+
+Smoke:
+```text
+[ ] Install 2.6.48 → re-import Forge_Chat.html
+[ ] "Search the web for …" → web_search tool runs, cites links
+[ ] "Fetch this url …" → web_fetch returns text
+[ ] "Where am I?" → get_location (GPS perm)
+[ ] "Show recent SMS from …" → sms_list (SMS perm)
+[ ] launch still confirms when setting on
 ```

@@ -77,11 +77,12 @@ select, input, textarea { background:#0f172a; color:#e2e8f0; border:1px solid #4
     </div>
     <div style="margin:12px 0"><label><input type="checkbox" id="inline-img"> Inline remote images</label></div>
     <div style="margin:12px 0"><label><input type="checkbox" id="prefer-html"> Prefer HTML replies</label></div>
-    <div style="margin:12px 0"><label><input type="checkbox" id="enable-tools"> Enable app tools</label></div>
-    <div style="margin:12px 0"><label><input type="checkbox" id="confirm-launch"> Confirm before launch</label></div>
+    <div style="margin:12px 0"><label><input type="checkbox" id="enable-tools"> Enable host tools (web, GPS, SMS, apps…)</label></div>
+    <div style="margin:12px 0"><label><input type="checkbox" id="confirm-launch"> Confirm before side effects (launch/send/call)</label></div>
+    <div style="margin:12px 0"><label><input type="checkbox" id="allow-danger"> Allow dangerous tools (sms_send, phone_call)</label></div>
     <div style="margin:12px 0">
       <label>Max tool rounds</label>
-      <input type="range" id="max-rounds" min="1" max="8" step="1" value="5">
+      <input type="range" id="max-rounds" min="1" max="12" step="1" value="8">
     </div>
     <div style="display:flex;gap:12px;margin-top:20px">
       <button onclick="saveSettings()" style="flex:1">Save</button>
@@ -93,126 +94,47 @@ select, input, textarea { background:#0f172a; color:#e2e8f0; border:1px solid #4
 <script>
 let messages = [];
 let pendingAttachments = [];
-let settings = { providerId: null, htmlScale: 1.0, inlineImages: true, preferHtml: true, enableTools: true, confirmLaunch: true, maxToolRounds: 5, systemPrompt: '', temperature: 0.7 };
-const APP_TOOLS = [
-  {
-    type: 'function',
-    function: {
-      name: 'list_apps',
-      description: 'Search installed Android apps',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string' },
-          limit: { type: 'number' }
+let settings = { providerId: null, htmlScale: 1.0, inlineImages: true, preferHtml: true, enableTools: true, confirmLaunch: true, allowDangerousTools: false, maxToolRounds: 8, systemPrompt: '', temperature: 0.7 };
+let APP_TOOLS = []; // filled from ForgeHost.tools.list
+let TOOL_META = {}; // name -> { risk, group }
+
+async function refreshHostTools() {
+  APP_TOOLS = [];
+  TOOL_META = {};
+  window.__forgeToolsHint = '';
+  if (!settings.enableTools) return;
+  try {
+    const riskMax = settings.allowDangerousTools ? 'danger' : 'confirm';
+    const r = await ForgeHost.tools.list({ riskMax: riskMax });
+    APP_TOOLS = Array.isArray(r.tools) ? r.tools : [];
+    (r.catalog || []).forEach(function (c) {
+      TOOL_META[c.name] = c;
+    });
+    try {
+      const hr = await ForgeHost.tools.hint({ riskMax: settings.allowDangerousTools ? 'danger' : 'confirm' });
+      window.__forgeToolsHint = (hr && hr.hint) || '';
+    } catch (_) {}
+    // Fallback if host too old
+    if (!APP_TOOLS.length && ForgeHost.apps) {
+      APP_TOOLS = [{
+        type: 'function',
+        function: {
+          name: 'list_apps',
+          description: 'Search installed apps',
+          parameters: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'number' } } }
         }
-      }
+      }];
     }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'list_activities',
-      description: 'List activities for package',
-      parameters: {
-        type: 'object',
-        properties: {
-          packageName: { type: 'string' }
-        },
-        required: ['packageName']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'launch_app',
-      description: 'Launch app or deep link',
-      parameters: {
-        type: 'object',
-        properties: {
-          packageName: { type: 'string' },
-          activity: { type: 'string' },
-          data: { type: 'string' },
-          chooser: { type: 'boolean' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'list_contacts',
-      description: 'List phone contacts (optional substring query). Requires contacts permission.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Optional name/number substring' },
-          limit: { type: 'number' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'find_contact',
-      description: 'Find contacts by JavaScript regex over display name and phone numbers.',
-      parameters: {
-        type: 'object',
-        properties: {
-          regex: { type: 'string', description: 'JS regex source, e.g. ^Ann|555' },
-          flags: { type: 'string', description: 'Regex flags, default i' },
-          query: { type: 'string', description: 'Optional prefilter substring' },
-          limit: { type: 'number' }
-        },
-        required: ['regex']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'radio_status',
-      description: 'Get Wi-Fi, Bluetooth, GPS/location, and hotspot on/off status.',
-      parameters: { type: 'object', properties: {} }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'radio_set',
-      description: 'Enable/disable Wi-Fi, Bluetooth, GPS, or hotspot. OS may open a Settings panel if direct toggle is blocked.',
-      parameters: {
-        type: 'object',
-        properties: {
-          wifi: { type: 'boolean' },
-          bluetooth: { type: 'boolean' },
-          gps: { type: 'boolean' },
-          hotspot: { type: 'boolean' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'radio_open_settings',
-      description: 'Open system settings panel for wifi, bluetooth, gps/location, hotspot, or wireless.',
-      parameters: {
-        type: 'object',
-        properties: {
-          which: { type: 'string', description: 'wifi|bluetooth|gps|hotspot|wireless' }
-        }
-      }
-    }
+  } catch (e) {
+    try { console.warn('[Forge Chat] tools.list failed', e && e.message ? e.message : e); } catch (_) {}
   }
-];
+}
 
 async function init() {
   const saved = await ForgeHost.storage.get('forgechat_settings');
   if (saved) settings = {...settings, ...saved};
   await refreshProviders();
+  await refreshHostTools();
   renderMessages();
   document.getElementById('html-scale').oninput = () => { document.getElementById('scale-val').textContent = Math.round(document.getElementById('html-scale').value*100)+'%'; };
 }
@@ -528,6 +450,12 @@ async function runChatTurn(userText, attachments) {
     if (settings.enableTools) {
       payload.tools = APP_TOOLS;
       payload.tool_choice = 'auto';
+      try {
+        if (!window.__forgeToolsHint) {
+          const hr = await ForgeHost.tools.hint({ riskMax: settings.allowDangerousTools ? 'danger' : 'confirm' });
+          window.__forgeToolsHint = (hr && hr.hint) || '';
+        }
+      } catch (_) { window.__forgeToolsHint = ''; }
     }
     if (r === 0 && attachments.length) {
       payload.attachments = attachments.map(toChatAttachment).filter(function (a) {
@@ -673,77 +601,34 @@ function toChatAttachment(item) {
 
 async function executeTool(name, args) {
   args = args || {};
-  if (name === 'list_apps') {
-    const r = await ForgeHost.apps.list({query: args.query, limit: args.limit||40});
-    return {ok:true, apps: (r.apps||[]).slice(0,20)};
+  const meta = TOOL_META[name] || {};
+  const risk = meta.risk || 'safe';
+  if (settings.confirmLaunch && (risk === 'confirm' || risk === 'danger')) {
+    const preview = name + (args && Object.keys(args).length ? ' ' + JSON.stringify(args).slice(0, 180) : '');
+    if (!confirm('Allow tool?\n\n' + preview)) {
+      return { ok: false, cancelled: true };
+    }
   }
-  if (name === 'list_activities') {
-    const r = await ForgeHost.apps.listActivities(args.packageName);
-    return {ok:true, activities: (r.activities||[]).slice(0,20)};
+  // Prefer host registry (auto-grows with Forge)
+  if (ForgeHost.tools && ForgeHost.tools.run) {
+    try {
+      const riskMax = settings.allowDangerousTools ? 'danger' : 'confirm';
+      const r = await ForgeHost.tools.run({ name: name, args: args, riskMax: riskMax });
+      return r;
+    } catch (e) {
+      return { ok: false, error: (e && e.message) ? e.message : String(e) };
+    }
+  }
+  // Legacy fallbacks
+  if (name === 'list_apps') {
+    const r = await ForgeHost.apps.list({ query: args.query, limit: args.limit || 40 });
+    return { ok: true, apps: (r.apps || []).slice(0, 20) };
   }
   if (name === 'launch_app') {
-    if (settings.confirmLaunch) {
-      if (!confirm('Launch ' + (args.packageName || args.data) + '?')) return {ok:false, cancelled:true};
-    }
     await ForgeHost.apps.launch(args);
-    return {ok:true, launched:true};
+    return { ok: true, launched: true };
   }
-  if (name === 'list_contacts') {
-    try { await ForgeHost.permissions.request('contacts'); } catch (_) {}
-    const r = await ForgeHost.contacts.list({ query: args.query || undefined, limit: args.limit || 40 });
-    const contacts = (r.contacts || []).slice(0, 25).map(function (c) {
-      return {
-        id: c.id,
-        name: c.name,
-        phones: (c.phones || []).map(function (p) { return p.number || p; }).filter(Boolean),
-      };
-    });
-    return { ok:true, count: r.count != null ? r.count : contacts.length, contacts: contacts };
-  }
-  if (name === 'find_contact') {
-    if (!args.regex && !args.pattern) return { ok:false, error:'regex required' };
-    try { await ForgeHost.permissions.request('contacts'); } catch (_) {}
-    const r = await ForgeHost.contacts.find({
-      regex: args.regex || args.pattern,
-      flags: args.flags || 'i',
-      query: args.query || undefined,
-      limit: args.limit || 15,
-    });
-    const contacts = (r.contacts || []).map(function (c) {
-      return {
-        id: c.id,
-        name: c.name,
-        phones: (c.phones || []).map(function (p) { return p.number || p; }).filter(Boolean),
-      };
-    });
-    return {
-      ok: true,
-      contact: contacts[0] || null,
-      contacts: contacts,
-      count: contacts.length,
-      scanned: r.scanned,
-      regex: r.regex,
-    };
-  }
-  if (name === 'radio_status') {
-    const r = await ForgeHost.radio.getStatus();
-    return { ok:true, wifi:r.wifi, bluetooth:r.bluetooth, gps:r.gps, hotspot:r.hotspot, sdk:r.sdk, notes:r.notes };
-  }
-  if (name === 'radio_set') {
-    const o = {};
-    if (args.wifi !== undefined) o.wifi = !!args.wifi;
-    if (args.bluetooth !== undefined) o.bluetooth = !!args.bluetooth;
-    if (args.gps !== undefined) o.gps = !!args.gps;
-    if (args.hotspot !== undefined) o.hotspot = !!args.hotspot;
-    if (!Object.keys(o).length) return { ok:false, error:'provide wifi/bluetooth/gps/hotspot boolean' };
-    const r = await ForgeHost.radio.set(o);
-    return { ok: !!r.ok, needsUser: !!r.needsUser, results: r.results, status: r.status };
-  }
-  if (name === 'radio_open_settings') {
-    const r = await ForgeHost.radio.openSettings({ which: args.which || args.panel || 'wireless' });
-    return { ok:true, opened: r.opened || args.which };
-  }
-  return {ok:false, error:'unknown'};
+  return { ok: false, error: 'unknown tool (host tools unavailable): ' + name };
 }
 
 function openSettings() {
@@ -757,7 +642,8 @@ function openSettings() {
   document.getElementById('prefer-html').checked = settings.preferHtml;
   document.getElementById('enable-tools').checked = settings.enableTools;
   document.getElementById('confirm-launch').checked = settings.confirmLaunch;
-  document.getElementById('max-rounds').value = settings.maxToolRounds;
+  document.getElementById('allow-danger').checked = !!settings.allowDangerousTools;
+  document.getElementById('max-rounds').value = settings.maxToolRounds || 8;
 }
 
 function hideSettings() { document.getElementById('settings-modal').style.display = 'none'; }
@@ -770,6 +656,7 @@ async function saveSettings() {
   settings.preferHtml = document.getElementById('prefer-html').checked;
   settings.enableTools = document.getElementById('enable-tools').checked;
   settings.confirmLaunch = document.getElementById('confirm-launch').checked;
+  settings.allowDangerousTools = document.getElementById('allow-danger').checked;
   settings.maxToolRounds = parseInt(document.getElementById('max-rounds').value);
   await ForgeHost.storage.set('forgechat_settings', settings);
   updateSubtitle();
