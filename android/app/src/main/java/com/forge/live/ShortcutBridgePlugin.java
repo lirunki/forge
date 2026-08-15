@@ -135,12 +135,35 @@ public class ShortcutBridgePlugin extends Plugin {
         }
         data.put("source", this.pendingLaunchSource);
         notifyListeners("appLaunch", data, true);
+        // Consume launch markers on the Activity intent. Extras alone are not enough:
+        // extractAppId() also reads forge://app/<id> (and ?id=). If data stays set,
+        // every onStart (e.g. return from CameraX) re-captures and the host reloads
+        // the mini-app — dropping in-flight takePhoto / attachments.
         try {
             intent.removeExtra(EXTRA_APP_ID);
             intent.removeExtra(EXTRA_APP_TITLE);
             intent.removeExtra(NotifyBridgePlugin.EXTRA_PAYLOAD);
             intent.removeExtra(NotifyBridgePlugin.EXTRA_TAG);
             intent.removeExtra(NotifyBridgePlugin.EXTRA_NOTIFY_ID);
+            try {
+                Uri dataUri = intent.getData();
+                if (dataUri != null) {
+                    String host = dataUri.getHost();
+                    boolean forgeApp = "app".equals(host)
+                            || (dataUri.getQueryParameter("id") != null
+                                && !dataUri.getQueryParameter("id").trim().isEmpty());
+                    if (forgeApp || ACTION_OPEN_APP.equals(intent.getAction())) {
+                        intent.setData(null);
+                    }
+                } else if (ACTION_OPEN_APP.equals(intent.getAction())) {
+                    // no-op data; still normalize action below
+                }
+            } catch (Exception ignored) {
+            }
+            if (ACTION_OPEN_APP.equals(intent.getAction())
+                    || NotifyBridgePlugin.ACTION_OPEN_FROM_NOTIFY.equals(intent.getAction())) {
+                intent.setAction(Intent.ACTION_MAIN);
+            }
         } catch (Exception e4) {
         }
     }

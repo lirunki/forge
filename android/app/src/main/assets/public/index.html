@@ -11986,22 +11986,43 @@ function renderLibrary() {
       }
     }
 
+    /** Dedupe shortcut/notify opens — getPendingLaunch + retained appLaunch + onStart can triple-fire. */
+    let _lastOpenAppById = { id: '', at: 0 };
+
     function openAppById(id, title) {
       if (!id) return false;
-      const app = getLibrary().find(x => x.id === id);
+      const idNorm = String(id).trim();
+      if (!idNorm) return false;
+      const now = Date.now();
+      const alreadyCurrent = currentApp?.id === idNorm && !!currentApp?.html;
+      const hasDoc = !!(el.previewFrame && String(el.previewFrame.srcdoc || '').length > 20);
+      // Same app already live (or opened moments ago): never reload — that drops in-flight
+      // camera/mic host calls when returning from CameraX / another activity.
+      if (alreadyCurrent && (appMode || hasDoc)) {
+        if (!appMode) enterAppMode('library');
+        _lastOpenAppById = { id: idNorm, at: now };
+        return true;
+      }
+      if (_lastOpenAppById.id === idNorm && (now - _lastOpenAppById.at) < 2500 && alreadyCurrent && hasDoc) {
+        if (!appMode) enterAppMode('library');
+        return true;
+      }
+      const app = getLibrary().find(x => x.id === idNorm);
       if (app?.html) {
+        _lastOpenAppById = { id: idNorm, at: now };
         loadPreview(app);
         enterAppMode('library');
         return true;
       }
       // fallback: draft match
-      if (currentApp?.id === id && currentApp?.html) {
-        loadPreview(currentApp);
+      if (currentApp?.id === idNorm && currentApp?.html) {
+        _lastOpenAppById = { id: idNorm, at: now };
+        if (!hasDoc) loadPreview(currentApp);
         enterAppMode('chat');
         return true;
       }
       exitAppMode('library');
-      addMessage('assistant', `Shortcut target “${title || id}” was not found in your library. Open Library and save the app again, then re-add the home shortcut.`);
+      addMessage('assistant', `Shortcut target “${title || idNorm}” was not found in your library. Open Library and save the app again, then re-add the home shortcut.`);
       showTab('library');
       setPreviewStatus('Shortcut app not found in library', 'err');
       return false;

@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.43 / versionCode 73** (bridge String.raw — media normalize `i is not defined`) · was 2.6.42/72
+| Version | **2.6.44 / versionCode 74** (homescreen shortcut camera reload) · was 2.6.43/73
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-15 — 2.6.43 bridge template regex escapes (camera normalize)
+| **Last rebuild** | 2026-08-15 — 2.6.44 shortcut launch consume + no reload on resume
 
 ### Locked product baseline
 
@@ -635,6 +635,29 @@ Smoke:
 [ ] Run mini-app with console.log / throw → lines appear; badge updates
 [ ] Failed ForgeHost call shows as error line
 [ ] Clear / Copy work
+```
+
+## Homescreen shortcut: takePhoto loses result (2026-08-15)
+
+**2.6.44 / versionCode 74**
+
+**Bug:** Library → open mini-app → Take photo OK. Same app via **Home shortcut** → photo does not
+attach; console shows repeated `— loaded … —` (including right after capture). No JS error.
+
+**Cause:** Shortcut opens `RunActivity` with `forge://app/<id>`. `ShortcutBridge.captureLaunchIntent`
+cleared extras but **left intent data**. `extractAppId` still reads the URI, so every `onStart`
+(return from CameraX) re-emits `appLaunch` → host `openAppById` → `loadPreview` wipes srcdoc and
+in-flight `camera.takePhoto` promise/state. Cold start also multi-fired (pending + retained listener).
+
+**Fix:**
+1. Native: after capture, `setData(null)` + `ACTION_MAIN` so resume cannot re-extract app id
+2. Host: `openAppById` idempotent — same live app does not `loadPreview` again (2.5s dedupe)
+
+Smoke:
+```text
+[ ] Install 2.6.44 → Home shortcut → Forge Chat → Take photo → thumb in attachment bar
+[ ] Console: one loaded/ready pair at open; **no** reload after camera
+[ ] Library open path still works; pin shortcut still opens runner
 ```
 
 ## Bridge media normalize `i is not defined` (2026-08-15)
