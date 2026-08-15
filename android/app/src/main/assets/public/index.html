@@ -727,7 +727,41 @@
     .pc-badge.freemium { background: rgba(34,211,238,.12); color: #67e8f9; }
     .pc-badge.paid { background: rgba(244,63,94,.12); color: #fda4af; }
     .pc-badge.local { background: rgba(251,191,36,.12); color: #fcd34d; }
+    .pc-badge.best { background: rgba(139,92,246,.22); color: #ddd6fe; }
     .prov-card .pc-desc { color: var(--muted); font-size: 0.82rem; line-height: 1.35; }
+    .prov-card.turnkey-rec {
+      border-color: rgba(139,92,246,.4);
+      background: linear-gradient(180deg, rgba(139,92,246,.14), rgba(139,92,246,.04));
+    }
+    .prov-card .pc-why {
+      margin-top: 0.25rem; font-size: 0.78rem; line-height: 1.35;
+      color: #c4b5fd;
+    }
+    .turnkey-note {
+      font-size: 0.82rem; line-height: 1.4; color: var(--muted);
+      padding: 0.65rem 0.75rem; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--bg); margin-bottom: 0.75rem;
+    }
+    .setup-guide-steps {
+      display: grid; gap: 0.45rem; margin: 0.55rem 0 0.75rem;
+    }
+    .setup-guide-steps .sg {
+      display: flex; gap: 0.55rem; align-items: flex-start;
+      padding: 0.55rem 0.65rem; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--bg); font-size: 0.86rem;
+    }
+    .setup-guide-steps .sg .n {
+      width: 1.25rem; height: 1.25rem; border-radius: 999px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 800; margin-top: 0.05rem;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .setup-guide-steps .sg.done {
+      border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08);
+    }
+    .setup-guide-steps .sg.done .n {
+      background: rgba(52,211,153,.2); border-color: rgba(52,211,153,.45); color: #6ee7b7;
+    }
     .setup-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.85rem; }
     .setup-actions .btn { flex: 1 1 auto; min-height: 44px; }
     .setup-panel { display: none; }
@@ -926,23 +960,42 @@ termux-reload-settings</div>
     <div class="setup-sheet">
       <div class="setup-steps" id="setupSteps" aria-hidden="true"></div>
       <div id="setupPanelWelcome" class="setup-panel active">
-        <h2 id="setupTitle">Set up Forge in a minute</h2>
+        <h2 id="setupTitle">Connect free AI — no tech skills needed</h2>
         <p class="setup-lead">
-          Forge needs an AI provider to generate mini-apps. Pick a <b>free</b> option,
-          create a key in the browser, paste it here — done. No paid plan required to start.
+          Forge needs a free AI “brain” to build mini-apps. You do <b>not</b> need a computer-science
+          background or a paid plan. On Android, the simplest path is a
+          <b>free Google Gemini key</b> with the Google account already on this phone.
         </p>
-        <div class="setup-actions">
-          <button class="btn" id="btnSetupStart" type="button">Choose a free provider</button>
-          <button class="btn secondary" id="btnSetupHaveKey" type="button">I already have a key</button>
+        <div class="turnkey-note">
+          <b>Turn-key path:</b> pick Google / Grok / Groq → we open the signup page →
+          you copy a free key → paste it here → Forge tests it. About one minute.
+        </div>
+        <div class="setup-actions" style="flex-direction:column;">
+          <button class="btn" id="btnSetupTurnkey" type="button">Start free turn-key setup</button>
+          <button class="btn secondary" id="btnSetupHaveKey" type="button">I already have an API key</button>
+          <button class="btn secondary" id="btnSetupStart" type="button">Browse all providers</button>
         </div>
         <p class="field-hint" style="margin-top:0.85rem;">
-          You can skip and configure later in the AI tab.
+          You can skip and set this up later in the AI tab.
           <button type="button" id="btnSetupSkip" class="btn secondary small" style="margin-left:0.35rem;">Skip for now</button>
         </p>
       </div>
 
+      <div id="setupPanelTurnkey" class="setup-panel">
+        <h2>Free turn-key brains</h2>
+        <p class="setup-lead">
+          Tap one card. We’ll guide you with plain steps. No credit card for these starter options
+          (free quotas / free tiers apply).
+        </p>
+        <div class="prov-pick" id="setupTurnkeyList"></div>
+        <button type="button" class="setup-link-btn" id="btnSetupSeeAllProviders">More options (OpenRouter, Hugging Face, local…)</button>
+        <div class="setup-actions">
+          <button class="btn secondary" id="btnSetupBackWelcomeFromTk" type="button">Back</button>
+        </div>
+      </div>
+
       <div id="setupPanelPick" class="setup-panel">
-        <h2>Choose a provider</h2>
+        <h2>All providers</h2>
         <p class="setup-lead">Free tiers first. You can change this anytime in AI settings.</p>
         <div class="prov-pick" id="setupProvList"></div>
         <div class="setup-actions">
@@ -954,11 +1007,14 @@ termux-reload-settings</div>
       <div id="setupPanelRegister" class="setup-panel">
         <h2 id="setupRegTitle">Get your free API key</h2>
         <p class="setup-lead" id="setupRegLead">Open the signup page, create a key, then paste it below.</p>
+        <div class="turnkey-note" id="setupWhyEasy" style="display:none;"></div>
+        <div class="setup-guide-steps" id="setupGuideSteps" aria-label="Setup steps"></div>
         <button class="setup-link-btn" id="btnSetupOpenSignup" type="button">Open registration →</button>
         <button class="setup-link-btn" id="btnSetupOpenKeys" type="button" style="border-style:solid;">I already signed up — open API keys →</button>
         <ol class="field-hint" id="setupRegSteps" style="margin:0.75rem 0 0.5rem 1.1rem; display:grid; gap:0.35rem;"></ol>
-        <label for="setupKeyInput" style="margin-top:0.75rem;">Paste API key</label>
+        <label for="setupKeyInput" style="margin-top:0.75rem;">Paste API key here</label>
         <input id="setupKeyInput" type="password" placeholder="Paste key here" autocomplete="off" />
+        <p class="field-hint" id="setupKeyHelp" style="margin-top:0.35rem;">After you copy the key in the browser, switch back to Forge and paste it.</p>
         <div id="setupExtraFields" class="hidden" style="margin-top:0.55rem;"></div>
         <div class="status-line" id="setupStatus" style="margin-top:0.55rem;"></div>
         <div class="setup-actions">
@@ -1002,7 +1058,7 @@ termux-reload-settings</div>
         <li><b>Open / share HTML:</b> From WhatsApp or Files use <b>Open with → Forge</b> or <b>Share → Forge</b> to install a mini-app.</li>
         <li><b>Kitchen sink lab:</b> Library → Kitchen sink demos every ForgeHost API.</li>
         <li><b>Device powers:</b> camera, mic/PCM, QR, share, notify, jobs, termux, AI, phone, apps via ForgeHost.</li>
-        <li><b>AI tab:</b> connect a free provider (Groq, Gemini…) if you have no key yet.</li>
+        <li><b>AI tab:</b> Turn-key setup — free Gemini (Google account), Groq, or OpenRouter free models.</li>
       </ul>
       <div class="hints-section-label">Refine chips</div>
       <div class="refine-row" id="refineRow" aria-label="Quick refine"></div>
@@ -1090,8 +1146,8 @@ termux-reload-settings</div>
         <div class="card">
           <h2>AI settings</h2>
           <p class="field-hint" style="margin-top:0;">
-            <b>Easiest:</b> paste any API key below — Forge picks the provider from the key shape.
-            Advanced options stay available if you need them.
+            <b>Easiest:</b> use <b>Turn-key setup</b> for a free Google / Grok / Groq key, or paste any API key below —
+            Forge picks the provider from the key shape. Advanced options stay collapsed unless you need them.
           </p>
 
           <div class="settings-block" style="margin:0 0 0.75rem;padding-bottom:0.65rem;border-bottom:1px solid var(--border);">
@@ -1102,12 +1158,16 @@ termux-reload-settings</div>
           <p class="field-hint" style="margin-top:-0.35rem;margin-bottom:0.65rem;">Debug mini-app, bridge, and ForgeHost errors.</p>
 
           <div id="aiQuickSetup" style="border:1px solid var(--border);border-radius:12px;padding:0.75rem 0.85rem;margin-bottom:0.9rem;background:var(--bg);">
+            <p class="field-hint" style="margin:0 0 0.55rem;">
+              <b>Turn-key free AI:</b> Google Gemini (easiest on Android), Groq, or OpenRouter free models.
+              xAI/Grok API is usually paid — not on the free path. No jargon: we open the page, you paste a key.
+            </p>
             <div class="settings-block" style="margin:0 0 0.55rem;">
-              <button class="btn small" id="btnOpenSetupWizard" type="button">Easy setup (free providers)</button>
+              <button class="btn small" id="btnOpenSetupWizard" type="button">Turn-key setup (free AI)</button>
             </div>
-            <label for="quickKey" style="margin-top:0;">Or paste API key</label>
-            <input id="quickKey" type="password" placeholder="xai-… / sk-… / hf_… / gsk_… / AIza…" autocomplete="off" />
-            <p class="field-hint" id="quickKeyHint">Detects xAI, OpenAI, Gemini, HF, Groq, OpenRouter, Azure from the key prefix.</p>
+            <label for="quickKey" style="margin-top:0;">Or paste any API key</label>
+            <input id="quickKey" type="password" placeholder="Google AI key / gsk_… / sk-or-… / sk-… / hf_…" autocomplete="off" />
+            <p class="field-hint" id="quickKeyHint">Gemini keys may not start with AIza — paste the full key. Free: Gemini, Groq, OpenRouter. xAI API is usually paid.</p>
             <div class="settings-block" style="margin-top:0.35rem;">
               <button class="btn small" id="btnQuickSave" type="button">Save &amp; use</button>
               <button class="btn secondary small" id="btnQuickTest" type="button">Save &amp; test</button>
@@ -1336,16 +1396,50 @@ termux-reload-settings</div>
     };
 
     /**
-     * Easy-setup catalog. Free / freemium first.
+     * Easy-setup catalog. Turn-key free options first (Gemini / Grok / Groq).
      * registrationUrl = account signup, keysUrl = where to mint a key.
+     * turnkey:true → shown on the simple "free turn-key" screen.
      */
     const SETUP_PROVIDERS = [
       {
+        id: 'gemini',
+        kind: 'builtin',
+        providerId: 'gemini',
+        turnkey: true,
+        recommended: true,
+        badge: 'best',
+        name: 'Google Gemini',
+        blurb: 'Easiest on Android. Free Google AI Studio key with your Google account — no credit card.',
+        whyEasy: 'Use the Google account already on this phone. In AI Studio tap Get API key → Create API key, then paste the WHOLE key back here (prefix can vary).',
+        guide: [
+          'Tap “Open Google AI Studio keys” below (browser opens).',
+          'Sign in with the Google account on this phone.',
+          'Get API key → Create API key (new project is fine). Accept any Google prompts to enable the API.',
+          'Copy the FULL key (do not worry about the prefix) → return to Forge → paste → Save & test.',
+        ],
+        registrationUrl: 'https://aistudio.google.com/apikey',
+        keysUrl: 'https://aistudio.google.com/apikey',
+        steps: [
+          'Open Google AI Studio API keys and sign in with Google.',
+          'Create API key (free). If Google asks to enable Generative Language API, allow it.',
+          'Paste the full key below — any prefix is OK; do not add quotes or “API_KEY=”.',
+        ],
+        keyHint: 'Paste full Google AI key',
+      },
+      {
         id: 'groq',
         kind: 'custom',
+        turnkey: true,
         badge: 'free',
         name: 'Groq',
-        blurb: 'Fast free tier. Best first choice — signup with email/Google, copy key.',
+        blurb: 'Truly free tier (rate-limited). Sign up with Google/GitHub/email, copy a gsk_ key.',
+        whyEasy: 'No credit card for the free tier. Fast models — great if Gemini misbehaves.',
+        guide: [
+          'Tap “Open Groq Console” below.',
+          'Sign up or log in (Google / GitHub / email).',
+          'API Keys → Create API Key → copy (usually starts with gsk_).',
+          'Return to Forge, paste the key, tap Save & test.',
+        ],
         registrationUrl: 'https://console.groq.com/login',
         keysUrl: 'https://console.groq.com/keys',
         steps: [
@@ -1363,33 +1457,19 @@ termux-reload-settings</div>
         },
       },
       {
-        id: 'gemini',
-        kind: 'custom',
-        badge: 'free',
-        name: 'Google Gemini',
-        blurb: 'Free AI Studio key. Good quality; OpenAI-compatible endpoint.',
-        registrationUrl: 'https://aistudio.google.com/',
-        keysUrl: 'https://aistudio.google.com/apikey',
-        steps: [
-          'Open Google AI Studio and sign in with Google.',
-          'Create API key (free tier).',
-          'Copy the key (often starts with AIza) and paste below.',
-        ],
-        keyHint: 'AIza…',
-        custom: {
-          slug: 'gemini',
-          label: 'Google Gemini',
-          base: 'https://generativelanguage.googleapis.com/v1beta/openai',
-          defaultModel: 'gemini-2.0-flash',
-          models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'],
-        },
-      },
-      {
         id: 'openrouter',
         kind: 'custom',
+        turnkey: true,
         badge: 'free',
-        name: 'OpenRouter',
-        blurb: 'One key for many models; includes free :free models.',
+        name: 'OpenRouter (free models)',
+        blurb: 'One key; pick free models (names ending in :free). Good backup brain.',
+        whyEasy: 'Sign up, create a key, Forge defaults to a free model router. No need to pay to try.',
+        guide: [
+          'Tap “Open OpenRouter” below and sign up.',
+          'Keys → Create key → copy (often sk-or-…).',
+          'Return to Forge, paste, Save & test.',
+          'Stay on free models (Forge sets a free default).',
+        ],
         registrationUrl: 'https://openrouter.ai/',
         keysUrl: 'https://openrouter.ai/keys',
         steps: [
@@ -1405,6 +1485,29 @@ termux-reload-settings</div>
           defaultModel: 'openrouter/free',
           models: ['openrouter/free', 'google/gemma-2-9b-it:free', 'meta-llama/llama-3.2-3b-instruct:free'],
         },
+      },
+      {
+        id: 'xai',
+        kind: 'builtin',
+        providerId: 'xai',
+        turnkey: false,
+        badge: 'paid',
+        name: 'xAI Grok (API)',
+        blurb: 'Grok chat apps can be free, but the developer API usually needs paid xAI credits.',
+        whyEasy: 'Only use this if you already bought xAI API credits. For free setup pick Gemini or Groq instead.',
+        guide: [
+          'Open the xAI console and sign in.',
+          'Add billing / credits if the console requires it.',
+          'Create an API key (starts with xai-) and paste below.',
+        ],
+        registrationUrl: 'https://console.x.ai/',
+        keysUrl: 'https://console.x.ai/',
+        steps: [
+          'Open the xAI API console (not only the Grok consumer app).',
+          'API access normally needs credits — free Grok chat ≠ free API.',
+          'Create a key (xai-…) only after billing allows API calls.',
+        ],
+        keyHint: 'xai-…',
       },
       {
         id: 'huggingface',
@@ -1468,22 +1571,6 @@ termux-reload-settings</div>
         },
       },
       {
-        id: 'xai',
-        kind: 'builtin',
-        providerId: 'xai',
-        badge: 'freemium',
-        name: 'xAI (Grok)',
-        blurb: 'Grok models. Needs an xAI account; may require credits.',
-        registrationUrl: 'https://accounts.x.ai/sign-up',
-        keysUrl: 'https://console.x.ai/',
-        steps: [
-          'Create an xAI account.',
-          'Open the console and create an API key.',
-          'Paste the key (starts with xai-).',
-        ],
-        keyHint: 'xai-…',
-      },
-      {
         id: 'openai',
         kind: 'builtin',
         providerId: 'openai',
@@ -1503,10 +1590,31 @@ termux-reload-settings</div>
 
     /** Built-in providers — OpenAI Chat Completions-compatible unless Azure */
     const BUILTIN_PROVIDERS = {
+      gemini: {
+        id: 'gemini',
+        label: 'Google Gemini',
+        hint: 'Free Google AI Studio key. Native Gemini API (multimodal). No credit card for free tier.',
+        base: 'https://generativelanguage.googleapis.com/v1beta',
+        baseLocked: true,
+        keyPlaceholder: 'Paste full Google AI key',
+        keyLabel: 'Google AI Studio API key',
+        auth: 'query',
+        jsonMode: 'off',
+        models: [
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+          'gemini-2.5-flash-lite',
+          'gemini-2.0-flash-lite',
+          'gemini-1.5-flash',
+        ],
+        defaultModel: 'gemini-2.5-flash',
+        builtin: true,
+        gemini: true,
+      },
       xai: {
         id: 'xai',
         label: 'xAI (Grok)',
-        hint: 'Grok models via api.x.ai — OpenAI-compatible Chat Completions.',
+        hint: 'Grok via api.x.ai — API usually needs paid credits (consumer Grok app free ≠ API free).',
         base: 'https://api.x.ai/v1',
         baseLocked: true,
         keyPlaceholder: 'xai-…',
@@ -1567,7 +1675,7 @@ termux-reload-settings</div>
       },
     };
 
-    const DEFAULT_PROVIDER = 'xai';
+    const DEFAULT_PROVIDER = 'gemini';
     let activeProviderId = DEFAULT_PROVIDER;
     let oaiEditorMode = null; // null | 'add' | 'edit'
 
@@ -2241,15 +2349,10 @@ termux-reload-settings</div>
       if (/^hf_/i.test(key)) {
         return { providerId: 'huggingface', label: 'Hugging Face', confidence: 'high', needsAdvanced: false };
       }
-      if (/^AIza/i.test(key)) {
-        const id = ensureBuiltinStyleCustom({
-          slug: 'gemini',
-          label: 'Google Gemini',
-          base: 'https://generativelanguage.googleapis.com/v1beta/openai',
-          defaultModel: 'gemini-2.0-flash',
-          models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'],
-        });
-        return { providerId: id, label: 'Google Gemini', confidence: 'high', needsAdvanced: false };
+      // Google AI Studio / Gemini keys traditionally AIza… — accept common variants too.
+      // Never require a specific prefix in the UI; detection is best-effort only.
+      if (/^AIza/i.test(key) || /^ya29\./i.test(key)) {
+        return { providerId: 'gemini', label: 'Google Gemini', confidence: 'high', needsAdvanced: false };
       }
       if (/^gsk_/i.test(key)) {
         const id = ensureBuiltinStyleCustom({
@@ -2257,7 +2360,7 @@ termux-reload-settings</div>
           label: 'Groq',
           base: 'https://api.groq.com/openai/v1',
           defaultModel: 'llama-3.3-70b-versatile',
-          models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+          models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'],
         });
         return { providerId: id, label: 'Groq', confidence: 'high', needsAdvanced: false };
       }
@@ -2266,22 +2369,33 @@ termux-reload-settings</div>
           slug: 'openrouter',
           label: 'OpenRouter',
           base: 'https://openrouter.ai/api/v1',
-          defaultModel: 'openai/gpt-4o-mini',
-          models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash-001'],
+          defaultModel: 'openrouter/free',
+          models: ['openrouter/free', 'google/gemma-2-9b-it:free', 'meta-llama/llama-3.2-3b-instruct:free'],
         });
         return { providerId: id, label: 'OpenRouter', confidence: 'high', needsAdvanced: false };
       }
       if (/^sk-/i.test(key)) {
         return { providerId: 'openai', label: 'OpenAI', confidence: 'high', needsAdvanced: false };
       }
-      // Azure keys are often long base64/hex without a stable prefix
-      if (/^[a-f0-9]{32}$/i.test(key) || (/^[A-Za-z0-9+/=]{40,}$/.test(key) && key.length >= 40 && !/[\s-]/.test(key))) {
+      // Azure: only the classic 32-char hex key shape (do NOT steal long random Google keys).
+      if (/^[a-f0-9]{32}$/i.test(key)) {
         return {
           providerId: 'azure',
           label: 'Azure OpenAI',
           confidence: 'medium',
           needsAdvanced: true,
           note: 'Azure needs resource + deployment under Advanced.',
+        };
+      }
+      // Long opaque keys with no known prefix: if user is already on Gemini, keep Gemini.
+      const curGuess = currentProviderId();
+      if (curGuess === 'gemini' || /gemini/i.test(String(getProvider(curGuess)?.label || ''))) {
+        return {
+          providerId: 'gemini',
+          label: 'Google Gemini',
+          confidence: 'medium',
+          needsAdvanced: false,
+          note: 'No standard prefix — using Google Gemini (turn-key free path).',
         };
       }
 
@@ -2394,13 +2508,18 @@ termux-reload-settings</div>
         overlay: document.getElementById('setupOverlay'),
         steps: document.getElementById('setupSteps'),
         panelWelcome: document.getElementById('setupPanelWelcome'),
+        panelTurnkey: document.getElementById('setupPanelTurnkey'),
         panelPick: document.getElementById('setupPanelPick'),
         panelRegister: document.getElementById('setupPanelRegister'),
         panelDone: document.getElementById('setupPanelDone'),
         provList: document.getElementById('setupProvList'),
+        turnkeyList: document.getElementById('setupTurnkeyList'),
         regTitle: document.getElementById('setupRegTitle'),
         regLead: document.getElementById('setupRegLead'),
         regSteps: document.getElementById('setupRegSteps'),
+        guideSteps: document.getElementById('setupGuideSteps'),
+        whyEasy: document.getElementById('setupWhyEasy'),
+        keyHelp: document.getElementById('setupKeyHelp'),
         keyInput: document.getElementById('setupKeyInput'),
         extra: document.getElementById('setupExtraFields'),
         status: document.getElementById('setupStatus'),
@@ -2411,6 +2530,9 @@ termux-reload-settings</div>
         btnOpenKeys: document.getElementById('btnSetupOpenKeys'),
       };
     }
+
+    let setupOpenedSite = false;
+    let setupFromTurnkey = true;
 
     function isSetupDone() {
       try { return localStorage.getItem(LS.setupDone) === '1'; } catch (_) { return false; }
@@ -2446,15 +2568,23 @@ termux-reload-settings</div>
       const s = setupEls();
       const map = {
         welcome: s.panelWelcome,
+        turnkey: s.panelTurnkey,
         pick: s.panelPick,
         register: s.panelRegister,
         done: s.panelDone,
       };
       Object.values(map).forEach(p => p && p.classList.remove('active'));
       if (map[name]) map[name].classList.add('active');
-      const order = ['welcome', 'pick', 'register', 'done'];
-      const labels = ['1 Welcome', '2 Provider', '3 Key', '4 Done'];
-      const idx = order.indexOf(name);
+      // Turn-key path: Welcome → Free brain → Key → Done
+      // All-providers path: Welcome → All → Key → Done
+      const order = setupFromTurnkey
+        ? ['welcome', 'turnkey', 'register', 'done']
+        : ['welcome', 'pick', 'register', 'done'];
+      const labels = setupFromTurnkey
+        ? ['1 Start', '2 Free AI', '3 Key', '4 Done']
+        : ['1 Start', '2 Provider', '3 Key', '4 Done'];
+      let idx = order.indexOf(name);
+      if (idx < 0) idx = 0;
       if (s.steps) {
         s.steps.innerHTML = labels.map((lab, i) => {
           const cls = i < idx ? 'done' : (i === idx ? 'on' : '');
@@ -2468,10 +2598,14 @@ termux-reload-settings</div>
       const s = setupEls();
       if (!s.overlay) return;
       s.overlay.classList.remove('hidden');
+      setupOpenedSite = false;
+      if (start === 'turnkey' || start === 'welcome') setupFromTurnkey = true;
+      if (start === 'pick') setupFromTurnkey = false;
       renderSetupProviderList();
+      renderSetupTurnkeyList();
       showSetupPanel(start);
       if (start === 'register' && setupSelectedId) fillSetupRegister(setupSelectedId);
-      if (start === 'pick' || start === 'welcome') setSetupStatus('');
+      if (start === 'pick' || start === 'welcome' || start === 'turnkey') setSetupStatus('');
     }
 
     function closeSetupWizard() {
@@ -2479,64 +2613,158 @@ termux-reload-settings</div>
       if (s.overlay) s.overlay.classList.add('hidden');
     }
 
+    function badgeLabel(badge) {
+      if (badge === 'best') return 'recommended';
+      return badge || '';
+    }
+
+    function renderProvCard(p, { selected = false, turnkey = false } = {}) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const rec = p.recommended || p.badge === 'best';
+      btn.className = 'prov-card'
+        + (selected ? ' selected' : '')
+        + (turnkey && rec ? ' turnkey-rec' : '');
+      btn.dataset.setupId = p.id;
+      const why = (turnkey && p.whyEasy)
+        ? `<div class="pc-why">${escapeHtml(p.whyEasy)}</div>`
+        : '';
+      btn.innerHTML = `
+          <div class="pc-top">
+            <span class="pc-name">${escapeHtml(p.name)}</span>
+            <span class="pc-badge ${escapeHtml(p.badge)}">${escapeHtml(badgeLabel(p.badge))}</span>
+          </div>
+          <div class="pc-desc">${escapeHtml(p.blurb)}</div>${why}`;
+      return btn;
+    }
+
+    function selectSetupProvider(id, { goRegister = false } = {}) {
+      setupSelectedId = id;
+      try { localStorage.setItem(LS.setupProvider, id); } catch (_) {}
+      setupOpenedSite = false;
+      renderSetupProviderList();
+      renderSetupTurnkeyList();
+      const s = setupEls();
+      if (s.btnContinue) s.btnContinue.disabled = !setupSelectedId;
+      if (goRegister) {
+        fillSetupRegister(id);
+        showSetupPanel('register');
+      }
+    }
+
     function renderSetupProviderList() {
       const s = setupEls();
       if (!s.provList) return;
       s.provList.innerHTML = '';
       SETUP_PROVIDERS.forEach(p => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'prov-card' + (setupSelectedId === p.id ? ' selected' : '');
-        btn.dataset.setupId = p.id;
-        btn.innerHTML = `
-          <div class="pc-top">
-            <span class="pc-name">${escapeHtml(p.name)}</span>
-            <span class="pc-badge ${escapeHtml(p.badge)}">${escapeHtml(p.badge)}</span>
-          </div>
-          <div class="pc-desc">${escapeHtml(p.blurb)}</div>`;
-        btn.addEventListener('click', () => {
-          setupSelectedId = p.id;
-          try { localStorage.setItem(LS.setupProvider, p.id); } catch (_) {}
-          renderSetupProviderList();
-          if (s.btnContinue) s.btnContinue.disabled = false;
-        });
+        const btn = renderProvCard(p, { selected: setupSelectedId === p.id, turnkey: false });
+        btn.addEventListener('click', () => selectSetupProvider(p.id));
         s.provList.appendChild(btn);
       });
       if (s.btnContinue) s.btnContinue.disabled = !setupSelectedId;
+    }
+
+    function renderSetupTurnkeyList() {
+      const s = setupEls();
+      if (!s.turnkeyList) return;
+      s.turnkeyList.innerHTML = '';
+      const list = SETUP_PROVIDERS.filter(p => p.turnkey);
+      list.forEach(p => {
+        const btn = renderProvCard(p, { selected: setupSelectedId === p.id, turnkey: true });
+        btn.addEventListener('click', () => {
+          setupFromTurnkey = true;
+          selectSetupProvider(p.id, { goRegister: true });
+        });
+        s.turnkeyList.appendChild(btn);
+      });
     }
 
     function getSetupProvider(id) {
       return SETUP_PROVIDERS.find(p => p.id === id) || null;
     }
 
+    function renderSetupGuide(p) {
+      const s = setupEls();
+      if (!s.guideSteps) return;
+      const steps = (p.guide && p.guide.length) ? p.guide : (p.steps || []);
+      s.guideSteps.innerHTML = steps.map((text, i) => {
+        const done = setupOpenedSite && i === 0 ? ' done' : '';
+        return `<div class="sg${done}"><span class="n">${i + 1}</span><div>${escapeHtml(text)}</div></div>`;
+      }).join('');
+    }
+
     function fillSetupRegister(id) {
       const p = getSetupProvider(id);
       const s = setupEls();
       if (!p || !s.regTitle) return;
-      s.regTitle.textContent = p.badge === 'free' || p.badge === 'local'
-        ? `Get ${p.name} working (free)`
+      const freeish = p.badge === 'free' || p.badge === 'best' || p.badge === 'local' || p.turnkey;
+      s.regTitle.textContent = freeish
+        ? `${p.name}: free key in a few taps`
         : `Connect ${p.name}`;
       s.regLead.textContent = p.kind === 'local'
         ? 'Local models need no cloud signup. Point Forge at your OpenAI-compatible server.'
-        : `Create a key at ${p.name}, then paste it here. Forge configures the rest.`;
-      s.regSteps.innerHTML = (p.steps || []).map(t => `<li>${escapeHtml(t)}</li>`).join('');
-      s.keyInput.value = '';
-      s.keyInput.placeholder = p.keyHint || 'API key';
+        : 'No coding. Open the site, copy a free key, come back here and paste it. Forge wires the rest.';
+      if (s.whyEasy) {
+        if (p.whyEasy) {
+          s.whyEasy.style.display = '';
+          s.whyEasy.innerHTML = `<b>Why this is easy:</b> ${escapeHtml(p.whyEasy)}`;
+        } else {
+          s.whyEasy.style.display = 'none';
+          s.whyEasy.textContent = '';
+        }
+      }
+      // Prefer plain guide checklist; keep ol as short fallback detail
+      renderSetupGuide(p);
+      if (s.regSteps) {
+        if (p.guide && p.guide.length) {
+          s.regSteps.style.display = 'none';
+          s.regSteps.innerHTML = '';
+        } else {
+          s.regSteps.style.display = '';
+          s.regSteps.innerHTML = (p.steps || []).map(step => `<li>${escapeHtml(step)}</li>`).join('');
+        }
+      }
+      if (s.keyInput) {
+        s.keyInput.value = '';
+        s.keyInput.placeholder = p.keyHint || 'API key';
+      }
+      if (s.keyHelp) {
+        s.keyHelp.textContent = p.kind === 'local'
+          ? 'Leave the key blank if your local server does not need one.'
+          : `Key usually looks like ${p.keyHint || 'your provider’s secret'}. Paste the whole thing — spaces are fine, we’ll trim.`;
+      }
       if (s.btnOpenSignup) {
         s.btnOpenSignup.style.display = p.registrationUrl ? '' : 'none';
-        s.btnOpenSignup.textContent = `Open ${p.name} signup →`;
+        if (p.id === 'gemini') s.btnOpenSignup.textContent = 'Open Google AI Studio →';
+        else if (p.id === 'xai') s.btnOpenSignup.textContent = 'Open xAI signup →';
+        else if (p.id === 'groq') s.btnOpenSignup.textContent = 'Open Groq Console →';
+        else s.btnOpenSignup.textContent = `Open ${p.name} signup →`;
       }
       if (s.btnOpenKeys) {
         s.btnOpenKeys.style.display = p.keysUrl ? '' : 'none';
         s.btnOpenKeys.textContent = p.kind === 'local'
           ? 'Docs / local help →'
-          : `Open ${p.name} API keys page →`;
+          : (p.id === 'gemini'
+            ? 'I already signed in — open API keys →'
+            : `Open ${p.name} API keys page →`);
       }
       if (s.extra) {
         s.extra.classList.add('hidden');
         s.extra.innerHTML = '';
       }
-      setSetupStatus(p.badge === 'free' ? 'Free tier path — no paid plan needed to try.' : '', '');
+      setSetupStatus(
+        freeish
+          ? 'Free path — no paid plan required to try Forge.'
+          : (p.badge === 'paid' ? 'This provider usually needs billing on their site.' : ''),
+        freeish ? 'ok' : ''
+      );
+    }
+
+    function markSetupSiteOpened() {
+      setupOpenedSite = true;
+      const p = getSetupProvider(setupSelectedId);
+      if (p) renderSetupGuide(p);
+      setSetupStatus('Browser opened. Create/copy your key, then paste it below.', 'ok');
     }
 
     function openExternalUrl(url) {
@@ -2566,10 +2794,15 @@ termux-reload-settings</div>
       const p = getSetupProvider(setupSelectedId);
       const s = setupEls();
       if (!p) { setSetupStatus('Pick a provider first.', 'err'); return; }
-      const key = String(s.keyInput?.value || '').trim();
+      let key = String(s.keyInput?.value || '').trim();
+      key = key.replace(/^api[_-]?key\s*=\s*/i, '').replace(/^["']|["']$/g, '').trim();
+      if (s.keyInput && key !== s.keyInput.value) s.keyInput.value = key;
       if (!key && !p.allowEmptyKey) {
         setSetupStatus('Paste your API key first (or open the keys page to create one).', 'err');
         return;
+      }
+      if (p.id === 'xai') {
+        setSetupStatus('Note: xAI developer API usually needs paid credits (free Grok chat app ≠ free API). Prefer Gemini or Groq for free.', '');
       }
 
       el.rememberKey.checked = true;
@@ -2586,7 +2819,8 @@ termux-reload-settings</div>
       if (p.custom?.defaultModel) el.model.value = p.custom.defaultModel;
       if (p.kind === 'builtin') {
         const bp = BUILTIN_PROVIDERS[p.providerId];
-        if (bp?.defaultModel && !el.model.value) el.model.value = bp.defaultModel;
+        // Always apply setup default model (avoid leftover grok-*/paid model ids)
+        if (bp?.defaultModel) el.model.value = bp.defaultModel;
       }
       // Mark local profiles so chat allows empty key
       if (p.allowEmptyKey) {
@@ -2616,7 +2850,11 @@ termux-reload-settings</div>
         refreshQuickSetupVisibility();
       } catch (e) {
         const msg = e?.message || String(e);
-        setSetupStatus('Saved, but test failed: ' + msg + (p.allowEmptyKey ? ' — is the local server running?' : ' — check the key / free tier.'), 'err');
+        let hint = ' — check the key / free tier.';
+        if (p.allowEmptyKey) hint = ' — is the local server running?';
+        else if (p.id === 'gemini') hint = ' — re-copy the FULL key from AI Studio (any prefix). Or try Groq turn-key (free).';
+        else if (p.id === 'xai') hint = ' — xAI API usually needs paid credits. Use Gemini or Groq for free.';
+        setSetupStatus('Saved, but test failed: ' + msg + hint, 'err');
         setAiStatus('Key saved; test failed: ' + msg, 'err');
         // Still mark partial setup so they aren't stuck; they can retry
         markSetupDone();
@@ -9684,15 +9922,61 @@ General:
      * Google Gemini generateContent — supports PDF, audio, video, images as inline_data.
      * Docs: multimodal input with inline_data mime types.
      */
+    function geminiModelFallbacks(preferred) {
+      const pref = String(preferred || '').replace(/^models\//, '').trim();
+      const list = [
+        pref,
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-flash-latest',
+      ].filter(Boolean);
+      const out = [];
+      for (const m of list) if (!out.includes(m)) out.push(m);
+      return out;
+    }
+
+    function formatGeminiError(status, raw) {
+      const text = typeof raw === 'string' ? raw : JSON.stringify(raw || {});
+      const low = text.toLowerCase();
+      if (status === 400 && /api[_ ]?key|invalid|illformed|invalid_argument/i.test(text)) {
+        return (
+          'Google rejected this API key. In AI Studio use Get API key → Create API key, ' +
+          'copy the FULL key (prefix may not be AIza), and paste it with no quotes or spaces. ' +
+          'Details: ' + text.slice(0, 280)
+        );
+      }
+      if (status === 403 || /permission|blocked|consumer|billing/i.test(low)) {
+        return (
+          'Google blocked the key (403). Open AI Studio → API key, ensure the Generative Language API is enabled, ' +
+          'and that the free tier is available in your region. Details: ' + text.slice(0, 280)
+        );
+      }
+      if (status === 404 || /not found|is not found|unknown model/i.test(low)) {
+        return 'Gemini model not found. Forge will try other free flash models. Details: ' + text.slice(0, 220);
+      }
+      if (status === 429 || /quota|rate/i.test(low)) {
+        return 'Gemini free-tier rate limit hit — wait a bit or try Groq turn-key. ' + text.slice(0, 220);
+      }
+      return `Gemini ${status}: ${text.slice(0, 400)}`;
+    }
+
     async function geminiGenerateContent(messages, signal, opts = {}) {
       const rt = getAiRuntime();
-      const key = String(rt.key || '').trim();
+      let key = String(rt.key || '').trim();
+      // tolerate "API_KEY=..." / quoted pastes from docs
+      key = key.replace(/^api[_-]?key\s*=\s*/i, '').replace(/^["']|["']$/g, '').trim();
       if (!key) throw new Error('Gemini API key required');
-      let model = String(rt.model || '').trim() || 'gemini-2.0-flash';
+      let model = String(rt.model || '').trim() || 'gemini-2.5-flash';
       // strip models/ prefix if user pasted full resource name
       model = model.replace(/^models\//, '');
 
-      const url = `${geminiApiBase()}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+      const urlFor = (m) =>
+        `${geminiApiBase()}/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(key)}`;
+      let url = urlFor(model);
 
       let systemText = '';
       const contents = [];
@@ -9780,28 +10064,75 @@ General:
         }];
       }
 
-      const headers = { 'Content-Type': 'application/json' };
+      const headers = {
+        'Content-Type': 'application/json',
+        // Google accepts key in query (above) and/or header — send both for stubborn clients
+        'x-goog-api-key': key,
+      };
+      const modelsTry = geminiModelFallbacks(model);
       let data;
-      if (Capacitor.isNativePlatform()) {
-        const res = await CapacitorHttp.request({
-          url,
-          method: 'POST',
-          headers,
-          data: body,
-          connectTimeout: 180000,
-          readTimeout: 180000,
-        });
-        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-        if (res.status < 200 || res.status >= 300) {
-          throw new Error(`Gemini ${res.status}: ${typeof res.data === 'string' ? res.data : JSON.stringify(res.data)}`);
+      let lastErr = null;
+      let usedModel = model;
+      for (let mi = 0; mi < modelsTry.length; mi++) {
+        usedModel = modelsTry[mi];
+        url = urlFor(usedModel);
+        try {
+          if (Capacitor.isNativePlatform()) {
+            const res = await CapacitorHttp.request({
+              url,
+              method: 'POST',
+              headers,
+              data: body,
+              connectTimeout: 180000,
+              readTimeout: 180000,
+            });
+            if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+            const payload = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+            let parsed;
+            try { parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data; }
+            catch { parsed = { raw: payload }; }
+            if (res.status < 200 || res.status >= 300) {
+              const err = new Error(formatGeminiError(res.status, payload));
+              err.status = res.status;
+              err.raw = payload;
+              throw err;
+            }
+            data = parsed;
+          } else {
+            const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
+            const text = await res.text();
+            let parsed;
+            try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
+            if (!res.ok) {
+              const err = new Error(formatGeminiError(res.status, text));
+              err.status = res.status;
+              err.raw = text;
+              throw err;
+            }
+            data = parsed;
+          }
+          lastErr = null;
+          // Remember working model for next calls
+          if (usedModel && el.model && currentProviderId() === 'gemini') {
+            try {
+              if (String(el.model.value || '').trim() !== usedModel) {
+                el.model.value = usedModel;
+                saveCurrentProfile();
+              }
+            } catch (_) {}
+          }
+          break;
+        } catch (e) {
+          if (e?.name === 'AbortError') throw e;
+          lastErr = e;
+          const msg = e?.message || String(e);
+          const raw = String(e?.raw || msg);
+          const canRetryModel = /not found|404|unknown model|is not supported|not supported for/i.test(msg + raw);
+          if (!canRetryModel || mi === modelsTry.length - 1) break;
+          // else try next free flash model
         }
-      } else {
-        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
-        const text = await res.text();
-        try { data = JSON.parse(text); } catch { data = { raw: text }; }
-        if (!res.ok) throw new Error(`Gemini ${res.status}: ${text.slice(0, 500)}`);
       }
+      if (lastErr || !data) throw lastErr || new Error('Gemini request failed');
 
       // Extract text + function calls from candidates
       const partsOut = data?.candidates?.[0]?.content?.parts || [];
@@ -10110,6 +10441,21 @@ General:
     }
 
     async function chatCompletions(messages, signal, opts = {}) {
+      // Gemini native generateContent (not OpenAI /chat/completions)
+      if (backendForRuntime(getAiRuntime()) === 'gemini') {
+        const g = await geminiGenerateContent(messages, signal, {
+          tools: opts.tools || opts.functions,
+          tool_choice: opts.tool_choice != null ? opts.tool_choice : opts.toolChoice,
+          fullResponse: !!(opts.fullResponse || opts.returnToolCalls || opts.tools || opts.functions),
+          jsonMode: opts.jsonMode,
+        });
+        if (g && typeof g === 'object' && !Array.isArray(g) && ('content' in g || 'tool_calls' in g)) {
+          if (opts.fullResponse || opts.returnToolCalls) return g;
+          return g.content != null ? g.content : '';
+        }
+        return g;
+      }
+
       const { url, headers, model } = resolveEndpoint();
       const temperature = parseFloat(getAiRuntime().temperature);
       const body = {
@@ -13441,10 +13787,25 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       el.apiKey.dataset.dirty = '1';
     });
 
-    // Easy setup wizard events
+    // Easy / turn-key setup wizard events
+    document.getElementById('btnSetupTurnkey')?.addEventListener('click', () => {
+      setupFromTurnkey = true;
+      renderSetupTurnkeyList();
+      showSetupPanel('turnkey');
+    });
     document.getElementById('btnSetupStart')?.addEventListener('click', () => {
+      setupFromTurnkey = false;
       showSetupPanel('pick');
       renderSetupProviderList();
+    });
+    document.getElementById('btnSetupSeeAllProviders')?.addEventListener('click', () => {
+      setupFromTurnkey = false;
+      showSetupPanel('pick');
+      renderSetupProviderList();
+    });
+    document.getElementById('btnSetupBackWelcomeFromTk')?.addEventListener('click', () => {
+      setupFromTurnkey = true;
+      showSetupPanel('welcome');
     });
     document.getElementById('btnSetupHaveKey')?.addEventListener('click', () => {
       closeSetupWizard();
@@ -13461,14 +13822,20 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       fillSetupRegister(setupSelectedId);
       showSetupPanel('register');
     });
-    document.getElementById('btnSetupBackPick')?.addEventListener('click', () => showSetupPanel('pick'));
+    document.getElementById('btnSetupBackPick')?.addEventListener('click', () => {
+      showSetupPanel(setupFromTurnkey ? 'turnkey' : 'pick');
+      if (setupFromTurnkey) renderSetupTurnkeyList();
+      else renderSetupProviderList();
+    });
     document.getElementById('btnSetupOpenSignup')?.addEventListener('click', () => {
       const p = getSetupProvider(setupSelectedId);
       openExternalUrl(p?.registrationUrl || p?.keysUrl);
+      markSetupSiteOpened();
     });
     document.getElementById('btnSetupOpenKeys')?.addEventListener('click', () => {
       const p = getSetupProvider(setupSelectedId);
       openExternalUrl(p?.keysUrl || p?.registrationUrl);
+      markSetupSiteOpened();
     });
     document.getElementById('btnSetupSaveKey')?.addEventListener('click', () => setupSaveAndTest());
     document.getElementById('setupKeyInput')?.addEventListener('keydown', (e) => {
@@ -13512,7 +13879,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     setAiStatus(
       hasAnyApiKeyConfigured()
         ? ('Brain: ' + currentProvider().label + (el.apiKey.value ? ' · ' + maskKey(el.apiKey.value) : ''))
-        : 'Brain: not set — run Easy setup',
+        : 'Brain: not set — run Turn-key setup',
       hasAnyApiKeyConfigured() ? 'ok' : ''
     );
     refreshTermuxStatus();
@@ -13523,8 +13890,8 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
 
     // First-run / missing key → easy setup (free providers)
     try {
-      setupSelectedId = localStorage.getItem(LS.setupProvider) || 'groq';
-    } catch (_) { setupSelectedId = 'groq'; }
+      setupSelectedId = localStorage.getItem(LS.setupProvider) || 'gemini';
+    } catch (_) { setupSelectedId = 'gemini'; }
 
     async function maybeOfferTermuxSetup() {
       if (!Capacitor.isNativePlatform()) return;
@@ -13543,7 +13910,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       setTimeout(() => openSetupWizard({ force: true, start: 'welcome' }), 350);
     } else if (!hasAnyApiKeyConfigured()) {
       if (!chat.length) {
-        addMessage('assistant', 'Tip: open AI → Easy setup to connect a free provider (Groq, Gemini, OpenRouter…) in about a minute.');
+        addMessage('assistant', 'Tip: open AI → Turn-key setup for free Gemini (Google account), Groq, or OpenRouter — about a minute. Grok API is usually paid.');
       }
       setTimeout(() => maybeOfferTermuxSetup(), 800);
       setTimeout(() => openTour(false), 1200);

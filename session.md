@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.44 / versionCode 74** (homescreen shortcut camera reload) · was 2.6.43/73
+| Version | **2.6.46 / versionCode 76** (Gemini key fix + xAI not free) · was 2.6.45/75
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-15 — 2.6.44 shortcut launch consume + no reload on resume
+| **Last rebuild** | 2026-08-15 — 2.6.46 Gemini native fix; free path Gemini/Groq/OpenRouter
 
 ### Locked product baseline
 
@@ -635,6 +635,64 @@ Smoke:
 [ ] Run mini-app with console.log / throw → lines appear; badge updates
 [ ] Failed ForgeHost call shows as error line
 [ ] Clear / Copy work
+```
+
+
+
+## Gemini key + free-path corrections (2026-08-15)
+
+**2.6.46 / versionCode 76**
+
+### User reports
+1. Gemini API key did not work; key **prefix ≠ AIza** (UI was too strict / misleading)
+2. xAI/Grok API key fails — console requires **payment/credits** (free Grok chat ≠ free API)
+
+### Fixes
+- Built-in **`gemini`** provider (native `generateContent`, not broken `/v1beta/chat/completions`)
+- `chatCompletions` + setup **Save & test** route through Gemini native API
+- Key paste: accept full key any prefix; strip `API_KEY=` / quotes; no AIza requirement in copy
+- Model fallbacks: `gemini-2.5-flash` → `2.0-flash` → lite → 1.5-flash on 404
+- Auth: query `key=` + header `x-goog-api-key`
+- Friendlier Google 400/403/429 errors
+- Stop mis-detecting long keys as Azure
+- **xAI removed from free turn-key** (badge paid); turn-key = Gemini + Groq + OpenRouter free
+- Default provider → `gemini`
+
+Smoke:
+```text
+[ ] Turn-key → Gemini → paste full AI Studio key (any prefix) → Save & test OK
+[ ] Turn-key → Groq → gsk_ key works
+[ ] xAI not shown on free turn-key cards; all-providers lists it as paid
+[ ] Forge it with Gemini produces an app
+```
+
+## Turn-key free AI setup (2026-08-15)
+
+**2.6.45 / versionCode 75**
+
+Lower-complexity onboarding for non-technical users. Provider selection was the main wall.
+
+### What changed
+- First-run / AI tab wizard leads with **Turn-key setup (free AI)** — plain language, no CS jargon
+- **Recommended path: Google Gemini** (free AI Studio key via Google account already on Android)
+- Also turn-key: **xAI Grok** (free account + small API quota) and **Groq** (fast free tier)
+- One-tap cards open a guided key page (open site → copy key → paste → Save & test)
+- Full provider list moved behind **Browse all providers** / **More options**
+- Default first-run pick: `gemini` (was `groq`)
+
+### Not changed
+- Advanced provider/model/endpoint controls stay collapsed under AI settings
+- Quick paste key still auto-detects provider from key shape
+- Paid OpenAI remains available but not pushed on the turn-key screen
+
+Smoke:
+```text
+[ ] Fresh install / clear setup flag → wizard offers Turn-key setup
+[ ] Pick Google Gemini → Open AI Studio → paste AIza key → Save & test → Done
+[ ] Pick xAI Grok / Groq same flow
+[ ] AI tab → Turn-key setup (free AI) reopens wizard
+[ ] Browse all providers still lists OpenRouter/HF/local/OpenAI
+[ ] Existing keys / advanced settings still work
 ```
 
 ## Homescreen shortcut: takePhoto loses result (2026-08-15)
