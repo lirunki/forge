@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.48 / versionCode 78** (generic LLM tools + web/gps/sms) · was 2.6.47/77
+| Version | **2.6.49 / versionCode 79** (reforge tool settings + tools migration) · prior 2.6.48/78
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -836,4 +836,35 @@ Smoke:
 [ ] "Where am I?" → get_location (GPS perm)
 [ ] "Show recent SMS from …" → sms_list (SMS perm)
 [ ] launch still confirms when setting on
+```
+
+
+## Reforge tool settings + tools migration (host)
+
+**2.6.49 / versionCode 79**
+
+Reforge sheet now includes **LLM tools** controls so chat/agent apps are rewritten onto `ForgeHost.tools`:
+
+- Enable host tools
+- Max risk: safe | sensitive | confirm | danger
+- Confirm side effects
+- Force migrate legacy tool lists
+- Add in-app tool settings UI
+- Group presets (Essential / Phone / All) + per-tool checklist
+- Prefs remembered in `localStorage.forge_reforge_tools_v1`
+
+`buildReforgeUserPrompt` / `reforgeAppWithAi` inject the live host catalog and mandate:
+- `tools.list` / `run` / `hint` instead of hardcoded `APP_TOOLS`
+- Settings UI for tool selection inside the mini-app
+- Preserve chat UX + app-specific tools
+
+SYSTEM_PROMPT also documents `ForgeHost.tools` for fresh **Forge it** apps.
+
+Smoke:
+```text
+[ ] Library → ⚒️ Reforge on Forge Chat → sheet shows tool groups
+[ ] Essential preset → Reforge → preview uses ForgeHost.tools.list/run
+[ ] Settings inside app: risk + tool toggles
+[ ] web_search / get_location work after re-import save
+[ ] Discard reforge restores original
 ```

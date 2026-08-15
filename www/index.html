@@ -597,6 +597,83 @@
     .tour-mode-opt input { margin-top: 0.2rem; width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--accent); }
     .tour-mode-opt .tm-title { font-weight: 700; font-size: 0.92rem; color: var(--text); }
     .tour-mode-opt .tm-hint { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 0.15rem; line-height: 1.35; }
+
+    /* === REFORGE_TOOLS_CSS_BEGIN === */
+    .tour-tools {
+      margin: 0.15rem 0 0.85rem;
+      padding: 0.65rem 0.7rem;
+      border-radius: 12px;
+      border: 1px solid var(--border, #333);
+      background: rgba(0,0,0,.18);
+      max-height: min(46vh, 360px);
+      overflow: auto;
+    }
+    .tour-tools h3 {
+      margin: 0 0 0.45rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.01em;
+    }
+    .tour-tools .tt-row {
+      display: flex; align-items: center; gap: 0.45rem;
+      margin: 0.28rem 0; font-size: 0.84rem; color: var(--text);
+    }
+    .tour-tools .tt-row label { flex: 1; cursor: pointer; }
+    .tour-tools select {
+      flex: 1; min-width: 0;
+      background: var(--bg, #111);
+      color: var(--text);
+      border: 1px solid var(--border, #333);
+      border-radius: 8px;
+      padding: 0.35rem 0.45rem;
+      font-size: 0.82rem;
+    }
+    .tour-tools .tt-hint {
+      color: var(--muted); font-size: 0.75rem; line-height: 1.35;
+      margin: 0.15rem 0 0.45rem;
+    }
+    .tour-tools .tt-groups, .tour-tools .tt-names {
+      display: flex; flex-wrap: wrap; gap: 0.3rem;
+      margin: 0.25rem 0 0.35rem;
+    }
+    .tour-tools .tt-chip {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      border: 1px solid var(--border, #333);
+      background: rgba(255,255,255,.04);
+      border-radius: 999px;
+      padding: 0.2rem 0.55rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      user-select: none;
+      color: var(--text);
+    }
+    .tour-tools .tt-chip.on {
+      border-color: rgba(139,92,246,.55);
+      background: rgba(139,92,246,.14);
+    }
+    .tour-tools .tt-chip input { display: none; }
+    .tour-tools details { margin-top: 0.35rem; }
+    .tour-tools summary {
+      cursor: pointer; color: var(--muted); font-size: 0.78rem;
+      user-select: none;
+    }
+    .tour-tools .tt-presets {
+      display: flex; flex-wrap: wrap; gap: 0.3rem;
+      margin: 0.2rem 0 0.45rem;
+    }
+    .tour-tools .tt-presets button {
+      font-size: 0.72rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid var(--border, #333);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .tour-tools .tt-presets button:hover { color: var(--text); border-color: rgba(139,92,246,.45); }
+    /* === REFORGE_TOOLS_CSS_END === */
+
     .tour-actions { display: flex; gap: 0.45rem; justify-content: flex-end; flex-wrap: wrap; }
     .tour-dots { display: flex; gap: 0.3rem; margin-bottom: 0.65rem; }
     .tour-dots span {
@@ -9810,6 +9887,22 @@ Termux (if installed) — full command bridge:
   - Never run destructive scripts without an explicit user tap.
   - Long jobs: raise timeoutMs; stream progress by writing files if needed.
 
+
+Host LLM tools registry (generic — grows with ForgeHost):
+  const { tools, catalog } = await ForgeHost.tools.list({ riskMax:'confirm', names?: string[] })
+  // tools = OpenAI function tools[] for ai.chat; filter by riskMax: safe|sensitive|confirm|danger
+  await ForgeHost.tools.run('web_search', { query:'…', limit:5 })
+  await ForgeHost.tools.run('web_fetch', { url, maxChars:12000 })
+  await ForgeHost.tools.run('get_location')
+  await ForgeHost.tools.run('sms_list', { limit:30, box:'all', address:'555' })
+  await ForgeHost.tools.run({ name, args, riskMax:'confirm' })
+  await ForgeHost.tools.call('apps.list', { query:'maps' })  // allowlisted bridge methods
+  const { hint } = await ForgeHost.tools.hint({ riskMax:'confirm' })  // put into system prompt
+  // aliases: ForgeHost.ai.tools.* · ForgeHost.web.search/fetch
+  // Chat/agent mini-apps MUST use tools.list/run (not a hardcoded APP_TOOLS for device APIs).
+  // Include Settings: enable tools, riskMax, confirm side effects, optional tool multi-select; persist via ForgeHost.storage.
+  // Danger tools (sms_send, phone_call) only if user enables danger risk and explicitly asks.
+
 Permission UX:
 - Request before sensitive APIs; on deny, show UI + button calling device.openSettings().
 - Prefer sms.compose / phone.dial over silent send/call unless user wants automation.
@@ -12293,6 +12386,8 @@ General:
       const summary = app?.summary || '';
       const html = String(app?.html || '');
       const wantCar = !!opts.wantCar;
+      const toolSettings = opts.tools || loadReforgeToolSettings();
+      const toolsSection = buildReforgeToolsPromptSection(app, toolSettings);
       const modeLine = wantCar
         ? 'TARGET MODE: AA-COMPAT (Android Auto / AAForge). Embed aaforge-car contract; prefer voice-first + large actions; stub phone-only APIs (camera/files/qr).'
         : 'TARGET MODE: STANDARD (full Forge phone UI). Keep rich UI; do not force aaforge-car unless already present and still valid.';
@@ -12309,7 +12404,7 @@ You MUST preserve 100%:
 - Every control and what it does: buttons, menus, toggles, inputs, sliders, attaches, sends, deletes, settings saves, navigation — same labels, same actions, same side effects
 - Event handlers / onclick / onchange wiring intent (rename vars only if needed; do not drop or repurpose handlers)
 - Data model: message shapes, attachment shape, settings object fields, localStorage / ForgeHost.storage keys and value meanings
-- AI prompts, tool names, tool schemas, and tool-loop behavior if present
+- AI chat UX, tool-loop structure, and app-specific prompts if present (device tool schemas must upgrade to ForgeHost.tools.list/run — see LLM TOOLS section)
 - Permissions requested and when they are requested
 - Error/status text purpose (wording may clarify, not remove)
 
@@ -12319,7 +12414,7 @@ You must NOT:
 - Replace custom UI with a generic chat shell
 - Add unrelated features or demos
 - Change storage keys (breaks existing user data)
-- Alter tool names the model already knows unless you keep backward-compatible aliases
+- Alter app-specific tool names the model already knows unless you keep backward-compatible aliases (host device tools MUST move to ForgeHost.tools names from the registry)
 
 Self-check before you answer (do this mentally, then ship complete html):
 1. List every interactive control in the source HTML.
@@ -12334,6 +12429,8 @@ Allowed changes ONLY:
 - Light visual polish ONLY if something is clearly broken — do not restyle the app
 
 But update ALL host integration to the LATEST ForgeHost contract.
+
+${toolsSection}
 
 ## Latest ForgeHost rules (must follow)
 
@@ -12372,6 +12469,8 @@ if (!part.dataUrl && part.base64) part.dataUrl = 'data:' + part.mime + ';base64,
 - ForgeHost.ai.listProviders() for provider picker — NO API keys in HTML.
 - Attachments: [{ type:'image', dataUrl, base64?, mime, name }]
 - Tool loop is owned by the mini-app; parse tool_calls defensively (arguments may be JSON strings).
+- **Device tools:** ForgeHost.tools.list / run / hint / call (NOT a hardcoded TOOLS constant). See LLM TOOLS section.
+- ForgeHost.web.search / web.fetch shortcuts are available.
 
 ### Other common bridges
 - ForgeHost.storage.get/set, secrets, files.pick, apps.list/launch, tts, mic, http.inlineHtml, toast, permissions.
@@ -12405,6 +12504,7 @@ ${html}
 
     async function reforgeAppWithAi(app, opts = {}) {
       const wantCar = !!opts.wantCar;
+      const toolSettings = opts.tools || loadReforgeToolSettings();
       // System: factory rules + reforge emphasis (SYSTEM_PROMPT already documents host API)
       let system = SYSTEM_PROMPT;
       system += `
@@ -12412,10 +12512,14 @@ ${html}
 REFORGE MODE (active):
 You are updating an EXISTING mini-app the user already uses.
 ABSOLUTE RULE: core product purpose and user jobs must stay the same.
-Preserve settings keys, tool names, and data model where possible.
-Modernize ForgeHost usage to current best practices (especially camera/media/AI attachments).
+Preserve settings keys and data model where possible.
+Modernize ForgeHost usage to current best practices (camera/media/AI attachments + ForgeHost.tools registry).
+If the app is a chat/agent with tools, migrate device tools to ForgeHost.tools.list/run and add tool settings UI as specified in the user prompt.
 Do not add unrelated demo features. Do not replace the product with a generic shell.
 Return complete html, not a diff.`;
+      if (toolSettings && toolSettings.enabled) {
+        system += '\n\n' + buildReforgeToolsPromptSection(app, toolSettings);
+      }
       if (wantCar) {
         system += '\n\n' + CAR_COMPAT_SYSTEM_ADDON;
         system += '\n\nAA REFORGE NOTE: User chose AA-COMPAT mode. Adapt the same product for AAForge/driving: keep the job-to-be-done, ' +
@@ -12425,7 +12529,7 @@ Return complete html, not a diff.`;
           'Do not require aaforge-car. Keep phone features (camera/files/etc.) working when the original app has them.';
       }
 
-      const userText = buildReforgeUserPrompt(app, { wantCar });
+      const userText = buildReforgeUserPrompt(app, { wantCar, tools: toolSettings });
       const msgs = [
         { role: 'system', content: system },
         { role: 'user', content: userText },
@@ -12478,18 +12582,225 @@ Return complete html, not a diff.`;
      * Reforge mode chooser: Standard | AA-compat | Cancel.
      * @returns {Promise<null | { wantCar: boolean }>}
      */
+
+    /* === REFORGE_TOOLS_FN_BEGIN === */
+    const LS_REFORGE_TOOLS = 'forge_reforge_tools_v1';
+    const REFORGE_TOOL_GROUPS = [
+      { id: 'web', label: 'Web' },
+      { id: 'location', label: 'GPS' },
+      { id: 'sms', label: 'SMS' },
+      { id: 'phone', label: 'Phone' },
+      { id: 'contacts', label: 'Contacts' },
+      { id: 'apps', label: 'Apps' },
+      { id: 'radio', label: 'Radio' },
+      { id: 'device', label: 'Device' },
+      { id: 'media', label: 'Media/TTS' },
+      { id: 'notify', label: 'Notify' },
+      { id: 'meta', label: 'Meta/bridge' },
+    ];
+
+    function defaultReforgeToolSettings() {
+      return {
+        enabled: true,
+        riskMax: 'confirm',
+        confirmSideEffects: true,
+        groups: REFORGE_TOOL_GROUPS.map((g) => g.id).filter((id) => id !== 'meta'),
+        names: null, // null = all in groups; array = explicit allowlist
+        addSettingsUi: true,
+        forceToolsMigration: true, // chat/tool apps always migrate to ForgeHost.tools
+      };
+    }
+
+    function loadReforgeToolSettings() {
+      const base = defaultReforgeToolSettings();
+      try {
+        const raw = localStorage.getItem(LS_REFORGE_TOOLS);
+        if (!raw) return base;
+        const o = JSON.parse(raw);
+        if (!o || typeof o !== 'object') return base;
+        return {
+          enabled: o.enabled !== false,
+          riskMax: ['safe', 'sensitive', 'confirm', 'danger'].includes(o.riskMax) ? o.riskMax : base.riskMax,
+          confirmSideEffects: o.confirmSideEffects !== false,
+          groups: Array.isArray(o.groups) ? o.groups.map(String) : base.groups,
+          names: Array.isArray(o.names) ? o.names.map(String) : null,
+          addSettingsUi: o.addSettingsUi !== false,
+          forceToolsMigration: o.forceToolsMigration !== false,
+        };
+      } catch (_) {
+        return base;
+      }
+    }
+
+    function saveReforgeToolSettings(s) {
+      try { localStorage.setItem(LS_REFORGE_TOOLS, JSON.stringify(s || loadReforgeToolSettings())); } catch (_) {}
+    }
+
+    function appLooksLikeToolChat(app) {
+      const html = String(app?.html || '');
+      if (!html) return false;
+      const h = html.toLowerCase();
+      const hasChat = /ai\.chat|forgehost\.ai\.chat|role\s*:\s*['"]assistant['"]|tool_calls/.test(h);
+      const hasTools = /tools\s*[:=]|tool_choice|executeTool|APP_TOOLS|function\s*:\s*\{\s*name\s*:/.test(html);
+      const hasHostTools = /ForgeHost\.tools\.(list|run)/.test(html);
+      return { hasChat, hasTools, hasHostTools, isToolChat: hasChat && (hasTools || hasHostTools) };
+    }
+
+    function getHostToolCatalogSafe() {
+      try {
+        if (typeof toolsList === 'function') {
+          const r = toolsList({ riskMax: 'danger' });
+          return {
+            catalog: Array.isArray(r.catalog) ? r.catalog : [],
+            tools: Array.isArray(r.tools) ? r.tools : [],
+            bridgeMethods: Array.isArray(r.bridgeMethods) ? r.bridgeMethods : [],
+          };
+        }
+      } catch (_) {}
+      return { catalog: [], tools: [], bridgeMethods: [] };
+    }
+
+    function filterCatalogByToolSettings(catalog, settings) {
+      const s = settings || defaultReforgeToolSettings();
+      const rank = { safe: 0, sensitive: 1, confirm: 2, danger: 3 };
+      const maxR = rank[s.riskMax] != null ? rank[s.riskMax] : 2;
+      const groupSet = new Set(Array.isArray(s.groups) ? s.groups : []);
+      const nameSet = Array.isArray(s.names) && s.names.length ? new Set(s.names) : null;
+      return (catalog || []).filter((c) => {
+        if (!c || !c.name) return false;
+        if ((rank[c.risk] != null ? rank[c.risk] : 0) > maxR) return false;
+        if (nameSet) return nameSet.has(c.name);
+        if (groupSet.size && c.group && !groupSet.has(c.group)) return false;
+        return true;
+      });
+    }
+
+    function buildReforgeToolsPromptSection(app, toolSettings) {
+      const s = toolSettings || defaultReforgeToolSettings();
+      if (!s.enabled) {
+        return (
+`## LLM tools
+User disabled host-tool migration for this reforge. Do NOT strip existing tools unless broken.
+If the app already uses ForgeHost.tools, keep it. Do not add a large new tool system.`
+        );
+      }
+      const det = appLooksLikeToolChat(app);
+      const { catalog } = getHostToolCatalogSafe();
+      const selected = filterCatalogByToolSettings(catalog, s);
+      const selectedNames = selected.map((c) => c.name);
+      const catalogLines = selected.map((c) =>
+        `- ${c.name} [${c.risk}/${c.group || 'misc'}]: ${c.description || ''}`
+      ).join('\n');
+      const migrate = s.forceToolsMigration || det.isToolChat || det.hasTools;
+
+      return (
+`## LLM TOOLS — latest ForgeHost contract (MANDATORY modernization)
+
+Host now ships a **generic tool registry**. Mini-apps must NOT hardcode a stale APP_TOOLS / TOOLS array for device capabilities.
+
+### APIs (use these)
+\`\`\`js
+// List OpenAI-shaped tools (filter with riskMax and optional names)
+const { tools, catalog } = await ForgeHost.tools.list({
+  riskMax: ${JSON.stringify(s.riskMax)},
+  ${selectedNames.length ? `names: ${JSON.stringify(selectedNames)},` : '// names: optional allowlist'}
+});
+// Execute
+const result = await ForgeHost.tools.run({ name, args, riskMax: ${JSON.stringify(s.riskMax)} });
+// System blurb for the model
+const { hint } = await ForgeHost.tools.hint({ riskMax: ${JSON.stringify(s.riskMax)}${selectedNames.length ? `, names: ${JSON.stringify(selectedNames)}` : ''} });
+// Aliases: ForgeHost.ai.tools.*  ·  ForgeHost.web.search/fetch
+// Low-level: await ForgeHost.tools.call('sms.read', { limit:20 })
+\`\`\`
+
+### Detection of this app
+- looksLikeChat: ${det.hasChat}
+- hasLegacyOrAnyTools: ${det.hasTools}
+- alreadyOnHostTools: ${det.hasHostTools}
+- migrateToHostTools: ${migrate}
+
+### What you MUST do when migrateToHostTools is true
+1. Remove hardcoded device tool schemas (list_apps, sms_*, get_location, web_*, etc.) that exist in the host registry.
+2. On boot + when tool settings change: \`refreshHostTools()\` → \`ForgeHost.tools.list({ riskMax, names? })\` → store as APP_TOOLS / tools for ai.chat.
+3. \`executeTool(name, args)\` → \`ForgeHost.tools.run({ name, args, riskMax })\` (keep confirm dialog if confirmSideEffects).
+4. Pass \`tools\` + \`tool_choice:'auto'\` into \`ForgeHost.ai.chat\` when tools enabled.
+5. Prepend tools hint into the model system prompt via \`ForgeHost.tools.hint()\`.
+6. Keep any **app-specific** tools that are NOT device bridges (custom pure-JS tools) and merge them with host tools.
+7. Preserve the chat UX, message list, composer, attachment flow, provider picker — only modernize tool wiring + settings.
+
+### Settings UI inside the mini-app (required if addSettingsUi=${s.addSettingsUi})
+Add (or extend) a Settings sheet with:
+- **Enable tools** (checkbox) — default ${s.enabled}
+- **Max risk** select: safe | sensitive | confirm | danger — default ${JSON.stringify(s.riskMax)}
+- **Confirm side effects** (checkbox) — default ${s.confirmSideEffects}
+- **Tool picker**: multi-select or group chips so the user can enable/disable tools; persist under a stable ForgeHost.storage key (keep old keys if present; you may add \`forgechat_tool_settings\` or extend existing settings object without renaming old fields)
+- Changing tool settings calls refreshHostTools() before the next send
+- Do NOT request API keys; keep using ForgeHost.ai.listProviders / setProvider
+
+### Selected tools for THIS reforge (prefer these in list/names filter)
+${catalogLines || '(catalog unavailable — still call ForgeHost.tools.list at runtime)'}
+
+### Risk rules to embed in app system prompt
+- Never sms_send / phone_call unless user clearly asked AND danger tools enabled.
+- Be discreet with SMS/contacts/location contents.
+- web_search then web_fetch for research questions.
+- get_location for "where am I".
+- sms_list for reading messages (permission via host).
+
+### Confirm side effects
+confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confirm|danger tools (launch_app, open_url, sms_send, phone_call, radio_set, etc.).
+`
+      );
+    }
+    /* === REFORGE_TOOLS_FN_END === */
+
     function confirmReforgeMode(app) {
       return new Promise((resolve) => {
         const name = app?.title || 'this app';
         const currentAa = appIsAaMode(app);
+        const det = appLooksLikeToolChat(app);
+        const initial = loadReforgeToolSettings();
+        // If app already tool-chat, default enable migration on
+        if (det.isToolChat) initial.enabled = true;
+
+        const { catalog } = getHostToolCatalogSafe();
+        const groupsPresent = new Set((catalog || []).map((c) => c.group || 'misc'));
+
         const wrap = document.createElement('div');
         wrap.className = 'tour-overlay';
         wrap.setAttribute('role', 'dialog');
         wrap.setAttribute('aria-modal', 'true');
+
+        const groupChips = REFORGE_TOOL_GROUPS
+          .filter((g) => !groupsPresent.size || groupsPresent.has(g.id) || g.id === 'web')
+          .map((g) => {
+            const on = (initial.groups || []).includes(g.id);
+            return (
+              '<label class="tt-chip' + (on ? ' on' : '') + '" data-group="' + g.id + '">' +
+                '<input type="checkbox" data-group="' + g.id + '"' + (on ? ' checked' : '') + '/>' +
+                escapeHtml(g.label) +
+              '</label>'
+            );
+          }).join('');
+
+        const nameChips = (catalog || []).map((c) => {
+          const checked = !initial.names || initial.names.includes(c.name);
+          // when names is null, all checked visually within groups
+          return (
+            '<label class="tt-chip' + (checked ? ' on' : '') + '" data-name="' + escapeHtml(c.name) + '" title="' + escapeHtml(c.risk + ': ' + (c.description || '')) + '">' +
+              '<input type="checkbox" data-name="' + escapeHtml(c.name) + '"' + (checked ? ' checked' : '') + '/>' +
+              escapeHtml(c.name) +
+            '</label>'
+          );
+        }).join('');
+
         wrap.innerHTML =
-          '<div class="tour-card">' +
-            '<h2>Reforge mode</h2>' +
-            '<p>Update host APIs for <strong></strong>. Keep the current mode, switch, or cancel.</p>' +
+          '<div class="tour-card" style="max-width:min(520px,96vw)">' +
+            '<h2>Reforge</h2>' +
+            '<p>Update host APIs for <strong></strong>. Pick mode + which LLM tools the app should use.</p>' +
+            (det.isToolChat
+              ? '<p class="tt-hint" style="color:var(--accent);margin-top:-0.35rem">Detected chat + tools — will migrate to <code>ForgeHost.tools</code>.</p>'
+              : '') +
             '<div class="tour-mode-list" role="radiogroup" aria-label="Reforge target mode">' +
               '<label class="tour-mode-opt' + (!currentAa ? ' on' : '') + '">' +
                 '<input type="radio" name="reforgeMode" value="standard"' + (!currentAa ? ' checked' : '') + ' />' +
@@ -12502,13 +12813,45 @@ Return complete html, not a diff.`;
                 '<span class="tm-hint">Android Auto via AAForge — car contract, large actions, stub phone-only APIs.</span></span>' +
               '</label>' +
             '</div>' +
+            '<div class="tour-tools" id="reforgeToolsPanel">' +
+              '<h3>LLM tools (ForgeHost.tools)</h3>' +
+              '<div class="tt-hint">Reforged apps load tools from the host registry (web search, GPS, SMS, apps…). New host tools appear automatically.</div>' +
+              '<div class="tt-row"><label><input type="checkbox" id="rtEnabled"' + (initial.enabled ? ' checked' : '') + '/> Enable host tools in this app</label></div>' +
+              '<div class="tt-row"><label><input type="checkbox" id="rtConfirm"' + (initial.confirmSideEffects ? ' checked' : '') + '/> Confirm before side effects</label></div>' +
+              '<div class="tt-row"><label><input type="checkbox" id="rtSettingsUi"' + (initial.addSettingsUi ? ' checked' : '') + '/> Add/keep in-app tool settings UI</label></div>' +
+              '<div class="tt-row"><label><input type="checkbox" id="rtForceMig"' + (initial.forceToolsMigration || det.isToolChat ? ' checked' : '') + '/> Force migrate legacy tool lists → ForgeHost.tools</label></div>' +
+              '<div class="tt-row"><span style="min-width:4.5rem;color:var(--muted);font-size:0.8rem">Max risk</span>' +
+                '<select id="rtRisk">' +
+                  ['safe','sensitive','confirm','danger'].map((r) =>
+                    '<option value="' + r + '"' + (initial.riskMax === r ? ' selected' : '') + '>' + r +
+                    (r === 'confirm' ? ' (recommended)' : r === 'danger' ? ' (sms_send/call)' : '') +
+                    '</option>'
+                  ).join('') +
+                '</select>' +
+              '</div>' +
+              '<div class="tt-hint">Groups</div>' +
+              '<div class="tt-presets">' +
+                '<button type="button" data-preset="essential">Essential</button>' +
+                '<button type="button" data-preset="phone">Phone pack</button>' +
+                '<button type="button" data-preset="all">All groups</button>' +
+                '<button type="button" data-preset="none">None</button>' +
+              '</div>' +
+              '<div class="tt-groups" id="rtGroups">' + groupChips + '</div>' +
+              '<details id="rtNamesDetails">' +
+                '<summary>Individual tools (' + (catalog || []).length + ')</summary>' +
+                '<div class="tt-hint">Uncheck to exclude. If you change these, reforge passes an explicit names allowlist.</div>' +
+                '<div class="tt-names" id="rtNames">' + (nameChips || '<span class="tt-hint">Catalog loads with host…</span>') + '</div>' +
+              '</details>' +
+            '</div>' +
             '<div class="tour-actions">' +
               '<button class="btn secondary small" type="button" data-act="cancel">Cancel</button>' +
               '<button class="btn small" type="button" data-act="ok">Reforge</button>' +
             '</div>' +
           '</div>';
+
         const strong = wrap.querySelector('strong');
         if (strong) strong.textContent = '"' + name + '"';
+
         const opts = wrap.querySelectorAll('.tour-mode-opt');
         const syncOn = () => {
           opts.forEach((lab) => {
@@ -12517,6 +12860,61 @@ Return complete html, not a diff.`;
           });
         };
         opts.forEach((lab) => lab.addEventListener('click', () => setTimeout(syncOn, 0)));
+
+        // chip toggle styling
+        const syncChips = (root) => {
+          root.querySelectorAll('.tt-chip').forEach((lab) => {
+            const inp = lab.querySelector('input');
+            lab.classList.toggle('on', !!(inp && inp.checked));
+          });
+        };
+        wrap.querySelectorAll('.tt-chip input').forEach((inp) => {
+          inp.addEventListener('change', () => syncChips(wrap));
+        });
+
+        const presets = {
+          essential: ['web', 'device', 'apps'],
+          phone: ['sms', 'phone', 'contacts', 'location', 'device'],
+          all: REFORGE_TOOL_GROUPS.map((g) => g.id),
+          none: [],
+        };
+        wrap.querySelectorAll('[data-preset]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const ids = new Set(presets[btn.getAttribute('data-preset')] || []);
+            wrap.querySelectorAll('#rtGroups input[data-group]').forEach((inp) => {
+              inp.checked = ids.has(inp.getAttribute('data-group'));
+            });
+            // reset individual names to all checked when using group presets
+            wrap.querySelectorAll('#rtNames input[data-name]').forEach((inp) => { inp.checked = true; });
+            syncChips(wrap);
+          });
+        });
+
+        const collect = () => {
+          const enabled = !!wrap.querySelector('#rtEnabled')?.checked;
+          const confirmSideEffects = !!wrap.querySelector('#rtConfirm')?.checked;
+          const addSettingsUi = !!wrap.querySelector('#rtSettingsUi')?.checked;
+          const forceToolsMigration = !!wrap.querySelector('#rtForceMig')?.checked;
+          const riskMax = wrap.querySelector('#rtRisk')?.value || 'confirm';
+          const groups = [...wrap.querySelectorAll('#rtGroups input[data-group]:checked')].map((i) => i.getAttribute('data-group'));
+          const allNameInputs = [...wrap.querySelectorAll('#rtNames input[data-name]')];
+          const checkedNames = allNameInputs.filter((i) => i.checked).map((i) => i.getAttribute('data-name'));
+          let names = null;
+          if (allNameInputs.length && checkedNames.length < allNameInputs.length) {
+            names = checkedNames;
+          }
+          // If groups narrowed and names still all-checked, filter by groups only (names null)
+          return {
+            enabled,
+            riskMax,
+            confirmSideEffects,
+            addSettingsUi,
+            forceToolsMigration,
+            groups,
+            names,
+          };
+        };
+
         const finish = (val) => {
           try { wrap.remove(); } catch (_) {}
           resolve(val);
@@ -12528,13 +12926,14 @@ Return complete html, not a diff.`;
         wrap.querySelector('[data-act="ok"]').onclick = () => {
           const picked = wrap.querySelector('input[name="reforgeMode"]:checked');
           const wantCar = picked && picked.value === 'aa';
-          finish({ wantCar: !!wantCar });
+          const tools = collect();
+          saveReforgeToolSettings(tools);
+          finish({ wantCar: !!wantCar, tools });
         };
         document.body.appendChild(wrap);
         try { wrap.querySelector('[data-act="ok"]').focus(); } catch (_) {}
       });
     }
-
     async function reforgeLibraryApp(app) {
       if (!app?.html) {
         setLibStatus('Nothing to reforge', 'err');
@@ -12564,6 +12963,7 @@ Return complete html, not a diff.`;
         return;
       }
       const wantCar = !!modeChoice.wantCar;
+      const toolSettings = modeChoice.tools || loadReforgeToolSettings();
 
       // Snapshot for discard (deep enough for html)
       pendingReforgeOriginal = {
@@ -12584,14 +12984,15 @@ Return complete html, not a diff.`;
       try { showTab('preview'); } catch (_) {}
       loadPreview({ ...app });
       const modeLabel = wantCar ? 'AA-compat' : 'Standard';
-      setLibStatus(`Reforging “${app.title || 'app'}” (${modeLabel})…`, '');
-      setPreviewStatus(`Reforging (${modeLabel}) with latest ForgeHost…`, '');
+      const toolsLabel = toolSettings.enabled ? (`tools:` + (toolSettings.riskMax || 'confirm')) : 'tools:off';
+      setLibStatus(`Reforging “${app.title || 'app'}” (${modeLabel}, ${toolsLabel})…`, '');
+      setPreviewStatus(`Reforging (${modeLabel}, ${toolsLabel}) with latest ForgeHost…`, '');
       setBusy(true);
       abortController = new AbortController();
 
       try {
         savePrefs();
-        const { app: next, message } = await reforgeAppWithAi(app, { wantCar });
+        const { app: next, message } = await reforgeAppWithAi(app, { wantCar, tools: toolSettings });
         // Preview only — library row unchanged until Save
         currentApp = next;
         loadPreview(next);
