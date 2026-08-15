@@ -6779,6 +6779,32 @@ termux-reload-settings</div>
       throw new Error("Unknown alias: " + alias);
     }
 
+    async function ensureSmsPermission(need) {
+      // need: 'read' | 'send' | 'any'
+      const want = String(need || 'any').toLowerCase();
+      let perms = await collectAllPermissions();
+      const ok = () => {
+        if (want === 'read') return !!perms.readSms;
+        if (want === 'send') return !!perms.sendSms;
+        return !!(perms.readSms || perms.sendSms || perms.sms);
+      };
+      if (ok()) return perms;
+      try {
+        await requestPermissionAlias('sms');
+      } catch (e) {
+        // fall through to re-check / structured error
+      }
+      perms = await collectAllPermissions();
+      if (ok()) return perms;
+      const err = new Error(
+        'SMS permission denied. Open Settings → Apps → Forge → Permissions → SMS (allow), then retry.'
+      );
+      err.code = 'SMS_PERMISSION_DENIED';
+      err.needsSettings = true;
+      err.permissions = perms;
+      throw err;
+    }
+
     function expandPermissionPack(params) {
       const pack = String(params.pack || params.id || '').toLowerCase();
       let features = [];
@@ -7879,8 +7905,10 @@ termux-reload-settings</div>
         case 'sms.compose':
           return await phoneCall('composeSms', { to: params.to || '', body: params.body || '' });
         case 'sms.send':
+          await ensureSmsPermission('send');
           return await phoneCall('sendSms', { to: params.to || '', body: params.body || '' });
         case 'sms.read':
+          await ensureSmsPermission('read');
           return await phoneCall('readSms', {
             limit: params.limit || 30,
             box: params.box || 'inbox',
@@ -8623,9 +8651,11 @@ Background jobs / reminders (AlarmManager; survives brief background):
 
 Phone / SMS / contacts / location:
   ForgeHost.sms.compose(to, body)              // no perm — opens SMS app
-  await ForgeHost.permissions.request('sms')
+  await ForgeHost.permissions.request('sms')   // shows system SMS dialog
+  // sms.read/send also auto-request once if missing
   ForgeHost.sms.send(to, body)
   ForgeHost.sms.read({limit, box, address})    // box: inbox|sent|all
+  // if still denied: ForgeHost.device.openSettings() → Permissions → SMS
   ForgeHost.phone.dial(number)                 // no perm
   await ForgeHost.permissions.request('phone')
   ForgeHost.phone.call(number)

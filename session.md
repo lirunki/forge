@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.46 / versionCode 76** (Gemini key fix + xAI not free) · was 2.6.45/75
+| Version | **2.6.47 / versionCode 77** (SMS perm auto-request) · was 2.6.46/76
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-15 — 2.6.46 Gemini native fix; free path Gemini/Groq/OpenRouter
+| **Last rebuild** | 2026-08-15 — 2.6.46 Gemini native fix; free path Gemini/Groq/OpenRouter · **user verified + pushed** (`turn key setup`)
 
 ### Locked product baseline
 
@@ -660,7 +660,7 @@ Smoke:
 
 Smoke:
 ```text
-[ ] Turn-key → Gemini → paste full AI Studio key (any prefix) → Save & test OK
+[x] Turn-key → Gemini → paste full AI Studio key (any prefix) → Save & test OK (user verified)
 [ ] Turn-key → Groq → gsk_ key works
 [ ] xAI not shown on free turn-key cards; all-providers lists it as paid
 [ ] Forge it with Gemini produces an app
@@ -759,3 +759,34 @@ Smoke:
 - GPS/hotspot almost always need system UI (Android restriction).
 - Wi-Fi/BT direct toggle best-effort; falls back to panel.
 - Re-import Forge_Chat.html after host install.
+
+
+## SMS read permission auto-request (2026-08-15)
+
+**2.6.47 / versionCode 77**
+
+**Bug:** Mini-apps that call `ForgeHost.sms.read` (conversation copy, etc.) fail with
+`READ_SMS permission not granted` / failed permissions — often because they never call
+`permissions.request('sms')`, or the user denied once and gets no second dialog.
+
+**Fix:**
+1. Native `PhoneBridge.readSms` / `sendSms` auto-`requestPermissionForAlias("sms")` then continue
+2. Host `ensureSmsPermission` before `sms.read` / `sms.send` with clear Settings guidance
+3. Sample: `~/downloads/Sms_Conversation_Copy.html` (+ `forge/samples/`)
+
+**Mini-app contract (still recommended):**
+```js
+await ForgeHost.permissions.request('sms')
+const { messages } = await ForgeHost.sms.read({ limit: 200, box: 'all', address: '555' })
+await ForgeHost.clipboard.write(text)
+// permanent deny:
+await ForgeHost.device.openSettings()  // Permissions → SMS
+```
+
+Smoke:
+```text
+[ ] Install 2.6.47 → import Sms_Conversation_Copy.html
+[ ] Grant SMS → Load threads → pick thread → Copy conversation
+[ ] Deny once → error mentions Settings; App settings opens Forge details
+[ ] After manual allow in Settings → Load works
+```

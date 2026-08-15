@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>SMS Conversation Copy</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1419;
+    --card: #1a2332;
+    --text: #e7ecf3;
+    --muted: #8b9bb4;
+    --accent: #4f8cff;
+    --ok: #3dd68c;
+    --err: #ff6b6b;
+    --line: #2a3548;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: 12px; padding-bottom: 28px;
+  }
+  h1 { font-size: 1.15rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: .85rem; margin-bottom: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  input, select, button, textarea {
+    font: inherit; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); padding: 10px 12px;
+  }
+  input, select { flex: 1; min-width: 120px; }
+  button {
+    background: var(--accent); border: none; color: #fff; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  button.sec { background: #2a3548; }
+  button:disabled { opacity: .5; }
+  .status {
+    min-height: 1.2em; font-size: .85rem; color: var(--muted); margin: 6px 0 10px;
+  }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--err); }
+  .threads { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .thread {
+    text-align: left; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; color: var(--text); width: 100%;
+  }
+  .thread.active { border-color: var(--accent); }
+  .thread .addr { font-weight: 700; }
+  .thread .preview { color: var(--muted); font-size: .82rem; margin-top: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+  #out {
+    width: 100%; min-height: 220px; resize: vertical; line-height: 1.35;
+    white-space: pre-wrap;
+  }
+  .hint { color: var(--muted); font-size: .8rem; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h1>SMS Conversation Copy</h1>
+  <div class="sub">Read a thread → copy plain text. Needs SMS permission once.</div>
+
+  <div class="row">
+    <input id="query" type="text" placeholder="Filter number or name fragment" />
+    <select id="box">
+      <option value="all">inbox + sent</option>
+      <option value="inbox">inbox only</option>
+      <option value="sent">sent only</option>
+    </select>
+  </div>
+  <div class="row">
+    <button id="btnPerm" class="sec" type="button">Grant SMS</button>
+    <button id="btnLoad" type="button">Load threads</button>
+    <button id="btnSettings" class="sec" type="button">App settings</button>
+  </div>
+  <div id="status" class="status">Ready.</div>
+  <div id="threads" class="threads"></div>
+
+  <div class="row">
+    <button id="btnCopy" type="button" disabled>Copy conversation</button>
+    <button id="btnShare" class="sec" type="button" disabled>Share</button>
+  </div>
+  <textarea id="out" placeholder="Conversation text appears here…" readonly></textarea>
+  <div class="hint">
+    Tip: if Android won’t show the SMS dialog, use <b>App settings</b> → Permissions → SMS → Allow.
+  </div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $('status');
+  const threadsEl = $('threads');
+  const outEl = $('out');
+  let selected = null; // { address, messages:[] }
+  let lastText = '';
+
+  function H() {
+    if (!window.ForgeHost) throw new Error('Open this inside Forge (not a normal browser).');
+    return window.ForgeHost;
+  }
+
+  function setStatus(msg, kind) {
+    statusEl.textContent = msg || '';
+    statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function digits(s) {
+    return String(s || '').replace(/\D+/g, '');
+  }
+
+  function fmtTime(ms) {
+    const n = Number(ms);
+    if (!n) return '';
+    try {
+      return new Date(n).toLocaleString();
+    } catch (_) {
+      return String(n);
+    }
+  }
+
+  function direction(m) {
+    // Telephony.Sms: 1=inbox, 2=sent, 3=draft, 5=failed, 6=queued
+    const t = Number(m && m.type);
+    if (t === 2 || t === 3 || t === 5 || t === 6) return 'me';
+    return 'them';
+  }
+
+  function normalizeMessages(raw) {
+    const list = (raw && (raw.messages || raw.items || raw)) || [];
+    return (Array.isArray(list) ? list : []).map((m) => ({
+      id: m.id,
+      address: m.address || m.from || m.to || '',
+      body: m.body != null ? String(m.body) : '',
+      date: Number(m.date || m.timestamp || 0),
+      type: m.type,
+      read: !!m.read,
+    }));
+  }
+
+  function groupThreads(messages) {
+    const map = new Map();
+    for (const m of messages) {
+      const key = digits(m.address) || String(m.address || 'unknown');
+      if (!map.has(key)) {
+        map.set(key, { key, address: m.address || key, messages: [] });
+      }
+      const th = map.get(key);
+      th.messages.push(m);
+      // keep a nicer display address (prefer non-empty original)
+      if (m.address && (!th.address || digits(th.address).length < digits(m.address).length)) {
+        th.address = m.address;
+      }
+    }
+    const threads = [...map.values()];
+    for (const th of threads) {
+      th.messages.sort((a, b) => (a.date || 0) - (b.date || 0));
+      th.lastDate = th.messages.length ? th.messages[th.messages.length - 1].date : 0;
+    }
+    threads.sort((a, b) => (b.lastDate || 0) - (a.lastDate || 0));
+    return threads;
+  }
+
+  function renderConversation(th) {
+    const lines = [];
+    lines.push('SMS conversation with ' + (th.address || th.key));
+    lines.push('Messages: ' + th.messages.length);
+    lines.push('');
+    for (const m of th.messages) {
+      const who = direction(m) === 'me' ? 'Me' : (th.address || 'Them');
+      const when = fmtTime(m.date);
+      lines.push('[' + when + '] ' + who + ':');
+      lines.push(m.body || '(empty)');
+      lines.push('');
+    }
+    lastText = lines.join('\n').trim() + '\n';
+    outEl.value = lastText;
+    $('btnCopy').disabled = !lastText;
+    $('btnShare').disabled = !lastText;
+  }
+
+  function renderThreads(threads) {
+    threadsEl.innerHTML = '';
+    if (!threads.length) {
+      threadsEl.innerHTML = '<div class="meta">No threads matched.</div>';
+      return;
+    }
+    for (const th of threads) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'thread' + (selected && selected.key === th.key ? ' active' : '');
+      const last = th.messages[th.messages.length - 1];
+      btn.innerHTML =
+        '<div class="addr"></div>' +
+        '<div class="meta"></div>' +
+        '<div class="preview"></div>';
+      btn.querySelector('.addr').textContent = th.address || th.key;
+      btn.querySelector('.meta').textContent =
+        th.messages.length + ' msgs · last ' + fmtTime(th.lastDate);
+      btn.querySelector('.preview').textContent = last ? last.body : '';
+      btn.onclick = () => {
+        selected = th;
+        renderThreads(threads);
+        renderConversation(th);
+        setStatus('Selected ' + (th.address || th.key), 'ok');
+      };
+      threadsEl.appendChild(btn);
+    }
+  }
+
+  async function ensurePerm() {
+    const h = H();
+    setStatus('Requesting SMS permission…');
+    try {
+      if (h.permissions && h.permissions.request) {
+        await h.permissions.request('sms');
+      }
+    } catch (e) {
+      // host/native may still auto-prompt on read
+    }
+    let perms = {};
+    try {
+      perms = (await h.permissions.get()) || {};
+    } catch (_) {
+      try { perms = (await h.permissions.check()) || {}; } catch (__) {}
+    }
+    // permissions.get may return nested snapshot
+    if (perms.permissions) perms = perms.permissions;
+    const ok = !!(perms.readSms || perms.sms || perms.SEND_SMS || perms.READ_SMS);
+    if (!ok) {
+      // Still try a tiny read — native auto-requests on 2.6.47+
+      return false;
+    }
+    return true;
+  }
+
+  async function loadThreads() {
+    const h = H();
+    $('btnLoad').disabled = true;
+    try {
+      const granted = await ensurePerm();
+      setStatus(granted ? 'Reading SMS…' : 'Reading SMS (will prompt if needed)…');
+
+      const box = $('box').value || 'all';
+      const q = ($('query').value || '').trim();
+      const opts = { limit: 200, box };
+      // If query looks like a phone fragment, push to native address filter
+      if (q && digits(q).length >= 3) opts.address = q;
+
+      let raw;
+      try {
+        raw = await h.sms.read(opts);
+      } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (/permission|READ_SMS|denied/i.test(msg)) {
+          setStatus(msg + ' — use App settings → SMS → Allow.', 'err');
+          return;
+        }
+        throw e;
+      }
+
+      let messages = normalizeMessages(raw);
+      // Client-side filter (name/number fragment) when native address filter unused/broad
+      if (q) {
+        const qd = digits(q);
+        const ql = q.toLowerCase();
+        messages = messages.filter((m) => {
+          const a = String(m.address || '');
+          const body = String(m.body || '');
+          if (ql && (a.toLowerCase().includes(ql) || body.toLowerCase().includes(ql))) return true;
+          if (qd && digits(a).includes(qd)) return true;
+          return false;
+        });
+      }
+
+      const threads = groupThreads(messages);
+      selected = null;
+      lastText = '';
+      outEl.value = '';
+      $('btnCopy').disabled = true;
+      $('btnShare').disabled = true;
+      renderThreads(threads);
+      setStatus('Loaded ' + messages.length + ' messages → ' + threads.length + ' threads.', 'ok');
+    } catch (e) {
+      setStatus((e && e.message) ? e.message : String(e), 'err');
+      try { h.toast && h.toast(String(e.message || e)); } catch (_) {}
+    } finally {
+      $('btnLoad').disabled = false;
+    }
+  }
+
+  async function copyOut() {
+    if (!lastText) return;
+    const h = H();
+    try {
+      if (h.clipboard && h.clipboard.write) {
+        await h.clipboard.write(lastText);
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(lastText);
+      } else {
+        outEl.removeAttribute('readonly');
+        outEl.select();
+        document.execCommand('copy');
+        outEl.setAttribute('readonly', 'readonly');
+      }
+      setStatus('Copied ' + lastText.length + ' chars.', 'ok');
+      try { h.toast && h.toast('Conversation copied'); } catch (_) {}
+    } catch (e) {
+      setStatus('Copy failed: ' + (e.message || e), 'err');
+    }
+  }
+
+  async function shareOut() {
+    if (!lastText) return;
+    const h = H();
+    try {
+      if (h.share) {
+        await h.share({ title: 'SMS conversation', text: lastText, dialogTitle: 'Share conversation' });
+        setStatus('Share sheet opened.', 'ok');
+      } else {
+        await copyOut();
+      }
+    } catch (e) {
+      setStatus('Share failed: ' + (e.message || e), 'err');
+    }
+  }
+
+  $('btnPerm').onclick = async () => {
+    try {
+      const ok = await ensurePerm();
+      if (ok) setStatus('SMS permission granted.', 'ok');
+      else setStatus('Permission still missing — try Load (auto-prompt) or App settings.', 'err');
+    } catch (e) {
+      setStatus(e.message || String(e), 'err');
+    }
+  };
+  $('btnLoad').onclick = () => { loadThreads(); };
+  $('btnCopy').onclick = () => { copyOut(); };
+  $('btnShare').onclick = () => { shareOut(); };
+  $('btnSettings').onclick = async () => {
+    try {
+      const h = H();
+      if (h.device && h.device.openSettings) await h.device.openSettings();
+      else if (h.openAppSettings) await h.openAppSettings();
+      else setStatus('Open Android Settings → Apps → Forge → Permissions → SMS', 'err');
+    } catch (e) {
+      setStatus(e.message || String(e), 'err');
+    }
+  };
+
+  // Auto-load if already permitted (best-effort)
+  setTimeout(() => {
+    try {
+      if (window.ForgeHost) setStatus('Forge ready. Grant SMS, then Load threads.');
+      else setStatus('Waiting for ForgeHost…', 'err');
+    } catch (_) {}
+  }, 300);
+})();
+</script>
+</body>
+</html>

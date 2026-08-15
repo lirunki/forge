@@ -336,11 +336,25 @@ public class PhoneBridgePlugin extends Plugin {
 
     @PluginMethod
     public void sendSms(PluginCall call) {
-        boolean z;
         if (!granted("android.permission.SEND_SMS")) {
-            call.reject("SEND_SMS permission not granted. Call requestPermission({alias:'sms'}) first.");
+            // Auto-prompt so mini-apps that forget permissions.request still work once
+            requestPermissionForAlias("sms", call, "sendSmsPermCallback");
             return;
         }
+        doSendSms(call);
+    }
+
+    @PermissionCallback
+    private void sendSmsPermCallback(PluginCall call) {
+        if (!granted("android.permission.SEND_SMS")) {
+            call.reject("SEND_SMS permission denied. Enable SMS in Settings → Apps → Forge → Permissions, then retry.");
+            return;
+        }
+        doSendSms(call);
+    }
+
+    private void doSendSms(PluginCall call) {
+        boolean z;
         String to = call.getString("to", "");
         String body = call.getString("body", "");
         if (to == null || to.trim().isEmpty()) {
@@ -372,14 +386,28 @@ public class PhoneBridgePlugin extends Plugin {
     /* JADX WARN: Unreachable blocks removed: 2, instructions: 4 */
     @PluginMethod
     public void readSms(PluginCall pluginCall) {
+        if (!granted("android.permission.READ_SMS")) {
+            // Auto-prompt so mini-apps that forget permissions.request still work once
+            requestPermissionForAlias("sms", pluginCall, "readSmsPermCallback");
+            return;
+        }
+        doReadSms(pluginCall);
+    }
+
+    @PermissionCallback
+    private void readSmsPermCallback(PluginCall pluginCall) {
+        if (!granted("android.permission.READ_SMS")) {
+            pluginCall.reject("READ_SMS permission denied. Enable SMS in Settings → Apps → Forge → Permissions, then retry.");
+            return;
+        }
+        doReadSms(pluginCall);
+    }
+
+    private void doReadSms(PluginCall pluginCall) {
         String selection;
         String[] selArgs;
         Throwable th;
         String str = "body";
-        if (!granted("android.permission.READ_SMS")) {
-            pluginCall.reject("READ_SMS permission not granted. Call requestPermission({alias:'sms'}) first.");
-            return;
-        }
         int limit = pluginCall.getInt("limit", 30).intValue();
         if (limit < 1) {
             limit = 1;
