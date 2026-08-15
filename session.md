@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.41 / versionCode 71** (mini-app console, safe re-land) · was 2.6.40/70 restore
+| Version | **2.6.42 / versionCode 72** (contacts.find regex + radio wifi/bt/gps/hotspot) · was 2.6.41/71
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-14 — **2.6.41/71** mini-app console (bridge template untouched)
+| **Last rebuild** | 2026-08-14 — 2.6.42 contacts.find + radio toggles
 
 ### Locked product baseline
 
@@ -637,3 +637,21 @@ Smoke:
 [ ] Clear / Copy work
 ```
 
+## Contacts find + radio controls (2026-08-14)
+
+**2.6.42 / versionCode 72**
+
+### Mini-app APIs
+- `ForgeHost.contacts.list({ query, limit, regex, flags })`
+- `ForgeHost.contacts.find({ regex, flags, query, limit, scanLimit })` (alias `search`)
+- `ForgeHost.radio.getStatus()` → `{ wifi, bluetooth, gps, hotspot, ... }`
+- `ForgeHost.radio.set({ wifi?, bluetooth?, gps?, hotspot? })` → may set `needsUser` and open Settings
+- `ForgeHost.radio.openSettings({ which: 'wifi'|'bluetooth'|'gps'|'hotspot'|'wireless' })`
+
+### LLM tools (Forge_Chat.html)
+`list_contacts`, `find_contact`, `radio_status`, `radio_set`, `radio_open_settings`
+
+### Notes
+- GPS/hotspot almost always need system UI (Android restriction).
+- Wi-Fi/BT direct toggle best-effort; falls back to panel.
+- Re-import Forge_Chat.html after host install.

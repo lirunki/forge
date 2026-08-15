@@ -4434,10 +4434,20 @@ termux-reload-settings</div>
     },
     contacts: {
       list: (opts) => call('contacts.list', opts || {}),
+      /** Find contacts by JS regex over name + phone numbers. */
+      find: (opts) => call('contacts.find', opts || {}),
+      search: (opts) => call('contacts.find', opts || {}),
     },
     location: {
       get: () => call('location.get'),
       openMaps: (opts) => call('location.openMaps', opts || {}),
+    },
+    /** Wi‑Fi / Bluetooth / GPS / hotspot status + best-effort toggles (may open Settings). */
+    radio: {
+      getStatus: () => call('radio.getStatus'),
+      status: () => call('radio.getStatus'),
+      set: (opts) => call('radio.set', opts || {}),
+      openSettings: (opts) => call('radio.openSettings', typeof opts === 'string' ? { which: opts } : (opts || {})),
     },
     device: {
       info: () => call('device.info'),
@@ -6035,6 +6045,52 @@ termux-reload-settings</div>
     async function phoneCall(method, options) {
       return nativeCall(PhoneBridge, method, options);
     }
+
+    /** Optional regex filter for contacts.list / contacts.find (name + phone numbers). */
+    function filterContactsResult(raw, params) {
+      const src = raw && Array.isArray(raw.contacts) ? raw.contacts : [];
+      const scanned = src.length;
+      const pattern = params && (params.regex || params.pattern || params.re);
+      let out = src;
+      if (pattern != null && String(pattern).length) {
+        let re;
+        try {
+          re = new RegExp(String(pattern), String((params && params.flags) || 'i'));
+        } catch (e) {
+          throw new Error('Invalid contacts regex: ' + (e && e.message ? e.message : e));
+        }
+        out = src.filter((c) => {
+          try {
+            const name = c && c.name != null ? String(c.name) : '';
+            if (name && re.test(name)) return true;
+            const phones = (c && Array.isArray(c.phones) ? c.phones : [])
+              .map((p) => (p && (p.number || p)) != null ? String(p.number || p) : '')
+              .filter(Boolean);
+            for (const n of phones) {
+              if (re.test(n)) return true;
+              // also test digits-only form
+              const digits = n.replace(/\D+/g, '');
+              if (digits && re.test(digits)) return true;
+            }
+            if (c && c.id != null && re.test(String(c.id))) return true;
+            return false;
+          } catch (_) {
+            return false;
+          }
+        });
+      }
+      const limit = params && params.limit != null ? Number(params.limit) : out.length;
+      if (Number.isFinite(limit) && limit >= 0 && out.length > limit) {
+        out = out.slice(0, limit);
+      }
+      return {
+        contacts: out,
+        count: out.length,
+        scanned,
+        query: (params && (params.query || params.q)) || null,
+        regex: pattern != null ? String(pattern) : null,
+      };
+    }
     async function appsCall(method, options) {
       return nativeCall(AppsBridge, method, options);
     }
@@ -7629,10 +7685,56 @@ termux-reload-settings</div>
           return await appsCall('resolve', params || {});
 
         // ——— Contacts ———
-        case 'contacts.list':
-          return await phoneCall('getContacts', {
-            limit: params.limit || 100,
-            query: params.query || null,
+        case 'contacts.list': {
+          const limit = Math.min(Math.max(Number(params.limit) || 100, 1), 500);
+          const raw = await phoneCall('getContacts', {
+            limit,
+            query: params.query || params.q || null,
+          });
+          return filterContactsResult(raw, params);
+        }
+        case 'contacts.find':
+        case 'contacts.search': {
+          // Pull a wider scan, then filter by regex (name + numbers)
+          const limit = Math.min(Math.max(Number(params.limit) || 20, 1), 100);
+          const scanLimit = Math.min(Math.max(Number(params.scanLimit) || 500, limit), 500);
+          const raw = await phoneCall('getContacts', {
+            limit: scanLimit,
+            query: params.query || params.q || null,
+          });
+          const filtered = filterContactsResult(raw, {
+            regex: params.regex || params.pattern || params.re,
+            flags: params.flags,
+            limit,
+          });
+          const contacts = filtered.contacts || [];
+          return {
+            ok: true,
+            contact: contacts[0] || null,
+            contacts,
+            count: contacts.length,
+            scanned: filtered.scanned != null ? filtered.scanned : (raw && raw.count) || 0,
+            regex: params.regex || params.pattern || params.re || null,
+          };
+        }
+
+        // ——— Radio (wifi / bluetooth / gps / hotspot) ———
+        case 'radio.getStatus':
+        case 'radio.status':
+          return await phoneCall('getRadioStatus', {});
+        case 'radio.set': {
+          const o = {};
+          for (const k of ['wifi', 'bluetooth', 'gps', 'hotspot']) {
+            if (params[k] !== undefined && params[k] !== null) o[k] = !!params[k];
+          }
+          if (!Object.keys(o).length) {
+            throw new Error('radio.set requires at least one of: wifi, bluetooth, gps, hotspot');
+          }
+          return await phoneCall('setRadio', o);
+        }
+        case 'radio.openSettings':
+          return await phoneCall('openRadioSettings', {
+            which: params.which || params.panel || params.type || 'wireless',
           });
 
         // ——— Location ———
@@ -8249,7 +8351,7 @@ HTTP (native — bypasses WebView/iframe CORS):
   // ALWAYS inlineHtml before putting LLM HTML with external images into an iframe/srcdoc.
 
 Clipboard / share / UI:
-  ForgeHost.clipboard.read()/write(text)
+  ForgeHost.contacts.list/find({query,regex,flags,limit})\n  ForgeHost.radio.getStatus()/set({wifi,bluetooth,gps,hotspot})/openSettings(which)\n  ForgeHost.clipboard.read()/write(text)
   // Share with OTHER apps (Android share sheet). Use this to send anything the mini-app created.
   await ForgeHost.share.isAvailable()  // { available, files, native }
   await ForgeHost.share({ title:'Note', text:'Hello from Forge' })

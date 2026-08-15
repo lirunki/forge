@@ -1,18 +1,24 @@
 package com.forge.live;
 
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothManager;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.ConnectivityManager;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.provider.ContactsContract;
+import android.provider.Settings;
 import android.provider.Telephony;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
@@ -54,6 +60,10 @@ public class PhoneBridgePlugin extends Plugin {
         caps.put("maps", true);
         caps.put(NotificationCompat.CATEGORY_EMAIL, true);
         caps.put("settings", true);
+        caps.put("radio", true);
+        caps.put("wifi", pm.hasSystemFeature("android.hardware.wifi"));
+        caps.put("bluetooth", pm.hasSystemFeature("android.hardware.bluetooth"));
+        caps.put("hotspot", pm.hasSystemFeature("android.hardware.wifi"));
         caps.put("tts", true);
         caps.put("permissions", (Object) permissionSnapshot());
         call.resolve(caps);
@@ -859,6 +869,413 @@ public class PhoneBridgePlugin extends Plugin {
         } catch (Exception e) {
             call.reject("openUrl failed: " + e.getMessage(), e);
         }
+    }
+
+
+    @PluginMethod
+    public void getRadioStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            ret.put("wifi", wifiEnabled());
+            ret.put("bluetooth", bluetoothEnabled());
+            ret.put("gps", locationEnabled());
+            ret.put("hotspot", hotspotEnabled());
+            ret.put("platform", "android");
+            ret.put("sdk", Build.VERSION.SDK_INT);
+            ret.put("canWriteSettings", Settings.System.canWrite(getContext()));
+            ret.put("notes", "Modern Android may require a settings panel for some toggles. setRadio returns needsUser when the OS blocks direct change.");
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("getRadioStatus failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void setRadio(PluginCall call) {
+        JSObject ret = new JSObject();
+        JSObject results = new JSObject();
+        boolean anyNeedsUser = false;
+        try {
+            if (call.getData() != null && call.getData().has("wifi")) {
+                JSObject one = setWifiEnabled(call.getBoolean("wifi", Boolean.FALSE));
+                results.put("wifi", (Object) one);
+                if (one.has("needsUser") && one.getBool("needsUser")) anyNeedsUser = true;
+            }
+            if (call.getData() != null && call.getData().has("bluetooth")) {
+                JSObject one = setBluetoothEnabled(call.getBoolean("bluetooth", Boolean.FALSE));
+                results.put("bluetooth", (Object) one);
+                if (one.has("needsUser") && one.getBool("needsUser")) anyNeedsUser = true;
+            }
+            if (call.getData() != null && call.getData().has("gps")) {
+                JSObject one = setGpsEnabled(call.getBoolean("gps", Boolean.FALSE));
+                results.put("gps", (Object) one);
+                if (one.has("needsUser") && one.getBool("needsUser")) anyNeedsUser = true;
+            }
+            if (call.getData() != null && call.getData().has("hotspot")) {
+                JSObject one = setHotspotEnabled(call.getBoolean("hotspot", Boolean.FALSE));
+                results.put("hotspot", (Object) one);
+                if (one.has("needsUser") && one.getBool("needsUser")) anyNeedsUser = true;
+            }
+            if (results.length() == 0) {
+                call.reject("Provide at least one of: wifi, bluetooth, gps, hotspot (boolean)");
+                return;
+            }
+            ret.put("ok", true);
+            ret.put("needsUser", anyNeedsUser);
+            ret.put("results", (Object) results);
+            ret.put("status", (Object) radioSnapshot());
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("setRadio failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void openRadioSettings(PluginCall call) {
+        String which = call.getString("which", call.getString("panel", "wireless"));
+        if (which == null || which.isEmpty()) which = "wireless";
+        which = which.toLowerCase();
+        try {
+            Intent intent = null;
+            if ("wifi".equals(which)) {
+                if (Build.VERSION.SDK_INT >= 29) {
+                    intent = new Intent(Settings.Panel.ACTION_WIFI);
+                } else {
+                    intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+                }
+            } else if ("bluetooth".equals(which) || "bt".equals(which)) {
+                intent = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
+            } else if ("gps".equals(which) || "location".equals(which)) {
+                intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            } else if ("hotspot".equals(which) || "tether".equals(which)) {
+                intent = new Intent();
+                intent.setAction("android.settings.TETHER_SETTINGS");
+                try {
+                    if (intent.resolveActivity(getContext().getPackageManager()) == null) {
+                        intent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+                    }
+                } catch (Exception e) {
+                    intent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+                }
+            } else if ("wireless".equals(which) || "all".equals(which) || "network".equals(which)) {
+                intent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+            } else {
+                intent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("opened", which);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("openRadioSettings failed: " + e.getMessage(), e);
+        }
+    }
+
+    private JSObject radioSnapshot() {
+        JSObject ret = new JSObject();
+        ret.put("wifi", wifiEnabled());
+        ret.put("bluetooth", bluetoothEnabled());
+        ret.put("gps", locationEnabled());
+        ret.put("hotspot", hotspotEnabled());
+        return ret;
+    }
+
+    private boolean wifiEnabled() {
+        try {
+            WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            return wm != null && wm.isWifiEnabled();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean bluetoothEnabled() {
+        try {
+            BluetoothAdapter adapter = bluetoothAdapter();
+            return adapter != null && adapter.isEnabled();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean locationEnabled() {
+        try {
+            LocationManager lm = (LocationManager) getContext().getSystemService(Context.LOCATION_SERVICE);
+            if (lm == null) return false;
+            boolean gps = false;
+            boolean net = false;
+            try { gps = lm.isProviderEnabled(LocationManager.GPS_PROVIDER); } catch (Exception e) {}
+            try { net = lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER); } catch (Exception e) {}
+            if (Build.VERSION.SDK_INT >= 28) {
+                try { return lm.isLocationEnabled() || gps || net; } catch (Exception e) {}
+            }
+            return gps || net;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean hotspotEnabled() {
+        try {
+            WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm == null) return false;
+            // WifiManager.isWifiApEnabled is hidden — reflection
+            try {
+                java.lang.reflect.Method m = wm.getClass().getMethod("isWifiApEnabled");
+                Object v = m.invoke(wm);
+                return v instanceof Boolean && ((Boolean) v);
+            } catch (Exception e) {
+                return false;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private BluetoothAdapter bluetoothAdapter() {
+        try {
+            if (Build.VERSION.SDK_INT >= 31) {
+                BluetoothManager bm = (BluetoothManager) getContext().getSystemService(Context.BLUETOOTH_SERVICE);
+                return bm != null ? bm.getAdapter() : null;
+            }
+            return BluetoothAdapter.getDefaultAdapter();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private JSObject setWifiEnabled(boolean enabled) {
+        JSObject ret = new JSObject();
+        ret.put("requested", enabled);
+        try {
+            WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm == null) {
+                ret.put("ok", false);
+                ret.put("error", "WifiManager unavailable");
+                return ret;
+            }
+            boolean before = wm.isWifiEnabled();
+            ret.put("before", before);
+            if (before == enabled) {
+                ret.put("ok", true);
+                ret.put("applied", true);
+                ret.put("after", before);
+                ret.put("needsUser", false);
+                return ret;
+            }
+            boolean changed = false;
+            try {
+                // May be ignored on API 29+ for third-party apps
+                changed = wm.setWifiEnabled(enabled);
+            } catch (Exception e) {
+                ret.put("directError", e.getMessage());
+            }
+            boolean after = wm.isWifiEnabled();
+            ret.put("after", after);
+            if (after == enabled) {
+                ret.put("ok", true);
+                ret.put("applied", true);
+                ret.put("needsUser", false);
+                ret.put("via", "WifiManager.setWifiEnabled");
+                return ret;
+            }
+            // Open user panel
+            try {
+                Intent intent;
+                if (Build.VERSION.SDK_INT >= 29) {
+                    intent = new Intent(Settings.Panel.ACTION_WIFI);
+                } else {
+                    intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+                }
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(intent);
+                ret.put("ok", true);
+                ret.put("applied", false);
+                ret.put("needsUser", true);
+                ret.put("opened", "wifi");
+                ret.put("via", "settings_panel");
+            } catch (Exception e) {
+                ret.put("ok", false);
+                ret.put("error", "Cannot toggle Wi-Fi: " + e.getMessage());
+                ret.put("needsUser", true);
+            }
+            return ret;
+        } catch (Exception e) {
+            ret.put("ok", false);
+            ret.put("error", e.getMessage());
+            return ret;
+        }
+    }
+
+    private JSObject setBluetoothEnabled(boolean enabled) {
+        JSObject ret = new JSObject();
+        ret.put("requested", enabled);
+        try {
+            if (Build.VERSION.SDK_INT >= 31 &&
+                    ContextCompat.checkSelfPermission(getContext(), "android.permission.BLUETOOTH_CONNECT")
+                            != PackageManager.PERMISSION_GRANTED) {
+                ret.put("ok", false);
+                ret.put("needsUser", true);
+                ret.put("error", "BLUETOOTH_CONNECT permission not granted");
+                try {
+                    Intent intent = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(intent);
+                    ret.put("opened", "bluetooth");
+                } catch (Exception e) {}
+                return ret;
+            }
+            BluetoothAdapter adapter = bluetoothAdapter();
+            if (adapter == null) {
+                ret.put("ok", false);
+                ret.put("error", "BluetoothAdapter unavailable");
+                return ret;
+            }
+            boolean before = adapter.isEnabled();
+            ret.put("before", before);
+            if (before == enabled) {
+                ret.put("ok", true);
+                ret.put("applied", true);
+                ret.put("after", before);
+                ret.put("needsUser", false);
+                return ret;
+            }
+            if (enabled) {
+                boolean started = false;
+                try {
+                    started = adapter.enable();
+                } catch (Exception e) {
+                    ret.put("directError", e.getMessage());
+                }
+                if (!adapter.isEnabled()) {
+                    try {
+                        Intent en = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                        en.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        getActivity().startActivity(en);
+                        ret.put("ok", true);
+                        ret.put("applied", false);
+                        ret.put("needsUser", true);
+                        ret.put("opened", "bluetooth_enable_prompt");
+                        ret.put("via", "ACTION_REQUEST_ENABLE");
+                        ret.put("after", adapter.isEnabled());
+                        return ret;
+                    } catch (Exception e) {
+                        // fall through to settings
+                    }
+                } else {
+                    ret.put("ok", true);
+                    ret.put("applied", true);
+                    ret.put("needsUser", false);
+                    ret.put("via", "BluetoothAdapter.enable");
+                    ret.put("after", true);
+                    return ret;
+                }
+            } else {
+                try {
+                    adapter.disable();
+                } catch (Exception e) {
+                    ret.put("directError", e.getMessage());
+                }
+                if (!adapter.isEnabled()) {
+                    ret.put("ok", true);
+                    ret.put("applied", true);
+                    ret.put("needsUser", false);
+                    ret.put("via", "BluetoothAdapter.disable");
+                    ret.put("after", false);
+                    return ret;
+                }
+            }
+            try {
+                Intent intent = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(intent);
+                ret.put("ok", true);
+                ret.put("applied", false);
+                ret.put("needsUser", true);
+                ret.put("opened", "bluetooth");
+                ret.put("after", adapter.isEnabled());
+            } catch (Exception e) {
+                ret.put("ok", false);
+                ret.put("error", e.getMessage());
+                ret.put("needsUser", true);
+            }
+            return ret;
+        } catch (Exception e) {
+            ret.put("ok", false);
+            ret.put("error", e.getMessage());
+            return ret;
+        }
+    }
+
+    private JSObject setGpsEnabled(boolean enabled) {
+        JSObject ret = new JSObject();
+        ret.put("requested", enabled);
+        boolean before = locationEnabled();
+        ret.put("before", before);
+        if (before == enabled) {
+            ret.put("ok", true);
+            ret.put("applied", true);
+            ret.put("after", before);
+            ret.put("needsUser", false);
+            return ret;
+        }
+        // Third-party apps cannot silently toggle location mode on modern Android.
+        try {
+            Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            ret.put("ok", true);
+            ret.put("applied", false);
+            ret.put("needsUser", true);
+            ret.put("opened", "gps");
+            ret.put("via", "LOCATION_SOURCE_SETTINGS");
+            ret.put("after", locationEnabled());
+            ret.put("note", "User must toggle location in system settings");
+        } catch (Exception e) {
+            ret.put("ok", false);
+            ret.put("error", e.getMessage());
+            ret.put("needsUser", true);
+        }
+        return ret;
+    }
+
+    private JSObject setHotspotEnabled(boolean enabled) {
+        JSObject ret = new JSObject();
+        ret.put("requested", enabled);
+        boolean before = hotspotEnabled();
+        ret.put("before", before);
+        if (before == enabled) {
+            ret.put("ok", true);
+            ret.put("applied", true);
+            ret.put("after", before);
+            ret.put("needsUser", false);
+            return ret;
+        }
+        // Full Wi‑Fi tethering is system-protected; open tether settings for the user.
+        try {
+            Intent intent = new Intent();
+            intent.setAction("android.settings.TETHER_SETTINGS");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (intent.resolveActivity(getContext().getPackageManager()) == null) {
+                intent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
+            getContext().startActivity(intent);
+            ret.put("ok", true);
+            ret.put("applied", false);
+            ret.put("needsUser", true);
+            ret.put("opened", "hotspot");
+            ret.put("via", "TETHER_SETTINGS");
+            ret.put("after", hotspotEnabled());
+            ret.put("note", "Hotspot toggle requires system tether UI on most devices");
+        } catch (Exception e) {
+            ret.put("ok", false);
+            ret.put("error", e.getMessage());
+            ret.put("needsUser", true);
+        }
+        return ret;
     }
 
     private String getCol(Cursor c, String name) {
