@@ -1405,6 +1405,7 @@ termux-reload-settings</div>
 
         <div class="card">
           <h2>About Forge</h2>
+          <p id="forgeBuildInfo" style="color:var(--muted);font-size:0.8rem;margin:0 0 8px;font-family:monospace;">Forge (dev build)</p>
           <p style="color:var(--muted);font-size:0.9rem;">
             Forge runs <b>HTML mini-apps</b> on your phone. <b>Open with Forge</b> or <b>Share → Forge</b>
             from WhatsApp, Files, Drive, etc. to import a .html and run it. You can also Import from Library,
@@ -1438,6 +1439,46 @@ termux-reload-settings</div>
     const QrBridge = registerPlugin('QrBridge');
     const DriveBridge = registerPlugin('DriveBridge');
     const OpenHtmlBridge = registerPlugin('OpenHtmlBridge');
+
+    /* === FORGE_BUILD_STAMP ===
+       Runtime build identity. Populated from:
+         (1) Capacitor App.getInfo()  -> version / build (versionCode)
+         (2) fetch('forge-build.json') -> git sha / builtAt (written by build_forge.sh)
+       forge_check.sh asserts this assignment exists. Exposed as window.__FORGE_BUILD
+       and surfaced in Settings → About Forge. */
+    window.__FORGE_BUILD = window.__FORGE_BUILD || { version: '', versionCode: 0, sha: 'dev', builtAt: 0 };
+    (async () => {
+      try {
+        const App = window.Capacitor?.Plugins?.App;
+        if (App && typeof App.getInfo === 'function') {
+          const info = await App.getInfo();
+          if (info) {
+            window.__FORGE_BUILD.version = String(info.version || window.__FORGE_BUILD.version || '');
+            window.__FORGE_BUILD.versionCode = Number(info.build || info.versionCode || window.__FORGE_BUILD.versionCode || 0);
+            window.__FORGE_BUILD.id = String(info.id || '');
+            window.__FORGE_BUILD.name = String(info.name || '');
+        }
+        }
+      } catch (_) {}
+      try {
+        const r = await fetch('forge-build.json', { cache: 'no-store' });
+        if (r && r.ok) {
+          const j = await r.json();
+          if (j && typeof j === 'object') Object.assign(window.__FORGE_BUILD, j);
+        }
+      } catch (_) {}
+      try {
+        const node = document.getElementById('forgeBuildInfo');
+        if (node) {
+          const b = window.__FORGE_BUILD;
+          const parts = [];
+          if (b.version) parts.push('v' + b.version + (b.versionCode ? ' (' + b.versionCode + ')' : ''));
+          if (b.sha && b.sha !== 'dev') parts.push(b.sha);
+          if (b.builtAt) parts.push(new Date(b.builtAt).toISOString().slice(0, 10));
+          node.textContent = parts.length ? 'Forge ' + parts.join(' · ') : 'Forge (dev build)';
+        }
+      } catch (_) {}
+    })();
 
     const FS_DIRS = {
       documents: Directory.Documents,
@@ -5014,6 +5055,79 @@ termux-reload-settings</div>
         typeof idOrOpts === 'string' ? { providerId: idOrOpts } : (idOrOpts || {})),
       chat: (opts) => call('ai.chat', opts || {}),
       /**
+       * Token-streaming chat (2.6.51). Resolves to the full ai.chat result shape
+       * (content / tool_calls / provider / model / ...). While waiting, the host emits
+       * ai.stream.delta events carrying { callId, delta, done, tool_calls? }.
+       * Pass onToken / onDelta / onToolCall callbacks — they are stripped before the
+       * host call (functions cannot be postMessage'd). Non-streaming fallback is
+       * automatic if the provider/transport cannot stream.
+       *
+       *   const r = await ForgeHost.ai.chatStream({
+       *     messages, tools,
+       *     onToken: (delta, meta) => render(delta),
+       *     onToolCall: (tool_calls, meta) => {},
+       *     providerId, model,
+       *   })
+       */
+      chatStream: (opts) => {
+        const o = Object.assign({}, opts || {});
+        const onToken = o.onToken, onDelta = o.onDelta, onToolCall = o.onToolCall;
+        delete o.onToken; delete o.onDelta; delete o.onToolCall; delete o.onDone; delete o.onFinish;
+        const callId = 'cs' + (_id++);
+        o.__streamCallId = callId;
+        const wantEvents = !!(onToken || onDelta || onToolCall);
+        const off = wantEvents
+          ? on('ai.stream.delta', (d) => {
+              if (!d || d.callId !== callId) return;
+              try {
+                if (d.delta != null && (onToken || onDelta)) (onToken || onDelta)(d.delta, d);
+                if (d.tool_calls && onToolCall) onToolCall(d.tool_calls, d);
+              } catch (e) { console.error('[chatStream]', e); }
+            })
+          : null;
+        return call('ai.chatStream', o).then(
+          (r) => { if (off) off(); return r; },
+          (e) => { if (off) off(); throw e; }
+        );
+      },
+      /**
+       * Agent loop (2.6.51). Host runs chat + tool-call loop, executing tools via
+       * ForgeHost.tools.run with a host-level risk sheet (Allow / Always allow / Deny)
+       * for confirm/danger tools. Resolves to { content, rounds, tools, provider, ... }.
+       * Events (ai.agent.event): round | chat | token | toolCall | toolResult | toolDenied | maxrounds.
+       *   const r = await ForgeHost.ai.agent({
+       *     messages, tools,           // omit tools to auto-load via tools.list
+       *     maxRounds: 6, riskMax: 'confirm',
+       *     onToken: t => render(t),
+       *     onToolCall: ({name,args}) => true,
+       *     onRound: ({round, toolCalls}) => {},
+       *   })
+       */
+      agent: (opts) => {
+        const o = Object.assign({}, opts || {});
+        const onToken = o.onToken, onToolCall = o.onToolCall, onRound = o.onRound, onChat = o.onChat, onToolResult = o.onToolResult;
+        delete o.onToken; delete o.onDelta; delete o.onToolCall; delete o.onRound; delete o.onChat; delete o.onToolResult; delete o.onDone;
+        o.__agentCallId = 'ag' + (_id++);
+        o.__wantStream = !!(onToken);
+        const wantEvents = !!(onToken || onToolCall || onRound || onChat || onToolResult);
+        const off = wantEvents
+          ? on('ai.agent.event', (d) => {
+              if (!d || d.callId !== o.__agentCallId) return;
+              try {
+                if (d.type === 'token' && onToken && typeof d.delta === 'string') onToken(d.delta, d);
+                else if (d.type === 'round' && onRound) onRound({ round: d.round, toolCalls: d.toolCalls }, d);
+                else if (d.type === 'chat' && onChat) onChat({ round: d.round, content: d.content, tool_calls: d.tool_calls }, d);
+                else if (d.type === 'toolCall' && onToolCall) onToolCall({ name: d.name, args: d.args, round: d.round }, d);
+                else if (d.type === 'toolResult' && onToolResult) onToolResult({ name: d.name, result: d.result, round: d.round }, d);
+              } catch (e) { console.error('[ai.agent]', e); }
+            })
+          : null;
+        return call('ai.agent', o).then(
+          (r) => { if (off) off(); return r; },
+          (e) => { if (off) off(); throw e; }
+        );
+      },
+      /**
        * Speech-to-text via host AI (OpenAI Whisper / xAI /stt). Not Gemini.
        * opts: {
        *   dataUrl|base64|file|audio,
@@ -5029,13 +5143,23 @@ termux-reload-settings</div>
        * Live streaming translation session (open mic → STT windows → translate).
        * Events: live.status | live.level | live.partialSource | live.finalSource |
        *         live.partialTarget | live.finalTarget | live.error
-       * start({ sourceLang?, targetLang, speak?, chunkMs?, windowMs?, providerId?, route? })
+       *         | live.flip | live.pause | live.resume   (Patch 4)
+       * start({ sourceLang?, targetLang, speak?, chunkMs?, windowMs?, providerId?, route?,
+       *         mode?, langA?, langB?, autoDetect? })
+       *   mode 'oneWay' (default, A→B) | 'conversation' (A↔B, flippable)
+       *   In conversation mode: langA/langB are the two languages; flip() swaps direction;
+       *   autoDetect:true uses script heuristic to auto-flip (best for distinct-script
+       *   pairs like en↔zh, en↔ja, en↔ar, en↔ru; same-script pairs use manual flip).
        */
       liveTranslate: {
         start: (opts) => call('ai.liveTranslate.start', opts || {}),
         stop: () => call('ai.liveTranslate.stop'),
         status: () => call('ai.liveTranslate.status'),
         configure: (opts) => call('ai.liveTranslate.configure', opts || {}),
+        // Patch 4: conversation / bidirectional controls
+        flip: () => call('ai.liveTranslate.flip'),
+        pause: () => call('ai.liveTranslate.pause'),
+        resume: () => call('ai.liveTranslate.resume'),
       },
       /* === FORGE_HOST_TOOLS_API_BEGIN === */
       tools: {
@@ -6236,6 +6360,14 @@ termux-reload-settings</div>
       lastTranslatedSource: '',
       lastFinalTarget: '',
       startedAt: 0,
+      // Patch 4: conversation / bidirectional
+      mode: 'oneWay',           // 'oneWay' (A→B) | 'conversation' (A↔B, flippable)
+      langA: '',                // conversation mode: language A (e.g. 'en')
+      langB: '',                // conversation mode: language B (e.g. 'es')
+      autoDetect: false,        // conversation: auto-detect spoken lang per segment by script
+      currentDirection: 'a2b',  // 'a2b' | 'b2a'  (a2b = translate A→B)
+      paused: false,            // conversation: STT suspended, mic stream kept warm
+      lastDetectedScript: null,
     };
 
     function liveEmit(event, data) {
@@ -6256,6 +6388,13 @@ termux-reload-settings</div>
         elapsedMs: liveTranslate.running ? (Date.now() - (liveTranslate.startedAt || Date.now())) : 0,
         sourcePartial: liveTranslate.sourcePartial || '',
         sourceCommitted: liveTranslate.sourceCommitted || '',
+        // Patch 4
+        mode: liveTranslate.mode || 'oneWay',
+        langA: liveTranslate.langA || '',
+        langB: liveTranslate.langB || '',
+        autoDetect: !!liveTranslate.autoDetect,
+        currentDirection: liveTranslate.currentDirection || 'a2b',
+        paused: !!liveTranslate.paused,
       };
     }
 
@@ -6277,6 +6416,76 @@ termux-reload-settings</div>
         const t = Number(params.rmsThreshold);
         if (t > 0 && t < 0.5) liveTranslate.rmsThreshold = t;
       }
+      // Patch 4: conversation mode tuning (direction flip/pause/resume are separate actions)
+      if (params.mode != null) {
+        const m = String(params.mode || 'oneWay');
+        if (m === 'oneWay' || m === 'conversation') liveTranslate.mode = m;
+      }
+      if (params.langA != null) liveTranslate.langA = String(params.langA || '');
+      if (params.langB != null) liveTranslate.langB = String(params.langB || '');
+      if (params.autoDetect != null) liveTranslate.autoDetect = !!params.autoDetect;
+      liveEmit('live.status', liveTranslateStatus());
+      return liveTranslateStatus();
+    }
+
+    // Patch 4: conversation-mode actions.
+    function liveTranslateFlip() {
+      if (liveTranslate.mode !== 'conversation') {
+        // oneWay flip = swap source/target (convenience for ad-hoc reverse)
+        const s = liveTranslate.sourceLang, t = liveTranslate.targetLang;
+        liveTranslate.sourceLang = (t === 'auto') ? 'auto' : t;
+        liveTranslate.targetLang = s && s !== 'auto' ? s : 'en';
+      } else {
+        liveTranslate.currentDirection = liveTranslate.currentDirection === 'b2a' ? 'a2b' : 'b2a';
+      }
+      // Clear stale translation state so the next segment retranslates fresh.
+      liveTranslate.lastTranslatedSource = '';
+      liveTranslate.lastFinalTarget = '';
+      liveTranslate.sourcePartial = '';
+      liveTranslate.sourceCommitted = '';
+      const dir = liveTranslate.currentDirection;
+      const src = (liveTranslate.mode === 'conversation')
+        ? (dir === 'b2a' ? liveTranslate.langB : liveTranslate.langA)
+        : liveTranslate.sourceLang;
+      const tgt = (liveTranslate.mode === 'conversation')
+        ? (dir === 'b2a' ? liveTranslate.langA : liveTranslate.langB)
+        : liveTranslate.targetLang;
+      liveEmit('live.flip', {
+        direction: dir,
+        sourceLang: src,
+        targetLang: tgt,
+        auto: false,
+        seq: ++liveTranslate.seq,
+      });
+      liveEmit('live.status', liveTranslateStatus());
+      return liveTranslateStatus();
+    }
+
+    function liveTranslatePause() {
+      if (!liveTranslate.running) return liveTranslateStatus();
+      if (liveTranslate.paused) return liveTranslateStatus();
+      liveTranslate.paused = true;
+      // Abort in-flight translation, stop the window timer; mic stream stays open.
+      try { if (liveTranslate.translateAbort) liveTranslate.translateAbort.abort(); } catch (_) {}
+      clearTimeout(liveTranslate.translateTimer);
+      liveTranslate.translateTimer = null;
+      liveTranslate.phase = 'paused';
+      liveEmit('live.pause', { seq: ++liveTranslate.seq });
+      liveEmit('live.status', liveTranslateStatus());
+      return liveTranslateStatus();
+    }
+
+    function liveTranslateResume() {
+      if (!liveTranslate.running) return liveTranslateStatus();
+      if (!liveTranslate.paused) return liveTranslateStatus();
+      liveTranslate.paused = false;
+      // Drop buffered PCM so we don't transcribe stale audio from the pause.
+      liveTranslate.pcmChunks = [];
+      liveTranslate.pcmBytes = 0;
+      liveTranslate.sourcePartial = '';
+      liveTranslate.lastSpeechAt = Date.now();
+      liveTranslate.phase = 'listening';
+      liveEmit('live.resume', { seq: ++liveTranslate.seq });
       liveEmit('live.status', liveTranslateStatus());
       return liveTranslateStatus();
     }
@@ -6370,10 +6579,75 @@ termux-reload-settings</div>
       return samples > 0 ? Math.sqrt(sumSq / samples) / 32768 : 0;
     }
 
+    // Patch 4: Unicode-script detection for auto-detecting conversation direction.
+    // Returns a script tag: 'latn' | 'cyrl' | 'arab' | 'hebr' | 'hani' | 'hira' | 'kana' | 'hang' | 'deva' | 'thai' | 'grek' | null
+    function liveDetectScript(text) {
+      const s = String(text || '');
+      for (let i = 0; i < s.length; i++) {
+        const c = s.codePointAt(i);
+        if (c == null) continue;
+        if (c >= 0x0400 && c <= 0x04FF) return 'cyrl';
+        if (c >= 0x0600 && c <= 0x06FF) return 'arab';
+        if (c >= 0x0590 && c <= 0x05FF) return 'hebr';
+        if (c >= 0x3040 && c <= 0x309F) return 'hira';
+        if (c >= 0x30A0 && c <= 0x30FF) return 'kana';
+        if (c >= 0xAC00 && c <= 0xD7AF) return 'hang';
+        if (c >= 0x0900 && c <= 0x097F) return 'deva';
+        if (c >= 0x0E00 && c <= 0x0E7F) return 'thai';
+        if (c >= 0x0370 && c <= 0x03FF) return 'grek';
+        if (c >= 0x4E00 && c <= 0x9FFF) return 'hani';   // CJK unified (zh/ja kanji)
+        if (c >= 0x0041 && c <= 0x024F) return 'latn';   // Latin (incl. extensions)
+      }
+      return null;
+    }
+    // Map a BCP-47 language code to its primary script tag.
+    const LIVE_LANG_SCRIPT = {
+      en:'latn', es:'latn', fr:'latn', de:'latn', it:'latn', pt:'latn', nl:'latn',
+      pl:'latn', sv:'latn', no:'latn', da:'latn', fi:'latn', cs:'latn', ro:'latn',
+      hu:'latn', id:'latn', vi:'latn', tr:'latn',
+      ru:'cyrl', uk:'cyrl', bg:'cyrl', sr:'cyrl',
+      ar:'arab', he:'hebr', hi:'deva', th:'thai', el:'grek',
+      zh:'hani', ja:'hani', ko:'hang',
+    };
+    function liveScriptForLang(code) {
+      const c = String(code || '').toLowerCase().split('-')[0];
+      return LIVE_LANG_SCRIPT[c] || null;
+    }
+    // Returns 'a2b' | 'b2a' | null (null = cannot determine from script).
+    function liveAutoDetectDirection(text) {
+      const script = liveDetectScript(text);
+      liveTranslate.lastDetectedScript = script;
+      if (!script) return null;
+      const sa = liveScriptForLang(liveTranslate.langA);
+      const sb = liveScriptForLang(liveTranslate.langB);
+      // Japanese hiragana/katakana → ja (langB or langA whichever is ja)
+      if (script === 'hira' || script === 'kana') {
+        if (liveTranslate.langB === 'ja') return 'b2a';
+        if (liveTranslate.langA === 'ja') return 'a2b';
+      }
+      if (sa && sb && sa !== sb) {
+        // Distinct scripts: map detected script to whichever lang owns it.
+        if (script === sb) return 'b2a';
+        if (script === sa) return 'a2b';
+      }
+      // Same-script pair (e.g. en↔es): script heuristic can't tell — keep current.
+      return null;
+    }
+
     async function liveChatTranslate(text, opts) {
       opts = opts || {};
-      const src = liveTranslate.sourceLang || 'auto';
-      const tgt = liveTranslate.targetLang || 'en';
+      // Patch 4: in conversation mode, derive source/target from currentDirection.
+      let src, tgt;
+      if (liveTranslate.mode === 'conversation' && liveTranslate.langA && liveTranslate.langB) {
+        if (liveTranslate.currentDirection === 'b2a') {
+          src = liveTranslate.langB; tgt = liveTranslate.langA;
+        } else {
+          src = liveTranslate.langA; tgt = liveTranslate.langB;
+        }
+      } else {
+        src = liveTranslate.sourceLang || 'auto';
+        tgt = liveTranslate.targetLang || 'en';
+      }
       const sys =
         'You are a real-time interpreter. Translate the user speech transcript into the target language only. ' +
         'Output ONLY the translation — no quotes, labels, or commentary. ' +
@@ -6400,6 +6674,24 @@ termux-reload-settings</div>
       const final = !!opts.final;
       const text = String(sourceText || '').trim();
       if (!text) return;
+      // Patch 4: auto-detect direction in conversation mode (script heuristic).
+      // Detect on the RECENT speech tail, not the whole transcript — partials carry
+      // committed (lang A) text as a prefix, so a left-to-right scan would never flip.
+      if (liveTranslate.mode === 'conversation' && liveTranslate.autoDetect && text.length >= 2) {
+        const tail = text.slice(-120);
+        const det = liveAutoDetectDirection(tail);
+        if (det && det !== liveTranslate.currentDirection) {
+          liveTranslate.currentDirection = det;
+          liveEmit('live.flip', {
+            direction: det,
+            sourceLang: det === 'b2a' ? liveTranslate.langB : liveTranslate.langA,
+            targetLang: det === 'b2a' ? liveTranslate.langA : liveTranslate.langB,
+            auto: true,
+            seq: ++liveTranslate.seq,
+          });
+          liveEmit('live.status', liveTranslateStatus());
+        }
+      }
       if (!final && text === liveTranslate.lastTranslatedSource) return;
       try { if (liveTranslate.translateAbort) liveTranslate.translateAbort.abort(); } catch (_) {}
       const ac = new AbortController();
@@ -6460,6 +6752,7 @@ termux-reload-settings</div>
 
     async function liveProcessWindow() {
       if (!liveTranslate.running || liveTranslate.sttBusy) return;
+      if (liveTranslate.paused) return;   // Patch 4: suspended
       const bytesPerSec = liveTranslate.sampleRate * 2;
       const windowBytes = Math.floor((liveTranslate.windowMs / 1000) * bytesPerSec);
       const overlapBytes = Math.floor((liveTranslate.overlapMs / 1000) * bytesPerSec);
@@ -6499,14 +6792,20 @@ termux-reload-settings</div>
       try {
         const wavB64 = livePcmToWavB64(slice, liveTranslate.sampleRate);
         let text = '';
+        // Patch 4: STT language hint follows current direction in conversation mode.
+        let sttLang = liveTranslate.sourceLang && liveTranslate.sourceLang !== 'auto'
+          ? liveTranslate.sourceLang : null;
+        if (liveTranslate.mode === 'conversation') {
+          const dirSrc = liveTranslate.currentDirection === 'b2a'
+            ? liveTranslate.langB : liveTranslate.langA;
+          sttLang = dirSrc || sttLang;
+        }
         await withAiRuntime(liveTranslate.providerId, null, async () => {
           text = await transcribeAudioFile({
             base64: wavB64,
             mime: 'audio/wav',
             name: 'live.wav',
-            language: liveTranslate.sourceLang && liveTranslate.sourceLang !== 'auto'
-              ? liveTranslate.sourceLang
-              : null,
+            language: sttLang,
           });
         });
         const t = String(text || '').trim();
@@ -6541,6 +6840,7 @@ termux-reload-settings</div>
 
     function onLiveMicPcm(data) {
       if (!liveTranslate.running) return;
+      if (liveTranslate.paused) return;   // Patch 4: drop PCM while suspended (mic stays warm)
       try {
         if (!data || !data.base64) return;
         const bytes = liveB64ToU8(data.base64);
@@ -6575,6 +6875,18 @@ termux-reload-settings</div>
       const chunkMs = Math.min(Math.max(Number(params.chunkMs) || 250, 100), 1000);
       const windowMs = Math.min(Math.max(Number(params.windowMs) || 1400, 700), 3500);
       const sampleRate = Math.min(Math.max(Number(params.sampleRate) || 16000, 8000), 48000);
+      // Patch 4: conversation mode
+      const mode = (params.mode === 'conversation') ? 'conversation' : 'oneWay';
+      let langA = String(params.langA || params.a || '').trim();
+      let langB = String(params.langB || params.b || '').trim();
+      if (mode === 'conversation') {
+        // Default langA/langB from sourceLang/targetLang if not supplied.
+        if (!langA) langA = sourceLang !== 'auto' ? sourceLang : 'en';
+        if (!langB) langB = targetLang || 'es';
+        // 'auto' isn't valid for a conversation endpoint — default to 'en'.
+        if (langA === 'auto') langA = 'en';
+      }
+      const autoDetect = !!params.autoDetect;
 
       await withAiRuntime(providerId, null, async (rt) => {
         if (!(rt.key && String(rt.key).trim()) && !rt.allowEmptyKey) {
@@ -6609,6 +6921,14 @@ termux-reload-settings</div>
         const t = Number(params.rmsThreshold);
         if (t > 0 && t < 0.5) liveTranslate.rmsThreshold = t;
       }
+      // Patch 4: conversation state
+      liveTranslate.mode = mode;
+      liveTranslate.langA = langA;
+      liveTranslate.langB = langB;
+      liveTranslate.autoDetect = autoDetect;
+      liveTranslate.currentDirection = 'a2b';
+      liveTranslate.paused = false;
+      liveTranslate.lastDetectedScript = null;
       liveTranslate.pcmChunks = [];
       liveTranslate.pcmBytes = 0;
       liveTranslate.sourceCommitted = '';
@@ -6671,6 +6991,9 @@ termux-reload-settings</div>
       liveTranslate.pcmChunks = [];
       liveTranslate.pcmBytes = 0;
       liveTranslate.phase = 'idle';
+      liveTranslate.paused = false;            // Patch 4
+      liveTranslate.currentDirection = 'a2b';  // Patch 4
+      liveTranslate.lastDetectedScript = null;
       liveEmit('live.status', liveTranslateStatus());
       liveEmit('mic.streamStop', { stopped: true, reason: 'liveTranslateStop' });
       return Object.assign({ stopped: true, wasRunning: was }, liveTranslateStatus());
@@ -8208,6 +8531,103 @@ termux-reload-settings</div>
       };
     }
 
+    // ——— Agent risk sheet (2.6.51) ————————————————————————————
+    // Host-level confirmation for confirm/danger tools invoked via ai.agent.
+    // safe/sensitive run automatically (sensitive already gated by caller riskMax).
+    // 'Always allow' memory persisted per-app in localStorage.
+    const AGENT_ALLOW_KEY = 'forge_agent_allow_v1';
+    function agentAllowSet() {
+      try { return new Set(JSON.parse(localStorage.getItem(AGENT_ALLOW_KEY) || '[]')); } catch { return new Set(); }
+    }
+    function agentAllowAdd(key) {
+      const s = agentAllowSet(); s.add(key);
+      try { localStorage.setItem(AGENT_ALLOW_KEY, JSON.stringify([...s])); } catch (_) {}
+    }
+    function agentRedactArgs(name, args) {
+      try {
+        const s = JSON.stringify(args || {});
+        if (s.length <= 600) return s;
+        return s.slice(0, 600) + '…(' + s.length + ' bytes)';
+      } catch { return '{…}'; }
+    }
+    async function agentConfirmTool(name, args, risk, opts) {
+      opts = opts || {};
+      const rank = toolRiskRank(risk);
+      // safe/sensitive: auto-allow (sensitive already filtered by caller riskMax)
+      if (rank <= toolRiskRank('sensitive')) return true;
+      const appKey = (currentApp && currentApp.id) ? currentApp.id : 'global';
+      const fullKey = appKey + ':' + name;
+      const globalKey = 'global:' + name;
+      const allow = agentAllowSet();
+      if (allow.has(fullKey) || allow.has(globalKey)) return true;
+      // Show host modal (lives in the host document, not the mini-app iframe).
+      return new Promise((resolve) => {
+        let modal, timer, settled = false;
+        const done = (val) => {
+          if (settled) return; settled = true;
+          clearTimeout(timer);
+          try { modal && modal.remove(); } catch (_) {}
+          resolve(val);
+        };
+        try {
+          modal = document.createElement('div');
+          modal.className = 'forge-agent-confirm';
+          modal.style.cssText = [
+            'position:fixed', 'inset:0', 'z-index:99999',
+            'background:rgba(8,12,20,.66)', 'display:flex',
+            'align-items:center', 'justify-content:center',
+            'padding:18px', 'backdrop-filter:blur(4px)',
+          ].join(';');
+          const riskColor = risk === 'danger' ? '#f87171' : (risk === 'confirm' ? '#fbbf24' : '#93a0b8');
+          modal.innerHTML =
+            '<div style="background:var(--card,#121a2b);border:1px solid var(--line,#243049);' +
+            'border-radius:16px;max-width:420px;width:100%;padding:16px;color:var(--text,#e8eefc);' +
+            'font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 24px 60px rgba(0,0,0,.5)">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+                '<span style="font-size:18px">🛠️</span>' +
+                '<b style="font-size:15px">' + escapeHtmlText(name) + '</b>' +
+                '<span style="margin-left:auto;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;' +
+                  'text-transform:uppercase;letter-spacing:.06em;background:' + riskColor + '22;color:' + riskColor + '">' +
+                  escapeHtmlText(risk) + '</span>' +
+              '</div>' +
+              '<div style="color:var(--muted,#93a0b8);font-size:12px;margin-bottom:8px">' +
+                'A mini-app agent wants to run this tool' + (currentApp && currentApp.title ? ' in ' + escapeHtmlText(currentApp.title) : '') + '.' +
+              '</div>' +
+              '<pre style="background:#0b1220;border:1px solid var(--line,#243049);border-radius:10px;' +
+                'padding:10px;margin:0 0 14px;max-height:180px;overflow:auto;font-size:12px;white-space:pre-wrap;' +
+                'word-break:break-word;color:#cbd5e1">' + escapeHtmlText(agentRedactArgs(name, args)) + '</pre>' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+                '<button data-act="deny" style="min-height:42px;border-radius:10px;border:1px solid var(--line,#243049);' +
+                  'background:#1e293b;color:var(--text,#e8eefc);font-weight:600;font-size:14px">Deny</button>' +
+                '<button data-act="once" style="min-height:42px;border-radius:10px;border:none;' +
+                  'background:#334155;color:white;font-weight:600;font-size:14px">Allow</button>' +
+                '<button data-act="always" style="min-height:42px;border-radius:10px;border:none;' +
+                  'background:#1d4ed8;color:white;font-weight:600;font-size:14px">Always</button>' +
+              '</div>' +
+            '</div>';
+          document.body.appendChild(modal);
+          modal.addEventListener('click', (ev) => {
+            const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-act]') : null;
+            if (!btn) return;
+            const act = btn.getAttribute('data-act');
+            if (act === 'deny') done(false);
+            else if (act === 'once') done(true);
+            else if (act === 'always') { agentAllowAdd(fullKey); done(true); }
+          });
+          // Auto-deny after 60s so the loop cannot hang forever.
+          timer = setTimeout(() => done(false), 60000);
+        } catch (e) {
+          // If the host DOM is unavailable for any reason, default to deny for safety.
+          done(false);
+        }
+      });
+    }
+    function escapeHtmlText(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     async function toolsRun(nameOrOpts, maybeArgs, runOpts) {
       let name = nameOrOpts;
       let args = maybeArgs;
@@ -8685,6 +9105,187 @@ termux-reload-settings</div>
                   : 'OpenAI-compatible rich attachments. Use ai.listProviders / setProvider for AI menu.',
           };
         }
+        case 'ai.agent': {
+          const agentCallId = params.__agentCallId || ('ag_' + Date.now().toString(36));
+          const agentEmit = (type, data) => {
+            try { postToMiniApp('ai.agent.event', Object.assign({ callId: agentCallId, type: type }, data || {})); } catch (_) {}
+          };
+          const providerIdA = resolveMiniAppProviderId(params);
+          const modelOverrideA = params.model != null ? params.model : null;
+          return await withAiRuntime(providerIdA, modelOverrideA, async (rt) => {
+            if (!(rt.key && String(rt.key).trim()) && !rt.allowEmptyKey) {
+              throw new Error(
+                'Host AI not configured for ' +
+                (rt.provider?.label || providerIdA) +
+                '. Set a provider key in Forge AI settings.'
+              );
+            }
+            const riskMax = String(params.riskMax || params.maxRisk || 'confirm');
+            let tools = normalizeToolsParam(params.tools || params.functions);
+            if (!tools) {
+              const listed = toolsList({ riskMax: riskMax });
+              tools = Array.isArray(listed.tools) ? listed.tools : [];
+            }
+            const maxRounds = Math.min(Math.max(Number(params.maxRounds) || 6, 1), 12);
+            const messages = Array.isArray(params.messages) ? params.messages.map(m => Object.assign({}, m)) : [];
+            if (params.prompt && !messages.some(m => m.role === 'user')) {
+              messages.push({ role: 'user', content: String(params.prompt) });
+            }
+            // Inject tools system hint if the caller wants it and no system msg present.
+            if (params.systemHint !== false && tools.length && !messages.some(m => m.role === 'system')) {
+              try { messages.unshift({ role: 'system', content: toolsSystemHint({ riskMax: riskMax }) }); } catch (_) {}
+            }
+            if (!messages.length) throw new Error('ai.agent requires messages or prompt');
+            if (!messages.some(m => m.role === 'user')) messages.push({ role: 'user', content: 'Please continue.' });
+
+            const toolChoice = params.tool_choice != null ? params.tool_choice : (params.toolChoice != null ? params.toolChoice : 'auto');
+            const wantStream = !!params.__wantStream;
+            const backend = backendForRuntime(rt);
+            const fileMetaA = { transcribed: 0, inputFiles: 0, inputAudio: 0, fallbacks: 0 };
+
+            async function agentChatRound() {
+              const chatOpts = { tools, tool_choice: toolChoice, fullResponse: true };
+              const onDelta = wantStream ? ((delta) => agentEmit('token', { delta })) : null;
+              if (backend === 'gemini') {
+                if (wantStream) return await geminiStreamGenerateContent(messages, null, { tools, tool_choice: toolChoice, fullResponse: true, onDelta });
+                return await geminiGenerateContent(messages, null, { tools, tool_choice: toolChoice, fullResponse: true });
+              }
+              // OAI: materialize rich attachments for user turns
+              const oai = [];
+              for (const m of messages) {
+                if (m.role === 'system' || m.role === 'assistant' || m.role === 'tool') { oai.push(m); continue; }
+                const cp = await materializeContentForRichOAI(m.content, fileMetaA);
+                oai.push({ role: m.role || 'user', content: cp });
+              }
+              if (wantStream) return await chatCompletionsStream(oai, null, { ...chatOpts, onDelta });
+              return await chatCompletionsWithFiles(oai, null, chatOpts);
+            }
+
+            const history = [];
+            let round = 0;
+            let lastContent = '';
+            let lastToolCalls = [];
+            for (;;) {
+              round++;
+              if (round > maxRounds) { agentEmit('maxrounds', { round: maxRounds }); break; }
+              agentEmit('round', { round, toolCalls: lastToolCalls });
+              const r = await agentChatRound();
+              lastContent = (r && typeof r === 'object' && !Array.isArray(r)) ? String(r.content || '') : String(r ?? '');
+              lastToolCalls = (r && Array.isArray(r.tool_calls)) ? r.tool_calls : [];
+              agentEmit('chat', { round, content: lastContent, tool_calls: lastToolCalls });
+              if (!lastToolCalls.length) break;
+              messages.push({ role: 'assistant', content: lastContent, tool_calls: lastToolCalls });
+              for (const tc of lastToolCalls) {
+                const tname = String((tc.function && tc.function.name) || tc.name || '');
+                let targs = {}; try { targs = JSON.parse((tc.function && tc.function.arguments) || '{}'); } catch (_) {}
+                agentEmit('toolCall', { round, name: tname, args: targs });
+                const entry = HOST_TOOL_REGISTRY.find(e => e.name === tname);
+                const risk = entry ? entry.risk : 'confirm';
+                let allowed = true;
+                try {
+                  allowed = await agentConfirmTool(tname, targs, risk, { callId: agentCallId });
+                } catch (e) { allowed = false; agentEmit('error', { stage: 'confirm', message: e && e.message }); }
+                if (!allowed) {
+                  agentEmit('toolDenied', { round, name: tname });
+                  messages.push({ role: 'tool', tool_call_id: tc.id, name: tname, content: JSON.stringify({ ok: false, error: 'User denied this tool call.' }) });
+                  continue;
+                }
+                let out;
+                try {
+                  out = await toolsRun({ name: tname, args: targs, riskMax });
+                } catch (e) {
+                  out = { ok: false, error: e && e.message ? e.message : String(e), tool: tname };
+                }
+                history.push({ round, name: tname, args: targs, result: out, risk });
+                agentEmit('toolResult', { round, name: tname, result: out });
+                messages.push({ role: 'tool', tool_call_id: tc.id, name: tname, content: JSON.stringify(out) });
+              }
+            }
+            return {
+              content: lastContent,
+              rounds: Math.min(round, maxRounds),
+              tools: history,
+              provider: rt.provider?.label || '',
+              providerId: rt.providerId,
+              model: rt.model || '',
+              backend,
+              riskMax,
+              maxRounds,
+            };
+          });
+        }
+        case 'ai.chatStream': {
+          const streamCallId = params.__streamCallId || ('cs_' + Date.now().toString(36));
+          const streamEmit = (delta, meta) => {
+            try { postToMiniApp('ai.stream.delta', Object.assign({ callId: streamCallId }, meta || {}, { delta: delta || '' })); } catch (_) {}
+          };
+          const providerIdS = resolveMiniAppProviderId(params);
+          const modelOverrideS = params.model != null ? params.model : null;
+          return await withAiRuntime(providerIdS, modelOverrideS, async (rt) => {
+            if (!(rt.key && rt.key.trim()) && !rt.allowEmptyKey) {
+              throw new Error(
+                'Host AI not configured for ' +
+                (rt.provider?.label || providerIdS) +
+                '. User must set a provider key in Forge AI settings, or pick another provider via ForgeHost.ai.setProvider / ai.chat({ providerId }).'
+              );
+            }
+            const built = buildMiniAppAiMessages(params);
+            const backend = backendForRuntime(rt);
+            const fileMeta = { transcribed: 0, inputFiles: 0, inputAudio: 0, fallbacks: 0 };
+            const tools = normalizeToolsParam(params.tools || params.functions);
+            const toolChoice = params.tool_choice != null ? params.tool_choice : params.toolChoice;
+            const wantFull = !!(tools || params.fullResponse || params.returnToolCalls);
+            let content = '';
+            let tool_calls = [];
+            let finish_reason = null;
+            if (backend === 'gemini') {
+              const g = await geminiStreamGenerateContent(built.messages, null, {
+                tools, tool_choice: toolChoice, fullResponse: wantFull || !!tools, onDelta: streamEmit,
+              });
+              if (g && typeof g === 'object' && !Array.isArray(g)) {
+                content = g.content != null ? String(g.content) : '';
+                tool_calls = Array.isArray(g.tool_calls) ? g.tool_calls : [];
+                finish_reason = g.finish_reason || null;
+              } else {
+                content = String(g ?? '');
+              }
+            } else {
+              // xAI + OpenAI-compatible: materialize rich attachments, then stream.
+              const oaiMessages = [];
+              for (const m of built.messages) {
+                if (!m) continue;
+                if (m.role === 'system' || m.role === 'assistant' || m.role === 'tool') {
+                  oaiMessages.push(m); continue;
+                }
+                const contentParts = await materializeContentForRichOAI(m.content, fileMeta);
+                oaiMessages.push({ role: m.role || 'user', content: contentParts });
+              }
+              const result = await chatCompletionsStream(oaiMessages, null, {
+                tools, tool_choice: toolChoice, fullResponse: wantFull || !!tools,
+                onDelta: streamEmit,
+              });
+              if (result && typeof result === 'object' && !Array.isArray(result) && ('tool_calls' in result || 'content' in result)) {
+                content = result.content != null ? String(result.content) : '';
+                tool_calls = Array.isArray(result.tool_calls) ? result.tool_calls : [];
+                finish_reason = result.finish_reason || null;
+              } else {
+                content = String(result ?? '');
+              }
+            }
+            return {
+              content, tool_calls, finish_reason,
+              provider: rt.provider?.label || '',
+              providerId: rt.providerId, model: rt.model || '', backend,
+              richAttachments: true,
+              multimodal: built.stats.images > 0 || built.stats.files > 0 || fileMeta.inputFiles > 0 || fileMeta.transcribed > 0,
+              attachments: built.stats.attachments,
+              images: built.stats.images, files: built.stats.files,
+              transcribed: fileMeta.transcribed, inputFiles: fileMeta.inputFiles,
+              stats: Object.assign({}, built.stats, fileMeta),
+              streamed: true,
+            };
+          });
+        }
         case 'ai.chat': {
           const providerId = resolveMiniAppProviderId(params);
           const modelOverride = params.model != null ? params.model : null;
@@ -8825,6 +9426,12 @@ termux-reload-settings</div>
           return liveTranslateStatus();
         case 'ai.liveTranslate.configure':
           return liveTranslateConfigure(params || {});
+        case 'ai.liveTranslate.flip':
+          return liveTranslateFlip();
+        case 'ai.liveTranslate.pause':
+          return liveTranslatePause();
+        case 'ai.liveTranslate.resume':
+          return liveTranslateResume();
 
         // ——— AI convenience: TTS + voice list via host AI runtime ———
         // Cloud TTS uses the same provider/key as ai.chat (OpenAI-compatible /audio/speech).
@@ -9975,6 +10582,18 @@ Host AI (uses the user's Forge-configured providers/keys — NEVER embed API key
   //   providerId: 'openai',
   // })
   // if (r.tool_calls?.length) { /* run tools, push role:tool messages, call ai.chat again */ }
+  // Token streaming (2.6.51) — resolves to the full ai.chat shape; onToken fires per delta:
+  // const r = await ForgeHost.ai.chatStream({
+  //   messages, tools,
+  //   onToken: (delta, meta) => render(delta),     // optional
+  //   onToolCall: (tool_calls, meta) => {},         // optional
+  //   providerId, model,
+  // })
+  // Agent loop (2.6.51) — host runs chat + tool-call loop + risk sheet:
+  // const r = await ForgeHost.ai.agent({
+  //   messages, tools, maxRounds:6, riskMax:'confirm',
+  //   onToken: t => render(t), onToolCall: ({name,args}) => true, onRound: ({round,toolCalls}) => {},
+  // })
   // mode: 'auto' (default) | 'cloud' | 'native'. Same provider/key as ai.chat / setProvider.
   // xAI (Grok): POST /v1/tts  voices: eve, ara, leo, rex, sal, luna, …  (default eve)
   // OpenAI-compat: POST /v1/audio/speech  voices: alloy, nova, …  (default alloy)
@@ -10127,6 +10746,7 @@ Live translation session (open mic → STT windows → translate):
   // Events via ForgeHost.on(...):
   //   live.status | live.level | live.partialSource | live.finalSource
   //   live.partialTarget | live.finalTarget | live.error
+  //   live.flip | live.pause | live.resume   (Patch 4: conversation mode)
   ForgeHost.on('live.partialTarget', d => console.log(d.text))
   await ForgeHost.ai.liveTranslate.start({
     sourceLang:'auto', targetLang:'en', speak:true,
@@ -10135,8 +10755,16 @@ Live translation session (open mic → STT windows → translate):
   await ForgeHost.ai.liveTranslate.status()
   await ForgeHost.ai.liveTranslate.configure({ speak:false })
   await ForgeHost.ai.liveTranslate.stop()
+  // Conversation mode (Patch 4) — bidirectional A↔B with flip / pause / resume:
+  await ForgeHost.ai.liveTranslate.start({
+    mode:'conversation', langA:'en', langB:'es',
+    speak:true, autoDetect:false,   // autoDetect:true works for distinct-script pairs
+  })
+  await ForgeHost.ai.liveTranslate.flip()     // swap direction (manual)
+  await ForgeHost.ai.liveTranslate.pause()    // suspend STT, keep mic warm
+  await ForgeHost.ai.liveTranslate.resume()
+  await ForgeHost.ai.liveTranslate.stop()
   // Needs STT provider (OpenAI/Groq/xAI). Caps: getCapabilities().liveTranslate
-  // One-direction A→B. Bidirectional conversation UX is mini-app-level.
 
 Audio output routing (force speaker / earpiece / headset / bluetooth):
   // Routes: auto|default|speaker|earpiece|wired|bluetooth|communication
@@ -11888,6 +12516,289 @@ General:
         };
       }
       return content == null ? '' : String(content);
+    }
+
+    // ——— Token streaming (2.6.51) ————————————————————————————
+    // Used by ai.chatStream. Emits opts.onDelta(delta, meta) per token, then resolves
+    // to the same packed result shape as chatCompletions. Falls back to a single
+    // non-streaming call (one delta) when fetch streaming is unavailable or rejected
+    // (e.g. provider CORS blocks WebView fetch). CapacitorHttp cannot stream, so we
+    // rely on the WebView fetch + ReadableStream reader, which Chromium WebView supports.
+    async function chatCompletionsStream(messages, signal, opts = {}) {
+      const onDelta = typeof opts.onDelta === 'function' ? opts.onDelta : null;
+      const tools = normalizeToolsParam(opts.tools || opts.functions);
+      const full = !!(opts.fullResponse || opts.returnToolCalls || tools);
+      const toolChoice = opts.tool_choice != null ? opts.tool_choice : (opts.toolChoice != null ? opts.toolChoice : 'auto');
+
+      // Gemini native streamGenerateContent?alt=sse
+      if (backendForRuntime(getAiRuntime()) === 'gemini') {
+        try {
+          const g = await geminiStreamGenerateContent(messages, signal, {
+            tools, tool_choice: toolChoice, fullResponse: full || !!tools, onDelta,
+          });
+          return g;
+        } catch (e) {
+          // fall back to non-streaming gemini and emit one delta
+          const g = await geminiGenerateContent(messages, signal, {
+            tools, tool_choice: toolChoice, fullResponse: full || !!tools, jsonMode: opts.jsonMode,
+          });
+          const content = (g && typeof g === 'object' && !Array.isArray(g)) ? (g.content != null ? String(g.content) : '') : String(g ?? '');
+          if (onDelta && content) try { onDelta(content, { done: true }); } catch (_) {}
+          return g;
+        }
+      }
+
+      const { url, headers, model } = resolveEndpoint();
+      const temperature = parseFloat(getAiRuntime().temperature);
+      const body = { model, messages: normalizeChatMessages(messages), stream: true };
+      if (!Number.isNaN(temperature)) body.temperature = temperature;
+      if (tools) { body.tools = tools; body.tool_choice = toolChoice; }
+      if (opts.jsonMode === true || opts.jsonMode === 'on') body.response_format = { type: 'json_object' };
+      // vision/json + tools combos are fragile under streaming; drop response_format for parts/tools
+      if (tools || body.messages.some(m => Array.isArray(m.content))) delete body.response_format;
+
+      const canStream = typeof fetch === 'function';
+      if (!canStream) {
+        const r = await chatCompletions(messages, signal, opts);
+        const c = typeof r === 'string' ? r : (r && r.content) || '';
+        if (onDelta && c) try { onDelta(c, { done: true }); } catch (_) {}
+        return r;
+      }
+
+      let res;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: Object.assign({}, headers, { 'Accept': 'text/event-stream' }),
+          body: JSON.stringify(body),
+          signal,
+        });
+      } catch (netErr) {
+        // WebView fetch blocked (CORS/ offline) → CapacitorHttp fallback (no stream)
+        const r = await chatCompletions(messages, signal, opts);
+        const c = typeof r === 'string' ? r : (r && r.content) || '';
+        if (onDelta && c) try { onDelta(c, { done: true, fallback: true }); } catch (_) {}
+        return r;
+      }
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        // Retry once without response_format / tools if the provider rejects them (same logic as chatCompletions)
+        if (body.response_format && /response_format|unknown.?parameter|unsupported/i.test(errText)) {
+          delete body.response_format;
+          return chatCompletionsStream(messages, signal, Object.assign({}, opts, { jsonMode: 'off', onDelta }));
+        }
+        if (body.tools && /tools|tool_choice|unknown.?parameter|unsupported/i.test(errText)) {
+          delete body.tools; delete body.tool_choice;
+          return chatCompletionsStream(messages, signal, Object.assign({}, opts, { onDelta }));
+        }
+        throw new Error('API ' + res.status + ': ' + errText);
+      }
+      const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+      if (!reader) {
+        // No streaming body support — read whole text, emit one delta
+        const text = await res.text();
+        let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
+        const packed = packChatCompletionResult(data, { ...opts, tools });
+        const c = typeof packed === 'string' ? packed : (packed && packed.content) || '';
+        if (onDelta && c) try { onDelta(c, { done: true }); } catch (_) {}
+        return packed;
+      }
+
+      const decoder = new TextDecoder('utf-8');
+      let buf = '';
+      let contentAcc = '';
+      const toolAcc = {};       // index -> { id, function:{ name, arguments:'' } }
+      let finishReason = null;
+      let modelUsed = model;
+      let anyChunk = false;
+
+      const flushEvent = (line) => {
+        // line like `data: {...}` or `data: [DONE]`
+        const raw = line.replace(/^data:\s*/i, '').trim();
+        if (!raw || raw === '[DONE]') return;
+        let ev; try { ev = JSON.parse(raw); } catch { return; }
+        anyChunk = true;
+        if (ev.model) modelUsed = ev.model;
+        const choice = ev.choices && ev.choices[0];
+        if (!choice) return;
+        const delta = choice.delta || {};
+        if (typeof delta.content === 'string' && delta.content) {
+          contentAcc += delta.content;
+          if (onDelta) try { onDelta(delta.content, { done: false }); } catch (_) {}
+        }
+        if (Array.isArray(delta.tool_calls)) {
+          for (const tc of delta.tool_calls) {
+            const idx = Number.isFinite(tc.index) ? tc.index : 0;
+            const slot = toolAcc[idx] = toolAcc[idx] || { id: tc.id || '', type: 'function', function: { name: '', arguments: '' } };
+            if (tc.function) {
+              if (tc.function.name) slot.function.name += tc.function.name;
+              if (typeof tc.function.arguments === 'string') slot.function.arguments += tc.function.arguments;
+            }
+            if (tc.id && !slot.id) slot.id = tc.id;
+          }
+        }
+        if (choice.finish_reason) finishReason = choice.finish_reason;
+      };
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let nl;
+          // SSE events separated by blank lines; we process line-by-line
+          while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl).replace(/\r$/, '');
+            buf = buf.slice(nl + 1);
+            if (line === '') continue;
+            if (/^data:\s*/i.test(line)) flushEvent(line);
+            // ignore comments / event:/ id: lines
+          }
+        }
+        if (buf.length) { if (/^data:\s*/i.test(buf)) flushEvent(buf); }
+      } finally {
+        try { reader.releaseLock(); } catch (_) {}
+      }
+      if (onDelta) try { onDelta('', { done: true }); } catch (_) {}
+      if (!anyChunk) {
+        // Some providers return a single non-SSE JSON on error; surface it.
+        throw new Error('Empty stream response');
+      }
+      const tool_calls = Object.keys(toolAcc).sort((a,b)=>a-b).map(k => toolAcc[k]);
+      if (tools || tool_calls.length || full) {
+        return { content: contentAcc, tool_calls, finish_reason: finishReason, role: 'assistant', model: modelUsed };
+      }
+      return contentAcc;
+    }
+
+    // Gemini streaming variant: streamGenerateContent?alt=sse
+    async function geminiStreamGenerateContent(messages, signal, opts = {}) {
+      const onDelta = typeof opts.onDelta === 'function' ? opts.onDelta : null;
+      const rt = getAiRuntime();
+      let key = String(rt.key || '').trim().replace(/^api[_-]?key\s*=\s*/i, '').replace(/^["']|["']$/g, '').trim();
+      if (!key) throw new Error('Gemini API key required');
+      let model = String(rt.model || '').trim() || 'gemini-2.5-flash';
+      model = model.replace(/^models\//, '');
+      const tools = normalizeToolsParam(opts.tools || opts.functions);
+      let systemText = '';
+      const contents = [];
+      for (const m of messages || []) {
+        if (!m || !m.role) continue;
+        if (m.role === 'system') { systemText += (systemText ? '\n' : '') + String(m.content || ''); continue; }
+        if (m.role === 'tool') {
+          let response; try { response = typeof m.content === 'string' ? JSON.parse(m.content) : m.content; } catch { response = { result: m.content }; }
+          const parts = [{ functionResponse: { name: String(m.name || 'tool'), response: response && typeof response === 'object' ? response : { result: response } } }];
+          const prev = contents[contents.length - 1];
+          if (prev && prev.role === 'user') prev.parts = (prev.parts || []).concat(parts); else contents.push({ role:'user', parts });
+          continue;
+        }
+        if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+          const parts = [];
+          if (m.content) parts.push({ text: String(m.content) });
+          for (const tc of m.tool_calls) {
+            let args = {}; try { const raw = tc.function?.arguments ?? tc.arguments ?? '{}'; args = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {}); } catch { args = {}; }
+            parts.push({ functionCall: { name: String(tc.function?.name || tc.name || 'tool'), args } });
+          }
+          const prev = contents[contents.length - 1];
+          if (prev && prev.role === 'model') prev.parts = (prev.parts || []).concat(parts); else contents.push({ role:'model', parts });
+          continue;
+        }
+        const role = m.role === 'assistant' ? 'model' : 'user';
+        let parts;
+        if (role === 'model') parts = [{ text: String(m.content ?? '') }];
+        else { parts = openaiContentToGeminiParts(m.content); if (!parts.length) parts = [{ text: '' }]; }
+        const prev = contents[contents.length - 1];
+        if (prev && prev.role === role) prev.parts = (prev.parts || []).concat(parts); else contents.push({ role, parts });
+      }
+      if (!contents.length) throw new Error('No content to send to Gemini');
+      if (contents[contents.length - 1].role !== 'user') contents.push({ role:'user', parts:[{ text:'Please continue.' }] });
+
+      const body = { contents };
+      if (systemText) body.systemInstruction = { parts:[{ text: systemText }] };
+      const temperature = parseFloat(getAiRuntime().temperature);
+      if (!Number.isNaN(temperature)) body.generationConfig = { temperature };
+      if (tools && tools.length) body.tools = [{ functionDeclarations: tools.map(t => ({ name:t.function.name, description:t.function.description||'', parameters:t.function.parameters||{type:'object',properties:{}} })) }];
+
+      const headers = { 'Content-Type':'application/json', 'x-goog-api-key': key };
+      const modelsTry = geminiModelFallbacks(model);
+      let contentAcc = '';
+      const toolCalls = [];
+      let lastErr = null;
+      let usedModel = model;
+
+      for (let mi = 0; mi < modelsTry.length; mi++) {
+        usedModel = modelsTry[mi];
+        const url = `${geminiApiBase()}/models/${encodeURIComponent(usedModel)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`;
+        let res;
+        try {
+          res = await fetch(url, { method:'POST', headers, body: JSON.stringify(body), signal });
+        } catch (e) { lastErr = e; continue; }
+        if (res.status < 200 || res.status >= 300) {
+          const errText = await res.text().catch(() => '');
+          lastErr = new Error(formatGeminiError(res.status, errText));
+          if (res.status === 404) continue;
+          if (/not.?found|404/i.test(errText)) continue;
+          break;
+        }
+        const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+        if (!reader) {
+          const text = await res.text();
+          let j; try { j = JSON.parse(text); } catch { j = { raw: text }; }
+          const partsOut = (j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+          contentAcc = partsOut.map(p => p.text || '').filter(Boolean).join('\n');
+          break;
+        }
+        const decoder = new TextDecoder('utf-8');
+        let buf = '';
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream:true });
+            let nl;
+            while ((nl = buf.indexOf('\n')) >= 0) {
+              const line = buf.slice(0, nl).replace(/\r$/, ''); buf = buf.slice(nl + 1);
+              if (!/^data:\s*/i.test(line)) continue;
+              const raw = line.replace(/^data:\s*/i, '').trim();
+              if (!raw || raw === '[DONE]') continue;
+              let ev; try { ev = JSON.parse(raw); } catch { continue; }
+              const cands = ev.candidates || (ev && ev[0] && ev[0].candidates) || [];
+              for (const cand of cands) {
+                const parts = cand && cand.content && cand.content.parts || [];
+                for (const p of parts) {
+                  if (typeof p.text === 'string' && p.text) {
+                    contentAcc += p.text;
+                    if (onDelta) try { onDelta(p.text, { done:false }); } catch (_) {}
+                  }
+                  if (p.functionCall) {
+                    toolCalls.push({ id: 'call_' + (toolCalls.length + 1), type:'function', function:{ name: String(p.functionCall.name||''), arguments: JSON.stringify(p.functionCall.args || {}) } });
+                  }
+                }
+              }
+            }
+          }
+          if (buf.length && /^data:\s*/i.test(buf)) {
+            const raw = buf.replace(/^data:\s*/i, '').trim();
+            if (raw && raw !== '[DONE]') {
+              try {
+                const ev = JSON.parse(raw);
+                const cands = ev.candidates || (ev[0] && ev[0].candidates) || [];
+                for (const cand of cands) for (const p of (cand && cand.content && cand.content.parts) || []) {
+                  if (typeof p.text === 'string' && p.text) { contentAcc += p.text; if (onDelta) try { onDelta(p.text, { done:false }); } catch (_) {} }
+                  if (p.functionCall) toolCalls.push({ id:'call_'+(toolCalls.length+1), type:'function', function:{ name:String(p.functionCall.name||''), arguments:JSON.stringify(p.functionCall.args||{}) } });
+                }
+              } catch {}
+            }
+          }
+        } finally { try { reader.releaseLock(); } catch(_) {} }
+        if (onDelta) try { onDelta('', { done:true }); } catch(_) {}
+        lastErr = null;
+        break;
+      }
+      if (lastErr) throw lastErr;
+      const full = !!(opts.fullResponse || opts.returnToolCalls || toolCalls.length);
+      if (full) return { content: contentAcc, tool_calls: toolCalls, finish_reason: toolCalls.length ? 'tool_calls' : 'stop', role:'assistant', model: usedModel };
+      return contentAcc;
     }
 
     async function chatCompletions(messages, signal, opts = {}) {

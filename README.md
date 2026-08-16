@@ -22,6 +22,7 @@ adb install -r ~/downloads/Forge-debug.apk
 ## Structure
 - `android/` — Gradle + native plugins  
 - `www/` / `android/app/src/main/assets/public/` — UI from APK  
+- `docs/` — `api.md` (ForgeHost bridge), `tools.md` (LLM tool registry)  
 - `recovered/` — JADX / APKEditor archives (do not delete)  
 - `node_modules/@capacitor` — Capacitor 6 Android libraries  
 
