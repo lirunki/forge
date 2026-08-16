@@ -2,6 +2,8 @@ package com.forge.live;
 
 import android.content.Intent;
 import android.media.AudioRecord;
+import android.media.audiofx.AcousticEchoCanceler;
+import android.media.audiofx.NoiseSuppressor;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -41,6 +43,10 @@ public class MicBridgePlugin extends Plugin {
     private int streamSampleRate = 16000;
     private int streamChunkMs = 250;
     private long streamSeq = 0;
+    private AcousticEchoCanceler aec;
+    private NoiseSuppressor noiseSuppressor;
+    private boolean streamAec = true;
+    private boolean streamNs = true;
     private int recordSampleRate = 16000;
     private long recordStartedAt = 0;
     private int maxRecordMs = 60000;
@@ -66,6 +72,8 @@ public class MicBridgePlugin extends Plugin {
         o.put("record", true);
         o.put("pcmStream", true);
         o.put("maxRecordMs", 120000);
+        o.put("aec", AcousticEchoCanceler.isAvailable());
+        o.put("noiseSuppressor", NoiseSuppressor.isAvailable());
         o.put("formats", (Object) new JSArray().put("wav").put("pcm"));
         call.resolve(o);
     }
@@ -460,11 +468,19 @@ public class MicBridgePlugin extends Plugin {
         int chunkMs = call.getInt("chunkMs", 250).intValue();
         if (chunkMs < 80) chunkMs = 80;
         if (chunkMs > 2000) chunkMs = 2000;
+        // 2.6.54: AEC + NoiseSuppressor for live-translate (avoids TTS echo into mic).
+        // Defaults on; mini-app can disable via { aec:false, noiseSuppressor:false }.
+        boolean wantAec = call.getBoolean("aec", true).booleanValue();
+        boolean wantNs = call.getBoolean("noiseSuppressor", true).booleanValue();
+        if (!AcousticEchoCanceler.isAvailable()) wantAec = false;
+        if (!NoiseSuppressor.isAvailable()) wantNs = false;
         final int sampleRate2 = sampleRate;
         final int chunkMs2 = chunkMs;
         this.streamSampleRate = sampleRate2;
         this.streamChunkMs = chunkMs2;
         this.streamSeq = 0;
+        this.streamAec = wantAec;
+        this.streamNs = wantNs;
         try {
             int minBuf = AudioRecord.getMinBufferSize(sampleRate2, 16, 2);
             if (minBuf <= 0) minBuf = sampleRate2 * 2;
@@ -478,6 +494,27 @@ public class MicBridgePlugin extends Plugin {
             }
             this.streaming.set(true);
             this.recordStartedAt = System.currentTimeMillis();
+            // Apply AEC / NoiseSuppressor on the AudioRecord session (2.6.54).
+            int sessionId = -1;
+            try { sessionId = audioRecord.getAudioSessionId(); } catch (Exception e) {}
+            if (wantAec && sessionId >= 0) {
+                try {
+                    AcousticEchoCanceler aec = AcousticEchoCanceler.create(sessionId);
+                    if (aec != null) {
+                        if (aec.isAvailable()) aec.setEnabled(true); else aec.release();
+                        if (aec.getEnabled()) this.aec = aec; else aec.release();
+                    }
+                } catch (Exception e) {}
+            }
+            if (wantNs && sessionId >= 0) {
+                try {
+                    NoiseSuppressor ns = NoiseSuppressor.create(sessionId);
+                    if (ns != null) {
+                        if (ns.isAvailable()) ns.setEnabled(true); else ns.release();
+                        if (ns.getEnabled()) this.noiseSuppressor = ns; else ns.release();
+                    }
+                } catch (Exception e) {}
+            }
             Thread thread = new Thread(new Runnable() {
                 @Override
                 public final void run() {
@@ -493,6 +530,8 @@ public class MicBridgePlugin extends Plugin {
             ret.put("encoding", "pcm_s16le");
             ret.put("channels", 1);
             ret.put("mime", "audio/pcm");
+            ret.put("aec", this.aec != null);
+            ret.put("noiseSuppressor", this.noiseSuppressor != null);
             call.resolve(ret);
         } catch (Exception e) {
             this.streaming.set(false);
@@ -695,6 +734,15 @@ public class MicBridgePlugin extends Plugin {
             } catch (Exception e) {
             }
             this.audioRecord = null;
+        }
+        // 2.6.54: release echo cancellation / noise suppression effects.
+        if (this.aec != null) {
+            try { this.aec.release(); } catch (Exception e) {}
+            this.aec = null;
+        }
+        if (this.noiseSuppressor != null) {
+            try { this.noiseSuppressor.release(); } catch (Exception e) {}
+            this.noiseSuppressor = null;
         }
     }
 

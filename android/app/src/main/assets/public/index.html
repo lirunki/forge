@@ -2339,6 +2339,15 @@ termux-reload-settings</div>
       return aiCallContext || buildAiRuntime(currentProviderId());
     }
 
+    // === Stream / agent cancellation + agent tool-call veto (2.6.54) ===
+    // streamAbortControllers: stream/agent id -> AbortController (used by ai.chatStream)
+    // agentCancelFlags:      agent id -> { cancelled: boolean } (checked each round)
+    // agentToolCallPending:  `${callId}:${toolCallId}` -> { resolve, timer }
+    //                           (mini-app onToolCall veto round-trip)
+    const streamAbortControllers = new Map();
+    const agentCancelFlags = new Map();
+    const agentToolCallPending = new Map();
+
     async function withAiRuntime(providerId, modelOverride, fn) {
       const prev = aiCallContext;
       aiCallContext = buildAiRuntime(providerId, modelOverride);
@@ -5073,8 +5082,10 @@ termux-reload-settings</div>
         const o = Object.assign({}, opts || {});
         const onToken = o.onToken, onDelta = o.onDelta, onToolCall = o.onToolCall;
         delete o.onToken; delete o.onDelta; delete o.onToolCall; delete o.onDone; delete o.onFinish;
-        const callId = 'cs' + (_id++);
+        // 2.6.54: caller may pass id to cancel later; otherwise we mint one and return it as r.id.
+        const callId = o.id ? String(o.id) : 'cs' + (_id++);
         o.__streamCallId = callId;
+        delete o.id;
         const wantEvents = !!(onToken || onDelta || onToolCall);
         const off = wantEvents
           ? on('ai.stream.delta', (d) => {
@@ -5086,7 +5097,7 @@ termux-reload-settings</div>
             })
           : null;
         return call('ai.chatStream', o).then(
-          (r) => { if (off) off(); return r; },
+          (r) => { if (off) off(); if (r && typeof r === 'object') r.id = r.id || callId; return r; },
           (e) => { if (off) off(); throw e; }
         );
       },
@@ -5107,26 +5118,42 @@ termux-reload-settings</div>
         const o = Object.assign({}, opts || {});
         const onToken = o.onToken, onToolCall = o.onToolCall, onRound = o.onRound, onChat = o.onChat, onToolResult = o.onToolResult;
         delete o.onToken; delete o.onDelta; delete o.onToolCall; delete o.onRound; delete o.onChat; delete o.onToolResult; delete o.onDone;
-        o.__agentCallId = 'ag' + (_id++);
+        // 2.6.54: caller may pass id (cancellable); otherwise mint one.
+        const callId = o.id ? String(o.id) : 'ag' + (_id++);
+        o.__agentCallId = callId;
+        delete o.id;
+        // 2.6.54: onToolCall is now a veto (request/response). Tell the host we have one
+        // so it emits toolCallRequest and awaits our ai.agent.toolCallRespond.
+        o.__hasOnToolCall = !!onToolCall;
         o.__wantStream = !!(onToken);
         const wantEvents = !!(onToken || onToolCall || onRound || onChat || onToolResult);
         const off = wantEvents
           ? on('ai.agent.event', (d) => {
-              if (!d || d.callId !== o.__agentCallId) return;
+              if (!d || d.callId !== callId) return;
               try {
+                if (d.type === 'toolCallRequest' && onToolCall) {
+                  // Veto round-trip: resolve the callback (sync or Promise); false denies.
+                  Promise.resolve()
+                    .then(() => onToolCall({ name: d.name, args: d.args, round: d.round }, d))
+                    .then((allow) => call('ai.agent.toolCallRespond', { callId, toolCallId: d.toolCallId, allow: allow !== false }))
+                    .catch(() => call('ai.agent.toolCallRespond', { callId, toolCallId: d.toolCallId, allow: false }));
+                  return;
+                }
                 if (d.type === 'token' && onToken && typeof d.delta === 'string') onToken(d.delta, d);
                 else if (d.type === 'round' && onRound) onRound({ round: d.round, toolCalls: d.toolCalls }, d);
                 else if (d.type === 'chat' && onChat) onChat({ round: d.round, content: d.content, tool_calls: d.tool_calls }, d);
-                else if (d.type === 'toolCall' && onToolCall) onToolCall({ name: d.name, args: d.args, round: d.round }, d);
+                else if (d.type === 'toolCall' && onToolCall) { /* notification only; veto handled above */ }
                 else if (d.type === 'toolResult' && onToolResult) onToolResult({ name: d.name, result: d.result, round: d.round }, d);
               } catch (e) { console.error('[ai.agent]', e); }
             })
           : null;
         return call('ai.agent', o).then(
-          (r) => { if (off) off(); return r; },
+          (r) => { if (off) off(); if (r && typeof r === 'object') r.id = r.id || callId; return r; },
           (e) => { if (off) off(); throw e; }
         );
       },
+      /** Cancel a running ai.chatStream / ai.agent by id (2.6.54). */
+      cancel: (id) => call('ai.cancel', { id: String(id || '') }),
       /**
        * Speech-to-text via host AI (OpenAI Whisper / xAI /stt). Not Gemini.
        * opts: {
@@ -6942,7 +6969,7 @@ termux-reload-settings</div>
 
       try {
         try { await BackgroundForge.start({ title: 'Live Translate', text: 'Listening…' }); } catch (_) {}
-        await nativeCall(MicBridge, 'startStream', { sampleRate: sampleRate, chunkMs: chunkMs });
+        await nativeCall(MicBridge, 'startStream', { sampleRate: sampleRate, chunkMs: chunkMs, aec: true, noiseSuppressor: true });
       } catch (e) {
         liveTranslate.running = false;
         liveTranslate.phase = 'idle';
@@ -8622,6 +8649,31 @@ termux-reload-settings</div>
         }
       });
     }
+    /**
+     * Mini-app onToolCall veto round-trip (2.6.54).
+     * Emits `toolCallRequest` and waits for the bridge to call back
+     * `ai.agent.toolCallRespond({ callId, toolCallId, allow })`.
+     * Returns true if allowed, false if denied or timed out (30s → deny for safety).
+     */
+    function agentAskMiniAppToolCall(callId, toolCallId, info) {
+      return new Promise((resolve) => {
+        const key = callId + ':' + toolCallId;
+        let settled = false;
+        const done = (allow) => {
+          if (settled) return; settled = true;
+          clearTimeout(timer);
+          agentToolCallPending.delete(key);
+          resolve(!!allow);
+        };
+        const timer = setTimeout(() => done(false), 30000);
+        agentToolCallPending.set(key, { resolve: done });
+        try {
+          postToMiniApp('ai.agent.event', Object.assign({ callId, type: 'toolCallRequest', toolCallId }, info || {}));
+        } catch (e) {
+          done(false);
+        }
+      });
+    }
     function escapeHtmlText(s) {
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -9146,9 +9198,10 @@ termux-reload-settings</div>
             async function agentChatRound() {
               const chatOpts = { tools, tool_choice: toolChoice, fullResponse: true };
               const onDelta = wantStream ? ((delta) => agentEmit('token', { delta })) : null;
+              const sig = agentAbortController ? agentAbortController.signal : null;
               if (backend === 'gemini') {
-                if (wantStream) return await geminiStreamGenerateContent(messages, null, { tools, tool_choice: toolChoice, fullResponse: true, onDelta });
-                return await geminiGenerateContent(messages, null, { tools, tool_choice: toolChoice, fullResponse: true });
+                if (wantStream) return await geminiStreamGenerateContent(messages, sig, { tools, tool_choice: toolChoice, fullResponse: true, onDelta });
+                return await geminiGenerateContent(messages, sig, { tools, tool_choice: toolChoice, fullResponse: true });
               }
               // OAI: materialize rich attachments for user turns
               const oai = [];
@@ -9157,49 +9210,73 @@ termux-reload-settings</div>
                 const cp = await materializeContentForRichOAI(m.content, fileMetaA);
                 oai.push({ role: m.role || 'user', content: cp });
               }
-              if (wantStream) return await chatCompletionsStream(oai, null, { ...chatOpts, onDelta });
-              return await chatCompletionsWithFiles(oai, null, chatOpts);
+              if (wantStream) return await chatCompletionsStream(oai, sig, { ...chatOpts, onDelta });
+              return await chatCompletionsWithFiles(oai, sig, chatOpts);
             }
 
             const history = [];
-            let round = 0;
-            let lastContent = '';
-            let lastToolCalls = [];
-            for (;;) {
-              round++;
-              if (round > maxRounds) { agentEmit('maxrounds', { round: maxRounds }); break; }
-              agentEmit('round', { round, toolCalls: lastToolCalls });
-              const r = await agentChatRound();
-              lastContent = (r && typeof r === 'object' && !Array.isArray(r)) ? String(r.content || '') : String(r ?? '');
-              lastToolCalls = (r && Array.isArray(r.tool_calls)) ? r.tool_calls : [];
-              agentEmit('chat', { round, content: lastContent, tool_calls: lastToolCalls });
-              if (!lastToolCalls.length) break;
-              messages.push({ role: 'assistant', content: lastContent, tool_calls: lastToolCalls });
-              for (const tc of lastToolCalls) {
-                const tname = String((tc.function && tc.function.name) || tc.name || '');
-                let targs = {}; try { targs = JSON.parse((tc.function && tc.function.arguments) || '{}'); } catch (_) {}
-                agentEmit('toolCall', { round, name: tname, args: targs });
-                const entry = HOST_TOOL_REGISTRY.find(e => e.name === tname);
-                const risk = entry ? entry.risk : 'confirm';
-                let allowed = true;
-                try {
-                  allowed = await agentConfirmTool(tname, targs, risk, { callId: agentCallId });
-                } catch (e) { allowed = false; agentEmit('error', { stage: 'confirm', message: e && e.message }); }
-                if (!allowed) {
-                  agentEmit('toolDenied', { round, name: tname });
-                  messages.push({ role: 'tool', tool_call_id: tc.id, name: tname, content: JSON.stringify({ ok: false, error: 'User denied this tool call.' }) });
-                  continue;
+            const agentCancelFlag = { cancelled: false };
+            agentCancelFlags.set(agentCallId, agentCancelFlag);
+            const agentAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            if (agentAbortController) streamAbortControllers.set(agentCallId, agentAbortController);
+            try {
+              let round = 0;
+              let lastContent = '';
+              let lastToolCalls = [];
+              for (;;) {
+                round++;
+                if (agentCancelFlag.cancelled) { agentEmit('cancelled', { round }); break; }
+                if (round > maxRounds) { agentEmit('maxrounds', { round: maxRounds }); break; }
+                agentEmit('round', { round, toolCalls: lastToolCalls });
+                const r = await agentChatRound();
+                if (agentCancelFlag.cancelled) { agentEmit('cancelled', { round }); break; }
+                lastContent = (r && typeof r === 'object' && !Array.isArray(r)) ? String(r.content || '') : String(r ?? '');
+                lastToolCalls = (r && Array.isArray(r.tool_calls)) ? r.tool_calls : [];
+                agentEmit('chat', { round, content: lastContent, tool_calls: lastToolCalls });
+                if (!lastToolCalls.length) break;
+                messages.push({ role: 'assistant', content: lastContent, tool_calls: lastToolCalls });
+                for (const tc of lastToolCalls) {
+                  if (agentCancelFlag.cancelled) break;
+                  const tname = String((tc.function && tc.function.name) || tc.name || '');
+                  let targs = {}; try { targs = JSON.parse((tc.function && tc.function.arguments) || '{}'); } catch (_) {}
+                  agentEmit('toolCall', { round, name: tname, args: targs });
+                  const entry = HOST_TOOL_REGISTRY.find(e => e.name === tname);
+                  const risk = entry ? entry.risk : 'confirm';
+                  // Gate 1: host-level risk sheet (Allow / Always / Deny).
+                  let allowed = true;
+                  try {
+                    allowed = await agentConfirmTool(tname, targs, risk, { callId: agentCallId });
+                  } catch (e) { allowed = false; agentEmit('error', { stage: 'confirm', message: e && e.message }); }
+                  // Gate 2 (2.6.54): mini-app onToolCall veto (request/response round-trip).
+                  // Only when the mini-app supplied an onToolCall callback. Returning false
+                  // (or a Promise resolving to false) denies the call; the loop continues
+                  // with a denied `role:'tool'` row so the model can react.
+                  if (allowed && params.__hasOnToolCall) {
+                    const toolCallId = 'tc_' + round + '_' + (tc.id || '') + '_' + Date.now().toString(36);
+                    try {
+                      allowed = await agentAskMiniAppToolCall(agentCallId, toolCallId, { round, name: tname, args: targs });
+                    } catch (e) { allowed = false; agentEmit('error', { stage: 'onToolCall', message: e && e.message }); }
+                    if (!allowed) agentEmit('toolDenied', { round, name: tname, source: 'miniapp' });
+                  }
+                  if (!allowed) {
+                    if (!params.__hasOnToolCall) agentEmit('toolDenied', { round, name: tname });
+                    messages.push({ role: 'tool', tool_call_id: tc.id, name: tname, content: JSON.stringify({ ok: false, error: 'User denied this tool call.' }) });
+                    continue;
+                  }
+                  let out;
+                  try {
+                    out = await toolsRun({ name: tname, args: targs, riskMax });
+                  } catch (e) {
+                    out = { ok: false, error: e && e.message ? e.message : String(e), tool: tname };
+                  }
+                  history.push({ round, name: tname, args: targs, result: out, risk });
+                  agentEmit('toolResult', { round, name: tname, result: out });
+                  messages.push({ role: 'tool', tool_call_id: tc.id, name: tname, content: JSON.stringify(out) });
                 }
-                let out;
-                try {
-                  out = await toolsRun({ name: tname, args: targs, riskMax });
-                } catch (e) {
-                  out = { ok: false, error: e && e.message ? e.message : String(e), tool: tname };
-                }
-                history.push({ round, name: tname, args: targs, result: out, risk });
-                agentEmit('toolResult', { round, name: tname, result: out });
-                messages.push({ role: 'tool', tool_call_id: tc.id, name: tname, content: JSON.stringify(out) });
               }
+            } finally {
+              agentCancelFlags.delete(agentCallId);
+              streamAbortControllers.delete(agentCallId);
             }
             return {
               content: lastContent,
@@ -9211,6 +9288,7 @@ termux-reload-settings</div>
               backend,
               riskMax,
               maxRounds,
+              cancelled: agentCancelFlag.cancelled,
             };
           });
         }
@@ -9219,9 +9297,14 @@ termux-reload-settings</div>
           const streamEmit = (delta, meta) => {
             try { postToMiniApp('ai.stream.delta', Object.assign({ callId: streamCallId }, meta || {}, { delta: delta || '' })); } catch (_) {}
           };
+          // 2.6.54: cancellable. ForgeHost.ai.cancel(id) aborts the in-flight stream.
+          const streamCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          if (streamCtrl) streamAbortControllers.set(streamCallId, streamCtrl);
+          const streamSig = streamCtrl ? streamCtrl.signal : null;
           const providerIdS = resolveMiniAppProviderId(params);
           const modelOverrideS = params.model != null ? params.model : null;
-          return await withAiRuntime(providerIdS, modelOverrideS, async (rt) => {
+          try {
+            return await withAiRuntime(providerIdS, modelOverrideS, async (rt) => {
             if (!(rt.key && rt.key.trim()) && !rt.allowEmptyKey) {
               throw new Error(
                 'Host AI not configured for ' +
@@ -9239,7 +9322,7 @@ termux-reload-settings</div>
             let tool_calls = [];
             let finish_reason = null;
             if (backend === 'gemini') {
-              const g = await geminiStreamGenerateContent(built.messages, null, {
+              const g = await geminiStreamGenerateContent(built.messages, streamSig, {
                 tools, tool_choice: toolChoice, fullResponse: wantFull || !!tools, onDelta: streamEmit,
               });
               if (g && typeof g === 'object' && !Array.isArray(g)) {
@@ -9260,7 +9343,7 @@ termux-reload-settings</div>
                 const contentParts = await materializeContentForRichOAI(m.content, fileMeta);
                 oaiMessages.push({ role: m.role || 'user', content: contentParts });
               }
-              const result = await chatCompletionsStream(oaiMessages, null, {
+              const result = await chatCompletionsStream(oaiMessages, streamSig, {
                 tools, tool_choice: toolChoice, fullResponse: wantFull || !!tools,
                 onDelta: streamEmit,
               });
@@ -9274,6 +9357,7 @@ termux-reload-settings</div>
             }
             return {
               content, tool_calls, finish_reason,
+              id: streamCallId,
               provider: rt.provider?.label || '',
               providerId: rt.providerId, model: rt.model || '', backend,
               richAttachments: true,
@@ -9284,7 +9368,10 @@ termux-reload-settings</div>
               stats: Object.assign({}, built.stats, fileMeta),
               streamed: true,
             };
-          });
+            });
+          } finally {
+            streamAbortControllers.delete(streamCallId);
+          }
         }
         case 'ai.chat': {
           const providerId = resolveMiniAppProviderId(params);
@@ -9432,6 +9519,30 @@ termux-reload-settings</div>
           return liveTranslatePause();
         case 'ai.liveTranslate.resume':
           return liveTranslateResume();
+
+        // ——— Stream / agent cancellation + agent veto response (2.6.54) ———
+        case 'ai.cancel':
+        case 'ai.chatStream.cancel':
+        case 'ai.agent.cancel': {
+          const cancelId = String((params && (params.id || params.callId || params.streamId)) || '');
+          if (!cancelId) return { ok: false, error: 'id required' };
+          let aborted = false;
+          const ctrl = streamAbortControllers.get(cancelId);
+          if (ctrl) { try { ctrl.abort(); } catch (_) {} aborted = true; streamAbortControllers.delete(cancelId); }
+          const flag = agentCancelFlags.get(cancelId);
+          if (flag) { flag.cancelled = true; aborted = true; }
+          return { ok: true, id: cancelId, aborted };
+        }
+        case 'ai.agent.toolCallRespond': {
+          const callId = String((params && params.callId) || '');
+          const toolCallId = String((params && params.toolCallId) || '');
+          const allow = params && params.allow !== false;
+          const key = callId + ':' + toolCallId;
+          const pending = agentToolCallPending.get(key);
+          if (!pending) return { ok: false, error: 'no pending tool-call request for that id' };
+          pending.resolve(allow);
+          return { ok: true, allowed: allow };
+        }
 
         // ——— AI convenience: TTS + voice list via host AI runtime ———
         // Cloud TTS uses the same provider/key as ai.chat (OpenAI-compatible /audio/speech).
@@ -10135,6 +10246,8 @@ termux-reload-settings</div>
           return await nativeCall(MicBridge, 'startStream', {
             sampleRate: params.sampleRate,
             chunkMs: params.chunkMs,
+            aec: params.aec,
+            noiseSuppressor: params.noiseSuppressor,
           });
         }
         case 'mic.stopStream':

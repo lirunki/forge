@@ -2,7 +2,7 @@
 
 > Canonical source: `HOST_TOOL_REGISTRY` + `HOST_BRIDGE_ALLOW` in `forge/www/index.html`.
 > This file is a human-readable mirror — regenerate when the registry changes.
-> Version baseline: `2.6.50 / versionCode 80` (24 tools, 2.6.48).
+> Version baseline: `2.6.54 / versionCode 84` (27 tools).
 
 The host exposes a tool catalog over `ForgeHost` bridges so chat/agent mini-apps
 gain power as the host grows. Mini-apps call `ForgeHost.tools.list()` to get

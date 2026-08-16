@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.50 / versionCode 80** (Cheaper Inference provider + live models) · prior 2.6.49/79
+| Version | **2.6.54 / versionCode 84** (agent tool-call veto + stream cancel + mic AEC + docs/scripts) · prior 2.6.52/82
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-15 — 2.6.46 Gemini native fix; free path Gemini/Groq/OpenRouter · **user verified + pushed** (`turn key setup`)
+| **Last rebuild** | 2026-08-16 — 2.6.52 docs/build-gate/chatStream/ai.agent/live Patch 4 · **user verified + pushed** (commit `4a3d2e7`)
 
 ### Locked product baseline
 
@@ -967,4 +967,87 @@ Smoke (batch):
 [ ] ai.agent runs a 2-round tool loop; confirm-tool sheet appears for `confirm` tools
 [ ] Live Translate → Conversation mode → Auto-detect flips direction; Pause/Resume hold mic warm
 [ ] Re-import Forge_Live_Translate.html after install
+```
+
+## Improvement batch #7–#13 (minus #10): agent veto, stream cancel, mic AEC, docs gate, smoke (2026-08-16)
+
+**2.6.54 / versionCode 84** (from 2.6.52/82). Native Java touched (`MicBridgePlugin` only — AEC/NS).
+
+Seven-item batch from the improvement audit. #10 (web_fetch readability) **deferred** — see follow-up note below.
+
+### #1–#5 — doc/version drift closed
+- `session.md` status table: 2.6.50/80 → 2.6.54/84; rebuild date 2026-08-16
+- `docs/api.md` baseline → `2.6.54/84`; `chatStream`/`agent` labels `2.6.51` → `2.6.52`
+- `docs/tools.md` → `27 tools` (was stale `24 tools, 2.6.48`)
+- `README.md` → current version (was `v2.6.1 (33)`)
+- `package.json` `version` → `2.6.54` (was `2.6.1`)
+
+### #6 + #9 — `ai.agent` onToolCall veto (contract made real)
+The api.md contract claimed `onToolCall: ({name,args}) => true  // return false to abort a tool`;
+the host did **not** honor the return value. Now it does.
+- Bridge `agent()`: sets `o.__hasOnToolCall = !!onToolCall`; accepts caller `id` (cancellable).
+- On `toolCallRequest` event, bridge runs the mini-app callback; `false` (or Promise→false)
+  sends `ai.agent.toolCallRespond({callId, toolCallId, allow:false})`.
+- Host: **gate 2** after the host risk sheet — `agentAskMiniAppToolCall()` emits the request,
+  awaits the response (30s timeout → deny for safety). Denied calls push a `role:'tool'`
+  row so the model can react; emits `toolDenied { source:'miniapp' }`.
+- `api.md` updated to document the veto + `id` + cancel.
+
+### #8 — stream / agent cancellation
+- `ai.chatStream` accepts `opts.id` (or mints one); returns `r.id`. Host stores an
+  `AbortController` keyed by stream id and passes `signal` to `chatCompletionsStream` /
+  `geminiStreamGenerateContent`.
+- `ai.agent` accepts `opts.id`; host stores a cancel flag checked each round + an
+  `AbortController` wired into the in-flight streaming round.
+- New bridge: `ForgeHost.ai.cancel(id)` → host `ai.cancel` aborts the stream controller and
+  sets the agent cancel flag. Returns `{ ok, id, aborted }`.
+- Agent result gains `cancelled: boolean`; emits `ai.agent.event { type:'cancelled' }`.
+
+### #11 — mic AEC + NoiseSuppressor (native)
+`MicBridgePlugin.startStream` now applies `AcousticEchoCanceler` + `NoiseSuppressor` on the
+`AudioRecord` session id (both default **on**; mini-app can disable via
+`mic.startStream({ aec:false, noiseSuppressor:false })`). Released in `releaseAudioRecord`.
+- Fixes the live-translate TTS→mic echo noted in the 2.6.2 audio-routing section.
+- `isAvailable()` reports `aec` / `noiseSuppressor` capability flags.
+- Host `mic.startStream` forwards `aec`/`noiseSuppressor`; live-translate start forces both on.
+
+### #12 — `forge_docs_check.sh` (docs drift guard)
+New script asserts `docs/` mirrors the host:
+- `HOST_TOOL_REGISTRY` names (line-based awk range) ≡ `docs/tools.md` tool tables
+  (excludes the reserved risk-tier words `safe|sensitive|confirm|danger`).
+- `tools.md` + `api.md` version baselines ≡ `build.gradle`.
+- `api.md` documents `ai.chatStream/agent/cancel/transcribe` + `liveTranslate.flip/pause/resume`.
+Wired as **step 8** of `forge_check.sh` (aborts build on drift). Caught the 24-vs-27 drift on
+first run; now green (27 tools, 2.6.54/84).
+
+### #13 — `forge_smoke.sh` (on-device smoke harness)
+New script drives the installed app via adb: cold start, process-up, crash check via logcat,
+foreground check, version stamp, + manual smoke reminders (kitchen-sink AI ping, camera,
+console). Complements `forge_check.sh` (syntax/parity) with runtime checks. Non-fatal by
+default; exits non-zero only on hard failure.
+
+### Follow-up note — #10 deferred
+**#10 (web_fetch JS-render / readability fallback)** is **not** in this batch. `toolsWebFetch`
+still does raw HTTP get + HTML strip (`www/index.html:7918`). Many JS-rendered pages return
+near-empty. Next batch: add a Mozilla-Readability-style extraction or `<article>`/`<main>`
+selector before stripping. Track here when landing.
+
+### Build note — String.raw backtick lesson
+The `chatStream`/`agent`/`cancel` bridge methods live **inside** the `const bridge = String.raw\`...\``
+mini-app bridge template (`www/index.html:4810..5681`). Raw backticks cannot appear inside that
+template — they close it early (the 2.6.43 class of bug, in a new guise). First attempt added
+backtick-quoted words in `//` comments inside those methods and broke the host. `forge_check.sh`
+step 4 (backtick sanity) caught it. Fix: no backticks in any string/comment inside the template.
+
+Smoke:
+```text
+[ ] bash ~/downloads/build_forge.sh --bump && adb install -r ~/downloads/Forge-debug-rebuilt.apk
+[ ] Settings → About Forge shows v2.6.54 (84) · 528b822
+[ ] forge_check.sh + forge_docs_check.sh PASS; forge_smoke.sh cold-start ok
+[ ] ai.chatStream({ id:'x', onToken }) → ai.cancel('x') stops mid-stream
+[ ] ai.agent({ id:'a', onToolCall:({name})=>name==='sms_send'?false:true }) vetoes sms_send
+[ ] ai.agent({ id:'a' }) → ai.cancel('a') stops after current round
+[ ] mic.startStream() → result.aec === true; live-translate TTS no longer echoes back
+[ ] mic.startStream({ aec:false }) → result.aec === false
+[ ] Docs: tools.md lists 27 tools; api.md version says 2.6.54/84
 ```

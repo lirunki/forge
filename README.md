@@ -1,6 +1,8 @@
 # Forge (`com.forge.live`)
 
-Phone host for mini-apps + AI — reconstructed from **`Forge-debug.apk` v2.6.1 (33)**.
+Phone host for mini-apps + AI — reconstructed from **`Forge-debug.apk`** (original binary preserved).
+
+Current version: **2.6.54 / versionCode 84** (see `session.md`).
 
 ## ⛔ Never delete folders without explicit permission
 See [`INVARIANTS.md`](INVARIANTS.md).

@@ -2,7 +2,7 @@
 
 > Canonical source: `forge/www/index.html` (the `SYSTEM_PROMPT` + `ForgeHost` bridge).
 > This file is a human-readable mirror — regenerate from the host when the bridge changes.
-> Version baseline: `2.6.50 / versionCode 80`.
+> Version baseline: `2.6.54 / versionCode 84`.
 
 `window.ForgeHost` (alias `window.forge`) is injected into every mini-app
 iframe by the host before `ready`. **All host APIs are async (Promises).
@@ -97,21 +97,29 @@ await ForgeHost.ai.chat({
   ],
 })
 
-// Token streaming (2.6.51): resolves to the full ai.chat result; onToken fires per delta
+// Token streaming (2.6.52): resolves to the full ai.chat result; onToken fires per delta
+// Cancellable (2.6.54): pass an `id` and call ForgeHost.ai.cancel(id) to abort.
 await ForgeHost.ai.chatStream({
   messages, tools,
+  id: 'my-stream',           // optional; returned as r.id if omitted
   onToken: (delta, meta) => render(delta),     // optional
   onToolCall: (tool_calls, meta) => {},          // optional
   providerId, model,
 })
+// r.id is the stream id (use it to cancel if you did not pass one)
+await ForgeHost.ai.cancel(r.id)   // aborts a running stream / agent
 
-// Agent loop (2.6.51): host runs chat + tool-call loop + risk sheet
+// Agent loop (2.6.52): host runs chat + tool-call loop + risk sheet
+// onToolCall veto (2.6.54): returning false (or a Promise resolving to false)
+//   denies that tool call and the loop continues (a denied `role:'tool'` row is pushed).
+//   This is IN ADDITION to the host risk sheet; either gate can deny.
 const r = await ForgeHost.ai.agent({
   messages, tools,           // or omit tools to auto-load via tools.list
   maxRounds: 6,
   riskMax: 'confirm',        // safe|sensitive|confirm|danger
+  id: 'my-agent',            // optional; cancellable via ai.cancel(id)
   onToken: t => render(t),   // optional (uses chatStream when provided)
-  onToolCall: ({name,args}) => true,  // return false to abort a tool
+  onToolCall: ({name,args}) => true,  // return false to veto this tool call
   onRound: ({round, toolCalls}) => {},
 })
 ```
