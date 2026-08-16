@@ -1243,8 +1243,8 @@ termux-reload-settings</div>
               <button class="btn small" id="btnOpenSetupWizard" type="button">Turn-key setup (free AI)</button>
             </div>
             <label for="quickKey" style="margin-top:0;">Or paste any API key</label>
-            <input id="quickKey" type="password" placeholder="Google AI key / gsk_… / sk-or-… / sk-… / hf_…" autocomplete="off" />
-            <p class="field-hint" id="quickKeyHint">Gemini keys may not start with AIza — paste the full key. Free: Gemini, Groq, OpenRouter. xAI API is usually paid.</p>
+            <input id="quickKey" type="password" placeholder="Google AI key / gsk_… / ir_live_… / sk-or-… / sk-… / hf_…" autocomplete="off" />
+            <p class="field-hint" id="quickKeyHint">Gemini keys may not start with AIza — paste the full key. Free: Gemini, Groq, OpenRouter. Cheaper Inference (ir_live_…) is wallet/paid and auto-detected. xAI API is usually paid.</p>
             <div class="settings-block" style="margin-top:0.35rem;">
               <button class="btn small" id="btnQuickSave" type="button">Save &amp; use</button>
               <button class="btn secondary small" id="btnQuickTest" type="button">Save &amp; test</button>
@@ -1332,6 +1332,10 @@ termux-reload-settings</div>
           <input id="model" type="text" list="modelSuggestions" placeholder="grok-2-latest" autocomplete="off" />
           <datalist id="modelSuggestions"></datalist>
           <div class="pill-row" id="modelPills" aria-label="Suggested models"></div>
+          <div class="settings-block" style="margin:0.15rem 0 0.55rem;">
+            <button class="btn secondary small" id="btnRefreshModels" type="button">Refresh models</button>
+            <span class="field-hint" id="modelCatalogStatus" style="margin-left:6px;"></span>
+          </div>
 
           <div class="row2">
             <div>
@@ -1469,6 +1473,7 @@ termux-reload-settings</div>
       draft: 'forge_draft_v1',
       setupDone: 'forge_setup_done_v1',
       setupProvider: 'forge_setup_provider_v1',
+      modelCatalogCache: 'forge_model_catalog_cache_v1',
       termuxSetupDone: 'forge_termux_setup_done_v1',
     };
 
@@ -1562,6 +1567,30 @@ termux-reload-settings</div>
           defaultModel: 'openrouter/free',
           models: ['openrouter/free', 'google/gemma-2-9b-it:free', 'meta-llama/llama-3.2-3b-instruct:free'],
         },
+      },
+      {
+        id: 'cheaperinference',
+        kind: 'builtin',
+        providerId: 'cheaperinference',
+        turnkey: false,
+        badge: 'paid',
+        name: 'Cheaper Inference',
+        blurb: 'One OpenAI-compatible key for many models (GLM, DeepSeek, GPT, Claude…) often below list price. Wallet-backed — not a free tier.',
+        whyEasy: 'Create an account, fund the wallet (first top-up often includes bonus credit), mint an ir_live_ key, then Forge pulls the live model catalog (includes glm-5.2).',
+        guide: [
+          'Tap “Open Cheaper Inference” and create an account.',
+          'Add wallet credit (check dashboard for any first-fund bonus).',
+          'Create an API key (starts with ir_live_) and copy it once.',
+          'Return to Forge, paste the key, Save & test. Use Refresh models if the list looks stale.',
+        ],
+        registrationUrl: 'https://cheaperinference.com/',
+        keysUrl: 'https://cheaperinference.com/',
+        steps: [
+          'Sign up at cheaperinference.com and open the dashboard.',
+          'Fund the wallet, then create an API key (ir_live_…).',
+          'Paste the key below. Default model is glm-5.2; Refresh models loads the live catalog.',
+        ],
+        keyHint: 'ir_live_…',
       },
       {
         id: 'xai',
@@ -1688,6 +1717,39 @@ termux-reload-settings</div>
         builtin: true,
         gemini: true,
       },
+      cheaperinference: {
+        id: 'cheaperinference',
+        label: 'Cheaper Inference',
+        hint: 'OpenAI-compatible gateway (api.cheaperinference.com). Wallet key ir_live_…. Live catalog via /public/models (glm-5.2 and more).',
+        base: 'https://api.cheaperinference.com/v1',
+        baseLocked: true,
+        keyPlaceholder: 'ir_live_…',
+        keyLabel: 'Cheaper Inference API key',
+        auth: 'bearer',
+        jsonMode: 'auto',
+        models: [
+          'glm-5.2',
+          'glm-5.1',
+          'glm-5',
+          'glm-4.7',
+          'glm-4.6',
+          'glm-4.5',
+          'glm-4.5-air',
+          'deepseek-v4-flash',
+          'deepseek-v4-pro',
+          'gpt-5.4-mini',
+          'claude-haiku-4.5',
+          'gemini-3.6-flash',
+          'qwen3.6-27b',
+          'minimax-m2.7',
+          'kimi-k3',
+        ],
+        defaultModel: 'glm-5.2',
+        builtin: true,
+        catalogPublicUrl: 'https://api.cheaperinference.com/public/models',
+        catalogModelsPath: 'models',
+        supportsOpenAiModels: true,
+      },
       xai: {
         id: 'xai',
         label: 'xAI (Grok)',
@@ -1755,6 +1817,9 @@ termux-reload-settings</div>
     const DEFAULT_PROVIDER = 'gemini';
     let activeProviderId = DEFAULT_PROVIDER;
     let oaiEditorMode = null; // null | 'add' | 'edit'
+    /** Runtime model lists from live catalogs (providerId → string[]). */
+    const PROVIDER_MODEL_OVERRIDES = Object.create(null);
+    let modelCatalogFetchGen = 0;
 
     const el = {
       messages: document.getElementById('messages'),
@@ -1818,6 +1883,8 @@ termux-reload-settings</div>
       model: document.getElementById('model'),
       modelSuggestions: document.getElementById('modelSuggestions'),
       modelPills: document.getElementById('modelPills'),
+      btnRefreshModels: document.getElementById('btnRefreshModels'),
+      modelCatalogStatus: document.getElementById('modelCatalogStatus'),
       temperature: document.getElementById('temperature'),
       jsonMode: document.getElementById('jsonMode'),
       azureResource: document.getElementById('azureResource'),
@@ -2109,7 +2176,31 @@ termux-reload-settings</div>
     }
     function getProvider(id) {
       const map = getProviderMap();
-      return map[id] || map[DEFAULT_PROVIDER];
+      const base = map[id] || map[DEFAULT_PROVIDER];
+      if (!base) return base;
+      const over = PROVIDER_MODEL_OVERRIDES[base.id];
+      if (Array.isArray(over) && over.length) {
+        return Object.assign({}, base, {
+          models: over.slice(),
+          defaultModel: over.includes(base.defaultModel) ? base.defaultModel : overDefaultModel(base, over),
+        });
+      }
+      try {
+        const cache = readJson(LS.modelCatalogCache, {});
+        const hit = cache && cache[base.id];
+        if (hit && Array.isArray(hit.models) && hit.models.length) {
+          return Object.assign({}, base, {
+            models: hit.models.slice(),
+            defaultModel: overDefaultModel(base, hit.models),
+          });
+        }
+      } catch (_) {}
+      return base;
+    }
+    function overDefaultModel(base, models) {
+      if (base && base.defaultModel && models.includes(base.defaultModel)) return base.defaultModel;
+      if (models.includes('glm-5.2')) return 'glm-5.2';
+      return models[0] || (base && base.defaultModel) || '';
     }
     function currentProviderId() {
       const id = el.provider.value || activeProviderId;
@@ -2407,10 +2498,11 @@ termux-reload-settings</div>
       if (providerId === 'xai') return [/^xai-/i];
       if (providerId === 'openai') return [/^sk-(?!or-)/i];
       if (providerId === 'huggingface') return [/^hf_/i];
+      if (providerId === 'cheaperinference') return [/^ir_(live_|test_)?/i, /^ir-/i];
       if (providerId === 'azure') return [/^[a-f0-9]{32,}$/i, /^[A-Za-z0-9+/=]{40,}$/];
       if (p?.custom) {
         // OpenAI-compatible often uses sk- or gsk_ (Groq) or or- / sk-or- (OpenRouter)
-        return [/^sk-/i, /^gsk_/i, /^or-/i, /^hf_/i, /^xai-/i];
+        return [/^sk-/i, /^gsk_/i, /^or-/i, /^hf_/i, /^xai-/i, /^ir_/i];
       }
       return [];
     }
@@ -2422,6 +2514,9 @@ termux-reload-settings</div>
 
       if (/^xai-/i.test(key)) {
         return { providerId: 'xai', label: 'xAI (Grok)', confidence: 'high', needsAdvanced: false };
+      }
+      if (/^ir_(live_|test_)?/i.test(key) || /^ir-/i.test(key)) {
+        return { providerId: 'cheaperinference', label: 'Cheaper Inference', confidence: 'high', needsAdvanced: false };
       }
       if (/^hf_/i.test(key)) {
         return { providerId: 'huggingface', label: 'Hugging Face', confidence: 'high', needsAdvanced: false };
@@ -2915,6 +3010,16 @@ termux-reload-settings</div>
           { role: 'user', content: 'ping' },
         ], null);
         markSetupDone();
+        if (providerId === 'cheaperinference' || p.id === 'cheaperinference') {
+          try {
+            await refreshModelsForCurrentProvider({ silent: true });
+            const ms = (getProvider(providerId).models || []);
+            if ((!el.model.value || el.model.value === 'grok-2-latest') && ms.includes('glm-5.2')) {
+              el.model.value = 'glm-5.2';
+              saveCurrentProfile();
+            }
+          } catch (_) {}
+        }
         const okMsg = `Connected to ${p.name}. ${finalKey ? maskKey(finalKey) : 'no key (local)'} · sample: ${String(content).slice(0, 80)}`;
         setSetupStatus(okMsg, 'ok');
         setAiStatus(`Brain: ${p.name} ready`, 'ok');
@@ -3150,7 +3255,241 @@ termux-reload-settings</div>
           : `Provider: ${p.label}` + (p.custom ? ' · add key if needed' : ' · add API key'),
         hasKey ? 'ok' : ''
       );
+      // Pull live model catalogs (Cheaper Inference public list, custom OAI /models, …)
+      if (p.catalogPublicUrl || p.supportsOpenAiModels || p.id === 'cheaperinference') {
+        refreshModelsForCurrentProvider({ silent: true }).catch(function () {});
+      } else {
+        setModelCatalogStatus('');
+      }
     }
+
+    function setModelCatalogStatus(msg, kind = '') {
+      if (!el.modelCatalogStatus) return;
+      el.modelCatalogStatus.textContent = msg || '';
+      el.modelCatalogStatus.style.color = kind === 'err'
+        ? 'var(--danger, #f66)'
+        : (kind === 'ok' ? 'var(--ok, #6c6)' : 'var(--muted)');
+    }
+
+    function sortCheaperInferenceModels(ids) {
+      const rank = (id) => {
+        const s = String(id || '');
+        if (s === 'glm-5.2') return 0;
+        if (/^glm-5(\.|$)/.test(s)) return 1;
+        if (/^glm-/.test(s)) return 2;
+        if (/^deepseek-/.test(s)) return 3;
+        if (/^gpt-/.test(s)) return 4;
+        if (/^claude-/.test(s)) return 5;
+        if (/^gemini-/.test(s) || /^google\//.test(s)) return 6;
+        return 10;
+      };
+      return ids.slice().sort((a, b) => {
+        const ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        return String(a).localeCompare(String(b));
+      });
+    }
+
+    function normalizeModelIdList(rawList) {
+      const out = [];
+      const seen = new Set();
+      for (const item of rawList || []) {
+        let id = '';
+        if (typeof item === 'string') id = item;
+        else if (item && typeof item === 'object') id = item.id || item.name || item.model || '';
+        id = String(id || '').trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push(id);
+      }
+      return out;
+    }
+
+    function extractModelsFromPublicCatalog(data) {
+      const rows = Array.isArray(data && data.models) ? data.models
+        : (Array.isArray(data && data.data) ? data.data : (Array.isArray(data) ? data : []));
+      const ids = [];
+      for (const m of rows) {
+        if (!m || typeof m !== 'object') {
+          if (typeof m === 'string') ids.push(m);
+          continue;
+        }
+        if (m.is_visible === false) continue;
+        const typ = String(m.model_type || m.type || 'text').toLowerCase();
+        if (typ && !/(text|chat|llm|language|completion)/.test(typ)
+            && /(image|audio|embed|tts|stt|video|moderation)/.test(typ)) {
+          continue;
+        }
+        if (m.id) ids.push(m.id);
+        else if (m.name) ids.push(m.name);
+      }
+      return normalizeModelIdList(ids);
+    }
+
+    function extractModelsFromOpenAiList(data) {
+      const rows = Array.isArray(data && data.data) ? data.data
+        : (Array.isArray(data && data.models) ? data.models : (Array.isArray(data) ? data : []));
+      return normalizeModelIdList(rows);
+    }
+
+    function cacheProviderModels(providerId, models, meta) {
+      meta = meta || {};
+      const id = String(providerId || '');
+      if (!id || !models || !models.length) return;
+      PROVIDER_MODEL_OVERRIDES[id] = models.slice();
+      try {
+        const cache = readJson(LS.modelCatalogCache, {}) || {};
+        cache[id] = {
+          models: models.slice(),
+          fetchedAt: Date.now(),
+          source: meta.source || '',
+          count: models.length,
+        };
+        writeJson(LS.modelCatalogCache, cache);
+      } catch (_) {}
+    }
+
+    function seedModelsForProvider(p) {
+      const seed = normalizeModelIdList((p && p.models) || []);
+      if ((p && p.id === 'cheaperinference') || /cheaperinference/i.test((p && p.label) || '')) {
+        return sortCheaperInferenceModels(seed);
+      }
+      return seed;
+    }
+
+    /**
+     * Reliable model list for providers that publish a catalog.
+     * Cheaper Inference: public /public/models (no key) + optional authed /v1/models.
+     */
+    async function fetchProviderModelCatalog(providerId, opts) {
+      opts = opts || {};
+      const map = getProviderMap();
+      const id = providerId && map[providerId] ? providerId : currentProviderId();
+      const p0 = map[id] || BUILTIN_PROVIDERS[id];
+      if (!p0) throw new Error('Unknown provider');
+      let key = '';
+      if (opts.key != null) key = String(opts.key || '').trim();
+      else {
+        try {
+          if (id === currentProviderId() && el.apiKey) key = String(el.apiKey.value || '').trim();
+          if (!key) {
+            const prof = getProfiles()[id] || {};
+            key = String(prof.key || '').trim();
+          }
+        } catch (_) {}
+      }
+      const seed = seedModelsForProvider(p0);
+      const merged = new Set(seed);
+      const sources = [];
+
+      const publicUrl = p0.catalogPublicUrl
+        || (p0.id === 'cheaperinference' ? 'https://api.cheaperinference.com/public/models' : '');
+      if (publicUrl) {
+        try {
+          const res = await fetch(publicUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const ids = extractModelsFromPublicCatalog(data);
+            for (const m of ids) merged.add(m);
+            if (ids.length) sources.push('public:' + ids.length);
+          } else {
+            sources.push('public_http_' + res.status);
+          }
+        } catch (e) {
+          sources.push('public_err');
+        }
+      }
+
+      let base = '';
+      try {
+        if (id === currentProviderId() && el.apiBase) base = String(el.apiBase.value || '');
+      } catch (_) {}
+      if (!base) base = String(p0.base || '');
+      base = base.replace(/\/+$/, '');
+      if ((p0.supportsOpenAiModels || p0.custom || publicUrl) && base) {
+        try {
+          const headers = { 'Accept': 'application/json' };
+          if (key) headers['Authorization'] = 'Bearer ' + key;
+          const res = await fetch(base + '/models', { method: 'GET', headers });
+          if (res.ok) {
+            const data = await res.json();
+            const ids = extractModelsFromOpenAiList(data);
+            for (const m of ids) merged.add(m);
+            if (ids.length) sources.push('v1:' + ids.length);
+          } else if (res.status !== 401 && res.status !== 403) {
+            sources.push('v1_http_' + res.status);
+          }
+        } catch (_) {
+          sources.push('v1_err');
+        }
+      }
+
+      let models = normalizeModelIdList(Array.from(merged));
+      if (p0.id === 'cheaperinference' || /cheaperinference/i.test(p0.label || '')) {
+        models = sortCheaperInferenceModels(models);
+        if (!models.includes('glm-5.2')) {
+          models = sortCheaperInferenceModels(['glm-5.2'].concat(models));
+          sources.push('seed:glm-5.2');
+        }
+      }
+      if (!models.length) {
+        models = seed.slice();
+        sources.push('seed-only');
+      }
+      cacheProviderModels(id, models, { source: sources.join(',') });
+      return { models: models, sources: sources, providerId: id };
+    }
+
+    async function refreshModelsForCurrentProvider(opts) {
+      opts = opts || {};
+      const silent = !!opts.silent;
+      const id = currentProviderId();
+      const p = getProvider(id);
+      const can = !!(p.catalogPublicUrl || p.supportsOpenAiModels || p.custom || p.id === 'cheaperinference');
+      if (!can) {
+        if (!silent) setModelCatalogStatus('No remote catalog for this provider', '');
+        return null;
+      }
+      const gen = ++modelCatalogFetchGen;
+      if (!silent) setModelCatalogStatus('Fetching models…', '');
+      if (el.btnRefreshModels) el.btnRefreshModels.disabled = true;
+      try {
+        const result = await fetchProviderModelCatalog(id, {});
+        if (gen !== modelCatalogFetchGen) return result;
+        const keep = el.model ? el.model.value : '';
+        applyProviderUI({ keepModel: true });
+        if (el.model && !String(el.model.value || '').trim()) {
+          const pref = (result.models.includes(p.defaultModel) && p.defaultModel)
+            || (result.models.includes('glm-5.2') && 'glm-5.2')
+            || result.models[0]
+            || '';
+          if (pref) el.model.value = pref;
+        } else if (el.model && keep) {
+          el.model.value = keep;
+        }
+        try { saveCurrentProfile(); } catch (_) {}
+        const n = result.models.length;
+        const hasGlm = result.models.includes('glm-5.2');
+        const msg = n
+          ? (n + ' models' + (hasGlm ? ' · glm-5.2' : '')
+            + (result.sources && result.sources.length ? ' (' + result.sources.join(', ') + ')' : ''))
+          : 'No models returned';
+        setModelCatalogStatus(msg, n ? 'ok' : 'err');
+        return result;
+      } catch (e) {
+        if (gen === modelCatalogFetchGen) {
+          setModelCatalogStatus(e.message || String(e), 'err');
+        }
+        if (!silent) throw e;
+        return null;
+      } finally {
+        if (el.btnRefreshModels) el.btnRefreshModels.disabled = false;
+      }
+    }
+
 
     function applyProviderUI(opts = {}) {
       const p = currentProvider();
@@ -15137,6 +15476,11 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       );
     });
     el.btnTestAi?.addEventListener('click', testConnection);
+    el.btnRefreshModels?.addEventListener('click', () => {
+      refreshModelsForCurrentProvider({ silent: false }).catch((e) => {
+        setModelCatalogStatus(e.message || String(e), 'err');
+      });
+    });
     el.btnMiniConsole?.addEventListener('click', openMiniConsole);
     el.btnMiniConsoleClose?.addEventListener('click', closeMiniConsole);
     el.btnMiniConsoleClear?.addEventListener('click', clearMiniConsole);

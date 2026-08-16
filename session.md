@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.49 / versionCode 79** (reforge tool settings + tools migration) · prior 2.6.48/78
+| Version | **2.6.50 / versionCode 80** (Cheaper Inference provider + live models) · prior 2.6.49/79
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
