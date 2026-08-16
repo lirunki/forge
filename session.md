@@ -868,3 +868,103 @@ Smoke:
 [ ] web_search / get_location work after re-import save
 [ ] Discard reforge restores original
 ```
+
+## Cheaper Inference provider + live model catalog (2026-08-16)
+
+**2.6.50 / versionCode 80** (prior 2.6.49/79)
+
+New wallet-backed OpenAI-compatible gateway alongside the free turn-key path.
+
+### Provider
+- **`cheaperinference`** — `https://api.cheaperinference.com/v1`, key `ir_live_…`
+- One key → many models (GLM, DeepSeek, GPT, Claude…) often below list price
+- **Not a free tier** — wallet-funded; auto-detected from key shape
+- Default model `glm-5.2`; live catalog pulled via `/public/models`
+- Added to turn-key cards + all-providers list (badge: paid/wallet)
+
+### Live model catalog
+- **Refresh models** button (`btnRefreshModels`) + `modelCatalogStatus` hint
+- `forge_model_catalog_cache_v1` localStorage cache
+- Quick-key hint copy updated: Gemini keys may not start with `AIza`; Cheaper Inference `ir_live_` is wallet/paid and auto-detected; xAI usually paid
+
+### Files
+- `android/app/build.gradle` (version bump), `www/index.html` + assets (+352 lines, identical)
+- `session.md` status table bumped to 2.6.50/80
+
+Smoke:
+```text
+[ ] AI tab → turn-key → Cheaper Inference card (paid badge)
+[ ] Paste ir_live_ key → Save & test OK
+[ ] Refresh models → live catalog loads (glm-5.2 + others)
+[ ] Forge it / chat with glm-5.2
+[ ] Free turn-key (Gemini/Groq/OpenRouter) still listed separately
+```
+
+## Improvement batch #1–#6: docs, build gate, chatStream, ai.agent, live Patch 4 (2026-08-16)
+
+**2.6.52 / versionCode 82** (from 2.6.50/80). No native Java touched. Gate green.
+
+Six-task improvement batch (plan given prior session, reconstructed from commit `4a3d2e7`).
+
+### #1 — `forge_check.sh` validation gate
+Pre-build gate wired as **first step** of `build_forge.sh` (`set -e` aborts on failure). Catches the recurring single-file host breakage modes (2.6.29/31/43/44):
+- JS syntax (`node --check` on extracted script)
+- `www/index.html` ≡ `android/.../assets/public/index.html` parity (incl. `forge-build.json`)
+- bridge `String.raw\`...\`` backtick-count sanity (the 2.6.43 `i is not defined` class)
+- stray raw `</script>` inside a script block
+- version stamp drift between `build.gradle` and the host
+Re-runs after stamping. `~/downloads/forge_check.sh`.
+
+### #2 — `docs/api.md` + `docs/tools.md`
+Filled the empty `docs/` dir with citable references extracted from the inline `SYSTEM_PROMPT` / `HOST_TOOL_REGISTRY`:
+- `forge/docs/api.md` (17.7 KB) — ForgeHost bridge reference
+- `forge/docs/tools.md` (6.9 KB) — LLM tool catalog
+
+### #3 — `forge_bump.py` + build stamp + About Forge
+- `~/downloads/forge_bump.py`: `versionCode +2` / `versionName patch +2`; wired to `build_forge.sh --bump`
+- `forge-build.json` `{version, versionCode, sha, builtAt}` written into **both** `www/` and `assets/` on every build
+- `window.__FORGE_BUILD` populated at runtime from Capacitor `App.getInfo()` + `forge-build.json`
+- Surfaced in **Settings → About Forge** (version · code · sha)
+
+### #4 — Live Translate Patch 4: bidirectional conversation mode
+- State: `mode / langA / langB / autoDetect / currentDirection / paused`
+- `liveDetectScript()` + `liveAutoDetectDirection()`: Unicode-script heuristic (latn/cyrl/arab/hebr/hani/hira/kana/hang/deva/thai/grek) → maps to langA/langB; auto-flips on recent speech tail
+- `liveChatTranslate()` derives source/target from `currentDirection`
+- `liveTranslateSegment()` auto-detects + emits `live.flip`
+- `liveProcessWindow()` / `onLiveMicPcm()` skip when `paused` (mic stays warm)
+- New actions: `flip()`, `pause()`, `resume()`
+- New events: `live.flip | live.pause | live.resume`
+- Bridge: `ForgeHost.ai.liveTranslate.flip / pause / resume`
+- `~/downloads/Forge_Live_Translate.html` rewritten: One-way/Conversation toggle, langA/langB selects, Flip, Auto-detect checkbox, Pause/Resume, direction badges. JS syntax validated standalone.
+
+### #5 — `ForgeHost.ai.chatStream` (token streaming)
+- OAI SSE + Gemini `streamGenerateContent?alt=sse`
+- `chatCompletionsStream()` + `geminiStreamGenerateContent()` with `ReadableStream` reader
+- tool_call accumulation across deltas
+- `response_format` / tools retry fallback
+- CapacitorHttp non-stream fallback on CORS/offline
+- Emits `ai.stream.delta { callId, delta, done, tool_calls? }`; `onToken/onDelta/onToolCall` stripped before `postMessage`
+- `ai.chatStream` host handler mirrors `ai.chat` (rich attachments, provider/model override, tools, fullResponse)
+
+### #6 — `ForgeHost.ai.agent` (centralized chat + tool-call loop)
+- Auto-loads tools via `tools.list` if omitted; `maxRounds` 1–12; `systemHint` injection
+- Streams tokens via `chatStream` when `onToken` provided
+- Host-level risk sheet: `agentConfirmTool()` modal (Deny / Allow / Always) for `confirm`/`danger` tools, persisted per-app in `localStorage`; 60 s auto-deny; `safe`/`sensitive` auto-allow
+- Events: `ai.agent.event { type: round | chat | token | toolCall | toolResult | toolDenied | maxrounds | error }`
+- Returns `{ content, rounds, tools[], provider, model, backend, riskMax }`
+
+### Gaps closed in this edit pass
+- **session.md backfill**: 2.6.50 + 2.6.52 sections were missing from the log (only in the git commit message) — appended above.
+- **stale build-stamp sha**: `forge-build.json` reported `sha: 9616460` (parent) because the last build ran before commit `4a3d2e7`. Rebuild re-stamps with the current HEAD sha so **About Forge** shows the right commit.
+
+Smoke (batch):
+```text
+[ ] bash ~/downloads/build_forge.sh && adb install -r ~/downloads/Forge-debug-rebuilt.apk
+[ ] Settings → About Forge shows v2.6.52 (82) · 4a3d2e7
+[ ] forge_check.sh aborts a deliberately broken host (parity/syntax/backtick)
+[ ] docs/api.md + docs/tools.md present and citable
+[ ] ai.chatStream streams tokens in a mini-app (OAI + Gemini)
+[ ] ai.agent runs a 2-round tool loop; confirm-tool sheet appears for `confirm` tools
+[ ] Live Translate → Conversation mode → Auto-detect flips direction; Pause/Resume hold mic warm
+[ ] Re-import Forge_Live_Translate.html after install
+```
