@@ -150,6 +150,41 @@
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
+    /* Transient rotating progress line shown while the LLM is forging (2.6.55). */
+    .bubble.progress {
+      align-self: flex-start;
+      max-width: min(92%, 560px);
+      padding: 0.55rem 0.9rem;
+      border-radius: 16px;
+      border: 1px dashed var(--border);
+      background: transparent;
+      box-shadow: none;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-style: italic;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .bubble.progress .prog-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--muted);
+      flex: 0 0 auto;
+      animation: forge-prog-pulse 1.1s ease-in-out infinite;
+    }
+    .bubble.progress .prog-text {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    @keyframes forge-prog-pulse {
+      0%, 100% { opacity: .25; transform: scale(.8); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
     .composer {
       display: grid;
       gap: 0.5rem;
@@ -4748,6 +4783,64 @@ termux-reload-settings</div>
         el.chatImageInput.click();
         setTimeout(() => el.chatImageInput?.removeAttribute('capture'), 0);
       }
+    }
+
+    // ——— Forge progress story (2.6.55) ————————————————————————————————
+    // Rotating circular buffer of funny, pseudoscientific mumbo-jumbo shown as a single
+    // gray line below the user's request while the LLM is forging. Each line replaces
+    // the previous; the whole bubble is wiped when the real assistant reply lands
+    // (renderChat rebuilds el.messages, removing this transient node).
+    const FORGE_PROGRESS_LINES = [
+      "exploring the forge-fermi paradox",
+      "calibrating the heuristic hamster wheel",
+      "consulting the great attractor",
+      "aligning flux capacitors with the event horizon",
+      "mining semantic dark matter",
+      "spinning up the rhetorical centrifuge",
+      "evolving the prompt through nine dimensions",
+      "negotiating with the placebo demon",
+      "warming up the cold-fusion teapot",
+      "polishing paradox tachyons",
+      "untangling superposition braids",
+      "bargaining with the entropy imp",
+      "oiling the quantum butter churn",
+      "interrogating the oracle's oracle",
+      "recombobulating the discombobulator",
+      "herding schrödinger's cats",
+      "distilling hand-wave ethanol",
+      "tuning the cosmic background hum",
+      "wrestling a rogue eigenvalue",
+      "feeding the heuristic gremlins",
+      "defragmenting the imaginary numbers",
+      "consulting the recipe for a black hole",
+      "borrowing negative probability from tuesday",
+      "simulating the unsimulatable",
+      "reciting the pi digits to a skeptical parrot",
+      "rewiring the forge's subconscious",
+      "asking the dust bunnies for guidance",
+      "locating the missing mass in the couch cushions",
+    ];
+    function startForgeProgress() {
+      try {
+        const div = document.createElement('div');
+        div.className = 'bubble progress';
+        const dot = document.createElement('span');
+        dot.className = 'prog-dot';
+        const txt = document.createElement('span');
+        txt.className = 'prog-text';
+        div.appendChild(dot); div.appendChild(txt);
+        let i = Math.floor(Math.random() * FORGE_PROGRESS_LINES.length);
+        txt.textContent = FORGE_PROGRESS_LINES[i];
+        el.messages.appendChild(div);
+        el.messages.scrollTop = el.messages.scrollHeight;
+        const timer = setInterval(() => {
+          i = (i + 1) % FORGE_PROGRESS_LINES.length;
+          txt.textContent = FORGE_PROGRESS_LINES[i];
+        }, 1900);
+        return {
+          stop() { clearInterval(timer); try { div.remove(); } catch (_) {} },
+        };
+      } catch (_) { return { stop() {} }; }
     }
 
     function addMessage(role, content, extras = {}) {
@@ -14493,6 +14586,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       addMessage('user', userText, { attachments });
       setBusy(true);
       abortController = new AbortController();
+      const forgeProgress = startForgeProgress();
 
       try {
         const { app, message } = await forgeApp(userText, attachments);
@@ -14504,6 +14598,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         if (err?.name === 'AbortError') addMessage('assistant', 'Stopped.');
         else addMessage('assistant', 'Could not forge that app: ' + (err.message || err));
       } finally {
+        forgeProgress.stop();
         setBusy(false);
         abortController = null;
         bgStop();

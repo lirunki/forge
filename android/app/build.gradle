@@ -10,8 +10,8 @@ android {
         applicationId "com.forge.live"
         minSdk 22
         targetSdk 34
-        versionCode 84
-        versionName "2.6.54"
+        versionCode 86
+        versionName "2.6.56"
     }
 
     buildTypes {

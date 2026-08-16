@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.54 / versionCode 84** (agent tool-call veto + stream cancel + mic AEC + docs/scripts) · prior 2.6.52/82
+| Version | **2.6.56 / versionCode 86** (forge progress story rotating mumbo-jumbo) · prior 2.6.54/84
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -1050,4 +1050,31 @@ Smoke:
 [ ] mic.startStream() → result.aec === true; live-translate TTS no longer echoes back
 [ ] mic.startStream({ aec:false }) → result.aec === false
 [ ] Docs: tools.md lists 27 tools; api.md version says 2.6.54/84
+```
+
+## Forge progress story (rotating mumbo-jumbo) (2026-08-16)
+
+**2.6.56 / versionCode 86** (from 2.6.54/84). Host-only, no native.
+
+The chat dialog felt silent while the LLM was forging. Added a transient rotating
+progress line: while `forgeApp` is awaiting the LLM, a slim gray assistant-side
+bubble appears below the user's request, cycling through a circular buffer of funny,
+pseudoscientific mumbo-jumbo (e.g. `exploring the forge-fermi paradox`,
+`recombobulating the discombobulator`, `herding schrödinger's cats`). Each line
+replaces the previous every ~1.9s. When the real reply lands, `addMessage('assistant',…)`
+triggers `renderChat` which rebuilds `el.messages` and wipes the transient node;
+`finally` clears the interval.
+
+- `FORGE_PROGRESS_LINES` (28 entries) + `startForgeProgress()` near `addMessage`.
+- CSS `.bubble.progress` (dashed border, muted italic, nowrap ellipsis) + pulsing dot keyframe.
+- Wired in `onSend`: started after `abortController = new AbortController()`, stopped in `finally`.
+- Stop button (abort) → catch → `addMessage('assistant','Stopped.')` → renderChat wipes node.
+
+Smoke:
+```text
+[ ] bash ~/downloads/build_forge.sh && adb install -r ~/downloads/Forge-debug-rebuilt.apk
+[ ] Chat: type an app, tap Forge it → gray rotating line appears below request, cycles ~every 2s
+[ ] Lines are single-line, italic, dashed bubble; replaced by the real reply when it lands
+[ ] Tap Stop → rotating line replaced by “Stopped.”
+[ ] No rotating line leaks after the reply (renderChat rebuilds messages)
 ```

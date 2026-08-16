@@ -2,7 +2,7 @@
 
 Phone host for mini-apps + AI — reconstructed from **`Forge-debug.apk`** (original binary preserved).
 
-Current version: **2.6.54 / versionCode 84** (see `session.md`).
+Current version: **2.6.56 / versionCode 86** (see `session.md`).
 
 ## ⛔ Never delete folders without explicit permission
 See [`INVARIANTS.md`](INVARIANTS.md).
