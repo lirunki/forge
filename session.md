@@ -1136,3 +1136,65 @@ Smoke:
 [ ] Forge a chat app using ai.chat + tools.list → correct tool-loop pattern
 [ ] No JSON parse errors / empty html / truncated output on cheaper models
 ```
+
+## Release build — Play Store (paid) + F-Droid/website (free) (2026-08-17)
+
+**2.6.61 / versionCode 91** (first Play-flavored release; from 2.6.60/90). Source-only gradle changes; no host/native touched.
+
+### Decision (locked with user)
+- **Path B**: one-time **$2.55** Play build (clean perms, auto-updates) + **free** full build (all perms) for website / F-Droid / sideload. No subscriptions, no AI-key monetization, no license gate, no account-ID collection. F-Droid eligible because the app is genuinely free + FOSS-licensed.
+- A newsletter/registration **gate** on the F-Droid build was explicitly rejected: violates F-Droid anti-features (NonFreeNet / license-check DRM) + is trivially fork-stripped on FOSS + Play Data Safety misdeclaration risk. Do not reintroduce.
+
+### Two distribution flavors (one source tree)
+Gradle `flavorDimensions = ["distribution"]` in `android/app/build.gradle`:
+- **`full`** → all permissions (main manifest) → APK → website / F-Droid / sideload
+- **`play`** → restricted perms stripped via `src/play/AndroidManifest.xml` (`tools:node="remove"`) → AAB → Google Play
+
+Stripped in `play` flavor only:
+`SEND_SMS` `READ_SMS` `RECEIVE_SMS` `CALL_PHONE` `READ_PHONE_STATE` `READ_CONTACTS` `QUERY_ALL_PACKAGES` `READ_EXTERNAL_STORAGE` `WRITE_EXTERNAL_STORAGE`
+Kept in both: INTERNET, CAMERA, RECORD_AUDIO, ACCESS_FINE/COARSE_LOCATION, POST_NOTIFICATIONS, BLUETOOTH_CONNECT, FOREGROUND_SERVICE(_DATA_SYNC), WAKE_LOCK, VIBRATE, RECEIVE_BOOT_COMPLETED, READ_MEDIA_IMAGES, MODIFY_AUDIO_SETTINGS, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, NEARBY_WIFI_DEVICES, SCHEDULE/USE_EXACT_ALARM, BLUETOOTH(_ADMIN ≤30), com.termux.permission.RUN_COMMAND.
+`<queries>` (specific packages + intents) stays in both — allowed on Play without QUERY_ALL_PACKAGES.
+
+### Release signing
+- **`android/.keystore/forge-upload.jks`** (gitignored) — RSA 2048, alias `forge-upload`, validity 10000d. **Back this up offline forever.** Losing it = can never update Forge on Play.
+- **`android/keystore.properties`** (gitignored) — storeFile/storePassword/keyAlias/keyPassword.
+- `build.gradle` reads `keystore.properties`; `signingConfigs.release` used by the `release` buildType. If the file is absent (fresh clone / fork), release builds fall back to debug signing so forks still build.
+- **Both flavors signed with the same key** → cross-store update preserves data if F-Droid reproducible builds ship the upstream-signed APK (default F-Droid re-signs → store switch needs reinstall).
+- When enrolling in Play App Signing: **upload this same keystore** (do NOT let Google generate the key), so the F-Droid build can match.
+- Keystore cert SHA-256: `d4678afb6f294e340342896b12d330a1e9bdca6c10ec9230006401996f409f0c`
+
+### License
+- **Apache-2.0** (`forge/LICENSE`) added so the full build is F-Droid-eligible. Permissive; the AI gateway / any backend stays unaffected.
+
+### Release script (checked in)
+- **`forge/release_forge.sh`** — builds both flavors from one source:
+  - stamps `forge-build.json` (sha + version + builtAt) into `www/` + `assets/`
+  - syncs `www/index.html` → `assets/`
+  - `./gradlew clean assembleFullRelease bundlePlayRelease`
+  - outputs → `forge/release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`)
+  - aborts if the release keystore is missing (gitignored secret)
+  - does NOT bump versions automatically — set `versionCode`/`versionName` in `app/build.gradle` first
+
+### First build (verified)
+- `bash release_forge.sh` → BUILD SUCCESSFUL (1m 46s)
+- Full APK (6.25 MB): has all restricted perms; signature verifies (v1+v2); signer cert SHA-256 matches keystore ✅
+- Play AAB (5.59 MB): restricted perms stripped (verified absent); kept perms present ✅
+
+Smoke:
+```text
+[ ] bash forge/release_forge.sh → both artifacts in release-out/
+[ ] apksigner verify -v Forge-full-release.apk → Verifies
+[ ] Play AAB manifest has no SMS/Call/Contacts/QUERY_ALL_PACKAGES/legacy-storage
+[ ] Full APK manifest still has them
+[ ] android/keystore.properties + android/.keystore/ are gitignored (secrets not committed)
+[ ] Play Console upload of Forge-play-release.aab accepted; enroll App Signing with THIS keystore
+```
+
+### Play Console steps (user does)
+1. Create app (com.forge.live, Paid, $2.55 — nearest tier to 2.55)
+2. App integrity → App signing → **upload the forge-upload.jks key** (do not let Google generate)
+3. Store listing (icon 512, feature graphic 1024×500, screenshots, description, privacy policy URL)
+4. Pricing → Paid → 2.55 USD (accept nearest tier per country)
+5. Data Safety form: declare Camera/Mic/Location/Notifications (NO SMS/Call/Contacts in play build)
+6. Content rating + target audience + ads declaration + app access
+7. Production → Create release → upload Forge-play-release.aab → Start rollout (review 1–7d)
