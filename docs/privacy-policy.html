@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Privacy Policy</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 760px; margin: 0 auto; padding: 32px 20px 80px;
+    color: #1a1a1a; background: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6e6e6; background: #121212; }
+    a { color: #6cb6ff; }
+    code { background: #242424; }
+  }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 28px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  h3 { font-size: 16px; margin: 18px 0 6px; }
+  .meta { color: #666; font-size: 14px; margin-bottom: 24px; }
+  .app { background: #eef; border-left: 4px solid #4a6; padding: 10px 14px; margin: 16px 0; border-radius: 4px; }
+  @media (prefers-color-scheme: dark) { .app { background: #1a2230; border-left-color: #4a6; } }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; vertical-align: top; }
+  @media (prefers-color-scheme: dark) { th, td { border-color: #444; } }
+  th { background: #eee; }
+  @media (prefers-color-scheme: dark) { th { background: #242424; } }
+  code { padding: 2px 5px; border-radius: 3px; font-size: 13px; }
+  ul { padding-left: 22px; }
+  .updated { font-style: italic; }
+  a { color: #06c; }
+</style>
+</head>
+<body>
+
+<h1>Forge — Privacy Policy</h1>
+<div class="meta">
+  App: <strong>Forge</strong> &middot; Package: <code>com.forge.live</code><br>
+  Platform: Android &middot; Distribution: Google Play (paid) and F-Droid / direct download (free)<br>
+  <span class="updated">Effective date: August 17, 2026</span>
+</div>
+
+<div class="app">
+This policy applies to the Forge app (the <strong>"App"</strong>) published on Google Play and
+distributed via F-Droid and direct download. The App is a local runtime that lets you create
+and run small "mini-apps" (HTML) on your phone, optionally using AI services you configure
+yourself with your own API keys.
+</div>
+
+<h2>1. Summary</h2>
+<p>
+Forge is designed to keep your data on your device. The App does not require an account, does
+not collect your email, does not use advertising, and does not sell your data. The only data
+that leaves your device is sent to <strong>AI providers that you choose and authenticate with
+your own API key</strong> (for example, when you ask Forge to generate or run a mini-app that
+uses AI). Camera, microphone, and location data are only accessed when you, through a
+mini-app, actively use those features.
+</p>
+
+<h2>2. Data the App may access and why</h2>
+<table>
+  <tr><th>Data</th><th>Permission</th><th>Purpose</th><th>Leaves the device?</th></tr>
+  <tr>
+    <td>Photos &amp; videos (camera capture, gallery pick)</td>
+    <td>Camera, Read media images</td>
+    <td>Only when a mini-app you run uses the camera or picks an image (e.g. a menu translator).</td>
+    <td>Only if you send it to an AI provider for processing.</td>
+  </tr>
+  <tr>
+    <td>Audio / voice recordings (microphone)</td>
+    <td>Record audio</td>
+    <td>Only when a mini-app uses speech-to-text or live translation.</td>
+    <td>Only if you send it to an AI provider for transcription/translation.</td>
+  </tr>
+  <tr>
+    <td>Approximate / precise location</td>
+    <td>Access coarse / fine location</td>
+    <td>Only when a mini-app requests location (e.g. a maps mini-app).</td>
+    <td>Only if you send it to an AI provider or map service.</td>
+  </tr>
+  <tr>
+    <td>Mini-app content &amp; your AI settings (providers, models, API keys)</td>
+    <td>On-device storage</td>
+    <td>Stored locally so Forge works offline and remembers your setup.</td>
+    <td>No, unless you enable optional backup (see &sect;4).</td>
+  </tr>
+  <tr>
+    <td>Notifications</td>
+    <td>Post notifications</td>
+    <td>To show status/progress for background mini-apps you run.</td>
+    <td>No.</td>
+  </tr>
+  <tr>
+    <td>Bluetooth connections</td>
+    <td>Bluetooth connect</td>
+    <td>Optional audio routing (e.g. to a Bluetooth speaker/earpiece) for mini-apps that use audio.</td>
+    <td>No.</td>
+  </tr>
+</table>
+
+<h2>3. Data the App does NOT collect</h2>
+<ul>
+  <li><strong>Account information / email:</strong> Forge has no account system and does not read your Google account.</li>
+  <li><strong>SMS, call logs, contacts:</strong> The Google Play build of Forge does not request or access SMS, call, or contacts permissions. (The optional direct-download/F-Droid build may request these for power-user mini-apps; that build is distributed outside Google Play and is governed by this same policy where applicable.)</li>
+  <li><strong>Device identifiers / advertising IDs:</strong> Forge does not collect them.</li>
+  <li><strong>Financial information:</strong> Forge does not process payments; purchases are handled by Google Play.</li>
+  <li><strong>Web browsing history:</strong> Not collected.</li>
+  <li><strong>Health, calendar, fitness data:</strong> Not collected.</li>
+</ul>
+
+<h2>4. Third parties you may connect</h2>
+<p>
+Forge is <strong>BYO-AI</strong>: you provide your own API key for a provider of your choice.
+When you use an AI feature, Forge sends the relevant text, images, or audio over HTTPS to that
+provider. Forge does not operate these providers and has no access to the data once it leaves
+your device. Each provider's privacy policy governs your data there.
+</p>
+<p>Providers you can configure include, for example:</p>
+<ul>
+  <li>Google Gemini (Google AI Studio)</li>
+  <li>OpenAI</li>
+  <li>Groq</li>
+  <li>xAI (Grok)</li>
+  <li>OpenRouter</li>
+  <li>Any OpenAI-compatible endpoint you configure (including "Cheaper Inference")</li>
+</ul>
+<p>
+<strong>Your API keys are stored only on your device</strong> (and in your optional backup,
+see &sect;5). They are never sent to Forge's developer or any party other than the provider they
+belong to.
+</p>
+
+<h2>5. Optional Google Drive / folder backup</h2>
+<p>
+Forge can back up your mini-app library and AI settings to a <strong>folder you choose</strong>
+using Android's Storage Access Framework (e.g. a folder in your own Google Drive). Forge only
+reads/writes inside the folder you pick; it never has access to the rest of your Drive. The
+backup contains your API keys &mdash; <strong>do not share the backup folder with anyone</strong>.
+Disconnecting backup removes Forge's access to that folder.
+</p>
+
+<h2>6. Data transmission &amp; security</h2>
+<ul>
+  <li>Network traffic to AI providers uses HTTPS/TLS.</li>
+  <li>API keys are stored in the app's private storage, not in plain shared files.</li>
+  <li>Backup data is written only to the folder you explicitly select.</li>
+</ul>
+
+<h2>7. Data retention &amp; deletion</h2>
+<ul>
+  <li><strong>On your device:</strong> mini-apps, settings, and keys persist until you delete them in the App or clear the App's data from Android Settings. Deleting a mini-app removes it locally.</li>
+  <li><strong>Backup folder:</strong> you can delete the backed-up files yourself at any time, or disconnect the folder in Forge settings.</li>
+  <li><strong>At AI providers:</strong> retention is governed by each provider's policy and your account there. Forge cannot delete data held by third-party providers; manage it in your provider account.</li>
+</ul>
+
+<h2>8. Children</h2>
+<p>
+Forge is a general-purpose developer tool and is not directed at children under 13 (or the
+applicable age in your country). Forge does not knowingly collect data from children. If you
+believe a child has provided data, contact us so it can be removed.
+</p>
+
+<h2>9. Your rights</h2>
+<p>
+Because Forge keeps your data on your device and with providers you control, you exercise your
+rights directly: review or delete mini-apps in the App, clear app data in Android Settings,
+disconnect or delete your backup folder, and manage your data in your AI provider accounts.
+</p>
+
+<h2>10. Permissions used by the Google Play build</h2>
+<p>For transparency, the Google Play build requests:</p>
+<p>
+Internet, Camera, Record audio, Access fine location, Access coarse location, Post
+notifications, Bluetooth connect, Foreground service (data sync), Wake lock, Vibrate, Receive
+boot completed, Read media images, Modify audio settings, Access network state, Access Wi-Fi
+state, Change Wi-Fi state, Nearby Wi-Fi devices, Schedule / use exact alarm.
+</p>
+<p>
+The Google Play build does <strong>not</strong> request SMS, call-log, contacts, phone-state, or
+query-all-packages permissions.
+</p>
+
+<h2>11. Changes to this policy</h2>
+<p>
+If this policy changes, the updated version will be posted at this same URL with a new effective
+date. Material changes will be noted in the App's release notes.
+</p>
+
+<h2>12. Contact</h2>
+<p>
+For privacy questions or requests, contact the developer:
+</p>
+<p>
+  Email: <a href="mailto:TODO_REPLACE_WITH_YOUR_EMAIL@example.com">TODO_REPLACE_WITH_YOUR_EMAIL@example.com</a><br>
+  GitHub: <a href="https://github.com/lirunki/forge">https://github.com/lirunki/forge</a>
+</p>
+<p style="color:#888;font-size:13px;margin-top:32px;">
+  Replace the <code>TODO_REPLACE_WITH_YOUR_EMAIL</code> placeholder with your real contact email before publishing.
+</p>
+
+</body>
+</html>
