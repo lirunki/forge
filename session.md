@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.56 / versionCode 86** (forge progress story rotating mumbo-jumbo) · prior 2.6.54/84
+| Version | **2.6.58 / versionCode 88** (forge progress story slower rotation) · prior 2.6.56/86
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -1061,7 +1061,7 @@ progress line: while `forgeApp` is awaiting the LLM, a slim gray assistant-side
 bubble appears below the user's request, cycling through a circular buffer of funny,
 pseudoscientific mumbo-jumbo (e.g. `exploring the forge-fermi paradox`,
 `recombobulating the discombobulator`, `herding schrödinger's cats`). Each line
-replaces the previous every ~1.9s. When the real reply lands, `addMessage('assistant',…)`
+replaces the previous every ~3.8s (2.6.58: doubled from 1.9s on user feedback). When the real reply lands, `addMessage('assistant',…)`
 triggers `renderChat` which rebuilds `el.messages` and wipes the transient node;
 `finally` clears the interval.
 

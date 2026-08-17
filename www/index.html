@@ -4836,7 +4836,7 @@ termux-reload-settings</div>
         const timer = setInterval(() => {
           i = (i + 1) % FORGE_PROGRESS_LINES.length;
           txt.textContent = FORGE_PROGRESS_LINES[i];
-        }, 1900);
+        }, 3800);
         return {
           stop() { clearInterval(timer); try { div.remove(); } catch (_) {} },
         };
