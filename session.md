@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.58 / versionCode 88** (forge progress story slower rotation) · prior 2.6.56/86
+| Version | **2.6.60 / versionCode 90** (slim SYSTEM_PROMPT — 70% smaller for cheaper-model instruction-following) · prior 2.6.58/88
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -1077,4 +1077,62 @@ Smoke:
 [ ] Lines are single-line, italic, dashed bubble; replaced by the real reply when it lands
 [ ] Tap Stop → rotating line replaced by “Stopped.”
 [ ] No rotating line leaks after the reply (renderChat rebuilds messages)
+```
+
+## Slim SYSTEM_PROMPT — 70% reduction for cheaper-model instruction-following (2026-08-17)
+
+**2.6.60 / versionCode 90** (from 2.6.58/88). Host-only, no native.
+
+### Problem
+Non-Grok models (GLM-5.2, Groq Llama-class, OpenRouter routes) were finding it harder
+to forge mini-apps in recent versions. Root cause: the `SYSTEM_PROMPT` had grown to
+**2,751 words / 24.3 KB / 393 lines** — 95% exhaustive API reference, only 5% task
+instruction. The critical "Return ONLY valid JSON" rule was buried under 2,400 words of
+live-translate, termux, and tools-registry docs — classic lost-in-the-middle attention
+dilution. The regression window (2.6.46 → 2.6.52) added +284 words of API-reference
+dumps (chatStream/agent, Live Translate Patch 4, tools registry) that most mini-apps
+never touch.
+
+### Fix
+Replaced the exhaustive per-method API dump with a **condensed quick reference** —
+one line per API group with the key method signatures + the critical gotchas that
+models get wrong (JSON-escape, no alert spam, no native bridges, data-forge-persist,
+attachment MIME classification, deep-link preference). The full reference already
+lives in `docs/api.md` and is pointed to inline.
+
+- **Before:** 393 lines, 2,751 words, 24,328 chars
+- **After:** 103 lines, ~811 words, ~7,414 chars
+- **Reduction:** ~70% in word count and char count
+
+### What stayed (essential)
+- Task + output JSON shape (top — most prominent)
+- Rules for html (condensed, +JSON-escape, +refine=full new html)
+- Most common APIs inline: ai.chat (text + multimodal), permissions, files, camera, http, sms/phone/contacts, apps.launch, notifications, jobs, storage/secrets, state/persist
+- Critical gotchas: non-image attachments must stay type:'file'; deep-link data URIs over activity class names; never embed API keys; never <input type=file> in iframe
+- Safety UX: request perms before sensitive APIs; never SMS/call/launch without a user tap
+
+### What was condensed to one-liners
+- Lifecycle events, state auto-preservation, data-forge-persist
+- Host AI streaming/agent/tools (signatures only — full examples in api.md)
+- TTS/STT/liveTranslate (one line each)
+- Mic/audio/qr/fs/termux (one line each)
+- Apps/intents (kept deep-link examples — most common launch pattern)
+
+### What was removed
+- Redundant per-method return-shape comments (`// { name, type, mime, size, base64, ... }`)
+- Verbose code examples for streaming/agent/tools (kept signature only; api.md has full examples)
+- TTS voice-list fill-select tutorial (a frequent gotcha but rare in practice; in api.md if needed)
+- Termux flavor/bridge detail (condensed to one line + "needs F-Droid Termux or agent")
+- Audio routing route list detail (condensed to one line)
+- Repeated permission-request reminders (consolidated into the Permission & safety UX section)
+
+Smoke:
+```text
+[ ] bash ~/downloads/build_forge.sh && adb install -r ~/downloads/Forge-debug-rebuilt.apk
+[ ] Forge a basic app (tip calculator) with GLM-5.2 → valid JSON, complete html, renders
+[ ] Forge with an attached sketch → matches layout
+[ ] Reforge an existing app → full new html (not a patch)
+[ ] Forge an app using sms/contacts → correct API calls in generated html
+[ ] Forge a chat app using ai.chat + tools.list → correct tool-loop pattern
+[ ] No JSON parse errors / empty html / truncated output on cheaper models
 ```

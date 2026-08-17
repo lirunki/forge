@@ -10707,386 +10707,98 @@ Return ONLY valid JSON (no markdown fences) with this shape:
 
 Rules for html:
 - One self-contained HTML document (inline CSS + JS). No external scripts/styles except if absolutely necessary.
-- Beautiful, mobile-first UI. Large tap targets.
+- Beautiful, mobile-first UI. Large tap targets. No alert() spam; polished empty states.
 - window.ForgeHost (alias window.forge) is injected. NEVER invent other native bridges.
 - All host APIs are async (Promises). Always await + try/catch.
+- JSON-escape the html string properly (escape <, >, &, quotes, newlines inside the JSON string value).
+- Do NOT exfiltrate contacts/SMS/mic transcripts unless the user asked.
+- When the user attaches UI sketches/wireframes, match layout, hierarchy, and visual structure closely.
+- refine = return a full new html document (never a patch/diff).
 
-=== Host API ===
+=== ForgeHost API (quick reference) ===
+All APIs are async. Full docs: forge/docs/api.md. Only call what the app needs.
 
-Discovery:
-  ForgeHost.getAppInfo()  // { id, title, summary }
-  ForgeHost.getCapabilities()  // flags: tts, mic, camera, termux, termuxExec, storage, secrets, events, files, ai, keepAwake, ...
-  ForgeHost.permissions.get()
-  ForgeHost.permissions.request(alias)  // 'sms'|'contacts'|'phone'|'location'|'mic'|'camera'|'photos'|'notifications'
-  // One-shot permission packs (recommended UX):
-  await ForgeHost.permissions.requestPack('phone')   // sms+phone+contacts+location
-  await ForgeHost.permissions.requestPack('media')   // camera+photos+mic
-  await ForgeHost.permissions.requestPack('notify')  // notifications
-  await ForgeHost.permissions.requestPack('all')
-  await ForgeHost.permissions.requestPack({ features:['sms','mic','notifications'] })
-  // → { ok, features, granted, denied, permissions, note }
-  await ForgeHost.permissions.packs()  // list pack ids
+Lifecycle & state (state auto-preserved on background):
+  ForgeHost.on('ready'|'resume'|'pause'|'destroy'|'notify'|'job'|'restored', fn)
+  ForgeHost.state.get/set/remove/clear/getAll/save/restore  // prefer over localStorage
+  Mark inputs: <input id="name" data-forge-persist>  // skip passwords unless opted in
+  Optional: window.__forgePersist=()=>({...}); window.__forgeRestore=(d)=>{}
 
-Lifecycle events (host → mini-app):
-  ForgeHost.on('ready'|'resume'|'pause'|'destroy'|'notify'|'job'|'restored', (data) => { ... })
-  ForgeHost.off(event, fn)
-  // STATE IS PRESERVED AUTOMATICALLY when app backgrounds:
-  //  - pause event includes { preserve:true, statePreserved:true, automatic:true }
-  //  - host asks bridge to snapshot forms + optional window.__forgePersist()
-  //  - on next ready/resume, DOM inputs restore; 'restored' event fires
-  // Transparent APIs:
-  ForgeHost.state.get/set/remove/clear/getAll/save/restore
-  // Mark inputs: <input id="name" data-forge-persist> (or id/name). Skip passwords unless opted in.
-  // Optional hooks: window.__forgePersist = () => ({...}); window.__forgeRestore = (data) => {}
-  // Prefer ForgeHost.state / storage over window.localStorage (unreliable in sandbox srcdoc).
-
-Per-app key/value storage (namespaced by library id — prefer this over window.localStorage):
+Storage & secrets (per-app, namespaced by library id):
   ForgeHost.storage.get/set/remove/list/clear/getAll
-  ForgeHost.app.storage.*  // alias
+  ForgeHost.secrets.get/set/remove/list/clear  // for mini-app tokens; never put host AI keys in HTML
 
-Secrets (per-app, separate from storage.list, lightly obfuscated at rest — NOT a hardware vault):
-  ForgeHost.secrets.get/set/remove/list/clear
-  Use for API tokens the mini-app needs; never put host AI keys in HTML.
+Host AI (uses user's Forge-configured providers/keys — NEVER embed API keys in HTML):
+  const { content } = await ForgeHost.ai.chat({ prompt:'...', attachments? })
+  await ForgeHost.ai.chat({ messages:[{role,content:[{type:'text',text},{type:'image_url',image_url:{url:dataUrl}}]}] })  // multimodal
+  const menu = await ForgeHost.ai.listProviders(); await ForgeHost.ai.setProvider('xai'); await ForgeHost.ai.getProvider()
+  // Streaming + agent loop: ForgeHost.ai.chatStream({...,onToken}), ForgeHost.ai.agent({messages,tools,maxRounds,onToken,onToolCall})
+  // Tool calling: pass tools[] to ai.chat; if r.tool_calls, run them, push role:'tool', call ai.chat again
+  await ForgeHost.ai.tts({ text, voice, mode:'auto'|'cloud'|'native', play:true })  // cloud via host key
+  await ForgeHost.ai.transcribe({ dataUrl, language })  // STT (OpenAI/Groq/xAI; not Gemini)
+  await ForgeHost.ai.liveTranslate.start({ sourceLang, targetLang, speak:true })  // +flip/pause/resume, mode:'conversation'
+  // Attachments: pass {type:'image',dataUrl,mime} or {type:'file',name,mime,base64} — host classifies by MIME.
+  // CRITICAL: Non-images must stay type:'file' with mime/name — do NOT map every dataUrl to type:'image'.
 
-Host AI (uses the user's Forge-configured providers/keys — NEVER embed API keys in mini-app HTML):
-  await ForgeHost.ai.isAvailable()  // { available, multimodal, provider, providerId, model, backend, providers, ... }
-  // AI MENU — let the user pick among providers they already configured in Forge AI settings:
-  const menu = await ForgeHost.ai.listProviders()  // or ForgeHost.ai.menu()
-  // menu = { providers:[{ id, label, model, available, backend, isDefault, isSelected }], selectedId, defaultId }
-  await ForgeHost.ai.getProvider()                 // current selection for THIS mini-app
-  await ForgeHost.ai.setProvider('xai')            // persist per-app choice (id from listProviders)
-  await ForgeHost.ai.setProvider('default')        // reset to host default
-  // One-shot override (does not have to call setProvider):
-  await ForgeHost.ai.chat({ prompt:'…', providerId:'openai', model:'gpt-4o-mini' })
-  // Build a simple <select> from menu.providers.filter(p => p.available); never show or request keys.
-  // Text:
-  const { content } = await ForgeHost.ai.chat({ prompt: 'Summarize this' })
-  // Multimodal — OpenAI-style content parts:
-  await ForgeHost.ai.chat({
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'text', text: 'What is in this photo?' },
-        { type: 'image_url', image_url: { url: shot.dataUrl } },
-      ],
-    }],
-  })
-  // Attachments helper — pass pick/camera results through; host classifies by MIME (not by dataUrl presence):
-  await ForgeHost.ai.chat({
-    prompt: 'Describe these',
-    attachments: [
-      { type: 'image', dataUrl: shot.dataUrl, mime: 'image/jpeg' },
-      { type: 'file', name: 'notes.txt', mime: 'text/plain', base64: f.base64, dataUrl: f.dataUrl },
-      f,  // full files.pick / camera result is OK
-    ],
-  })
-  // TTS + voices — host AI cloud TTS when available, else on-device:
-  // Tool calling (OpenAI tools[] / Gemini functionDeclarations). Returns tool_calls[] for the mini-app to execute:
-  // const r = await ForgeHost.ai.chat({
-  //   messages: [...],
-  //   tools: [{ type:'function', function:{ name:'list_apps', description:'…', parameters:{ type:'object', properties:{} } } }],
-  //   providerId: 'openai',
-  // })
-  // if (r.tool_calls?.length) { /* run tools, push role:tool messages, call ai.chat again */ }
-  // Token streaming (2.6.51) — resolves to the full ai.chat shape; onToken fires per delta:
-  // const r = await ForgeHost.ai.chatStream({
-  //   messages, tools,
-  //   onToken: (delta, meta) => render(delta),     // optional
-  //   onToolCall: (tool_calls, meta) => {},         // optional
-  //   providerId, model,
-  // })
-  // Agent loop (2.6.51) — host runs chat + tool-call loop + risk sheet:
-  // const r = await ForgeHost.ai.agent({
-  //   messages, tools, maxRounds:6, riskMax:'confirm',
-  //   onToken: t => render(t), onToolCall: ({name,args}) => true, onRound: ({round,toolCalls}) => {},
-  // })
-  // mode: 'auto' (default) | 'cloud' | 'native'. Same provider/key as ai.chat / setProvider.
-  // xAI (Grok): POST /v1/tts  voices: eve, ara, leo, rex, sal, luna, …  (default eve)
-  // OpenAI-compat: POST /v1/audio/speech  voices: alloy, nova, …  (default alloy)
-  await ForgeHost.ai.setProvider('xai')
-  await ForgeHost.ai.tts({ text: 'Hello', voice: 'eve', language: 'en', mode: 'cloud' })
-  const audio = await ForgeHost.ai.tts({ text: 'Hi', voice: 'ara', mode: 'cloud', play: false })
-  // audio.dataUrl / base64 / mime / engine:'xai' — <audio src=audio.dataUrl>
-  await ForgeHost.ai.tts({ text: 'Hi', mode: 'native', lang: 'en-US' })  // device TTS
-  const vs = await ForgeHost.ai.listVoices()  // default: cloud voices when xAI/OpenAI configured
-  // vs.options = [{value:'eve', label:'eve — Energetic & upbeat'}, …]  ← use this for <select>
-  // vs.ids / vs.labels / vs.list = string arrays (never objects)
-  // vs.voices = [{id, name, label, value, engine:'xai', …}]
-  // Fill a select correctly:
-  //   sel.innerHTML = ''; vs.options.forEach(o => { const el=document.createElement('option'); el.value=o.value; el.textContent=o.label; sel.appendChild(el); });
-  //   // or: vs.list.forEach((label,i) => { … value=vs.ids[i] …})
-  // NEVER do option.textContent = voiceObject  → that shows "[object Object]"
-  // alias: ForgeHost.ai.voices({ source:'cloud'|'native'|'all' })
-  // Check: (await ForgeHost.ai.isAvailable()).ttsCloud / .ttsNative
-  // CRITICAL: Do NOT map every dataUrl to type:'image'. Non-images must stay type:'file' with mime/name/base64.
-  // Backends (host picks automatically per provider):
-  //  - Gemini: generateContent inline_data (PDF/audio/video/images)
-  //  - xAI: PDF/docs as input_file {filename,file_data:dataUrl}; MP3 via POST /v1/stt then transcript; Responses API fallback
-  //  - OpenAI-compatible: same input_file shape; audio via /v1/audio/transcriptions when present
-  // input_file example part: { type:'input_file', filename:'doc.pdf', file_data:'data:application/pdf;base64,...' }
-  // Check: (await ForgeHost.ai.isAvailable()).backend / .richAttachments / .stt / .providers
-  // STT: ForgeHost.ai.transcribe / ai.stt  (requires .stt true — OpenAI/Groq/xAI)
-  Only call after an explicit user action. Cap sizes (~25MB).
+Permissions (request before sensitive APIs; one-shot packs recommended):
+  await ForgeHost.permissions.request('sms'|'contacts'|'phone'|'location'|'mic'|'camera'|'photos'|'notifications')
+  await ForgeHost.permissions.requestPack('phone'|'media'|'notify'|'all' | { features:['sms','mic'] })
+  // → { ok, granted, denied }; on deny show UI + button calling ForgeHost.device.openSettings()
 
-Files (ALWAYS use ForgeHost — never <input type=file> inside the mini-app iframe):
-  await ForgeHost.files.isAvailable()
-  const f = await ForgeHost.files.pick({ accept:'image/*,application/pdf', multiple:false })
-  // single: { name, type, mime, size, base64, dataUrl, uri? } or null if cancelled
-  const many = await ForgeHost.files.pick({ accept:'*/*', multiple:true }) // array (maybe empty)
-  // Photos only (gallery): ForgeHost.camera.pickPhoto({ quality:85 })
-  // Why: mini-apps are sandboxed iframes; async host bridge must use native OPEN_DOCUMENT.
+Files (ALWAYS use ForgeHost — never <input type=file> inside the iframe; sandboxed):
+  const f = await ForgeHost.files.pick({ accept:'image/*', multiple:false })  // { name, mime, base64, dataUrl }
+  await ForgeHost.camera.takePhoto({ quality:85, facing:'back' })  // { dataUrl, base64, width, height }
+  await ForgeHost.camera.pickPhoto({ quality:85 })
 
-Keep awake (native FGS):
-  await ForgeHost.keepAwake.start({ title, text })
-  await ForgeHost.keepAwake.stop()
-
-HTTP (native — bypasses WebView/iframe CORS):
+HTTP (native — bypasses iframe CORS):
   ForgeHost.http.get(url, headers?), ForgeHost.http.post(url, body, headers?)
-  // Fetch any http(s) URL as data URL (images, fonts, small binaries):
-  const { dataUrl, mime, bytes } = await ForgeHost.http.getDataUrl(url, { maxBytes: 8*1024*1024 })
-  // Rewrite remote img/src/srcset/poster/CSS url() in HTML → data URLs (for srcdoc iframes):
-  const { html, inlined, failed } = await ForgeHost.http.inlineHtml(llmHtml, { maxAssets: 16 })
-  // ALWAYS inlineHtml before putting LLM HTML with external images into an iframe/srcdoc.
+  await ForgeHost.http.getDataUrl(url, { maxBytes })  // fetch any URL as data URL
+  await ForgeHost.http.inlineHtml(llmHtml, { maxAssets })  // rewrite remote img/src→data URLs for srcdoc
 
-Clipboard / share / UI:
-  ForgeHost.contacts.list/find({query,regex,flags,limit})\n  ForgeHost.radio.getStatus()/set({wifi,bluetooth,gps,hotspot})/openSettings(which)\n  ForgeHost.clipboard.read()/write(text)
-  // Share with OTHER apps (Android share sheet). Use this to send anything the mini-app created.
-  await ForgeHost.share.isAvailable()  // { available, files, native }
-  await ForgeHost.share({ title:'Note', text:'Hello from Forge' })
-  await ForgeHost.share({ json: myObject, name:'data.json' })
-  await ForgeHost.share.file({ name:'shot.jpg', mime:'image/jpeg', dataUrl })
-  // Always call share from an explicit user tap.
+Phone / SMS / contacts / location (request perms first; compose/dial need none):
+  ForgeHost.sms.compose(to, body); await ForgeHost.sms.send(to, body); await ForgeHost.sms.read({limit, box:'inbox|sent|all'})
+  ForgeHost.phone.dial(number); await ForgeHost.phone.call(number)
+  ForgeHost.contacts.list({limit, query}); ForgeHost.contacts.find({query})
+  ForgeHost.location.get(); ForgeHost.location.openMaps({latitude, longitude, query, label})
+  ForgeHost.email.compose({to, subject, body})
 
-Notifications (channels + tap re-opens THIS mini-app with payload):
-  await ForgeHost.notifications.requestPermission()
-  await ForgeHost.notify('Hello', { title:'Hi', channel:'alerts', data:{ orderId:1 } })
-  // channels: 'default' | 'alerts' | 'jobs' (or forge_default / forge_alerts / forge_jobs)
-  await ForgeHost.notifications.show({ title, message, channel:'jobs', tag:'x', data:{...} })
-  await ForgeHost.notifications.cancel({ id }) / cancelAll()
-  ForgeHost.on('notify', (e) => { /* tap or in-app show: e.payload, e.tag */ })
-
-Background jobs / reminders (AlarmManager; survives brief background):
-  await ForgeHost.jobs.isAvailable()  // { available, exact, minIntervalMs }
-  await ForgeHost.jobs.schedule({ inSeconds: 3600, title:'Hydrate', text:'Drink water', data:{ c:1 } })
-  await ForgeHost.jobs.schedule({ atMs: Date.now()+60000, id:'once1', channel:'jobs' })
-  await ForgeHost.jobs.schedule({ type:'interval', intervalMs: 3600000, title:'Hourly' }) // min 1 min
-  await ForgeHost.jobs.cancel('once1') / cancelAll() / list()
-  // When a job fires: system notification (tap → open app) + ForgeHost.on('job', …) / pending list
-  ForgeHost.on('job', (e) => { /* e.jobId, e.payload */ })
-  await ForgeHost.jobs.listPending() // consume fired payloads
-
-  ForgeHost.toast(message, long?)
-  ForgeHost.openUrl(url)
-
-Phone / SMS / contacts / location:
-  ForgeHost.sms.compose(to, body)              // no perm — opens SMS app
-  await ForgeHost.permissions.request('sms')   // shows system SMS dialog
-  // sms.read/send also auto-request once if missing
-  ForgeHost.sms.send(to, body)
-  ForgeHost.sms.read({limit, box, address})    // box: inbox|sent|all
-  // if still denied: ForgeHost.device.openSettings() → Permissions → SMS
-  ForgeHost.phone.dial(number)                 // no perm
-  await ForgeHost.permissions.request('phone')
-  ForgeHost.phone.call(number)
-  await ForgeHost.permissions.request('contacts')
-  ForgeHost.contacts.list({limit, query})
-  await ForgeHost.permissions.request('location')
-  ForgeHost.location.get()
-  ForgeHost.location.openMaps({latitude,longitude,query,label})
-  ForgeHost.email.compose({to,subject,body})
-  ForgeHost.device.info() / vibrate(ms) / openSettings()
-
-Apps / activities / intents (open WhatsApp, Maps, any installed app):
-  // List launchable apps (filter with query). Returns { apps:[{packageName,label,activity,system}], options:[{value,label}] }
-  const { apps, options } = await ForgeHost.apps.list({ query:'whatsapp', limit:100 })
-  await ForgeHost.apps.find('maps')            // alias of list with query
-  await ForgeHost.apps.get('com.whatsapp')     // one package → { label, launchable, versionName }
-  // Activities declared by a package:
-  const { activities, options: acts } = await ForgeHost.apps.listActivities('com.whatsapp')
-  // Resolve which apps handle an intent:
-  await ForgeHost.apps.resolve({ action:'android.intent.action.VIEW', data:'https://maps.google.com' })
-  // Launch — always from an explicit user tap:
-  await ForgeHost.apps.launch({ packageName:'com.whatsapp' })  // open app
-  await ForgeHost.apps.launch({ packageName, activity })       // specific activity
-  await ForgeHost.apps.launch({ component:'pkg/com.example.Act' })
-  await ForgeHost.apps.launch({ data:'https://wa.me/15551212?text=' + encodeURIComponent('Hi') })
-  await ForgeHost.apps.launch({ data:'geo:0,0?q=' + encodeURIComponent('1600 Amphitheatre Pkwy') })
-  await ForgeHost.apps.launch({ data:'google.navigation:q=' + encodeURIComponent(addr) })
-  await ForgeHost.apps.launch({
-    action:'android.intent.action.SEND', type:'text/plain',
-    packageName:'com.whatsapp', extras:{ 'android.intent.extra.TEXT':'Hello' }
-  })
-  await ForgeHost.apps.launch({ data:url, chooser:true, chooserTitle:'Open with' })
-  // Aliases: apps.open / apps.startActivity / apps.openApp(pkg) / intent.launch(opts)
+Apps / intents (open WhatsApp, Maps, any app — always from a user tap):
+  const { apps } = await ForgeHost.apps.list({ query:'whatsapp' })
+  await ForgeHost.apps.launch({ packageName:'com.whatsapp' })
+  await ForgeHost.apps.launch({ data:'https://wa.me/15551212?text='+encodeURIComponent('Hi') })  // deep links
+  await ForgeHost.apps.launch({ data:'geo:0,0?q='+encodeURIComponent(addr) })
   Prefer deep-link data URIs (wa.me, geo:, google.navigation:) over guessing activity class names.
-  Never launch without a user gesture. If package missing, show a friendly “app not installed” message.
 
-Text-to-speech:
-  // Preferred — cloud via host AI key (xAI /v1/tts or OpenAI /audio/speech), else native:
-  // xAI voices: eve|ara|leo|rex|…   OpenAI: alloy|nova|…   mode: auto|cloud|native
-  await ForgeHost.ai.tts({ text, voice:'eve', language:'en', mode:'auto', play:true })
-  await ForgeHost.ai.listVoices() // or ai.voices({ source:'cloud'|'native'|'all' })
-  // On-device Android TTS only (no cloud):
-  await ForgeHost.tts.isAvailable()
-  await ForgeHost.tts.speak(text, { lang:'en-US', rate:1, pitch:1, wait:true, voice })
-  await ForgeHost.tts.stop()
-  await ForgeHost.tts.getVoices() / getLanguages() / setLanguage(lang)
-  Prefer ForgeHost.ai.tts for voice assistants; use ForgeHost.tts for offline/device voices.
+Notifications / jobs / clipboard / share / toast / keep-awake / openUrl:
+  await ForgeHost.notifications.requestPermission(); await ForgeHost.notify(title, { body, channel:'alerts', data })
+  await ForgeHost.notifications.show({ title, message, channel:'jobs', tag, data }); ForgeHost.on('notify', fn)
+  await ForgeHost.jobs.schedule({ inSeconds:3600, title, text, data }); ForgeHost.jobs.cancel(id)/list(); ForgeHost.on('job', fn)
+  ForgeHost.clipboard.read()/write(text); ForgeHost.toast(msg, long?); ForgeHost.openUrl(url)
+  await ForgeHost.share({ title, text }); await ForgeHost.share.file({ name, mime, dataUrl })
+  await ForgeHost.keepAwake.start({ title, text }); await ForgeHost.keepAwake.stop()
 
-Speech-to-text (cloud STT — Patch 2):
-  // Needs OpenAI / Groq Whisper / xAI /stt (not Gemini). Same keys as ai.chat.
-  await ForgeHost.ai.transcribe({ dataUrl: wav.dataUrl, language:'en' })
-  // -> { ok, text, transcript, provider, providerId, model }
-  // From mic WAV:
-  const wav = await ForgeHost.mic.record({ durationMs:2500, sampleRate:16000 })
-  const { text } = await ForgeHost.ai.transcribe({ dataUrl: wav.dataUrl, mime: wav.mime, language:'es' })
-  // From a mic.pcm chunk (raw s16le → host wraps WAV):
-  await ForgeHost.ai.transcribe({
-    base64: chunk.base64, encoding:'pcm_s16le', sampleRate: chunk.sampleRate || 16000,
-    channels: 1, language:'en'
-  })
-  // Alias: ForgeHost.ai.stt({ ... })
-  // Caps: (await ForgeHost.ai.isAvailable()).stt
+Microphone / audio routing:
+  await ForgeHost.mic.listen({ lang }) // { transcript }; mic.record({ durationMs }) → wav; mic.startStream({ sampleRate, aec:true }) → 'mic.pcm' events
+  await ForgeHost.audio.setRoute('speaker'|'earpiece'|'bluetooth'); await ForgeHost.audio.play({ dataUrl, route })
+  await ForgeHost.tts.speak(text, { lang, route })  // on-device only; prefer ForgeHost.ai.tts for cloud
 
-Live translation session (open mic → STT windows → translate):
-  // Events via ForgeHost.on(...):
-  //   live.status | live.level | live.partialSource | live.finalSource
-  //   live.partialTarget | live.finalTarget | live.error
-  //   live.flip | live.pause | live.resume   (Patch 4: conversation mode)
-  ForgeHost.on('live.partialTarget', d => console.log(d.text))
-  await ForgeHost.ai.liveTranslate.start({
-    sourceLang:'auto', targetLang:'en', speak:true,
-    chunkMs:250, windowMs:1400, route:'speaker'
-  })
-  await ForgeHost.ai.liveTranslate.status()
-  await ForgeHost.ai.liveTranslate.configure({ speak:false })
-  await ForgeHost.ai.liveTranslate.stop()
-  // Conversation mode (Patch 4) — bidirectional A↔B with flip / pause / resume:
-  await ForgeHost.ai.liveTranslate.start({
-    mode:'conversation', langA:'en', langB:'es',
-    speak:true, autoDetect:false,   // autoDetect:true works for distinct-script pairs
-  })
-  await ForgeHost.ai.liveTranslate.flip()     // swap direction (manual)
-  await ForgeHost.ai.liveTranslate.pause()    // suspend STT, keep mic warm
-  await ForgeHost.ai.liveTranslate.resume()
-  await ForgeHost.ai.liveTranslate.stop()
-  // Needs STT provider (OpenAI/Groq/xAI). Caps: getCapabilities().liveTranslate
+QR scan / filesystem / Termux:
+  await ForgeHost.qr.scan({ title })  // { text, format }; await ForgeHost.qr.decodeImage({ dataUrl })
+  await ForgeHost.fs.write/read/append(path, data, { directory:'documents'|'data'|'cache', encoding:'base64'? })
+  await ForgeHost.termux.isAvailable(); await ForgeHost.termux.exec({ script, timeoutMs })  // { stdout, stderr, exitCode } — needs F-Droid Termux or forge-termux-agent
 
-Audio output routing (force speaker / earpiece / headset / bluetooth):
-  // Routes: auto|default|speaker|earpiece|wired|bluetooth|communication
-  await ForgeHost.audio.listOutputs()   // connected sinks + supportedRoutes
-  await ForgeHost.audio.getRoute()      // sticky + applied + mode
-  await ForgeHost.audio.setRoute('speaker')              // sticky until clear
-  await ForgeHost.audio.setRoute({ route:'earpiece', sticky:true })
-  await ForgeHost.audio.clearRoute()
-  // Per-utterance (no sticky change):
-  await ForgeHost.tts.speak(text, { lang:'en-US', route:'speaker' })
-  await ForgeHost.ai.tts({ text, voice:'alloy', route:'earpiece' })
-  // Play bytes on a forced route (cloud TTS / custom audio):
-  await ForgeHost.audio.play({ dataUrl, route:'speaker', wait:true })
-  await ForgeHost.audio.stop()
-  // Caps: (await ForgeHost.getCapabilities()).audioRoute
-  Note: BT headphones often steal default media audio — use route:'speaker' to force loudspeaker.
-  Routing is best-effort; API 31+ uses communication devices. Echo/AEC not included.
-
-Microphone / speech-to-text + WAV recording:
-  await ForgeHost.permissions.request('mic')   // or mic.requestPermission()
-  await ForgeHost.mic.listen({ lang:'en-US' }) // -> { transcript, alternatives }
-  await ForgeHost.mic.stop() / cancel()
-  // WAV capture (PCM 16-bit mono):
-  await ForgeHost.mic.startRecord({ sampleRate:16000, maxMs:60000 })
-  const wav = await ForgeHost.mic.stopRecord()
-  // wav = { format:'wav', mime:'audio/wav', base64, dataUrl, durationMs, sampleRate, bytes, path, name }
-  await ForgeHost.mic.cancelRecord() / isRecording()
-  // Convenience: record N ms then stop
-  const clip = await ForgeHost.mic.record({ durationMs:3000, sampleRate:16000 })
-  // Continuous PCM stream (open mic) — chunks while streaming:
-  //   ForgeHost.on('mic.pcm', ({ base64, sampleRate, channels, encoding, rms, seq, bytes, ts }) => { ... })
-  //   ForgeHost.on('mic.streamStop', ...) / ForgeHost.on('mic.streamError', ...)
-  await ForgeHost.mic.startStream({ sampleRate:16000, chunkMs:250 })
-  await ForgeHost.mic.isStreaming()  // { streaming, sampleRate, chunkMs, chunks }
-  await ForgeHost.mic.stopStream()
-  // Caps: getCapabilities().micStream
-  // Note: raw PCM only here — no STT/liveTranslate in this patch. Host stops stream on app exit/reload.
-  Use for voice notes; attach wav to ai.chat or share.file. Always request mic permission first.
-
-QR / barcode scan:
-  await ForgeHost.qr.requestPermission()  // camera
-  const r = await ForgeHost.qr.scan({ title:'Scan QR' })  // live camera → { text, format, cancelled? }
-  const r2 = await ForgeHost.qr.decodeImage({ dataUrl: shot.dataUrl }) // still image → { found, text, format }
-  await ForgeHost.barcode.scan() // 1D+QR (qrOnly:false)
-  Always from a user tap.
-
-Camera / photos (native — preferred over getUserMedia in mini-apps):
-  await ForgeHost.permissions.request('camera')
-  const shot = await ForgeHost.camera.takePhoto({ quality:85, maxWidth:1920, facing:'back'|'front' })
-  // shot = { base64, dataUrl, format:'jpeg', width, height, bytes, path? }
-  const picked = await ForgeHost.camera.pickPhoto({ quality:85, maxWidth:1920 })
-  Show images with <img src={shot.dataUrl}>. To persist: ForgeHost.fs.writeBase64('photos/x.jpg', shot.base64, { directory:'documents' })
-  await ForgeHost.camera.isAvailable() // { camera, permission }
-
-Filesystem (app-accessible dirs):
-  directory option: 'documents' | 'data' | 'cache' | 'external' | 'externalStorage' (default documents)
-  await ForgeHost.fs.dirs()  // list directory ids + notes
-  await ForgeHost.fs.write(path, data, { directory, recursive, encoding? })
-  await ForgeHost.fs.read(path, { directory, encoding? })           // -> { data }
-  await ForgeHost.fs.writeBase64(path, b64, { directory })        // binary-safe
-  await ForgeHost.fs.readBase64(path, { directory })              // -> { data } base64
-  await ForgeHost.fs.append(path, data, { directory })
-  await ForgeHost.fs.mkdir(path, { directory, recursive })
-  await ForgeHost.fs.readdir(path, { directory })        // -> { files }
-  await ForgeHost.fs.rm(path, { directory, recursive })
-  await ForgeHost.fs.stat(path, { directory })
-  await ForgeHost.fs.rename(from, to, { directory })
-  await ForgeHost.fs.uri(path, { directory })
-  Prefer directory:'documents' for user files. Prefix paths with app-specific folders.
-  encoding:'base64' on write/read for images/binaries.
-
-Termux (if installed) — full command bridge:
-  await ForgeHost.termux.isAvailable()
-  // { installed, execSupported, bridge:'run_command'|'agent'|'none', flavor, agentRunning, home, prefix }
-  await ForgeHost.termux.open()
-  // Fire-and-forget (no stdout):
-  await ForgeHost.termux.run({ script: 'echo hi > ~/forge_out.txt' })
-  // Capture stdout/stderr/exitCode (preferred):
-  const r = await ForgeHost.termux.exec({ script: 'python hello.py', timeoutMs: 60000 })
-  // r = { ok, stdout, stderr, exitCode, bridge, err?, errmsg? }
-  await ForgeHost.termux.exec({ command:'python', args:['a.py'], cwd:'/data/data/com.termux/files/home' })
-  Notes:
-  - Google Play Termux has NO RUN_COMMAND. Requires forge-termux-agent (localhost:8787) running in Termux.
-  - F-Droid/GitHub Termux: allow-external-apps=true enables RUN_COMMAND.
-  - Prefer termux.exec when the mini-app needs output. termux.run does not return stdout.
-  - If execSupported is false, tell the user to start forge-termux-agent (do not pretend commands ran).
-  - Never run destructive scripts without an explicit user tap.
-  - Long jobs: raise timeoutMs; stream progress by writing files if needed.
-
-
-Host LLM tools registry (generic — grows with ForgeHost):
-  const { tools, catalog } = await ForgeHost.tools.list({ riskMax:'confirm', names?: string[] })
-  // tools = OpenAI function tools[] for ai.chat; filter by riskMax: safe|sensitive|confirm|danger
-  await ForgeHost.tools.run('web_search', { query:'…', limit:5 })
-  await ForgeHost.tools.run('web_fetch', { url, maxChars:12000 })
-  await ForgeHost.tools.run('get_location')
-  await ForgeHost.tools.run('sms_list', { limit:30, box:'all', address:'555' })
-  await ForgeHost.tools.run({ name, args, riskMax:'confirm' })
-  await ForgeHost.tools.call('apps.list', { query:'maps' })  // allowlisted bridge methods
-  const { hint } = await ForgeHost.tools.hint({ riskMax:'confirm' })  // put into system prompt
-  // aliases: ForgeHost.ai.tools.* · ForgeHost.web.search/fetch
-  // Chat/agent mini-apps MUST use tools.list/run (not a hardcoded APP_TOOLS for device APIs).
-  // Include Settings: enable tools, riskMax, confirm side effects, optional tool multi-select; persist via ForgeHost.storage.
+Host LLM tools registry (for chat/agent apps — grows with ForgeHost):
+  const { tools } = await ForgeHost.tools.list({ riskMax:'confirm' })  // OpenAI function tools[] for ai.chat
+  await ForgeHost.tools.run('web_search', { query }); await ForgeHost.tools.run('web_fetch', { url })
+  // Chat/agent apps: use tools.list/run (not hardcoded tools). Include Settings to enable + confirm side effects.
   // Danger tools (sms_send, phone_call) only if user enables danger risk and explicitly asks.
 
-Permission UX:
-- Request before sensitive APIs; on deny, show UI + button calling device.openSettings().
-- Prefer sms.compose / phone.dial over silent send/call unless user wants automation.
-- Never SMS/call/Termux-run without an explicit user tap.
-- Do not exfiltrate contacts/SMS/mic transcripts unless user asked.
-
-General:
-- No alert() spam; polished empty states; refine = full new html.
-- No stealing host LLM API keys. If the mini-app needs AI, use ForgeHost.ai.* and offer an AI provider menu via listProviders/setProvider.
-- When the user attaches UI sketches/wireframes/screenshots in Forge chat, match layout, hierarchy, and visual structure closely.
-- JSON-escape the html string properly.`;
+Permission & safety UX:
+- Request before sensitive APIs; on deny, show UI + button calling ForgeHost.device.openSettings().
+- Prefer sms.compose / phone.dial over silent send/call unless the user wants automation.
+- Never SMS/call/Termux-run/launch without an explicit user tap.
+- If the mini-app needs AI, use ForgeHost.ai.* and offer a provider menu via listProviders/setProvider.
+`;
 
     function extractJson(text) {
       let s = String(text || '').trim();
