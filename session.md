@@ -1164,7 +1164,7 @@ Kept in both: INTERNET, CAMERA, RECORD_AUDIO, ACCESS_FINE/COARSE_LOCATION, POST_
 - Keystore cert SHA-256: `d4678afb6f294e340342896b12d330a1e9bdca6c10ec9230006401996f409f0c`
 
 ### License
-- **Apache-2.0** (`forge/LICENSE`) added so the full build is F-Droid-eligible. Permissive; the AI gateway / any backend stays unaffected.
+- **GPL-3.0** (`forge/LICENSE`) — copyleft, F-Droid-eligible. Chosen over Apache-2.0 (permissive) and over a custom non-commercial license: GPL forces modified/distributed versions to stay open-source (stops closed-source commercial ripoffs) while keeping F-Droid. A non-commercial license would forbid monetization but is non-free → F-Droid rejects. Note: no license protects against AI-assisted functional cloning (idea/expression dichotomy); real protection is distribution + brand + update velocity, not the license.
 
 ### Release script (checked in)
 - **`forge/release_forge.sh`** — builds both flavors from one source:
