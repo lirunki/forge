@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.66 / versionCode 96** (FGS network keep-alive + retry for all AI HTTP; prior 2.6.65/95 retry WIP, 2.6.61/91 Play split, 2.6.60/90 slim SYSTEM_PROMPT)
+| Version | **2.6.67 / versionCode 97** (10-min AI read timeouts + friendly timeout msg; prior 2.6.66/96 FGS keep-alive, 2.6.61/91 Play split, 2.6.60/90 slim SYSTEM_PROMPT)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
