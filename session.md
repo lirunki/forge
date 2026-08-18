@@ -1375,3 +1375,40 @@ Smoke:
 [ ] Status-bar insets still correct (2.6.68 fix under 36)
 [ ] Upload release-out/Forge-play-release.aab → Play accepts targetSdk 36
 ```
+
+## Status-bar overlap fix v2 — listen on decor, not the WebView (2026-08-18)
+
+**2.6.70 / versionCode 100** (from 2.6.69/99). Native Java only.
+
+### Why 2.6.68 didn't work (user: "didn't fix the regression")
+2.6.68 registered `ViewCompat.setOnApplyWindowInsetsListener` on the bridge
+**WebView**. It never fired. Root cause: Capacitor's `bridge_layout_main.xml`
+wraps the WebView in a **`CoordinatorLayout`**, whose `onApplyWindowInsets`
+dispatches insets to children **only when `fitsSystemWindows=true`**. The
+WebView isn't marked, so the listener was starved and the WebView stayed
+edge-to-edge behind the status bar.
+
+### Fix (MainActivity.onCreate, inherited by RunActivity)
+- Listen on **`getWindow().getDecorView()`** — the root of the window-insets
+  dispatch, guaranteed to receive every pass regardless of intermediate groups.
+  Pad the bridge WebView from there (absolute padding, idempotent).
+- Keep a redundant listener on the WebView itself as belt-and-braces (harmless
+  duplicate of the same absolute padding for parents that do propagate).
+- `onResume` → `ViewCompat.requestApplyInsets(decor)` to force a pass for any
+  dispatch that happened before registration (or after re-layout/rotation).
+- `Log.d("ForgeInsets", "applied top=… bottom=…")` for on-device diagnosis via
+  `adb logcat | grep ForgeInsets` — confirms the listener fires + the real bar
+  heights.
+
+### Verified
+- assembleDebug + release green (2.6.70/100); `apkanalyzer` still targetSdk 36.
+- On-device smoke needed (no adb here): expect `ForgeInsets` log line + no
+  overlap on host and mini-apps; rotate + 3-button/gesture nav both padded.
+
+Smoke:
+```text
+[ ] adb install -r Forge-debug-rebuilt.apk → About Forge v2.6.70 (100)
+[ ] adb logcat | grep ForgeInsets  → "applied top=<n> bottom=<n>" (n>0)
+[ ] Host + mini-apps: top row below status bar; dark strip; white icons
+[ ] Rotate + gesture/3-button nav: bottom padding correct
+```
