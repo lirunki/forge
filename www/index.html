@@ -11598,7 +11598,7 @@ Permission & safety UX:
       let bytes = 0;
 
       if (Capacitor.isNativePlatform()) {
-        const res = await nativeHttpPost({ url, headers, data: body, responseType: 'arraybuffer', connectTimeout: 120000, readTimeout: 180000 });
+        const res = await nativeHttpPost({ url, headers, data: body, responseType: 'arraybuffer', connectTimeout: 60000, readTimeout: 300000 });
         ({ b64, bytes } = decodeCloudTtsBody(res.data, res.status));
       } else {
         const res = await fetch(url, {
@@ -11765,7 +11765,7 @@ Permission & safety UX:
       const headers = Object.assign({ 'Content-Type': 'application/json' }, providerAuthHeaders());
       let data;
       if (Capacitor.isNativePlatform()) {
-        const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 180000, readTimeout: 180000 });
+        const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
         if (res.status < 200 || res.status >= 300) {
@@ -11826,6 +11826,8 @@ Permission & safety UX:
     }
     async function nativeHttp(opts) {
       const maxAttempts = 3;
+      const connT = opts.connectTimeout || 60000;
+      const readT = opts.readTimeout || 120000;
       let lastErr;
       for (let i = 0; i < maxAttempts; i++) {
         if (opts.signal && opts.signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -11836,11 +11838,20 @@ Permission & safety UX:
             headers: opts.headers,
             data: opts.data,
             responseType: opts.responseType,
-            connectTimeout: opts.connectTimeout || 120000,
-            readTimeout: opts.readTimeout || 120000,
+            connectTimeout: connT,
+            readTimeout: readT,
           });
         } catch (e) {
           lastErr = e;
+          // HttpURLConnection SocketTimeoutException surfaces as a bare
+          // "timeout" message — make it actionable instead of cryptic.
+          if (e && /^timeout$/i.test(String(e.message || e))) {
+            throw new Error(
+              'Provider took longer than ' + Math.round(readT / 1000) +
+              's to respond — the model may be slow (reasoning models can take minutes).' +
+              ' Try again or pick a faster model.'
+            );
+          }
           if (opts.signal && opts.signal.aborted) throw new DOMException('Aborted', 'AbortError');
           if (!isTransientNetworkError(e) || i === maxAttempts - 1) throw e;
           if (typeof document !== 'undefined' && document.hidden) await waitForVisible(30000);
@@ -12190,7 +12201,7 @@ Permission & safety UX:
         url = urlFor(usedModel);
         try {
           if (Capacitor.isNativePlatform()) {
-            const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 180000, readTimeout: 180000 });
+            const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
             if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
             const payload = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
             let parsed;
@@ -12878,14 +12889,14 @@ Permission & safety UX:
       // Keep model in body for OpenAI-compatible providers.
 
       if (Capacitor.isNativePlatform()) {
-        const res = await nativeHttpPost({ url, headers, data: body, signal });
+        const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         if (res.status < 200 || res.status >= 300) {
           const errText = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
           // Retry once without response_format if provider rejects it
           if (body.response_format && /response_format|unknown.?parameter|unsupported/i.test(errText)) {
             delete body.response_format;
-            const res2 = await nativeHttpPost({ url, headers, data: body, signal });
+            const res2 = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
             if (res2.status < 200 || res2.status >= 300) {
               throw new Error(`API ${res2.status}: ${typeof res2.data === 'string' ? res2.data : JSON.stringify(res2.data)}`);
             }
@@ -12896,7 +12907,7 @@ Permission & safety UX:
           if (body.tools && /tools|tool_choice|unknown.?parameter|unsupported/i.test(errText)) {
             delete body.tools;
             delete body.tool_choice;
-            const res2 = await nativeHttpPost({ url, headers, data: body, signal });
+            const res2 = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
             if (res2.status < 200 || res2.status >= 300) {
               throw new Error(`API ${res2.status}: ${typeof res2.data === 'string' ? res2.data : JSON.stringify(res2.data)}`);
             }
