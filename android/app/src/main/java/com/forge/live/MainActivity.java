@@ -31,6 +31,31 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DriveBridgePlugin.class);
         registerPlugin(OpenHtmlBridgePlugin.class);
         super.onCreate(savedInstanceState);
+
+        // Android 15 (targetSdk 35) enforces edge-to-edge: without this the
+        // WebView draws behind the status bar / nav bar and mini-app UI overlaps
+        // them. Apply system-bar + display-cutout insets as WebView padding so the
+        // web content starts below the status bar. Covers RunActivity too (subclass).
+        try {
+            android.view.View wv = (getBridge() != null) ? getBridge().getWebView() : null;
+            if (wv != null) {
+                androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(wv, (v, insets) -> {
+                    androidx.core.graphics.Insets bars = insets.getInsets(
+                        androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                        | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+                    v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                    return androidx.core.view.WindowInsetsCompat.CONSUMED;
+                });
+                // Bar strips (padded area) show the window background — match host dark bg.
+                getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFF09090F));
+                // Dark strip → light (white) status/nav icons for contrast.
+                androidx.core.view.WindowCompat.getInsetsController(getWindow(), wv)
+                    .setAppearanceLightStatusBars(false);
+                androidx.core.view.WindowCompat.getInsetsController(getWindow(), wv)
+                    .setAppearanceLightNavigationBars(false);
+            }
+        } catch (Throwable ignored) {}
+
         Intent intent = getIntent();
         try { OpenHtmlBridgePlugin.captureHtmlIntent(intent); } catch (Exception ignored) {}
         if (!isRunnerInstance() && forwardOpenAppToRunner(intent)) {
