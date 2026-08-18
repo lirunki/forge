@@ -1337,3 +1337,41 @@ Smoke:
 [ ] Rotate + gesture-nav vs 3-button nav: bottom padding correct, no overlap
 [ ] Camera capture / QR scan flows still usable (watch-item above)
 ```
+
+## Target SDK 36 / Android 16 — toolchain migration (2026-08-18)
+
+**2.6.69 / versionCode 99** (from 2.6.68/98). Native build system; no host JS changes.
+
+### Why
+Google Play: new apps/updates must target API 36 (Android 16).
+
+### What changed
+| Item | Before | After |
+|---|---|---|
+| compileSdk / targetSdk | 35 | **36** (app/build.gradle + variables.gradle; Capacitor module follows ext) |
+| AGP | 8.2.2 | **8.9.2** (first AGP officially supporting compileSdk 36) |
+| Gradle wrapper | 8.2 | **8.11.1** (AGP 8.9 min) |
+| CameraX | 1.3.4 | **1.4.2** — .so 16 KB-page aligned |
+| proot SDK | platforms 34/35 | + android-36 (build-tools 35.0.0 already present) |
+
+### Verification
+- `zipalign -c -P 16 -v 4` on built APK → **exit 0** (16 KB alignment = Play hard req for 36)
+- `apkanalyzer manifest print` → `targetSdkVersion="36"`, `compileSdkVersion="36"`, minSdk 22
+- assembleDebug + release (AAB/APK) green on new toolchain (first build 7m32s cold)
+
+### Behavioral notes (target 36)
+- **Predictive back** default-on: AppCompat 1.6.1's OnBackPressedDispatcher copes; legacy
+  back paths still dispatched at commit. Watch on device (mini-app back, dialogs).
+- **16 KB page size**: devices with 16 KB pages (Pixel 2025+ A/B) now load our .so cleanly.
+- dataSync FGS 6 h/day cap, edge-to-edge — unchanged vs 35 (2.6.68 insets fix already in).
+- Remaining on Capacitor 6.1.2 (7/8 migration NOT required for 36 — avoided this release;
+  revisit when Capacitor 6 hits EOL or a feature demands it).
+
+Smoke:
+```text
+[ ] adb install -r Forge-debug-rebuilt.apk → About Forge v2.6.69 (99)
+[ ] Host boots, mini-apps run, camera capture + QR scan OK (CameraX 1.4.x)
+[ ] Back gesture/button: mini-app closes as before (predictive back watch-item)
+[ ] Status-bar insets still correct (2.6.68 fix under 36)
+[ ] Upload release-out/Forge-play-release.aab → Play accepts targetSdk 36
+```
