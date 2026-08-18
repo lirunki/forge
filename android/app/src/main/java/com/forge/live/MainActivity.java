@@ -150,6 +150,16 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Force a window-insets pass (covers any dispatch that happened before our
+        // decor listener was registered, and OEM edge cases after re-layout).
+        try {
+            androidx.core.view.ViewCompat.requestApplyInsets(getWindow().getDecorView());
+        } catch (Throwable ignored) {}
+    }
+
     @Override // com.getcapacitor.BridgeActivity, androidx.fragment.app.FragmentActivity, android.app.Activity
     public void onPause() {
         super.onPause();
