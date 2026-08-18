@@ -21,14 +21,14 @@ if (keystorePropsFile.exists()) {
 
 android {
     namespace 'com.forge.live'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.forge.live"
         minSdk 22
-        targetSdk 34
-        versionCode 91
-        versionName "2.6.61"
+        targetSdk 35
+        versionCode 92
+        versionName "2.6.62"
     }
 
     // Two distribution flavors sharing one source tree:
