@@ -10,7 +10,7 @@
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.60 / versionCode 90** (slim SYSTEM_PROMPT — 70% smaller for cheaper-model instruction-following) · prior 2.6.58/88
+| Version | **2.6.66 / versionCode 96** (FGS network keep-alive + retry for all AI HTTP; prior 2.6.65/95 retry WIP, 2.6.61/91 Play split, 2.6.60/90 slim SYSTEM_PROMPT)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,8 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-16 — 2.6.52 docs/build-gate/chatStream/ai.agent/live Patch 4 · **user verified + pushed** (commit `4a3d2e7`)
+| **Last rebuild** | 2026-08-18 — **2.6.66/96 FGS network keep-alive + retry for all AI HTTP** (pending device verify) · 2026-08-16 — 2.6.52 docs/build-gate/chatStream/ai.agent/live Patch 4 · **user verified + pushed** (commit `4a3d2e7`)
+| **Release artifacts** | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`) · GPL-3.0 · upload-key signed
 
 ### Locked product baseline
 
@@ -1198,3 +1199,105 @@ Smoke:
 5. Data Safety form: declare Camera/Mic/Location/Notifications (NO SMS/Call/Contacts in play build)
 6. Content rating + target audience + ads declaration + app access
 7. Production → Create release → upload Forge-play-release.aab → Start rollout (review 1–7d)
+
+## Backgrounded-network retry for AI calls (2026-08-18)
+
+**2.6.65 / versionCode 95** (from 2.6.63/93). Host-only, no native Java touched.
+
+### Problem (user report, Play build)
+On the **Google Play installed version**, switching away from Forge mid-AI-call (e.g. into another app) surfaces:
+`Error: Unable to resolve host "api.cheaperinference.com": No address associated with hostname`
+
+Cause: Android cuts network for backgrounded apps (Doze / Data Saver / Samsung sleeping-apps), so the in-flight or next-round native `CapacitorHttp` call dies with `UnknownHostException`. The host had **zero retry** for transient network errors — chat/agent rounds hard-failed and the mini-app showed `Error: …` (surface: `Forge_Chat.html` `'Error: ' + msg`).
+
+### Fix (`www/index.html`)
+New helpers near `chatCompletionsWithFiles`:
+- `isTransientNetworkError(e)` — matches unable-to-resolve / no-address / unknownhost / network-unreachable / failed-to-fetch / connection-reset|timed-out / ERR_NAME_NOT_RESOLVED / ERR_INTERNET_DISCONNECTED / ERR_NETWORK_CHANGED etc.
+- `waitForVisible(maxMs)` — resolves on `visibilitychange` → visible (OS restores network on resume)
+- `nativeHttpPost(opts)` — CapacitorHttp POST wrapper: up to **3 attempts** with backoff (1.2s, 2.4s); if the app is hidden, waits (≤30s) for foreground before retrying; honors `signal` (AbortError passthrough); rethrows non-transient errors immediately (4xx/5xx statuses are resolved values, never retried)
+
+Wired into:
+- `chatCompletions()` — primary + both response_format/tools-drop retries
+- `geminiGenerateContent()` native branch
+- Streaming path benefits transitively: `chatCompletionsStream` WebView-fetch failure falls back to `chatCompletions` (now retry-backed)
+- Not yet wrapped (deliberate, small patch): `toolsHttpRequest` (web_search/web_fetch GETs), model-catalog GET, cloud TTS — follow-up if backgrounded tool rounds still error
+
+### Also
+- `build_forge.sh` fixed for flavors: canonical `Forge-debug-rebuilt.apk` = **full** debug; `Forge-play-debug.apk` copied alongside (path was still pre-flavor `apk/debug/` → build "succeeded" but copy step failed)
+- Docs baselines re-synced (`docs/api.md`, `docs/tools.md` → 2.6.65/95; were stale at 2.6.60/90 vs gradle 2.6.63/93)
+- Gate: `forge_check.sh` + `forge_docs_check` PASS; both flavor debug APKs verified to contain `nativeHttpPost` + stamp `2.6.65/95`
+
+### Deploying to the Play-installed app
+The user's phone runs the **Play build** (release-signed via Play App Signing) — a debug APK **cannot** install over it. Ship path:
+1. Verify on a debug build (full or play flavor) first
+2. Commit fix (release stamp then records the right sha; current test APKs stamp HEAD `91b6670` without the fix commit)
+3. `bash forge/release_forge.sh` → upload `Forge-play-release.aab` to Play Console → rollout → Play updates users
+
+OS-level mitigation (works on the current Play version today): Settings → Apps → Forge → Battery → **Unrestricted** — reduces the background network cut.
+
+Smoke:
+```text
+[ ] adb install -r Forge-play-debug.apk (or full debug) → About Forge shows 2.6.65 (95)
+[ ] Forge Chat with cheaperinference (glm-5.2): send a message → switch away mid-reply → return → reply completes (no Unable-to-resolve error)
+[ ] Same with Gemini provider
+[ ] ai.agent multi-round: background during round 2 → return → loop continues
+[ ] Tap Stop (abort) mid-retry → aborts promptly (no zombie retries)
+[ ] Foreground behavior unchanged (single attempt when network is healthy)
+```
+
+## FGS network keep-alive for all AI calls + full retry coverage (2026-08-18)
+
+**2.6.66 / versionCode 96** (from 2.6.65/95). Host-only, no native Java touched.
+
+### Diagnosis (why 2.6.65 retry alone wasn't the whole story)
+2.6.65 recovered *after* the user returns (retry + wait-for-visible). But most mini-app AI
+calls had **no retry at all** and no network protection while backgrounded:
+
+- `CapacitorHttp.enabled:true` patches `window.fetch` — several AI paths (`/responses`,
+  cloud TTS, STT multipart, `http.get/post`, `toolsHttpRequest`, `fetchUrlAsDataUrl`)
+  used raw `CapacitorHttp.request` or patched `fetch` with **zero** transient handling
+- The **dataSync foreground service** (`BackgroundForgeService`, FOREGROUND_SERVICE_DATA_SYNC
+  in both flavors) was already proven to keep network + JS alive in background by
+  **live-translate**, but was only started by Forge-it/Reforge (`bgStart`) and live-translate
+
+### Fix 1 — unified FGS refcount (`aiFgsAcquire`)
+One service, many owners (token `Set` + 1.2 s grace before stop; `BackgroundForge.start`
+on first token, `stop` when empty — no start/stop churn between agent rounds; label on
+the first acquire wins):
+- `ai.chat` / `ai.chatStream` / `ai.agent` / `ai.transcribe` / `ai.tts` acquire for the
+  whole handler (tts holds through speech playback)
+- `bgStart`/`bgStop` (Forge-it / Reforge) now acquire/release through the same refcount
+- `liveTranslateStart/Stop` swapped direct `BackgroundForge.start/stop` for a held
+  `liveTranslateFgsRelease` token (fixes: a finishing ai.chat would have killed the
+  live-translate service)
+- `keepAwake.start/stop` mini-app API joins the refcount (stack of releases) — a
+  concurrent AI call finishing can no longer stop a mini-app's requested keep-awake
+- FGS start failure is non-fatal (`.catch(()=>{})`) — e.g. call begun while already
+  backgrounded on Android 12+ (start-from-background restricted); retry layer covers it
+
+### Fix 2 — retry coverage completed
+- `nativeHttpPost` generalized to `nativeHttp({method, responseType, …})` (POST alias kept)
+- Wrapped: `/responses` API, cloud TTS (arraybuffer), `http.get/post` bridge,
+  `toolsHttpRequest` (web_search/web_fetch), `fetchUrlAsDataUrl` (remote attachments)
+- New `fetchWithTransientRetry()` for patched-fetch one-shots — used by STT multipart
+- Not retried (by design): SSE streams (OAI/Gemini) — their fetch failure falls back to
+  the retry-backed non-stream path; model-catalog GETs (settings UI, foreground)
+
+### Housekeeping
+- Version 2.6.66/96 (gradle + docs baselines + package.json), gate green, both flavor
+  debug APKs + `release_forge.sh` release artifacts rebuilt
+- `release-out/Forge-full-release.apk` + `Forge-play-release.aab` stamped `2.6.66/96`
+  (sha `91b6670` pre-commit; rebuild after commit re-stamps)
+
+Smoke:
+```text
+[ ] adb install -r Forge-debug-rebuilt.apk → About Forge shows 2.6.66 (96)
+[ ] Forge Chat (cheaperinference): send → background mid-reply → "Forge / AI working…" FGS
+    notification appears → return → reply completed (or completed while backgrounded)
+[ ] Same with Gemini + ai.agent multi-round
+[ ] Live Translate: start (FGS) → run an ai.chat in another mini-app → chat finishes →
+    translate FGS notification still alive until stop
+[ ] Kitchen sink: keepAwake.start → ai.chat → keepAwake.stop still stops service after
+[ ] Background → foreground unchanged when network healthy (no retry latency)
+[ ] Deploy: upload release-out/Forge-play-release.aab to Play Console → Production release
+```
