@@ -1301,3 +1301,39 @@ Smoke:
 [ ] Background → foreground unchanged when network healthy (no retry latency)
 [ ] Deploy: upload release-out/Forge-play-release.aab to Play Console → Production release
 ```
+
+## Mini-apps overlapping Android status bar — edge-to-edge on targetSdk 35 (2026-08-18)
+
+**2.6.68 / versionCode 98** (from 2.6.67/97). Native Java only.
+
+### User report
+Mini-apps lost top buffer space and overlapped the Android status bar.
+
+### Cause
+The **compileSdk/targetSdk 34→35 bump** (commit `49f87bc`, Play requirement). Android 15
+**enforces edge-to-edge** for SDK-35 apps: the window ignores `fitSystemWindows` legacy
+behavior at the decor level and content draws behind status/nav bars. Capacitor's
+`BridgeActivity` does no inset handling of its own (`setContentView(bridge_layout_main)`),
+so the WebView filled the entire screen — host + every mini-app (RunActivity).
+
+### Fix (`MainActivity.onCreate`, after `super.onCreate`)
+- `ViewCompat.setOnApplyWindowInsetsListener(webView, …)`: pads the WebView by
+  `systemBars() | displayCutout()` insets; returns CONSUMED. Covers **RunActivity**
+  (subclass of MainActivity) and any bridge-hosted window — one fix, all windows.
+- Window background → `#09090F` (host `--bg`) so the padded bar strips look like app chrome.
+- Forced **light status/nav icons** (`setAppearanceLightStatusBars(false)`) for contrast
+  on the dark strip.
+- All via fully-qualified androidx.core names inside try/catch — no new imports/deps
+  (androidx.core ships with appcompat 1.6.1).
+
+Watch-item: QrScanActivity / CameraXCaptureActivity use their own layouts and may now
+also draw under bars — check on device; same one-liner applies if needed.
+
+Smoke:
+```text
+[ ] adb install -r Forge-debug-rebuilt.apk → About Forge v2.6.68 (98)
+[ ] Host: top tab bar sits below status bar; dark strip behind status bar; white icons
+[ ] Mini-app (Chess_vs_LLM): title row visible below status bar, no overlap
+[ ] Rotate + gesture-nav vs 3-button nav: bottom padding correct, no overlap
+[ ] Camera capture / QR scan flows still usable (watch-item above)
+```
