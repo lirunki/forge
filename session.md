@@ -1437,3 +1437,23 @@ Smoke (replaces 2.6.70 checklist):
 [ ] Host + mini-apps clear of status bar; dark strip + white icons
 [ ] Rotation + gesture/3-button nav correct
 ```
+
+## 2.6.72/102 — margins not padding (2026-08-19)
+
+Logcat confirmed the decor listener fires with real heights
+(`ForgeInsets: decor pass: top=95 bottom=39 left=0 right=0`) yet overlap
+persisted. Cause: Android WebView (Chromium) is unreliable about shifting its
+rendered content for `setPadding` — the page can keep painting at the top of the
+view bounds. Switched to layout **margins** on the WebView (`MarginLayoutParams
+.setMargins` + `requestLayout`), honored natively by the parent
+CoordinatorLayout — physically shrinks the view bounds so content cannot reach
+the bars. This is the approach Capacitor 7 settled on. Idempotent absolute
+margins per pass.
+
+Smoke:
+```text
+[ ] adb install -r Forge-debug-rebuilt.apk → About v2.6.72 (102)
+[ ] adb logcat -s ForgeInsets → "decor pass: top=95 bottom=39 …"
+[ ] Host + mini-apps: content starts below status bar; dark strip + white icons
+[ ] Rotation + gesture/3-button nav: bottom margin correct
+```
