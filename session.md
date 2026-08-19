@@ -5,12 +5,12 @@
 
 ---
 
-## Status (LOCKED baseline 2026-08-07 · host restored 2026-08-10)
+## Status (LOCKED baseline 2026-08-07 · host restored 2026-08-10 · refreshed 2026-08-19 @ 2.6.72/102 — session closed)
 
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.67 / versionCode 97** (10-min AI read timeouts + friendly timeout msg; prior 2.6.66/96 FGS keep-alive, 2.6.61/91 Play split, 2.6.60/90 slim SYSTEM_PROMPT)
+| Version | **2.6.72 / versionCode 102** (edge-to-edge insets fix, device-verified 2026-08-19; prior 2.6.71/101 decor-listener, 2.6.70/100 attempt, 2.6.69/99 SDK-36 migration, 2.6.68/98 insets v1, 2.6.67/97 timeouts, 2.6.66/96 FGS keep-alive, 2.6.61/91 Play split, 2.6.60/90 slim SYSTEM_PROMPT)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -18,7 +18,7 @@
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | 2026-08-18 — **2.6.66/96 FGS network keep-alive + retry for all AI HTTP** (pending device verify) · 2026-08-16 — 2.6.52 docs/build-gate/chatStream/ai.agent/live Patch 4 · **user verified + pushed** (commit `4a3d2e7`)
+| **Last rebuild** | **2026-08-19 — 2.6.72/102 edge-to-edge insets fix (margins not padding), DEVICE-VERIFIED** (commit `e2b77a2`) · 2026-08-18 — 2.6.69/99 SDK-36 migration (`5293411`) · 2026-08-18 — 2.6.66/96 FGS keep-alive
 | **Release artifacts** | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`) · GPL-3.0 · upload-key signed
 
 ### Locked product baseline
@@ -1460,3 +1460,21 @@ Smoke:
 
 **STATUS: FIXED & DEVICE-VERIFIED at 2.6.72/102 (e2b77a2).** The full fix
 chain: decor-view listener (2.6.71) + margins-not-padding (2.6.72).
+
+## Session close — 2026-08-19 (LOCKED @ 2.6.72/102)
+
+**All work device-verified and locked. State at close:**
+
+| Item | State |
+|------|-------|
+| App version | **2.6.72 / versionCode 102** (HEAD `e2b77a2`, SDK 36, AGP 8.9.2, Gradle 8.11.1, CameraX 1.4.2, 16 KB-aligned) |
+| Status-bar overlap | **FIXED & VERIFIED** — decor-view insets listener (2.6.71) + margins-not-padding (2.6.72); `adb logcat -s ForgeInsets` shows `top=95 bottom=39` |
+| FGS network keep-alive | 2.6.66/96 — refcounted dataSync service for all AI HTTP; shipped |
+| AI timeouts | 2.6.67/97 — 600 s read timeouts + friendly message; shipped |
+| SDK-36 migration | 2.6.69/99 — target/compile 36, zipalign 16 KB pass; shipped |
+| Release artifacts | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` @ 2.6.72/102 (also `/sdcard/Download/`) |
+| Play closed test | **Track live** (`play.google.com/apps/testing/com.forge.live`), AAB 2.6.72 published. Gate: personal account → need **12 testers opted-in + 14 days**, then Dashboard → Apply for production access. NOT yet done — pending testers. |
+| Play App content | Pending: data-safety form, content rating, privacy-policy URL (not drafted) |
+| Icon | Current = original. Where: APK `res/mipmap-*/ic_launcher*` + Play listing 512×512 upload; swap not done (option A `@capacitor/assets` recommended) |
+
+**Next session pickup points:** (1) 12-tester closed test + production-access application; (2) privacy.html + data-safety cheat sheet; (3) optional icon swap via `@capacitor/assets`; (4) optional: chatStream Forge-it, chess-as-Black, web_fetch readability fallback, Capacitor 7/8 migration (no pressure).
