@@ -47,7 +47,7 @@ public class MainActivity extends BridgeActivity {
                     | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
                 android.view.View wv = (getBridge() != null) ? getBridge().getWebView() : null;
                 if (wv != null) {
-                    wv.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                    applyBarInsets(wv, bars);
                     android.util.Log.d("ForgeInsets", "decor pass: top=" + bars.top + " bottom=" + bars.bottom + " left=" + bars.left + " right=" + bars.right);
                 }
                 return androidx.core.view.WindowInsetsCompat.CONSUMED;
@@ -58,7 +58,7 @@ public class MainActivity extends BridgeActivity {
                     androidx.core.graphics.Insets bars = insets.getInsets(
                         androidx.core.view.WindowInsetsCompat.Type.systemBars()
                         | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
-                    v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                    applyBarInsets(v, bars);
                     return androidx.core.view.WindowInsetsCompat.CONSUMED;
                 });
                 getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFF09090F));
@@ -164,6 +164,22 @@ public class MainActivity extends BridgeActivity {
             }
         } catch (Exception e) {
         }
+    }
+
+    /** Apply system-bar/cutout insets as layout MARGINS (not padding) on the bridge
+     *  WebView. Padding is unreliable on Android WebView (Chromium often paints
+     *  content at the top of the view bounds regardless of padding); margins are
+     *  honored by the parent CoordinatorLayout, physically shrinking the view so
+     *  content cannot reach the bars. Idempotent — sets absolute margins each pass. */
+    private static void applyBarInsets(android.view.View v, androidx.core.graphics.Insets bars) {
+        try {
+            android.view.ViewGroup.LayoutParams lp = v.getLayoutParams();
+            if (lp instanceof android.view.ViewGroup.MarginLayoutParams) {
+                android.view.ViewGroup.MarginLayoutParams mlp = (android.view.ViewGroup.MarginLayoutParams) lp;
+                mlp.setMargins(bars.left, bars.top, bars.right, bars.bottom);
+                v.requestLayout();
+            }
+        } catch (Throwable ignored) {}
     }
 
     @Override
