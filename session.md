@@ -1412,3 +1412,28 @@ Smoke:
 [ ] Host + mini-apps: top row below status bar; dark strip; white icons
 [ ] Rotate + gesture/3-button nav: bottom padding correct
 ```
+
+## 2.6.71/101 — the fix that 2.6.70 claimed but didn't contain (2026-08-19)
+
+**Root cause of the continued overlap:** the 2.6.70 "decor view" commit was
+missing its main hunk. The edit call that replaces the WebView-only listener
+with the decor-view listener failed atomically (its second anchor didn't match
+the file), and only the onResume half got retried. Net: 2.6.70 shipped with
+NO listener registration — just the onResume nudge — so nothing ever padded
+the WebView. Detected when user's logcat showed no ForgeInsets lines and a
+grep of MainActivity confirmed no getDecorView listener.
+
+**2.6.71/101 contains:**
+- `setOnApplyWindowInsetsListener(decor)` → pads bridge WebView (absolute,
+  idempotent). Decor = root of insets dispatch; CoordinatorLayout can't starve it.
+- Redundant WebView listener kept (harmless).
+- `onResume` → `requestApplyInsets(decor)` forces a pass after registration.
+- Logs: `adb logcat -s ForgeInsets` → "decor pass: top=… bottom=…".
+
+Smoke (replaces 2.6.70 checklist):
+```text
+[ ] adb install -r Forge-debug-rebuilt.apk → About v2.6.71 (101)
+[ ] adb logcat -s ForgeInsets → "decor pass: top=<n> …" (n>0) while Forge foregrounded
+[ ] Host + mini-apps clear of status bar; dark strip + white icons
+[ ] Rotation + gesture/3-button nav correct
+```
