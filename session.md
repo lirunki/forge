@@ -1478,3 +1478,21 @@ chain: decor-view listener (2.6.71) + margins-not-padding (2.6.72).
 | Icon | Current = original. Where: APK `res/mipmap-*/ic_launcher*` + Play listing 512×512 upload; swap not done (option A `@capacitor/assets` recommended) |
 
 **Next session pickup points:** (1) 12-tester closed test + production-access application; (2) privacy.html + data-safety cheat sheet; (3) optional icon swap via `@capacitor/assets`; (4) optional: chatStream Forge-it, chess-as-Black, web_fetch readability fallback, Capacitor 7/8 migration (no pressure).
+
+## Donate button in AI menu (2026-08-19 · 2.6.73/103)
+
+User claimed `paypal.me/forgedevthanksyou`. Added `☕ Support development`
+button at the bottom of the AI settings card (`www/index.html` + assets sync,
+host-only, no native change). Opens PayPal **in the system browser** via
+existing `openExternalUrl` (anchor target=_blank → external on Capacitor).
+
+**Compliance posture (why this is safe):**
+- Play: donation link-out with **no in-app benefit** → outside Google Play
+  Billing scope; standard "buy me a coffee" pattern.
+- F-Droid: donations allowed; can later add `Donate:` metadata. No anti-feature.
+- Button hint explicitly says "donating unlocks nothing".
+
+```text
+[ ] Smoke: AI tab → bottom → '☕ Support development' → PayPal page opens in browser
+[ ] Play closed-test track: optionally roll 2.6.73 to testers (same versionCode progression 103 > 102)
+```
