@@ -1395,6 +1395,11 @@ termux-reload-settings</div>
 
             </div>
           </details>
+
+          <div class="settings-block" style="margin-top:0.6rem;padding-top:0.55rem;border-top:1px solid var(--border);">
+            <button class="btn secondary small" id="btnDonate" type="button">☕ Support development</button>
+            <p class="field-hint" style="margin:0.35rem 0 0;">Optional tip via PayPal — opens in your browser. Forge is free; donating unlocks nothing, it just helps the dev.</p>
+          </div>
         </div>
 
         <div class="card">
@@ -1969,6 +1974,7 @@ termux-reload-settings</div>
       azureAuth: document.getElementById('azureAuth'),
       btnForgetKey: document.getElementById('btnForgetKey'),
       btnTestAi: document.getElementById('btnTestAi'),
+      btnDonate: document.getElementById('btnDonate'),
       btnMiniConsole: document.getElementById('btnMiniConsole'),
       btnMiniConsoleClear: document.getElementById('btnMiniConsoleClear'),
       btnMiniConsoleCopy: document.getElementById('btnMiniConsoleCopy'),
@@ -16397,6 +16403,11 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       } finally {
         if (el.importFile) el.importFile.value = '';
       }
+    });
+    el.btnDonate?.addEventListener('click', () => {
+      // External browser via anchor/_blank (system browser on Capacitor). No in-app
+      // purchase, no gating — donation link only (Play/F-Droid compliant).
+      openExternalUrl('https://www.paypal.me/forgedevthanksyou');
     });
     el.btnForgetKey?.addEventListener('click', () => {
       const id = currentProviderId();
