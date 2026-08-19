@@ -34,9 +34,24 @@ public class MainActivity extends BridgeActivity {
 
         // Android 15 (targetSdk 35) enforces edge-to-edge: without this the
         // WebView draws behind the status bar / nav bar and mini-app UI overlaps
-        // them. Apply system-bar + display-cutout insets as WebView padding so the
-        // web content starts below the status bar. Covers RunActivity too (subclass).
+        // them. Capacitor wraps the WebView in a CoordinatorLayout which does NOT
+        // forward insets to children unless fitsSystemWindows=true, so a listener
+        // on the WebView alone never fires — listen on the DECOR view (root of
+        // insets dispatch) and pad the WebView from there. Covers RunActivity too
+        // (subclass). onResume() forces a re-dispatch via requestApplyInsets.
         try {
+            final android.view.View decor = getWindow().getDecorView();
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(decor, (v, insets) -> {
+                androidx.core.graphics.Insets bars = insets.getInsets(
+                    androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                    | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+                android.view.View wv = (getBridge() != null) ? getBridge().getWebView() : null;
+                if (wv != null) {
+                    wv.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                    android.util.Log.d("ForgeInsets", "decor pass: top=" + bars.top + " bottom=" + bars.bottom + " left=" + bars.left + " right=" + bars.right);
+                }
+                return androidx.core.view.WindowInsetsCompat.CONSUMED;
+            });
             android.view.View wv = (getBridge() != null) ? getBridge().getWebView() : null;
             if (wv != null) {
                 androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(wv, (v, insets) -> {
@@ -46,7 +61,6 @@ public class MainActivity extends BridgeActivity {
                     v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
                     return androidx.core.view.WindowInsetsCompat.CONSUMED;
                 });
-                // Bar strips (padded area) show the window background — match host dark bg.
                 getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFF09090F));
                 // Dark strip → light (white) status/nav icons for contrast.
                 androidx.core.view.WindowCompat.getInsetsController(getWindow(), wv)
@@ -54,7 +68,9 @@ public class MainActivity extends BridgeActivity {
                 androidx.core.view.WindowCompat.getInsetsController(getWindow(), wv)
                     .setAppearanceLightNavigationBars(false);
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            android.util.Log.w("ForgeInsets", "insets setup failed", t);
+        }
 
         Intent intent = getIntent();
         try { OpenHtmlBridgePlugin.captureHtmlIntent(intent); } catch (Exception ignored) {}
