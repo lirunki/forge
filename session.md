@@ -1452,8 +1452,11 @@ margins per pass.
 
 Smoke:
 ```text
-[ ] adb install -r Forge-debug-rebuilt.apk → About v2.6.72 (102)
-[ ] adb logcat -s ForgeInsets → "decor pass: top=95 bottom=39 …"
-[ ] Host + mini-apps: content starts below status bar; dark strip + white icons
-[ ] Rotation + gesture/3-button nav: bottom margin correct
+[x] adb install -r Forge-debug-rebuilt.apk → About v2.6.72 (102)
+[x] adb logcat -s ForgeInsets → "decor pass: top=95 bottom=39 …"
+[x] Host + mini-apps: content starts below status bar; dark strip + white icons  (user-verified 2026-08-19: "wonderful")
+[ ] Rotation + gesture/3-button nav: bottom margin correct  (spot-check next use)
 ```
+
+**STATUS: FIXED & DEVICE-VERIFIED at 2.6.72/102 (e2b77a2).** The full fix
+chain: decor-view listener (2.6.71) + margins-not-padding (2.6.72).
