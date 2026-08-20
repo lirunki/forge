@@ -3,6 +3,12 @@
 ## ⛔ INVARIANT
 **Never delete folders without explicit user permission.** See [`INVARIANTS.md`](INVARIANTS.md).
 
+## 🔧 BUILD & RELEASE RUNBOOK — READ FIRST
+For any build, release, install, version bump, push, or i18n regen, see
+[`BUILD.md`](BUILD.md) (committed in the repo + on GitHub; survives device reset).
+Don't rediscover the tooling limits / script paths / keystore cert each session —
+it's all there.
+
 ---
 
 ## Status (LOCKED baseline 2026-08-07 · host restored 2026-08-10 · refreshed 2026-08-19 @ 2.6.72/102 — session closed)
