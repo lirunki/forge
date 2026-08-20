@@ -784,6 +784,20 @@
       padding: 0;
     }
     .setup-overlay.hidden { display: none !important; }
+    /* Share-backup selection sheet */
+    .share-back-list { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.4rem 0 0.7rem; }
+    .share-back-row {
+      display: flex; align-items: center; gap: 0.55rem;
+      padding: 0.5rem 0.55rem; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--bg);
+      cursor: pointer;
+    }
+    .share-back-row:active { transform: scale(0.997); }
+    .share-back-row .sb-check { flex: 0 0 auto; width: 1.1rem; height: 1.1rem; }
+    .share-back-row .sb-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .share-back-row .sb-meta { flex: 0 0 auto; color: var(--muted); font-size: 0.72rem; }
+    .share-back-section { font-size: 0.78rem; font-weight: 700; color: var(--muted); margin: 0.7rem 0 0.15rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .share-back-presets { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
     .setup-sheet {
       width: 100%; max-width: 520px; max-height: min(92vh, 760px);
       overflow: auto; -webkit-overflow-scrolling: touch;
@@ -1064,6 +1078,28 @@ termux-reload-settings</div>
         <button class="btn small" id="btnMiniConsoleCopySheet" type="button" data-i18n="common.copy">Copy</button>
         <button class="btn secondary small" id="btnMiniConsoleClearSheet" type="button" data-i18n="common.clear">Clear</button>
         <button class="btn secondary small" id="btnMiniConsoleClose" type="button" data-i18n="common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share backup as ZIP (select what to include) -->
+  <div id="shareBackupOverlay" class="setup-overlay hidden" aria-modal="true" role="dialog" aria-labelledby="shareBackupTitle">
+    <div class="setup-sheet">
+      <h2 id="shareBackupTitle" data-i18n="shareBackup.title">Share backup</h2>
+      <p class="setup-lead" data-i18n-html="shareBackup.lead">Pick what to include. The ZIP keeps the ForgeLibrary layout — another phone can Restore from it.</p>
+      <div class="share-back-presets">
+        <button class="btn small" id="btnSharePresetAll" type="button" data-i18n="shareBackup.everything">Everything</button>
+        <button class="btn secondary small" id="btnSharePresetConfig" type="button" data-i18n="shareBackup.configOnly">AI config only</button>
+        <button class="btn secondary small" id="btnSharePresetApps" type="button" data-i18n="shareBackup.appsOnly">Apps only</button>
+      </div>
+      <div class="share-back-section" data-i18n="shareBackup.configSection">AI config (providers + keys)</div>
+      <div class="share-back-list" id="shareBackupConfigList"></div>
+      <div class="share-back-section" data-i18n="shareBackup.appsSection">Mini-apps</div>
+      <div class="share-back-list" id="shareBackupAppList"></div>
+      <div class="status-line" id="shareBackupStatus" style="margin:0.5rem 0;"></div>
+      <div class="settings-block" style="margin:0;">
+        <button class="btn" id="btnShareBackupGo" type="button" data-i18n="shareBackup.create">Create &amp; share ZIP</button>
+        <button class="btn secondary small" id="btnShareBackupCancel" type="button" data-i18n="common.cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -1414,6 +1450,7 @@ termux-reload-settings</div>
             <button class="btn small" id="btnDriveConnect" type="button" data-i18n="drive.choose">Choose folder</button>
             <button class="btn secondary small" id="btnDriveBackupSettings" type="button" data-i18n="drive.backupNow">Backup now</button>
             <button class="btn secondary small" id="btnDriveRestoreSettings" type="button" data-i18n="drive.restore">Restore…</button>
+            <button class="btn secondary small" id="btnShareBackup" type="button" data-i18n="drive.shareBackup">Share backup…</button>
             <button class="btn secondary small" id="btnDriveDisconnect" type="button" data-i18n="drive.disconnect">Disconnect</button>
           </div>
           <p class="field-hint" style="margin-top:0.55rem;margin-bottom:0;" data-i18n-html="drive.hint2">
@@ -1657,6 +1694,25 @@ termux-reload-settings</div>
     "drive.backupDone": "Backup done — {up} uploaded, {same} unchanged, {total} in folder{note}",
     "drive.backupFailed": "Backup failed: {msg}",
     "drive.backupNow": "Backup now",
+    "drive.shareBackup": "Share backup…",
+    "shareBackup.title": "Share backup",
+    "shareBackup.lead": "Pick what to include. The ZIP keeps the ForgeLibrary layout — another phone can Restore from it.",
+    "shareBackup.everything": "Everything",
+    "shareBackup.configOnly": "AI config only",
+    "shareBackup.appsOnly": "Apps only",
+    "shareBackup.configSection": "AI config (providers + keys)",
+    "shareBackup.appsSection": "Mini-apps",
+    "shareBackup.hasKey": "key saved",
+    "shareBackup.noKey": "no key",
+    "shareBackup.custom": "custom",
+    "shareBackup.create": "Create & share ZIP",
+    "shareBackup.pickFirst": "Pick at least one item first.",
+    "shareBackup.building": "Building ZIP…",
+    "shareBackup.sharing": "Opening share sheet…",
+    "shareBackup.shareText": "Forge backup {date}",
+    "shareBackup.done": "ZIP ready — {n} file(s) shared.",
+    "shareBackup.cancelled": "Share cancelled",
+    "shareBackup.failed": "Share backup failed: {msg}",
     "drive.checking": "Checking backup folder…",
     "drive.choose": "Choose folder",
     "drive.connected": "Folder connected",
@@ -2096,6 +2152,25 @@ termux-reload-settings</div>
     "drive.backupDone": "Copia hecha — {up} subidos, {same} sin cambios, {total} en la carpeta{note}",
     "drive.backupFailed": "Falló la copia: {msg}",
     "drive.backupNow": "Copiar ahora",
+    "drive.shareBackup": "Compartir copia…",
+    "shareBackup.title": "Compartir copia de seguridad",
+    "shareBackup.lead": "Elige qué incluir. El ZIP mantiene el formato ForgeLibrary — otro teléfono puede Restaurar desde él.",
+    "shareBackup.everything": "Todo",
+    "shareBackup.configOnly": "Solo config. IA",
+    "shareBackup.appsOnly": "Solo apps",
+    "shareBackup.configSection": "Config. IA (proveedores + claves)",
+    "shareBackup.appsSection": "Mini-apps",
+    "shareBackup.hasKey": "clave guardada",
+    "shareBackup.noKey": "sin clave",
+    "shareBackup.custom": "personalizado",
+    "shareBackup.create": "Crear y compartir ZIP",
+    "shareBackup.pickFirst": "Elige al menos un elemento.",
+    "shareBackup.building": "Creando ZIP…",
+    "shareBackup.sharing": "Abriendo hoja de compartir…",
+    "shareBackup.shareText": "Copia de Forge {date}",
+    "shareBackup.done": "ZIP listo — {n} archivo(s) compartido(s).",
+    "shareBackup.cancelled": "Compartir cancelado",
+    "shareBackup.failed": "Error al compartir la copia: {msg}",
     "drive.checking": "Comprobando carpeta de copia…",
     "drive.choose": "Elegir carpeta",
     "drive.connected": "Carpeta conectada",
@@ -2604,6 +2679,25 @@ termux-reload-settings</div>
     "drive.backupDone": "Sauvegarde terminée — {up} envoyées, {same} inchangées, {total} dans le dossier{note}",
     "drive.backupFailed": "Échec de la sauvegarde : {msg}",
     "drive.backupNow": "Sauvegarder",
+    "drive.shareBackup": "Partager la sauvegarde…",
+    "shareBackup.title": "Partager la sauvegarde",
+    "shareBackup.lead": "Choisissez quoi inclure. Le ZIP garde la structure ForgeLibrary — un autre téléphone peut Restaurer depuis celui-ci.",
+    "shareBackup.everything": "Tout",
+    "shareBackup.configOnly": "Config IA seulement",
+    "shareBackup.appsOnly": "Apps seulement",
+    "shareBackup.configSection": "Config IA (fournisseurs + clés)",
+    "shareBackup.appsSection": "Mini-apps",
+    "shareBackup.hasKey": "clé enregistrée",
+    "shareBackup.noKey": "pas de clé",
+    "shareBackup.custom": "personnalisé",
+    "shareBackup.create": "Créer et partager le ZIP",
+    "shareBackup.pickFirst": "Choisissez au moins un élément.",
+    "shareBackup.building": "Création du ZIP…",
+    "shareBackup.sharing": "Ouverture du partage…",
+    "shareBackup.shareText": "Sauvegarde Forge {date}",
+    "shareBackup.done": "ZIP prêt — {n} fichier(s) partagé(s).",
+    "shareBackup.cancelled": "Partage annulé",
+    "shareBackup.failed": "Échec du partage : {msg}",
     "drive.checking": "Vérification du dossier de sauvegarde…",
     "drive.choose": "Choisir un dossier",
     "drive.connected": "Dossier connecté",
@@ -3112,6 +3206,25 @@ termux-reload-settings</div>
     "drive.backupDone": "Backup concluído — {up} enviados, {same} inalterados, {total} na pasta{note}",
     "drive.backupFailed": "Falha no backup: {msg}",
     "drive.backupNow": "Fazer backup",
+    "drive.shareBackup": "Compartilhar backup…",
+    "shareBackup.title": "Compartilhar backup",
+    "shareBackup.lead": "Escolha o que incluir. O ZIP mantém o layout ForgeLibrary — outro celular pode Restaurar a partir dele.",
+    "shareBackup.everything": "Tudo",
+    "shareBackup.configOnly": "Só config. IA",
+    "shareBackup.appsOnly": "Só apps",
+    "shareBackup.configSection": "Config. IA (provedores + chaves)",
+    "shareBackup.appsSection": "Mini-apps",
+    "shareBackup.hasKey": "chave salva",
+    "shareBackup.noKey": "sem chave",
+    "shareBackup.custom": "personalizado",
+    "shareBackup.create": "Criar e compartilhar ZIP",
+    "shareBackup.pickFirst": "Escolha ao menos um item.",
+    "shareBackup.building": "Criando ZIP…",
+    "shareBackup.sharing": "Abrindo compartilhamento…",
+    "shareBackup.shareText": "Backup do Forge {date}",
+    "shareBackup.done": "ZIP pronto — {n} arquivo(s) compartilhado(s).",
+    "shareBackup.cancelled": "Compartilhamento cancelado",
+    "shareBackup.failed": "Falha ao compartilhar backup: {msg}",
     "drive.checking": "Verificando pasta de backup…",
     "drive.choose": "Escolher pasta",
     "drive.connected": "Pasta conectada",
@@ -3620,6 +3733,25 @@ termux-reload-settings</div>
     "drive.backupDone": "バックアップ完了 — {up}件アップロード、{same}件変更なし、フォルダーに{total}件{note}",
     "drive.backupFailed": "バックアップに失敗：{msg}",
     "drive.backupNow": "今すぐバックアップ",
+    "drive.shareBackup": "バックアップを共有…",
+    "shareBackup.title": "バックアップを共有",
+    "shareBackup.lead": "含めるものを選択。ZIPはForgeLibraryレイアウトを保つ — 別のスマホでそこから復元できます。",
+    "shareBackup.everything": "すべて",
+    "shareBackup.configOnly": "AI設定のみ",
+    "shareBackup.appsOnly": "アプリのみ",
+    "shareBackup.configSection": "AI設定（プロバイダー＋キー）",
+    "shareBackup.appsSection": "ミニアプリ",
+    "shareBackup.hasKey": "キー保存済み",
+    "shareBackup.noKey": "キーなし",
+    "shareBackup.custom": "カスタム",
+    "shareBackup.create": "ZIP作成＆共有",
+    "shareBackup.pickFirst": "少なくとも1つ選択してください。",
+    "shareBackup.building": "ZIP作成中…",
+    "shareBackup.sharing": "共有シートを開いています…",
+    "shareBackup.shareText": "Forgeバックアップ {date}",
+    "shareBackup.done": "ZIP完了 — {n}ファイルを共有しました。",
+    "shareBackup.cancelled": "共有をキャンセルしました",
+    "shareBackup.failed": "バックアップ共有に失敗：{msg}",
     "drive.checking": "バックアップフォルダー確認中…",
     "drive.choose": "フォルダーを選択",
     "drive.connected": "フォルダーを接続しました",
@@ -4128,6 +4260,25 @@ termux-reload-settings</div>
     "drive.backupDone": "백업 완료 — {up} 업로드, {same} 변경 없음, 폴더에 {total}개{note}",
     "drive.backupFailed": "백업 실패: {msg}",
     "drive.backupNow": "지금 백업",
+    "drive.shareBackup": "백업 공유…",
+    "shareBackup.title": "백업 공유",
+    "shareBackup.lead": "포함할 항목을 고르세요. ZIP은 ForgeLibrary 레이아웃을 유지 — 다른 폰에서 복원할 수 있습니다.",
+    "shareBackup.everything": "전체",
+    "shareBackup.configOnly": "AI 설정만",
+    "shareBackup.appsOnly": "앱만",
+    "shareBackup.configSection": "AI 설정(제공자 + 키)",
+    "shareBackup.appsSection": "미니 앱",
+    "shareBackup.hasKey": "키 저장됨",
+    "shareBackup.noKey": "키 없음",
+    "shareBackup.custom": "사용자 지정",
+    "shareBackup.create": "ZIP 만들기 & 공유",
+    "shareBackup.pickFirst": "최소 하나는 선택하세요.",
+    "shareBackup.building": "ZIP 만드는 중…",
+    "shareBackup.sharing": "공유 시트 여는 중…",
+    "shareBackup.shareText": "Forge 백업 {date}",
+    "shareBackup.done": "ZIP 준비됨 — {n}개 파일 공유됨.",
+    "shareBackup.cancelled": "공유 취소됨",
+    "shareBackup.failed": "백업 공유 실패: {msg}",
     "drive.checking": "백업 폴더 확인 중…",
     "drive.choose": "폴더 선택",
     "drive.connected": "폴더 연결됨",
@@ -5009,6 +5160,16 @@ termux-reload-settings</div>
       btnDriveBackupSettings: document.getElementById('btnDriveBackupSettings'),
       btnDriveRestoreSettings: document.getElementById('btnDriveRestoreSettings'),
       btnDriveDisconnect: document.getElementById('btnDriveDisconnect'),
+      btnShareBackup: document.getElementById('btnShareBackup'),
+      shareBackupOverlay: document.getElementById('shareBackupOverlay'),
+      shareBackupConfigList: document.getElementById('shareBackupConfigList'),
+      shareBackupAppList: document.getElementById('shareBackupAppList'),
+      shareBackupStatus: document.getElementById('shareBackupStatus'),
+      btnSharePresetAll: document.getElementById('btnSharePresetAll'),
+      btnSharePresetConfig: document.getElementById('btnSharePresetConfig'),
+      btnSharePresetApps: document.getElementById('btnSharePresetApps'),
+      btnShareBackupGo: document.getElementById('btnShareBackupGo'),
+      btnShareBackupCancel: document.getElementById('btnShareBackupCancel'),
       driveStatusLine: document.getElementById('driveStatusLine'),
       importFile: document.getElementById('importFile'),
       libStatus: document.getElementById('libStatus'),
@@ -7737,6 +7898,217 @@ termux-reload-settings</div>
         const msg = e?.message || String(e);
         if (/cancel/i.test(msg)) status(t('drive.restoreCancelled'), '');
         else status(t('drive.restoreFailed', { msg: msg }), 'err');
+      }
+    }
+
+    // ——— Share backup as ZIP (select what to include) ———
+    // Dependency-free STORE-only ZIP writer (no network, no compression).
+    // The ZIP keeps the ForgeLibrary/ layout so another phone can Restore from it.
+    const _ZIP_CRC = (() => {
+      const tab = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        tab[i] = c >>> 0;
+      }
+      return tab;
+    })();
+    function _zipCrc32(bytes) {
+      let c = 0xFFFFFFFF;
+      for (let i = 0; i < bytes.length; i++) c = _ZIP_CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    }
+    function _u16(dv, off, v) { dv.setUint16(off, v, true); }
+    function _u32(dv, off, v) { dv.setUint32(off, v, true); }
+    function buildZip(files) {
+      const enc = new TextEncoder();
+      const out = [];
+      const central = [];
+      let offset = 0;
+      for (const f of files) {
+        const name = enc.encode(String(f.name));
+        const data = typeof f.data === 'string' ? enc.encode(f.data) : f.data;
+        const crc = _zipCrc32(data);
+        const lfh = new Uint8Array(30 + name.length);
+        const lv = new DataView(lfh.buffer);
+        _u32(lv, 0, 0x04034b50); _u16(lv, 4, 20); _u16(lv, 6, 0); _u16(lv, 8, 0);
+        _u16(lv, 10, 0); _u16(lv, 12, 0); _u32(lv, 14, crc);
+        _u32(lv, 18, data.length); _u32(lv, 22, data.length);
+        _u16(lv, 26, name.length); _u16(lv, 28, 0);
+        lfh.set(name, 30);
+        const cdr = new Uint8Array(46 + name.length);
+        const cv = new DataView(cdr.buffer);
+        _u32(cv, 0, 0x02014b50); _u16(cv, 4, 20); _u16(cv, 6, 20); _u16(cv, 8, 0);
+        _u16(cv, 10, 0); _u16(cv, 12, 0); _u16(cv, 14, 0); _u32(cv, 16, crc);
+        _u32(cv, 20, data.length); _u32(cv, 24, data.length);
+        _u16(cv, 28, name.length); _u16(cv, 30, 0); _u16(cv, 32, 0);
+        _u16(cv, 34, 0); _u16(cv, 36, 0); _u32(cv, 38, 0); _u32(cv, 42, offset);
+        cdr.set(name, 46);
+        out.push(lfh, data);
+        central.push(cdr);
+        offset += lfh.length + data.length;
+      }
+      const cdBytes = central.reduce((a, c) => a + c.length, 0);
+      const eocd = new Uint8Array(22);
+      const ev = new DataView(eocd.buffer);
+      _u32(ev, 0, 0x06054b50); _u16(ev, 4, 0); _u16(ev, 6, 0);
+      _u16(ev, 8, files.length); _u16(ev, 10, files.length);
+      _u32(ev, 12, cdBytes); _u32(ev, 16, offset); _u16(ev, 20, 0);
+      out.push(...central, eocd);
+      let total = 0; for (const c of out) total += c.length;
+      const res = new Uint8Array(total); let p = 0;
+      for (const c of out) { res.set(c, p); p += c.length; }
+      return res;
+    }
+    function _bytesToBase64(bytes) {
+      let s = '';
+      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return btoa(s);
+    }
+
+    function _shareBackupRows(list, getKey, getLabel, getMeta) {
+      return list.map(item => {
+        const key = getKey(item);
+        return { key, label: getLabel(item), meta: getMeta(item) };
+      });
+    }
+
+    function openShareBackupSheet() {
+      if (!el.shareBackupOverlay) return;
+      // AI config rows: built-in providers with a profile + custom providers
+      const configRows = [];
+      const profiles = getProfiles();
+      const customs = getCustomProviders();
+      const builtinIds = Object.keys(BUILTIN_PROVIDERS || {});
+      const seen = new Set();
+      for (const id of builtinIds) {
+        if (seen.has(id)) continue; seen.add(id);
+        const p = BUILTIN_PROVIDERS[id];
+        const prof = profiles[id] || {};
+        const hasKey = !!(prof && String(prof.key || '').trim());
+        configRows.push({ id, label: p?.label || id, meta: hasKey ? t('shareBackup.hasKey') : t('shareBackup.noKey') });
+      }
+      for (const c of customs) {
+        if (seen.has(c.id)) continue; seen.add(c.id);
+        configRows.push({ id: c.id, label: c.label || c.id, meta: t('shareBackup.custom') });
+      }
+      // App rows
+      const apps = getLibrary().slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const fmtBytes = (n) => { if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; return (n / 1048576).toFixed(1) + ' MB'; };
+      const appRows = apps.map(a => ({ id: a.id, label: a.title || t('lib.untitled'), meta: fmtBytes(String(a.html || '').length) }));
+
+      const renderRows = (container, rows, allChecked) => {
+        container.innerHTML = '';
+        for (const r of rows) {
+          const row = document.createElement('label');
+          row.className = 'share-back-row';
+          row.innerHTML =
+            '<input type="checkbox" class="sb-check" data-id="' + escapeHtml(r.id) + '">' +
+            '<span class="sb-label"></span>' +
+            '<span class="sb-meta"></span>';
+          row.querySelector('.sb-check').checked = !!allChecked;
+          row.querySelector('.sb-label').textContent = r.label;
+          row.querySelector('.sb-meta').textContent = r.meta;
+          container.appendChild(row);
+        }
+      };
+      renderRows(el.shareBackupConfigList, configRows, true);
+      renderRows(el.shareBackupAppList, appRows, true);
+      if (el.shareBackupStatus) { el.shareBackupStatus.textContent = ''; el.shareBackupStatus.className = 'status-line'; }
+      el.shareBackupOverlay.classList.remove('hidden');
+    }
+    function _shareBackupChecked(container) {
+      return Array.from(container.querySelectorAll('.sb-check:checked')).map(c => c.dataset.id);
+    }
+    function _shareBackupPreset(which) {
+      const setAll = (container, on) => container.querySelectorAll('.sb-check').forEach(c => { c.checked = !!on; });
+      if (which === 'all') { setAll(el.shareBackupConfigList, true); setAll(el.shareBackupAppList, true); }
+      else if (which === 'config') { setAll(el.shareBackupConfigList, true); setAll(el.shareBackupAppList, false); }
+      else if (which === 'apps') { setAll(el.shareBackupConfigList, false); setAll(el.shareBackupAppList, true); }
+    }
+
+    function _filterSettingsForProviders(fullBundle, providerIds) {
+      if (!providerIds || !providerIds.length) return null;
+      const want = new Set(providerIds);
+      const profiles = {};
+      if (fullBundle.profiles) for (const [pid, prof] of Object.entries(fullBundle.profiles)) {
+        if (want.has(pid)) profiles[pid] = prof;
+      }
+      const knownKeys = (fullBundle.knownKeys || []).filter(k => {
+        const ps = (k && (k.providers || k.providerIds)) || [];
+        return ps.some(p => want.has(p));
+      });
+      const customProviders = (fullBundle.customProviders || []).filter(c => want.has(c.id));
+      const active = want.has(fullBundle.activeProviderId) ? fullBundle.activeProviderId : (providerIds[0] || fullBundle.activeProviderId);
+      return {
+        format: fullBundle.format, version: fullBundle.version, exportedAt: fullBundle.exportedAt,
+        deviceId: fullBundle.deviceId, activeProviderId: active, rememberKey: fullBundle.rememberKey,
+        profiles, customProviders, knownKeys, setupDone: '', setupProvider: '', termuxSetupDone: '', legacy: {},
+      };
+    }
+
+    async function buildAndShareBackupZip() {
+      const status = (msg, kind) => { if (el.shareBackupStatus) { el.shareBackupStatus.textContent = msg || ''; el.shareBackupStatus.className = 'status-line' + (kind ? ' ' + kind : ''); } };
+      try {
+        const configIds = _shareBackupChecked(el.shareBackupConfigList);
+        const appIds = _shareBackupChecked(el.shareBackupAppList);
+        if (!configIds.length && !appIds.length) { status(t('shareBackup.pickFirst'), 'err'); return; }
+        status(t('shareBackup.building'), '');
+        const files = [];
+        let settingsBundle = null;
+        if (configIds.length) {
+          try { saveCurrentProfile(); } catch (_) {}
+          const full = collectSettingsForBackup();
+          settingsBundle = _filterSettingsForProviders(full, configIds);
+          if (settingsBundle) files.push({ name: 'ForgeLibrary/settings.json', data: JSON.stringify(settingsBundle, null, 2) });
+        }
+        const apps = getLibrary();
+        const manifest = { format: DRIVE_FORMAT, updatedAt: Date.now(), deviceId: getDriveDeviceId(), apps: [], tombstones: [] };
+        for (const id of appIds) {
+          const app = apps.find(a => a.id === id);
+          if (!app || !app.html) continue;
+          const sha = await hashApp(app);
+          const meta = {
+            format: DRIVE_APP_FORMAT, id: app.id, title: app.title || 'Untitled',
+            summary: app.summary || '', iconEmoji: app.iconEmoji || '⚡', iconColor: app.iconColor || '',
+            carCompatible: !!app.carCompatible, aaScan: app.aaScan || null,
+            createdAt: app.createdAt || app.updatedAt || Date.now(), updatedAt: app.updatedAt || Date.now(),
+            contentSha256: sha, htmlFile: 'app.html',
+          };
+          files.push({ name: 'ForgeLibrary/apps/' + app.id + '/meta.json', data: JSON.stringify(meta, null, 2) });
+          files.push({ name: 'ForgeLibrary/apps/' + app.id + '/app.html', data: String(app.html) });
+          manifest.apps.push({ id: app.id, title: meta.title, summary: meta.summary, iconEmoji: meta.iconEmoji, iconColor: meta.iconColor, carCompatible: meta.carCompatible, updatedAt: meta.updatedAt, contentSha256: sha, path: 'apps/' + app.id + '/' });
+        }
+        files.unshift({ name: 'ForgeLibrary/manifest.json', data: JSON.stringify(manifest, null, 2) });
+        const zip = buildZip(files);
+        const stamp = new Date().toISOString().slice(0, 10);
+        const fname = 'ForgeLibrary-' + stamp + '.zip';
+        status(t('shareBackup.sharing'), '');
+        if (Capacitor.isNativePlatform()) {
+          const path = 'exports/' + fname;
+          await Filesystem.writeFile({ path, data: _bytesToBase64(zip), directory: Directory.Cache, recursive: true });
+          const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
+          await Share.share({
+            title: 'Forge backup',
+            text: t('shareBackup.shareText', { date: stamp }),
+            url: uri, files: [uri],
+            dialogTitle: t('shareBackup.title'),
+          });
+          status(t('shareBackup.done', { n: files.length }), 'ok');
+        } else {
+          // Web fallback: download the zip
+          const blob = new Blob([zip], { type: 'application/zip' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = fname; a.rel = 'noopener';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          status(t('shareBackup.done', { n: files.length }), 'ok');
+        }
+      } catch (e) {
+        const msg = e?.message || String(e);
+        if (/cancel|abort|dismiss/i.test(msg)) { status(t('shareBackup.cancelled'), ''); return; }
+        status(t('shareBackup.failed', { msg }), 'err');
       }
     }
 
@@ -19408,6 +19780,15 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.btnDriveBackupSettings?.addEventListener('click', () => backupLibraryToDrive({ source: 'settings' }));
     el.btnDriveRestoreSettings?.addEventListener('click', () => restoreLibraryFromDrive({ source: 'settings', mode: 'merge' }));
     el.btnDriveDisconnect?.addEventListener('click', () => disconnectDriveFolder());
+    el.btnShareBackup?.addEventListener('click', () => openShareBackupSheet());
+    el.btnShareBackupCancel?.addEventListener('click', () => el.shareBackupOverlay?.classList.add('hidden'));
+    el.btnSharePresetAll?.addEventListener('click', () => _shareBackupPreset('all'));
+    el.btnSharePresetConfig?.addEventListener('click', () => _shareBackupPreset('config'));
+    el.btnSharePresetApps?.addEventListener('click', () => _shareBackupPreset('apps'));
+    el.btnShareBackupGo?.addEventListener('click', () => buildAndShareBackupZip());
+    el.shareBackupOverlay?.addEventListener('click', (e) => {
+      if (e.target === el.shareBackupOverlay) el.shareBackupOverlay.classList.add('hidden');
+    });
     el.btnShareAiToAa?.addEventListener('click', shareAiSettingsToAaforge);
     el.btnKitchenSink?.addEventListener('click', () => installKitchenSink());
     el.btnHints?.addEventListener('click', () => openHints());
