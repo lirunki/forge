@@ -2,7 +2,7 @@
 
 > Canonical source: `HOST_TOOL_REGISTRY` + `HOST_BRIDGE_ALLOW` in `forge/www/index.html`.
 > This file is a human-readable mirror — regenerate when the registry changes.
-> Version baseline: `2.6.85 / versionCode 115` (27 host tools + app-registered tools).
+> Version baseline: `2.6.87 / versionCode 117` (28 host tools + app-registered tools).
 
 The host exposes a tool catalog over `ForgeHost` bridges so chat/agent mini-apps
 gain power as the host grows. Mini-apps call `ForgeHost.tools.list()` to get
@@ -95,6 +95,7 @@ Filter: `tools.list({ riskMax:'confirm' })` returns everything up to and includi
 | name | risk | description |
 |------|------|-------------|
 | `tts_speak` | confirm | Speak text with on-device TTS. `text` (req), `lang`, `rate`, `route`. |
+| `image_generate` | confirm | Generate an image from a text prompt, optionally seeded with reference images. Uses the xAI Grok image model (requires an xAI API key). `prompt` (req), `images` (optional array of data URLs/base64/URLs for image-to-image), `n` (1-4), `model` (default `grok-2-image`). Returns `{ ok, images:[{url, revised_prompt}], count, model, backend }`. |
 
 ### meta
 | name | risk | description |

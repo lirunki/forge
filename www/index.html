@@ -12412,6 +12412,29 @@ termux-reload-settings</div>
         run: async () => ({ ok: true, ...(await handleHostCall('getCapabilities', {})) }),
       },
 
+      // —— Image generation (xAI Grok image; seed images optional) ——
+      {
+        name: 'image_generate',
+        description: 'Generate an image from a text prompt, optionally seeded with reference images. Uses the xAI Grok image model (requires an xAI API key in AI settings). Returns image(s) as data URLs.',
+        group: 'media', risk: 'confirm',
+        permissions: [],
+        parameters: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string', description: 'Text description of the image to generate.' },
+            images: {
+              type: 'array',
+              description: 'Optional seed/reference images (data URLs, base64, or URLs). Used for image-to-image.',
+              items: { type: 'string' },
+            },
+            n: { type: 'integer', description: 'Number of images to generate (1-4). Default 1.' },
+            model: { type: 'string', description: 'Model override (default grok-2-image).' },
+          },
+          required: ['prompt'],
+        },
+        run: async (a) => generateImage(a || {}),
+      },
+
       // —— Generic bridge escape hatch (allowlisted host call methods) ——
       {
         name: 'bridge_call',
@@ -12580,6 +12603,69 @@ termux-reload-settings</div>
         };
       }
       return { ok: true, result };
+    }
+
+    // ——— Image generation (xAI Grok image model) ———
+    // xAI exposes an OpenAI-compatible /v1/images/generations endpoint. The
+    // grok-2-image model supports text-to-image and image-to-image (seed images
+    // passed as image_url entries). Only the xAI backend is supported; other
+    // providers error out with a clear message.
+    async function generateImage(args) {
+      const prompt = String(args?.prompt || '').trim();
+      if (!prompt) throw new Error('image_generate: prompt is required');
+      const n = Math.max(1, Math.min(4, parseInt(args?.n, 10) || 1));
+      const seedImages = Array.isArray(args?.images) ? args.images.filter(Boolean) : [];
+      const model = String(args?.model || 'grok-2-image').trim();
+
+      const rt = getAiRuntime();
+      const backend = backendForRuntime(rt);
+      if (backend !== 'xai-rich') {
+        const label = rt.provider?.label || rt.providerId || 'this provider';
+        throw new Error('image_generate requires the xAI (Grok) provider — ' + label + ' does not support image generation. Set an xAI API key in AI settings.');
+      }
+      const key = String(rt.key || '').trim();
+      if (!key) throw new Error('image_generate: xAI API key not set. Add it in AI settings.');
+      let base = String(rt.base || rt.provider?.base || 'https://api.x.ai/v1').replace(/\/+$/, '');
+      if (/\/images\/generations\/?$/i.test(base)) { /* keep */ } else if (/\/v1$/i.test(base)) base = base + '/images/generations'; else base = base + '/images/generations';
+      const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key };
+
+      // Normalize seed images to image_url entries (data URLs or http URLs).
+      const imageUrls = seedImages.map((img) => {
+        const s = String(img || '').trim();
+        if (!s) return null;
+        if (/^data:/i.test(s) || /^https?:\/\//i.test(s)) return s;
+        // bare base64 -> data URL
+        return 'data:image/png;base64,' + s.replace(/^data:image\/[a-z]+;base64,/i, '');
+      }).filter(Boolean);
+
+      const body = { model, prompt, n };
+      // xAI image-to-image: pass seed images as an array of image_url objects.
+      if (imageUrls.length) body.image_url = imageUrls.map((url) => ({ url }));
+
+      const fgs = aiFgsAcquire('Generating image…');
+      try {
+        let res;
+        if (Capacitor.isNativePlatform()) {
+          res = await nativeHttpPost({ url: base, headers, data: body, connectTimeout: 60000, readTimeout: 300000 });
+          if (res.status < 200 || res.status >= 300) {
+            const errText = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+            throw new Error('xAI image API ' + res.status + ': ' + errText);
+          }
+          res.data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+        } else {
+          const r = await fetch(base, { method: 'POST', headers, body: JSON.stringify(body) });
+          if (!r.ok) throw new Error('xAI image API ' + r.status + ': ' + await r.text());
+          res = { data: await r.json() };
+        }
+        const imgs = Array.isArray(res.data?.data) ? res.data.data : [];
+        const out = imgs.map((im) => {
+          const url = im.url || im.image_url || (im.b64_json ? 'data:image/png;base64,' + im.b64_json : '');
+          return { url, revised_prompt: im.revised_prompt || '' };
+        }).filter((im) => im.url);
+        return { ok: true, images: out, count: out.length, model, backend: 'xai-rich' };
+      } finally {
+        fgs();
+      }
     }
 
     function toolsGetRegistry() {
