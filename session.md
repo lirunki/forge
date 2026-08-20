@@ -1543,3 +1543,42 @@ Smoke (device pending — adb offline at build time):
 [ ] Auto (device language) option works after restart
 [ ] Mini-apps unaffected; console capture still works; no regressions in selects/theme
 ```
+
+## i18n: add Korean, fix Japanese lossy strings (2026-08-20)
+
+**2.6.79 / versionCode 109** (from 2.6.77/107). Host-only, no native.
+
+### Korean (ko) — new
+- Full translation: **425 common + 81 provider-namespace keys = 506 total**,
+  proper UTF-8 (no mojibake).
+- `ko` row restored in `FORGE_LANGS` (was dropped at 2.6.77 because the old
+  pipeline never translated it). Now a real option in the Language select.
+- `about.langRestart` (ko): "저장됨 — 적용하려면 Forge를 다시 시작하세요."
+
+### Japanese (ja) — fix the 93 lossy strings
+- The 2.6.77 salvage dropped 93 ja keys whose source bytes were lossy (a C1
+  byte stripped in the old pipeline — unrecoverable by round-trip). Those
+  keys fell back to English via `t()`.
+- This land **re-translates all 93** (75 common + 18 ns) into proper UTF-8
+  Japanese, overlaid onto the repaired ja dict. **ja now full 506 keys** —
+  no more English fallbacks for the lossy set.
+
+### Verification
+- All 6 langs: en 425 common, es/fr/pt/ja/ko 506 (425 + 81 ns).
+- `{var}` token parity checked across every key in every language.
+- `forge_check.sh` + `forge_docs_check` PASS; both flavor debug APKs build.
+
+### Salvage artifacts (kept in `~/downloads/i18n_salvage/`)
+- `dict_ko.py` (full Korean, 508 incl. gate.* + langRestart)
+- `dict_ja_fix.py` (93 re-translations)
+- `surgery.py` (regeneration script; ko row kept, ja-fix overlay added)
+- `dict_en.py` / `dict_es/fr/pt/ja.py` (originals, mojibake-repaired at gen)
+
+Smoke (device pending — adb offline at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.6.79 (109) · 1615187
+[ ] AI tab → About Forge → Language → 한국어 → restart → UI in Korean (full)
+[ ] Language → 日本語 → restart → UI in Japanese (full, incl. the 93 fixed strings)
+[ ] Spot-check: ja lib.confirmDel, drive.backupDone, txs.playNeedsAgent show proper 日本語
+[ ] es/fr/pt still full; en default unchanged
+```
