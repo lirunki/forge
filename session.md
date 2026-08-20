@@ -1496,3 +1496,50 @@ existing `openExternalUrl` (anchor target=_blank → external on Capacitor).
 [ ] Smoke: AI tab → bottom → '☕ Support development' → PayPal page opens in browser
 [ ] Play closed-test track: optionally roll 2.6.73 to testers (same versionCode progression 103 > 102)
 ```
+
+## Host UI i18n — 5 languages, About-tab selector, restart-to-apply (2026-08-20)
+
+**2.6.77 / versionCode 107** (from 2.6.73/103; interim bumps 2.6.75/105 while
+diagnosing docs-baseline gate — monotonic, harmless). Host-only, no native.
+
+### Design (locked with user — after 3 failed over-engineered attempts)
+The earlier attempts failed by bolting on: dual translation mechanisms,
+a Python splice/validate toolchain, a first-run language gate, and a live
+re-render orchestrator (`reApplyI18nUI`). User directive: "it shouldn't be that
+complex — dictionary, N copies, selector." **This land is the minimal shape:**
+
+| Piece | State |
+|---|---|
+| `FORGE_I18N` dict | **en / es / fr / pt / ja** (ko dropped — never translated), inline between `/*__I18N_START__*/` markers, ~425 en keys |
+| Lookup | `t(id, vars)` + `tf(id, fallback, vars)` with `{var}` interpolation + **en fallback** |
+| Boot | `FORGE_LANG` = `localStorage.forge_lang_v1` → else `navigator.languages` auto-detect |
+| Static HTML | `data-i18n/-html/-ph/-title/-aria` attributes applied **once at boot** (`applyI18nDom`) — no live re-render |
+| Dynamic strings | 369 `t()` + 9 `tf()` call sites (tab labels, toasts, statuses, wizard) |
+| Selector | `Language` select in **AI tab → About Forge** card; change → saves + shows persistent `Saved — restart Forge to apply` hint (`about.langRestart`); **restart applies** |
+| Not present (by design) | No first-run gate, no `reApplyI18nUI`, no build toolchain, no auto-reload |
+
+### Salvage notes (from the WIP stash `stash@{0}`, then dropped)
+- Dict sources `.i18ntmp/dict_*.py` were **double-encoded UTF-8** (latin-1 view).
+  Repair = `encode('latin-1').decode('utf-8')` round trip with mojibake-pair
+  discriminator (proper `·`/`é` singles kept; `Ã©`-style pairs repaired).
+- **93 ja strings had dropped bytes** (C1 byte stripped in old pipeline — lossy,
+  unrecoverable): dropped keys → `t()` falls back to English for those.
+  ja ≈ 414/507 keys translated; es/fr/pt full.
+- Salvage scripts kept in `~/downloads/i18n_salvage/` (surgery.py + dicts + stashed.html).
+- The old stash was **dropped** after successful salvage (user: "revert all changes";
+  everything preserved first in `~/downloads/i18n_salvage/` + this commit).
+
+### Gate change
+`forge_check.sh` step 5: expected raw `</script>` count **2 → 1** (the pre-paint
+language-gate script was removed; only the host module block remains).
+
+Smoke (device pending — adb offline at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.6.77 (107) · 19be579
+[ ] Host UI unchanged in English (default) — tabs, chat, AI settings, library
+[ ] AI tab → About Forge → Language → Español → hint "reinicia Forge" appears
+[ ] Restart Forge → UI in Spanish (tabs, placeholders, hints, wizard)
+[ ] Same for Français / Português / 日本語 (ja: ~93 strings stay English)
+[ ] Auto (device language) option works after restart
+[ ] Mini-apps unaffected; console capture still works; no regressions in selects/theme
+```
