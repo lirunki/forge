@@ -8827,7 +8827,22 @@ termux-reload-settings</div>
     if (d.type === 'host-event') {
       emit(d.event || 'message', d.data);
     }
+    // Host invoking an app-registered tool handler (ForgeHost.tools.register)
+    if (d.type === 'tool-invoke') {
+      const handler = _appToolHandlersLocal.get(d.name);
+      if (!handler) {
+        parent.postMessage({ __forge: true, type: 'tool-result', handlerId: d.handlerId, ok: false, error: 'No handler for ' + d.name }, '*');
+        return;
+      }
+      Promise.resolve().then(() => handler(d.args || {})).then((result) => {
+        parent.postMessage({ __forge: true, type: 'tool-result', handlerId: d.handlerId, ok: true, result: result == null ? { ok: true } : result }, '*');
+      }).catch((e) => {
+        parent.postMessage({ __forge: true, type: 'tool-result', handlerId: d.handlerId, ok: false, error: (e && e.message) || String(e) }, '*');
+      });
+      return;
+    }
   });
+  const _appToolHandlersLocal = new Map();
   /** Make voice lists safe for <select> UIs (never "[object Object]"). */
   function normalizeVoicesResult(r){
     if (r == null) return { voices: [], options: [], ids: [], labels: [], list: [], count: 0 };
@@ -9360,6 +9375,21 @@ termux-reload-settings</div>
       hint: (opts) => call('tools.hint', opts || {}),
       systemHint: (opts) => call('tools.hint', opts || {}),
       registry: () => call('tools.registry'),
+      // Register a tool available only while THIS mini-app runs. handler is a
+      // function(args) -> result | Promise<result> executed in this iframe.
+      register: (spec) => {
+        if (!spec || typeof spec !== 'object') throw new Error('register: spec object required');
+        if (typeof spec.handler !== 'function') throw new Error('register: handler function required');
+        const name = String(spec.name || '').trim();
+        if (!name) throw new Error('register: name required');
+        _appToolHandlersLocal.set(name, spec.handler);
+        const { name: okName } = call('tools.register', { name, description: spec.description, parameters: spec.parameters, risk: spec.risk });
+        return Promise.resolve({ ok: true, name });
+      },
+      unregister: (name) => {
+        _appToolHandlersLocal.delete(String(name || '').trim());
+        return call('tools.unregister', { name });
+      },
     },
     web: {
       search: (opts) => call('web.search', typeof opts === 'string' ? { query: opts } : (opts || {})),
@@ -9701,6 +9731,8 @@ termux-reload-settings</div>
     function loadPreview(app) {
       // Notify previous app instance it's going away
       if (currentApp?.html) postToMiniApp('destroy', { reason: 'reload' });
+      // Clear any tools the previous mini-app registered (scoped to it)
+      if (currentApp?.id) clearAppTools(currentApp.id);
       try { stopMicStreamSafe('reload'); } catch (_) {}
       currentApp = app;
       el.previewTitle.textContent = app?.title || 'Untitled app';
@@ -12400,6 +12432,91 @@ termux-reload-settings</div>
       },
     ];
 
+    // ——— Mini-app-registered tools (scoped to the running app, in-memory only) ———
+    // A mini-app calls ForgeHost.tools.register({ name, description, parameters,
+    // risk?, handler }) to add a tool available only while it runs. The handler
+    // lives in the mini-app iframe; the host invokes it via postMessage.
+    // App tools cannot shadow host tools (rejected on name collision) and are
+    // forced to risk >= 'confirm' (they run arbitrary app code).
+    const APP_TOOL_REGISTRY = new Map(); // appId -> Map(name -> {name,description,parameters,risk,handlerId})
+    let _appToolHandlerSeq = 0;
+    const _appToolHandlers = new Map(); // handlerId -> { appId, resolve, reject }
+
+    function getAppToolMap(appId) {
+      const id = appId || (currentApp && currentApp.id) || 'draft';
+      if (!APP_TOOL_REGISTRY.has(id)) APP_TOOL_REGISTRY.set(id, new Map());
+      return APP_TOOL_REGISTRY.get(id);
+    }
+    function clearAppTools(appId) {
+      const id = appId || (currentApp && currentApp.id) || 'draft';
+      APP_TOOL_REGISTRY.delete(id);
+      // drop any pending handler callbacks for this app (they'll never resolve)
+      for (const [hid, rec] of _appToolHandlers) {
+        if (rec.appId === id) { try { rec.reject(new Error('app unloaded')); } catch (_) {} _appToolHandlers.delete(hid); }
+      }
+    }
+    function registerAppTool(spec) {
+      if (!spec || typeof spec !== 'object') throw new Error('register: spec object required');
+      const name = String(spec.name || '').trim();
+      if (!/^[a-z][a-z0-9_]{1,62}$/i.test(name)) throw new Error('register: invalid tool name (letters/digits/_ , 2-63 chars)');
+      if (HOST_TOOL_REGISTRY.some(e => e.name === name)) throw new Error('register: name "' + name + '" shadows a host tool');
+      const map = getAppToolMap();
+      const entry = {
+        name,
+        description: String(spec.description || 'App-provided tool ' + name).slice(0, 500),
+        parameters: spec.parameters && typeof spec.parameters === 'object' ? spec.parameters : { type: 'object', properties: {} },
+        risk: ['safe', 'sensitive', 'confirm', 'danger'].includes(spec.risk) ? spec.risk : 'confirm',
+        group: 'app',
+        _app: true,
+      };
+      map.set(name, entry);
+      return { ok: true, name };
+    }
+    function unregisterAppTool(name) {
+      const n = String(name || '').trim();
+      const map = getAppToolMap();
+      map.delete(n);
+      return { ok: true };
+    }
+    function listAppTools(appId) {
+      const map = APP_TOOL_REGISTRY.get(appId || (currentApp && currentApp.id) || 'draft');
+      return map ? [...map.values()] : [];
+    }
+    async function invokeAppTool(name, args, opts) {
+      const map = getAppToolMap();
+      const entry = map.get(name);
+      if (!entry) throw new Error('Unknown app tool: ' + name);
+      const maxRisk = String((opts && (opts.riskMax || opts.maxRisk)) || 'danger');
+      if (toolRiskRank(entry.risk) > toolRiskRank(maxRisk)) {
+        throw new Error('Tool ' + name + ' blocked by riskMax=' + maxRisk + ' (tool risk=' + entry.risk + ')');
+      }
+      // Risk sheet for confirm/danger app tools (same as host agent tools)
+      if (toolRiskRank(entry.risk) >= toolRiskRank('confirm')) {
+        const allowed = await agentConfirmTool(name, args, entry.risk, { appTool: true });
+        if (!allowed) throw new Error('Tool ' + name + ' denied by user');
+      }
+      // Dispatch to the mini-app iframe via postMessage round-trip
+      const w = el.previewFrame?.contentWindow;
+      if (!w) throw new Error('App tool ' + name + ': mini-app not running');
+      const handlerId = ++_appToolHandlerSeq;
+      return new Promise((resolve, reject) => {
+        _appToolHandlers.set(handlerId, { appId: currentApp?.id || 'draft', resolve, reject });
+        try {
+          w.postMessage({ __forge: true, type: 'tool-invoke', handlerId, name, args: args || {} }, '*');
+        } catch (e) {
+          _appToolHandlers.delete(handlerId);
+          reject(new Error('App tool dispatch failed: ' + (e?.message || e)));
+        }
+        // Timeout: app must respond
+        setTimeout(() => {
+          if (_appToolHandlers.has(handlerId)) {
+            _appToolHandlers.delete(handlerId);
+            reject(new Error('App tool ' + name + ' timed out'));
+          }
+        }, 60000);
+      });
+    }
+
     /** Allowlist for bridge_call — keep in sync when adding host methods. */
     const HOST_BRIDGE_ALLOW = new Set([
       'getAppInfo', 'getCapabilities',
@@ -12489,7 +12606,7 @@ termux-reload-settings</div>
       const exclude = Array.isArray(opts.exclude)
         ? new Set(opts.exclude.map(String))
         : new Set(opts.excludeDangerous === false ? [] : []);
-      return HOST_TOOL_REGISTRY.filter((e) => {
+      const host = HOST_TOOL_REGISTRY.filter((e) => {
         if (!e || !e.name) return false;
         if (names && !names.has(e.name)) return false;
         if (exclude.has(e.name)) return false;
@@ -12498,6 +12615,14 @@ termux-reload-settings</div>
         if (opts.includeDangerous === false && e.risk === 'danger') return false;
         return true;
       });
+      const app = listAppTools().filter((e) => {
+        if (names && !names.has(e.name)) return false;
+        if (exclude.has(e.name)) return false;
+        if (group && String(e.group || '') !== group) return false;
+        if (toolRiskRank(e.risk) > maxRank) return false;
+        return true;
+      });
+      return [...host, ...app];
     }
 
     function toolsList(opts) {
@@ -12658,28 +12783,45 @@ termux-reload-settings</div>
       args = args || {};
 
       const entry = HOST_TOOL_REGISTRY.find((e) => e.name === name);
-      if (!entry) throw new Error('Unknown tool: ' + name + ' (ForgeHost.tools.list())');
-
-      const maxRisk = String(opts.riskMax || opts.maxRisk || 'danger');
-      if (toolRiskRank(entry.risk) > toolRiskRank(maxRisk)) {
-        throw new Error('Tool ' + name + ' blocked by riskMax=' + maxRisk + ' (tool risk=' + entry.risk + ')');
-      }
-
-      try {
-        if (entry.permissions && entry.permissions.length) {
-          await toolsEnsurePerms(entry.permissions);
+      if (entry) {
+        const maxRisk = String(opts.riskMax || opts.maxRisk || 'danger');
+        if (toolRiskRank(entry.risk) > toolRiskRank(maxRisk)) {
+          throw new Error('Tool ' + name + ' blocked by riskMax=' + maxRisk + ' (tool risk=' + entry.risk + ')');
         }
-        const result = await entry.run(args || {});
-        return result == null ? { ok: true } : result;
-      } catch (e) {
-        return {
-          ok: false,
-          error: e && e.message ? e.message : String(e),
-          code: e && e.code ? e.code : undefined,
-          needsSettings: !!(e && e.needsSettings),
-          tool: name,
-        };
+        try {
+          if (entry.permissions && entry.permissions.length) {
+            await toolsEnsurePerms(entry.permissions);
+          }
+          const result = await entry.run(args || {});
+          return result == null ? { ok: true } : result;
+        } catch (e) {
+          return {
+            ok: false,
+            error: e && e.message ? e.message : String(e),
+            code: e && e.code ? e.code : undefined,
+            needsSettings: !!(e && e.needsSettings),
+            tool: name,
+          };
+        }
       }
+
+      // Mini-app-registered tool — dispatch to the running app's handler
+      const appMap = APP_TOOL_REGISTRY.get(currentApp?.id || 'draft');
+      if (appMap && appMap.has(name)) {
+        try {
+          const result = await invokeAppTool(name, args, opts);
+          return result == null ? { ok: true } : result;
+        } catch (e) {
+          return {
+            ok: false,
+            error: e && e.message ? e.message : String(e),
+            tool: name,
+            appTool: true,
+          };
+        }
+      }
+
+      throw new Error('Unknown tool: ' + name + ' (ForgeHost.tools.list())');
     }
 
     function toolsSystemHint(opts) {
@@ -12710,13 +12852,17 @@ termux-reload-settings</div>
         case 'tools.groups':
         case 'ai.tools.groups': {
           const g = {};
-          for (const e of HOST_TOOL_REGISTRY) {
+          for (const e of toolsFilterEntries({ riskMax: 'danger' })) {
             const k = e.group || 'misc';
             g[k] = g[k] || [];
             g[k].push(e.name);
           }
           return { ok: true, groups: g };
         }
+        case 'tools.register':
+          return registerAppTool(params || {});
+        case 'tools.unregister':
+          return unregisterAppTool((params || {}).name);
         case 'tools.run':
         case 'tools.execute':
         case 'tools.invoke':
@@ -12731,12 +12877,15 @@ termux-reload-settings</div>
         case 'tools.systemHint':
         case 'ai.tools.hint':
           return { ok: true, hint: toolsSystemHint(params || {}) };
-        case 'tools.registry':
+        case 'tools.registry': {
+          const all = toolsFilterEntries({ riskMax: 'danger' });
           return {
             ok: true,
-            names: HOST_TOOL_REGISTRY.map((e) => e.name),
-            count: HOST_TOOL_REGISTRY.length,
+            names: all.map((e) => e.name),
+            count: all.length,
+            appTools: listAppTools().map((e) => e.name),
           };
+        }
         case 'web.search':
           return await toolsWebSearch(params || {});
         case 'web.fetch':
@@ -14463,6 +14612,17 @@ termux-reload-settings</div>
 
       if (d.type === 'host-state') {
         // handled by requestMiniAppStateSave listener; ignore here
+        return;
+      }
+
+      // App-tool handler result (from ForgeHost.tools.register handler)
+      if (d.type === 'tool-result') {
+        const rec = _appToolHandlers.get(d.handlerId);
+        if (rec) {
+          _appToolHandlers.delete(d.handlerId);
+          if (d.ok) rec.resolve(d.result == null ? { ok: true } : d.result);
+          else rec.reject(new Error(d.error || 'App tool handler failed'));
+        }
         return;
       }
 
