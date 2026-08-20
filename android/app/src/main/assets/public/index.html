@@ -1104,6 +1104,29 @@ termux-reload-settings</div>
     </div>
   </div>
 
+  <!-- Merge backup from ZIP (select what to merge) -->
+  <input type="file" id="mergeBackupFile" accept=".zip,application/zip,application/x-zip-compressed" hidden />
+  <div id="mergeBackupOverlay" class="setup-overlay hidden" aria-modal="true" role="dialog" aria-labelledby="mergeBackupTitle">
+    <div class="setup-sheet">
+      <h2 id="mergeBackupTitle" data-i18n="mergeBackup.title">Merge backup</h2>
+      <p class="setup-lead" data-i18n-html="mergeBackup.lead">Pick what to merge into this device. Existing apps/providers are kept; newer items win.</p>
+      <div class="share-back-presets">
+        <button class="btn small" id="btnMergePresetAll" type="button" data-i18n="mergeBackup.everything">Everything</button>
+        <button class="btn secondary small" id="btnMergePresetConfig" type="button" data-i18n="mergeBackup.configOnly">AI config only</button>
+        <button class="btn secondary small" id="btnMergePresetApps" type="button" data-i18n="mergeBackup.appsOnly">Apps only</button>
+      </div>
+      <div class="share-back-section" data-i18n="mergeBackup.configSection">AI config (providers + keys)</div>
+      <div class="share-back-list" id="mergeBackupConfigList"></div>
+      <div class="share-back-section" data-i18n="mergeBackup.appsSection">Mini-apps</div>
+      <div class="share-back-list" id="mergeBackupAppList"></div>
+      <div class="status-line" id="mergeBackupStatus" style="margin:0.5rem 0;"></div>
+      <div class="settings-block" style="margin:0;">
+        <button class="btn" id="btnMergeBackupGo" type="button" data-i18n="mergeBackup.merge">Merge selected</button>
+        <button class="btn secondary small" id="btnMergeBackupCancel" type="button" data-i18n="common.cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Easy AI setup wizard -->
   <div id="setupOverlay" class="setup-overlay hidden" aria-modal="true" role="dialog" aria-labelledby="setupTitle">
     <div class="setup-sheet">
@@ -1451,6 +1474,7 @@ termux-reload-settings</div>
             <button class="btn secondary small" id="btnDriveBackupSettings" type="button" data-i18n="drive.backupNow">Backup now</button>
             <button class="btn secondary small" id="btnDriveRestoreSettings" type="button" data-i18n="drive.restore">Restore…</button>
             <button class="btn secondary small" id="btnShareBackup" type="button" data-i18n="drive.shareBackup">Share backup…</button>
+            <button class="btn secondary small" id="btnMergeBackup" type="button" data-i18n="drive.mergeBackup">Merge backup…</button>
             <button class="btn secondary small" id="btnDriveDisconnect" type="button" data-i18n="drive.disconnect">Disconnect</button>
           </div>
           <p class="field-hint" style="margin-top:0.55rem;margin-bottom:0;" data-i18n-html="drive.hint2">
@@ -1713,6 +1737,20 @@ termux-reload-settings</div>
     "shareBackup.done": "ZIP ready — {n} file(s) shared.",
     "shareBackup.cancelled": "Share cancelled",
     "shareBackup.failed": "Share backup failed: {msg}",
+    "drive.mergeBackup": "Merge backup…",
+    "mergeBackup.title": "Merge backup",
+    "mergeBackup.lead": "Pick what to merge into this device. Existing apps/providers are kept; newer items win.",
+    "mergeBackup.everything": "Everything",
+    "mergeBackup.configOnly": "AI config only",
+    "mergeBackup.appsOnly": "Apps only",
+    "mergeBackup.configSection": "AI config (providers + keys)",
+    "mergeBackup.appsSection": "Mini-apps",
+    "mergeBackup.merge": "Merge selected",
+    "mergeBackup.reading": "Reading ZIP…",
+    "mergeBackup.merging": "Merging…",
+    "mergeBackup.empty": "No Forge backup found in that ZIP.",
+    "mergeBackup.done": "Merged — {imp} new, {up} updated, {skip} unchanged{note}",
+    "mergeBackup.failed": "Merge failed: {msg}",
     "drive.checking": "Checking backup folder…",
     "drive.choose": "Choose folder",
     "drive.connected": "Folder connected",
@@ -2171,6 +2209,20 @@ termux-reload-settings</div>
     "shareBackup.done": "ZIP listo — {n} archivo(s) compartido(s).",
     "shareBackup.cancelled": "Compartir cancelado",
     "shareBackup.failed": "Error al compartir la copia: {msg}",
+    "drive.mergeBackup": "Combinar copia…",
+    "mergeBackup.title": "Combinar copia de seguridad",
+    "mergeBackup.lead": "Elige qué combinar a este dispositivo. Las apps/proveedores existentes se conservan; gana el más reciente.",
+    "mergeBackup.everything": "Todo",
+    "mergeBackup.configOnly": "Solo config. IA",
+    "mergeBackup.appsOnly": "Solo apps",
+    "mergeBackup.configSection": "Config. IA (proveedores + claves)",
+    "mergeBackup.appsSection": "Mini-apps",
+    "mergeBackup.merge": "Combinar selección",
+    "mergeBackup.reading": "Leyendo ZIP…",
+    "mergeBackup.merging": "Combinando…",
+    "mergeBackup.empty": "No se encontró copia de Forge en ese ZIP.",
+    "mergeBackup.done": "Combinado — {imp} nuevo(s), {up} actualizado(s), {skip} sin cambio{note}",
+    "mergeBackup.failed": "Error al combinar: {msg}",
     "drive.checking": "Comprobando carpeta de copia…",
     "drive.choose": "Elegir carpeta",
     "drive.connected": "Carpeta conectada",
@@ -2698,6 +2750,20 @@ termux-reload-settings</div>
     "shareBackup.done": "ZIP prêt — {n} fichier(s) partagé(s).",
     "shareBackup.cancelled": "Partage annulé",
     "shareBackup.failed": "Échec du partage : {msg}",
+    "drive.mergeBackup": "Fusionner la sauvegarde…",
+    "mergeBackup.title": "Fusionner la sauvegarde",
+    "mergeBackup.lead": "Choisissez quoi fusionner sur cet appareil. Les apps/fournisseurs existants sont conservés ; le plus récent gagne.",
+    "mergeBackup.everything": "Tout",
+    "mergeBackup.configOnly": "Config IA seulement",
+    "mergeBackup.appsOnly": "Apps seulement",
+    "mergeBackup.configSection": "Config IA (fournisseurs + clés)",
+    "mergeBackup.appsSection": "Mini-apps",
+    "mergeBackup.merge": "Fusionner la sélection",
+    "mergeBackup.reading": "Lecture du ZIP…",
+    "mergeBackup.merging": "Fusion…",
+    "mergeBackup.empty": "Aucune sauvegarde Forge dans ce ZIP.",
+    "mergeBackup.done": "Fusionné — {imp} nouveau, {up} mis à jour, {skip} inchangé{note}",
+    "mergeBackup.failed": "Échec de la fusion : {msg}",
     "drive.checking": "Vérification du dossier de sauvegarde…",
     "drive.choose": "Choisir un dossier",
     "drive.connected": "Dossier connecté",
@@ -3225,6 +3291,20 @@ termux-reload-settings</div>
     "shareBackup.done": "ZIP pronto — {n} arquivo(s) compartilhado(s).",
     "shareBackup.cancelled": "Compartilhamento cancelado",
     "shareBackup.failed": "Falha ao compartilhar backup: {msg}",
+    "drive.mergeBackup": "Mesclar backup…",
+    "mergeBackup.title": "Mesclar backup",
+    "mergeBackup.lead": "Escolha o que mesclar neste dispositivo. Apps/provedores existentes são mantidos; o mais novo vence.",
+    "mergeBackup.everything": "Tudo",
+    "mergeBackup.configOnly": "Só config. IA",
+    "mergeBackup.appsOnly": "Só apps",
+    "mergeBackup.configSection": "Config. IA (provedores + chaves)",
+    "mergeBackup.appsSection": "Mini-apps",
+    "mergeBackup.merge": "Mesclar seleção",
+    "mergeBackup.reading": "Lendo ZIP…",
+    "mergeBackup.merging": "Mesclando…",
+    "mergeBackup.empty": "Nenhum backup do Forge nesse ZIP.",
+    "mergeBackup.done": "Mesclado — {imp} novo(s), {up} atualizado(s), {skip} sem mudança{note}",
+    "mergeBackup.failed": "Falha ao mesclar: {msg}",
     "drive.checking": "Verificando pasta de backup…",
     "drive.choose": "Escolher pasta",
     "drive.connected": "Pasta conectada",
@@ -3752,6 +3832,20 @@ termux-reload-settings</div>
     "shareBackup.done": "ZIP完了 — {n}ファイルを共有しました。",
     "shareBackup.cancelled": "共有をキャンセルしました",
     "shareBackup.failed": "バックアップ共有に失敗：{msg}",
+    "drive.mergeBackup": "バックアップを結合…",
+    "mergeBackup.title": "バックアップを結合",
+    "mergeBackup.lead": "この端末に結合するものを選択。既存のアプリ/プロバイダーは保持され、新しい方が優先されます。",
+    "mergeBackup.everything": "すべて",
+    "mergeBackup.configOnly": "AI設定のみ",
+    "mergeBackup.appsOnly": "アプリのみ",
+    "mergeBackup.configSection": "AI設定（プロバイダー＋キー）",
+    "mergeBackup.appsSection": "ミニアプリ",
+    "mergeBackup.merge": "選択を結合",
+    "mergeBackup.reading": "ZIP読み込み中…",
+    "mergeBackup.merging": "結合中…",
+    "mergeBackup.empty": "そのZIPにForgeバックアップは見つかりません。",
+    "mergeBackup.done": "結合完了 — 新規{imp}、更新{up}、変更なし{skip}{note}",
+    "mergeBackup.failed": "結合に失敗：{msg}",
     "drive.checking": "バックアップフォルダー確認中…",
     "drive.choose": "フォルダーを選択",
     "drive.connected": "フォルダーを接続しました",
@@ -4279,6 +4373,20 @@ termux-reload-settings</div>
     "shareBackup.done": "ZIP 준비됨 — {n}개 파일 공유됨.",
     "shareBackup.cancelled": "공유 취소됨",
     "shareBackup.failed": "백업 공유 실패: {msg}",
+    "drive.mergeBackup": "백업 병합…",
+    "mergeBackup.title": "백업 병합",
+    "mergeBackup.lead": "이 기기에 병합할 항목을 고르세요. 기존 앱/제공자는 유지되고 더 최신 항목이 우선합니다.",
+    "mergeBackup.everything": "전체",
+    "mergeBackup.configOnly": "AI 설정만",
+    "mergeBackup.appsOnly": "앱만",
+    "mergeBackup.configSection": "AI 설정(제공자 + 키)",
+    "mergeBackup.appsSection": "미니 앱",
+    "mergeBackup.merge": "선택 병합",
+    "mergeBackup.reading": "ZIP 읽는 중…",
+    "mergeBackup.merging": "병합 중…",
+    "mergeBackup.empty": "해당 ZIP에 Forge 백업이 없습니다.",
+    "mergeBackup.done": "병합됨 — 신규 {imp}, 업데이트 {up}, 변경 없음 {skip}{note}",
+    "mergeBackup.failed": "병합 실패: {msg}",
     "drive.checking": "백업 폴더 확인 중…",
     "drive.choose": "폴더 선택",
     "drive.connected": "폴더 연결됨",
@@ -5170,6 +5278,17 @@ termux-reload-settings</div>
       btnSharePresetApps: document.getElementById('btnSharePresetApps'),
       btnShareBackupGo: document.getElementById('btnShareBackupGo'),
       btnShareBackupCancel: document.getElementById('btnShareBackupCancel'),
+      btnMergeBackup: document.getElementById('btnMergeBackup'),
+      mergeBackupFile: document.getElementById('mergeBackupFile'),
+      mergeBackupOverlay: document.getElementById('mergeBackupOverlay'),
+      mergeBackupConfigList: document.getElementById('mergeBackupConfigList'),
+      mergeBackupAppList: document.getElementById('mergeBackupAppList'),
+      mergeBackupStatus: document.getElementById('mergeBackupStatus'),
+      btnMergePresetAll: document.getElementById('btnMergePresetAll'),
+      btnMergePresetConfig: document.getElementById('btnMergePresetConfig'),
+      btnMergePresetApps: document.getElementById('btnMergePresetApps'),
+      btnMergeBackupGo: document.getElementById('btnMergeBackupGo'),
+      btnMergeBackupCancel: document.getElementById('btnMergeBackupCancel'),
       driveStatusLine: document.getElementById('driveStatusLine'),
       importFile: document.getElementById('importFile'),
       libStatus: document.getElementById('libStatus'),
@@ -8109,6 +8228,263 @@ termux-reload-settings</div>
         const msg = e?.message || String(e);
         if (/cancel|abort|dismiss/i.test(msg)) { status(t('shareBackup.cancelled'), ''); return; }
         status(t('shareBackup.failed', { msg }), 'err');
+      }
+    }
+
+    // ——— Merge a shared backup ZIP (select what to merge) ———
+    // Reads a ZIP (STORE or deflate) in-memory, parses the ForgeLibrary/ layout,
+    // shows a selection sheet, then merges selected providers + apps using the
+    // same merge logic as Drive restore (id + updatedAt + content-hash wins).
+    let _mergeBackupData = null; // { manifest, settings, apps: [{id,meta,html}] }
+
+    async function _unzipEntry(bytes, name, compressed) {
+      // compressed = 0 (store) | 8 (deflate). Returns Uint8Array.
+      if (compressed === 0) return bytes;
+      if (compressed === 8 && globalThis.DecompressionStream) {
+        const ds = new DecompressionStream('deflate-raw');
+        const writer = ds.writable.getWriter();
+        writer.write(bytes).catch(() => {});
+        writer.close().catch(() => {});
+        const chunks = [];
+        const reader = ds.readable.getReader();
+        for (;;) {
+          const r = await reader.read();
+          if (r.done) break;
+          if (r.value) chunks.push(r.value);
+        }
+        let total = 0; for (const c of chunks) total += c.length;
+        const out = new Uint8Array(total); let p = 0;
+        for (const c of chunks) { out.set(c, p); p += c.length; }
+        return out;
+      }
+      throw new Error('Unsupported zip method ' + compressed + ' for ' + name);
+    }
+
+    async function parseBackupZip(file) {
+      let buf;
+      if (file.bytes instanceof Uint8Array) buf = file.bytes;
+      else if (file.bytes) buf = new Uint8Array(file.bytes);
+      else if (file.base64) buf = Uint8Array.from(atob(file.base64), c => c.charCodeAt(0));
+      else if (file.dataUrl) {
+        const b64 = String(file.dataUrl).split(',')[1] || '';
+        buf = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      } else if (file.arrayBuffer) buf = new Uint8Array(await file.arrayBuffer());
+      else throw new Error('Cannot read zip bytes');
+      const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+      // Find EOCD
+      let eocd = -1;
+      for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+        if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+      }
+      if (eocd < 0) throw new Error('Not a ZIP file (no EOCD)');
+      const cdCount = dv.getUint16(eocd + 10, true);
+      const cdOff = dv.getUint32(eocd + 16, true);
+      const dec = new TextDecoder();
+      const entries = {};
+      let p = cdOff;
+      for (let i = 0; i < cdCount; i++) {
+        if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('Bad central directory entry');
+        const method = dv.getUint16(p + 10, true);
+        const compSize = dv.getUint32(p + 20, true);
+        const nameLen = dv.getUint16(p + 28, true);
+        const extraLen = dv.getUint16(p + 30, true);
+        const commLen = dv.getUint16(p + 32, true);
+        const lfhOff = dv.getUint32(p + 42, true);
+        const name = dec.decode(buf.subarray(p + 46, p + 46 + nameLen));
+        // local header
+        const lfhNameLen = dv.getUint16(lfhOff + 26, true);
+        const lfhExtraLen = dv.getUint16(lfhOff + 28, true);
+        const dataOff = lfhOff + 30 + lfhNameLen + lfhExtraLen;
+        const comp = buf.subarray(dataOff, dataOff + compSize);
+        const raw = await _unzipEntry(comp, name, method);
+        entries[name] = raw;
+        p += 46 + nameLen + extraLen + commLen;
+      }
+      return entries;
+    }
+
+    function _zipPath(entries, candidates) {
+      for (const c of candidates) if (entries[c] !== undefined) return c;
+      // try suffix match (e.g. ForgeLibrary/manifest.json)
+      for (const c of candidates) {
+        const suf = '/' + c;
+        for (const k of Object.keys(entries)) if (k.endsWith(suf)) return k;
+      }
+      return null;
+    }
+    function _zipJson(entries, path) {
+      if (!path || entries[path] === undefined) return null;
+      try { return JSON.parse(new TextDecoder().decode(entries[path])); } catch (_) { return null; }
+    }
+    function _zipText(entries, path) {
+      if (!path || entries[path] === undefined) return '';
+      try { return new TextDecoder().decode(entries[path]); } catch (_) { return ''; }
+    }
+
+    async function _readBackupZipIntoState(file) {
+      const entries = await parseBackupZip(file);
+      const manifest = _zipJson(entries, _zipPath(entries, ['manifest.json'])) || { apps: [], tombstones: [] };
+      const settings = _zipJson(entries, _zipPath(entries, ['settings.json']));
+      const apps = [];
+      for (const entry of (manifest.apps || [])) {
+        const id = entry?.id;
+        if (!id) continue;
+        const metaPath = _zipPath(entries, ['apps/' + id + '/meta.json']);
+        const htmlPath = _zipPath(entries, ['apps/' + id + '/app.html']);
+        const meta = _zipJson(entries, metaPath) || entry;
+        const html = _zipText(entries, htmlPath);
+        if (!html) continue;
+        apps.push({ id, meta: meta || entry, html });
+      }
+      return { manifest, settings, apps };
+    }
+
+    function openMergeBackupSheet() {
+      if (!el.mergeBackupFile) return;
+      el.mergeBackupFile.value = '';
+      el.mergeBackupFile.click();
+    }
+
+    async function onMergeBackupPicked() {
+      const status = (msg, kind) => { if (el.mergeBackupStatus) { el.mergeBackupStatus.textContent = msg || ''; el.mergeBackupStatus.className = 'status-line' + (kind ? ' ' + kind : ''); } };
+      try {
+        const file = el.mergeBackupFile.files && el.mergeBackupFile.files[0];
+        if (!file) return;
+        status(t('mergeBackup.reading'), '');
+        // Read as ArrayBuffer for the web File case
+        let parsed;
+        if (file.arrayBuffer) parsed = await _readBackupZipIntoState({ arrayBuffer: file.arrayBuffer.bind(file) });
+        else parsed = await _readBackupZipIntoState(file);
+        if (!parsed.apps.length && !parsed.settings) {
+          status(t('mergeBackup.empty'), 'err');
+          return;
+        }
+        _mergeBackupData = parsed;
+        // Build rows
+        const configRows = [];
+        if (parsed.settings) {
+          const s = parsed.settings;
+          const profiles = s.profiles || {};
+          const customs = s.customProviders || [];
+          const seen = new Set();
+          for (const id of Object.keys(profiles)) {
+            if (seen.has(id)) continue; seen.add(id);
+            const hasKey = !!(profiles[id] && String(profiles[id].key || '').trim());
+            const label = (BUILTIN_PROVIDERS[id]?.label) || (customs.find(c => c.id === id)?.label) || id;
+            configRows.push({ id, label, meta: hasKey ? t('shareBackup.hasKey') : t('shareBackup.noKey') });
+          }
+          for (const c of customs) {
+            if (seen.has(c.id)) continue; seen.add(c.id);
+            configRows.push({ id: c.id, label: c.label || c.id, meta: t('shareBackup.custom') });
+          }
+        }
+        const appRows = parsed.apps.map(a => ({
+          id: a.id,
+          label: a.meta?.title || t('lib.untitled'),
+          meta: (a.meta?.updatedAt ? new Date(a.meta.updatedAt).toISOString().slice(0, 10) + ' · ' : '') + (String(a.html || '').length / 1024).toFixed(0) + 'KB',
+        }));
+        const renderRows = (container, rows, allChecked) => {
+          container.innerHTML = '';
+          for (const r of rows) {
+            const row = document.createElement('label');
+            row.className = 'share-back-row';
+            row.innerHTML =
+              '<input type="checkbox" class="sb-check" data-id="' + escapeHtml(r.id) + '">' +
+              '<span class="sb-label"></span>' +
+              '<span class="sb-meta"></span>';
+            row.querySelector('.sb-check').checked = !!allChecked;
+            row.querySelector('.sb-label').textContent = r.label;
+            row.querySelector('.sb-meta').textContent = r.meta;
+            container.appendChild(row);
+          }
+        };
+        renderRows(el.mergeBackupConfigList, configRows, true);
+        renderRows(el.mergeBackupAppList, appRows, true);
+        status('', '');
+        el.mergeBackupOverlay.classList.remove('hidden');
+      } catch (e) {
+        status(t('mergeBackup.failed', { msg: e?.message || String(e) }), 'err');
+      } finally {
+        if (el.mergeBackupFile) el.mergeBackupFile.value = '';
+      }
+    }
+
+    function _mergeBackupPreset(which) {
+      const setAll = (c, on) => c.querySelectorAll('.sb-check').forEach(cb => { cb.checked = !!on; });
+      if (which === 'all') { setAll(el.mergeBackupConfigList, true); setAll(el.mergeBackupAppList, true); }
+      else if (which === 'config') { setAll(el.mergeBackupConfigList, true); setAll(el.mergeBackupAppList, false); }
+      else if (which === 'apps') { setAll(el.mergeBackupConfigList, false); setAll(el.mergeBackupAppList, true); }
+    }
+
+    async function mergeSelectedBackup() {
+      const status = (msg, kind) => { if (el.mergeBackupStatus) { el.mergeBackupStatus.textContent = msg || ''; el.mergeBackupStatus.className = 'status-line' + (kind ? ' ' + kind : ''); } };
+      try {
+        if (!_mergeBackupData) { status(t('mergeBackup.empty'), 'err'); return; }
+        const configIds = Array.from(el.mergeBackupConfigList.querySelectorAll('.sb-check:checked')).map(c => c.dataset.id);
+        const appIds = new Set(Array.from(el.mergeBackupAppList.querySelectorAll('.sb-check:checked')).map(c => c.dataset.id));
+        if (!configIds.length && !appIds.size) { status(t('shareBackup.pickFirst'), 'err'); return; }
+        status(t('mergeBackup.merging'), '');
+        let imported = 0, updated = 0, skipped = 0;
+        // Merge apps
+        if (appIds.size) {
+          let local = getLibrary();
+          const byId = new Map(local.map(a => [a.id, a]));
+          for (const a of _mergeBackupData.apps) {
+            if (!appIds.has(a.id)) continue;
+            const meta = a.meta || {};
+            let remoteApp = {
+              id: a.id,
+              title: meta.title || t('lib.untitled'),
+              summary: meta.summary || '',
+              html: a.html,
+              iconEmoji: meta.iconEmoji || '⚡',
+              iconColor: meta.iconColor || '',
+              carCompatible: !!meta.carCompatible,
+              createdAt: meta.createdAt || Date.now(),
+              updatedAt: meta.updatedAt || Date.now(),
+            };
+            try { remoteApp = applyAaScanToApp(remoteApp).app; } catch (_) {}
+            const cur = byId.get(a.id);
+            if (!cur) { byId.set(a.id, remoteApp); clearDriveTombstone(a.id); imported++; continue; }
+            const localSha = await hashApp(cur);
+            const remoteSha = meta.contentSha256 || await hashApp(remoteApp);
+            if (localSha === remoteSha) { skipped++; continue; }
+            if ((Number(remoteApp.updatedAt) || 0) >= (Number(cur.updatedAt) || 0)) {
+              byId.set(a.id, remoteApp); clearDriveTombstone(a.id); updated++;
+            } else skipped++;
+          }
+          setLibrary([...byId.values()]);
+          renderLibrary();
+        }
+        // Merge settings (filtered to selected providers)
+        let settingsNote = '';
+        if (configIds.length && _mergeBackupData.settings) {
+          const want = new Set(configIds);
+          const s = _mergeBackupData.settings;
+          const profiles = {};
+          for (const [pid, prof] of Object.entries(s.profiles || {})) if (want.has(pid)) profiles[pid] = prof;
+          const knownKeys = (s.knownKeys || []).filter(k => {
+            const ps = (k && (k.providers || k.providerIds)) || [];
+            return ps.some(p => want.has(p));
+          });
+          const customProviders = (s.customProviders || []).filter(c => want.has(c.id));
+          const active = want.has(s.activeProviderId) ? s.activeProviderId : configIds[0];
+          const bundle = {
+            format: s.format, version: s.version, exportedAt: s.exportedAt, deviceId: s.deviceId,
+            activeProviderId: active, rememberKey: s.rememberKey,
+            profiles, customProviders, knownKeys, setupDone: '', setupProvider: '', termuxSetupDone: '', legacy: {},
+          };
+          const sr = await applySettingsFromBackup(bundle, { mode: 'merge' });
+          if (sr?.ok) settingsNote = ', settings ✓ (' + (sr.profilesWithKey || 0) + ' keys, ' + (sr.knownKeys || 0) + ' vault)';
+          else settingsNote = ', settings (empty)';
+        }
+        status(t('mergeBackup.done', { imp: imported, up: updated, skip: skipped, note: settingsNote }), 'ok');
+        await refreshDriveStatus();
+        _mergeBackupData = null;
+        setTimeout(() => { el.mergeBackupOverlay?.classList.add('hidden'); }, 1200);
+      } catch (e) {
+        const msg = e?.message || String(e);
+        status(t('mergeBackup.failed', { msg }), 'err');
       }
     }
 
@@ -19788,6 +20164,16 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.btnShareBackupGo?.addEventListener('click', () => buildAndShareBackupZip());
     el.shareBackupOverlay?.addEventListener('click', (e) => {
       if (e.target === el.shareBackupOverlay) el.shareBackupOverlay.classList.add('hidden');
+    });
+    el.btnMergeBackup?.addEventListener('click', () => openMergeBackupSheet());
+    el.mergeBackupFile?.addEventListener('change', () => onMergeBackupPicked());
+    el.btnMergeBackupCancel?.addEventListener('click', () => { _mergeBackupData = null; el.mergeBackupOverlay?.classList.add('hidden'); });
+    el.btnMergePresetAll?.addEventListener('click', () => _mergeBackupPreset('all'));
+    el.btnMergePresetConfig?.addEventListener('click', () => _mergeBackupPreset('config'));
+    el.btnMergePresetApps?.addEventListener('click', () => _mergeBackupPreset('apps'));
+    el.btnMergeBackupGo?.addEventListener('click', () => mergeSelectedBackup());
+    el.mergeBackupOverlay?.addEventListener('click', (e) => {
+      if (e.target === el.mergeBackupOverlay) { _mergeBackupData = null; el.mergeBackupOverlay.classList.add('hidden'); }
     });
     el.btnShareAiToAa?.addEventListener('click', shareAiSettingsToAaforge);
     el.btnKitchenSink?.addEventListener('click', () => installKitchenSink());
