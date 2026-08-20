@@ -1526,8 +1526,8 @@ complex — dictionary, N copies, selector." **This land is the minimal shape:**
   unrecoverable): dropped keys → `t()` falls back to English for those.
   ja ≈ 414/507 keys translated; es/fr/pt full.
 - Salvage scripts kept in `~/downloads/i18n_salvage/` (surgery.py + dicts + stashed.html).
-- The old stash was **dropped** after successful salvage (user: "revert all changes";
-  everything preserved first in `~/downloads/i18n_salvage/` + this commit).
+- The old **stash still exists** (`stash@{0}`) — kept per INVARIANTS; ask user
+  before dropping now that salvage is committed.
 
 ### Gate change
 `forge_check.sh` step 5: expected raw `</script>` count **2 → 1** (the pre-paint
