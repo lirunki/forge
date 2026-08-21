@@ -17040,6 +17040,7 @@ Permission & safety UX:
       let modelUsed = model;
       let anyChunk = false;
 
+      let firstChunkLogged = false;
       const flushEvent = (line) => {
         // line like `data: {...}` or `data: [DONE]`
         const raw = line.replace(/^data:\s*/i, '').trim();
@@ -17047,12 +17048,33 @@ Permission & safety UX:
         let ev; try { ev = JSON.parse(raw); } catch { return; }
         anyChunk = true;
         if (ev.model) modelUsed = ev.model;
+        // Diagnostic: log the first parsed chunk shape when no content has been
+        // extracted yet — reveals providers that use non-standard field names.
+        if (!firstChunkLogged) {
+          firstChunkLogged = true;
+          try {
+            const preview = JSON.stringify(ev).slice(0, 400);
+            if (!ev.choices || !ev.choices[0]?.delta?.content) {
+              genLog('warn', 'first SSE chunk (no delta.content yet): ' + preview);
+            }
+          } catch (_) {}
+        }
         const choice = ev.choices && ev.choices[0];
-        if (!choice) return;
-        const delta = choice.delta || {};
-        if (typeof delta.content === 'string' && delta.content) {
-          contentAcc += delta.content;
-          if (onDelta) try { onDelta(delta.content, { done: false }); } catch (_) {}
+        if (!choice) {
+          // Some providers put content at top level (no choices wrapper)
+          const topText = ev.content || ev.text || ev.output || ev.response;
+          if (typeof topText === 'string' && topText) {
+            contentAcc += topText;
+            if (onDelta) try { onDelta(topText, { done: false }); } catch (_) {}
+          }
+          return;
+        }
+        const delta = choice.delta || choice.message || {};
+        // Accept multiple content field names (OpenAI=content, some compat=text)
+        const piece = delta.content || delta.text || delta.reasoning || delta.output;
+        if (typeof piece === 'string' && piece) {
+          contentAcc += piece;
+          if (onDelta) try { onDelta(piece, { done: false }); } catch (_) {}
         }
         if (Array.isArray(delta.tool_calls)) {
           for (const tc of delta.tool_calls) {
