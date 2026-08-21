@@ -45,10 +45,17 @@ public class MainActivity extends BridgeActivity {
                 androidx.core.graphics.Insets bars = insets.getInsets(
                     androidx.core.view.WindowInsetsCompat.Type.systemBars()
                     | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+                // SDK 35/36 edge-to-edge: adjustResize no longer resizes the window;
+                // the IME arrives as insets. Pad the WebView bottom with the max of
+                // the IME and the system bar so the keyboard pushes the page up
+                // (the chat input stays visible while typing) instead of overlaying.
+                androidx.core.graphics.Insets ime = insets.getInsets(
+                    androidx.core.view.WindowInsetsCompat.Type.ime());
+                androidx.core.graphics.Insets eff = withImeBottom(bars, ime);
                 android.view.View wv = (getBridge() != null) ? getBridge().getWebView() : null;
                 if (wv != null) {
-                    applyBarInsets(wv, bars);
-                    android.util.Log.d("ForgeInsets", "decor pass: top=" + bars.top + " bottom=" + bars.bottom + " left=" + bars.left + " right=" + bars.right);
+                    applyBarInsets(wv, eff);
+                    android.util.Log.d("ForgeInsets", "decor pass: top=" + eff.top + " bottom=" + eff.bottom + " ime=" + ime.bottom + " left=" + eff.left + " right=" + eff.right);
                 }
                 return androidx.core.view.WindowInsetsCompat.CONSUMED;
             });
@@ -58,7 +65,9 @@ public class MainActivity extends BridgeActivity {
                     androidx.core.graphics.Insets bars = insets.getInsets(
                         androidx.core.view.WindowInsetsCompat.Type.systemBars()
                         | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
-                    applyBarInsets(v, bars);
+                    androidx.core.graphics.Insets ime = insets.getInsets(
+                        androidx.core.view.WindowInsetsCompat.Type.ime());
+                    applyBarInsets(v, withImeBottom(bars, ime));
                     return androidx.core.view.WindowInsetsCompat.CONSUMED;
                 });
                 getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFF09090F));
@@ -180,6 +189,15 @@ public class MainActivity extends BridgeActivity {
                 v.requestLayout();
             }
         } catch (Throwable ignored) {}
+    }
+
+    /** Return bars with the bottom replaced by max(bars.bottom, ime.bottom) so the
+     *  keyboard pushes the WebView up instead of overlaying it (SDK 35/36). */
+    private static androidx.core.graphics.Insets withImeBottom(
+            androidx.core.graphics.Insets bars, androidx.core.graphics.Insets ime) {
+        int bottom = Math.max(bars.bottom, ime.bottom);
+        if (bottom == bars.bottom) return bars;
+        return androidx.core.graphics.Insets.of(bars.left, bars.top, bars.right, bottom);
     }
 
     @Override
