@@ -1744,6 +1744,7 @@ termux-reload-settings</div>
     "chat.failAuth": "The AI provider rejected the request (error {code}). Your key may be invalid, out of credit, or the model is unavailable — check AI settings.",
     "chat.failServer": "The AI provider had an error (error {code}). Try again in a moment, or switch providers in AI settings.",
     "chat.failParse": "The model didn’t return a buildable app this time (no JSON payload). Try rephrasing your request, or tap Create again — it often works on retry.",
+    "chat.failTruncated": "The model ran out of output room mid-build (HTML cut off). Use a model with a larger max output, simplify the prompt, or try again.\n[{msg}]",
     "chat.imageBtn": "🖼 Image",
     "chat.imageTitle": "Attach image / UI sketch",
     "chat.imgTooLarge": "Image too large (max ~5MB). Try a smaller sketch or screenshot.",
@@ -15237,6 +15238,9 @@ Permission & safety UX:
           return t('chat.failAuth', { code }) + '\n[' + raw.slice(0, 200) + ']';
         return t('chat.failServer', { code }) + '\n[' + raw.slice(0, 200) + ']';
       }
+      // Output truncated at the provider max-token limit (finish_reason: length)
+      if (err?.truncated || /max.?token|output hit|was cut off|truncated/i.test(low))
+        return t('chat.failTruncated', { msg: raw.slice(0, 200) });
       // Model returned text/markdown instead of JSON (the most common build failure)
       if (/did not return valid json|payload missing html|json/i.test(low))
         return t('chat.failParse') + '\n[' + raw.slice(0, 200) + ']';
@@ -16544,9 +16548,9 @@ Permission & safety UX:
       const body = { contents };
       if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
       const temperature = parseFloat(getAiRuntime().temperature);
-      if (!Number.isNaN(temperature)) {
-        body.generationConfig = { temperature };
-      }
+      body.generationConfig = {};
+      if (!Number.isNaN(temperature)) body.generationConfig.temperature = temperature;
+      if (opts.maxTokens > 0) body.generationConfig.maxOutputTokens = opts.maxTokens;
       if (tools && tools.length) {
         body.tools = [{
           functionDeclarations: tools.map(t => ({
@@ -16914,6 +16918,13 @@ Permission & safety UX:
       if ((content == null || content === '') && !tool_calls.length) {
         throw new Error('Empty model response');
       }
+      // finish_reason length = provider cut the completion mid-payload (common on big mini-apps)
+      if (finish_reason === 'length' && content && !tool_calls.length) {
+        const err = new Error('Model output hit the provider max-token limit mid-payload (finish_reason: length) — the app HTML was cut off. Try a shorter prompt, a model with a larger output limit, or a simpler app.');
+        err.truncated = true;
+        try { genLog('warn', 'finish_reason=length — output truncated at ' + String(content).length + ' chars'); } catch (_) {}
+        throw err;
+      }
       if (opts.fullResponse || tool_calls.length || opts.tools) {
         return {
           content: content == null ? '' : String(content),
@@ -16959,6 +16970,10 @@ Permission & safety UX:
       const { url, headers, model } = resolveEndpoint();
       const temperature = parseFloat(getAiRuntime().temperature);
       const body = { model, messages: normalizeChatMessages(messages), stream: true };
+      // Generation budget: mini-app HTML payloads can exceed provider defaults
+      // (often 4k-8k tokens) — ask for a large completion budget. Providers that
+      // reject the param will 4xx and the call falls back / surfaces the error.
+      if (opts.maxTokens > 0) body.max_tokens = opts.maxTokens;
       if (!Number.isNaN(temperature)) body.temperature = temperature;
       if (tools) { body.tools = tools; body.tool_choice = toolChoice; }
       if (opts.jsonMode === true || opts.jsonMode === 'on') body.response_format = { type: 'json_object' };
@@ -16997,6 +17012,11 @@ Permission & safety UX:
         }
         if (body.tools && /tools|tool_choice|unknown.?parameter|unsupported/i.test(errText)) {
           delete body.tools; delete body.tool_choice;
+          return chatCompletionsStream(messages, signal, Object.assign({}, opts, { onDelta }));
+        }
+        // Retry once without max_tokens if the provider rejects the param
+        if (body.max_tokens && /max_tokens|unknown.?parameter|unsupported/i.test(errText)) {
+          delete body.max_tokens;
           return chatCompletionsStream(messages, signal, Object.assign({}, opts, { onDelta }));
         }
         throw new Error('API ' + res.status + ': ' + errText);
@@ -17072,6 +17092,13 @@ Permission & safety UX:
         // Some providers return a single non-SSE JSON on error; surface it.
         throw new Error('Empty stream response');
       }
+      // Truncation: finish_reason length means the HTML JSON was cut mid-payload.
+      if (finishReason === 'length' && contentAcc) {
+        const err = new Error('Model output hit the provider max-token limit mid-payload (finish_reason: length) — the app HTML was cut off. Try a shorter prompt, a model with a larger output limit, or a simpler app.');
+        err.truncated = true;
+        try { genLog('warn', 'finish_reason=length — output truncated at ' + contentAcc.length + ' chars'); } catch (_) {}
+        throw err;
+      }
       const tool_calls = Object.keys(toolAcc).sort((a,b)=>a-b).map(k => toolAcc[k]);
       if (tools || tool_calls.length || full) {
         return { content: contentAcc, tool_calls, finish_reason: finishReason, role: 'assistant', model: modelUsed };
@@ -17124,7 +17151,9 @@ Permission & safety UX:
       const body = { contents };
       if (systemText) body.systemInstruction = { parts:[{ text: systemText }] };
       const temperature = parseFloat(getAiRuntime().temperature);
-      if (!Number.isNaN(temperature)) body.generationConfig = { temperature };
+      body.generationConfig = {};
+      if (!Number.isNaN(temperature)) body.generationConfig.temperature = temperature;
+      if (opts.maxTokens > 0) body.generationConfig.maxOutputTokens = opts.maxTokens;
       if (tools && tools.length) body.tools = [{ functionDeclarations: tools.map(t => ({ name:t.function.name, description:t.function.description||'', parameters:t.function.parameters||{type:'object',properties:{}} })) }];
 
       const headers = { 'Content-Type':'application/json', 'x-goog-api-key': key };
@@ -17132,6 +17161,7 @@ Permission & safety UX:
       let contentAcc = '';
       const toolCalls = [];
       let lastErr = null;
+      let lastFinishReason = null;
       let usedModel = model;
 
       for (let mi = 0; mi < modelsTry.length; mi++) {
@@ -17172,6 +17202,7 @@ Permission & safety UX:
               let ev; try { ev = JSON.parse(raw); } catch { continue; }
               const cands = ev.candidates || (ev && ev[0] && ev[0].candidates) || [];
               for (const cand of cands) {
+                if (cand && cand.finishReason) lastFinishReason = cand.finishReason;
                 const parts = cand && cand.content && cand.content.parts || [];
                 for (const p of parts) {
                   if (typeof p.text === 'string' && p.text) {
@@ -17204,6 +17235,13 @@ Permission & safety UX:
         break;
       }
       if (lastErr) throw lastErr;
+      // Gemini truncation: candidates finishReason 'MAX_TOKENS' / 'LENGTH' → output cut off
+      if (/max.?tokens|length/i.test(String(lastFinishReason || '')) && contentAcc) {
+        const err = new Error('Gemini hit maxOutputTokens mid-payload — the app HTML was cut off. Try a shorter prompt, a model with a larger output limit, or a simpler app.');
+        err.truncated = true;
+        try { genLog('warn', 'gemini finishReason=' + lastFinishReason + ' — output truncated at ' + contentAcc.length + ' chars'); } catch (_) {}
+        throw err;
+      }
       const full = !!(opts.fullResponse || opts.returnToolCalls || toolCalls.length);
       if (full) return { content: contentAcc, tool_calls: toolCalls, finish_reason: toolCalls.length ? 'tool_calls' : 'stop', role:'assistant', model: usedModel };
       return contentAcc;
@@ -17231,6 +17269,7 @@ Permission & safety UX:
         model,
         messages: normalizeChatMessages(messages),
       };
+      if (opts.maxTokens > 0) body.max_tokens = opts.maxTokens;
       if (!Number.isNaN(temperature)) body.temperature = temperature;
 
       const tools = normalizeToolsParam(opts.tools || opts.functions);
@@ -17285,6 +17324,16 @@ Permission & safety UX:
             // Provider dropped tools — return text only (no tool_calls)
             return packChatCompletionResult(data2, { fullResponse: !!opts.fullResponse });
           }
+          // Retry once without max_tokens if provider rejects the param
+          if (body.max_tokens && /max_tokens|unknown.?parameter|unsupported/i.test(errText)) {
+            delete body.max_tokens;
+            const res2 = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: aiReadTimeoutMs() });
+            if (res2.status < 200 || res2.status >= 300) {
+              throw new Error(`API ${res2.status}: ${typeof res2.data === 'string' ? res2.data : JSON.stringify(res2.data)}`);
+            }
+            const data2 = typeof res2.data === 'string' ? JSON.parse(res2.data) : res2.data;
+            return packChatCompletionResult(data2, { ...opts, tools });
+          }
           throw new Error(`API ${res.status}: ${errText}`);
         }
         const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
@@ -17320,6 +17369,15 @@ Permission & safety UX:
           if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
           const dataDrop = await res.json();
           return packChatCompletionResult(dataDrop, { fullResponse: !!opts.fullResponse });
+        } else if (body.max_tokens && /max_tokens|unknown.?parameter|unsupported/i.test(errText)) {
+          delete body.max_tokens;
+          res = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            signal,
+          });
+          if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
         } else {
           throw new Error(`API ${res.status}: ${errText}`);
         }
@@ -18201,14 +18259,15 @@ Return complete html, not a diff.`;
       };
       // Prefer streaming so tokens keep the connection alive (no single-call
       // 600s socket cliff); the stream fns fall back to non-streaming internally.
+      // maxTokens: full reforge payloads need a large output budget (see forgeApp).
       if (isGeminiHostProvider()) {
         try {
-          raw = await geminiStreamGenerateContent(msgs, abortController?.signal, { jsonMode: true, onDelta });
+          raw = await geminiStreamGenerateContent(msgs, abortController?.signal, { jsonMode: true, onDelta, maxTokens: 32768 });
         } catch (_) {
-          raw = await chatCompletions(msgs, abortController?.signal, { jsonMode: true });
+          raw = await chatCompletions(msgs, abortController?.signal, { jsonMode: true, maxTokens: 32768 });
         }
       } else {
-        raw = await chatCompletionsStream(msgs, abortController?.signal, { jsonMode: true, onDelta });
+        raw = await chatCompletionsStream(msgs, abortController?.signal, { jsonMode: true, onDelta, maxTokens: 32768 });
       }
       genLog('info', 'reforge received ' + raw.length + ' chars · parsing');
       const parsed = extractJson(raw);
@@ -18789,10 +18848,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // Force JSON for the factory payload even when vision parts are present.
       // Gemini native path is better for sketches when the active host provider is Gemini.
       // Stream variants give live progress; both fall back to non-streaming automatically.
+      // maxTokens: large mini-app payloads routinely exceed provider default output
+      // limits (4k-8k) — without an explicit budget the HTML gets cut off mid-JSON.
       if (isGeminiHostProvider() && attachments?.length) {
-        raw = await geminiStreamGenerateContent(msgs, abortController.signal, { jsonMode: true, onDelta });
+        raw = await geminiStreamGenerateContent(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: 32768 });
       } else {
-        raw = await chatCompletionsStream(msgs, abortController.signal, { jsonMode: true, onDelta });
+        raw = await chatCompletionsStream(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: 32768 });
       }
       status('Parsing app payload…');
       genLog('info', 'received ' + raw.length + ' chars · parsing');
