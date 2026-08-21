@@ -2,7 +2,7 @@
 
 > Canonical source: `forge/www/index.html` (the `SYSTEM_PROMPT` + `ForgeHost` bridge).
 > This file is a human-readable mirror — regenerate from the host when the bridge changes.
-> Version baseline: `2.6.93 / versionCode 123`.
+> Version baseline: `2.6.95 / versionCode 125`.
 
 `window.ForgeHost` (alias `window.forge`) is injected into every mini-app
 iframe by the host before `ready`. **All host APIs are async (Promises).

@@ -744,6 +744,24 @@
     #miniConsoleOut .mc-lvl.error { color: #fb7185; }
     #miniConsoleOut .mc-src { color: #67e8f9; }
     #miniConsoleOut .mc-empty { color: var(--muted); font-style: italic; }
+    /* Generation-timeout watchdog card (non-blocking — tabs/console stay usable) */
+    #genTimeoutWrap {
+      position: fixed; inset: 0; z-index: 150; pointer-events: none;
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 0 0.9rem calc(0.9rem + var(--safe-b));
+    }
+    #genTimeoutWrap.hidden { display: none !important; }
+    #genTimeoutCard {
+      pointer-events: auto; width: 100%; max-width: 420px;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 14px; padding: 0.85rem 0.95rem; box-shadow: var(--shadow);
+    }
+    #genTimeoutCard .gt-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 0.2rem; }
+    #genTimeoutCard .gt-body { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.6rem; }
+    #genTimeoutCard .gt-row { display: flex; align-items: center; gap: 0.45rem; margin-bottom: 0.6rem; font-size: 0.8rem; color: var(--muted); }
+    #genTimeoutCard .gt-row input { width: 92px; }
+    #genTimeoutCard .gt-actions { display: flex; gap: 0.45rem; }
+    #genTimeoutCard .gt-actions .btn { flex: 1; }
     body.app-mode .app-exit { display: inline-flex; }
     body.app-mode {
       background: #000;
@@ -1078,6 +1096,23 @@ termux-reload-settings</div>
         <button class="btn small" id="btnMiniConsoleCopySheet" type="button" data-i18n="common.copy">Copy</button>
         <button class="btn secondary small" id="btnMiniConsoleClearSheet" type="button" data-i18n="common.clear">Clear</button>
         <button class="btn secondary small" id="btnMiniConsoleClose" type="button" data-i18n="common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generation-timeout watchdog card (non-blocking) -->
+  <div id="genTimeoutWrap" class="hidden" aria-live="polite">
+    <div id="genTimeoutCard" role="alertdialog" aria-labelledby="genTimeoutTitle">
+      <div class="gt-title" id="genTimeoutTitle">⏳ <span data-i18n="gen.title">Still building…</span></div>
+      <div class="gt-body" id="genTimeoutBody">Generation is taking longer than the limit.</div>
+      <div class="gt-row">
+        <label for="genExtendSecs" data-i18n="gen.extendBy">Extend by</label>
+        <input id="genExtendSecs" type="number" inputmode="numeric" min="10" max="3600" step="10" value="600" />
+        <span>s</span>
+      </div>
+      <div class="gt-actions">
+        <button class="btn small" id="btnGenExtend" type="button" data-i18n="gen.extend">Extend</button>
+        <button class="btn secondary small" id="btnGenFail" type="button" data-i18n="gen.fail">Fail now</button>
       </div>
     </div>
   </div>
@@ -1446,6 +1481,15 @@ termux-reload-settings</div>
             </div>
           </div>
 
+          <div class="row2">
+            <div>
+              <label for="genTimeoutSecs" data-i18n="ai.genTimeout">Max generation time (s)</label>
+              <input id="genTimeoutSecs" type="number" inputmode="numeric" min="30" max="1800" step="10" value="600" />
+            </div>
+            <div></div>
+          </div>
+          <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.genTimeoutHint">Watchdog for Forge it / Reforge: when time is up you can extend or stop. Progress lands in Console.</p>
+
           <div class="settings-block" style="margin-top:0.25rem;">
             <button class="btn secondary small" id="btnTestAi" type="button" data-i18n="ai.test">Test connection</button>
             <button class="btn secondary small" id="btnForgetKey" type="button" data-i18n="ai.forget">Forget this key</button>
@@ -1619,6 +1663,14 @@ termux-reload-settings</div>
     "ai.json.off": "Off",
     "ai.json.on": "Always request json_object",
     "ai.jsonMode": "JSON mode",
+    "ai.genTimeout": "Max generation time (s)",
+    "ai.genTimeoutHint": "Watchdog for Forge it / Reforge: when time is up you can extend or stop. Progress lands in Console.",
+    "gen.title": "Still building…",
+    "gen.body": "{label}: {secs}s so far. The model is still working — keep waiting or stop.",
+    "gen.extendBy": "Extend by",
+    "gen.extend": "Extend",
+    "gen.fail": "Fail now",
+    "chat.genTimeoutMsg": "Generation stopped — time limit reached.",
     "ai.key": "API key",
     "ai.keyHint": "Saved only for this provider when Remember is on.",
     "ai.keyHintBuiltin": "Keys are saved per provider and kept in a known-keys vault for auto-restore on switch.",
@@ -4975,6 +5027,7 @@ termux-reload-settings</div>
       setupProvider: 'forge_setup_provider_v1',
       modelCatalogCache: 'forge_model_catalog_cache_v1',
       termuxSetupDone: 'forge_termux_setup_done_v1',
+      genTimeout: 'forge_gen_timeout_v1',
     };
 
     /**
@@ -5446,6 +5499,12 @@ termux-reload-settings</div>
       btnCancelOai: document.getElementById('btnCancelOai'),
       aiStatus: document.getElementById('aiStatus'),
       btnExitApp: document.getElementById('btnExitApp'),
+      genTimeoutSecs: document.getElementById('genTimeoutSecs'),
+      genTimeoutWrap: document.getElementById('genTimeoutWrap'),
+      genTimeoutBody: document.getElementById('genTimeoutBody'),
+      genExtendSecs: document.getElementById('genExtendSecs'),
+      btnGenExtend: document.getElementById('btnGenExtend'),
+      btnGenFail: document.getElementById('btnGenFail'),
     };
 
     // ——— Mini-app / bridge debug console (AI tab) ———
@@ -5553,6 +5612,78 @@ termux-reload-settings</div>
         el.miniConsoleOverlay.classList.add('hidden');
         el.miniConsoleOverlay.setAttribute('aria-hidden', 'true');
       }
+    }
+
+    // ——— Generation watchdog + console turn-logging ———
+    /** Max generation time setting (seconds, clamped 30–1800, default 600). */
+    function getGenTimeoutSecs() {
+      let v = parseInt(String(localStorage.getItem(LS.genTimeout) || ''), 10);
+      if (!Number.isFinite(v)) v = 600;
+      return Math.min(1800, Math.max(30, v));
+    }
+    /** Read-timeout for AI HTTP calls: never shorter than the old 600s default, grows with the setting. */
+    function aiReadTimeoutMs() {
+      return Math.max(600000, getGenTimeoutSecs() * 1000);
+    }
+    /** Generation progress → Mini-app console (AI tab), source-tagged forge-gen. */
+    function genLog(level, text) {
+      try { pushMiniConsole(level, text, 'forge-gen'); } catch (_) {}
+    }
+
+    let genWatchdog = null;
+    let genFailedByTimeout = false;
+    function showGenTimeoutCard(label, elapsedSec) {
+      if (!el.genTimeoutWrap) return;
+      try {
+        if (el.genTimeoutBody) {
+          el.genTimeoutBody.textContent = tf('gen.body', '{label}: {secs}s so far. The model is still working — keep waiting or stop.',
+            { label: label || 'Forge', secs: elapsedSec });
+        }
+        if (el.genExtendSecs) el.genExtendSecs.value = String(getGenTimeoutSecs());
+        el.genTimeoutWrap.classList.remove('hidden');
+      } catch (_) {}
+    }
+    function hideGenTimeoutCard() {
+      try { el.genTimeoutWrap?.classList.add('hidden'); } catch (_) {}
+    }
+    /**
+     * Whole-generation deadline. When the budget is exhausted a NON-blocking
+     * card offers Fail now / Extend +Ns — the user can still switch tabs and
+     * read the console while it is up (the wrapper is pointer-events:none).
+     */
+    function startGenWatchdog(label) {
+      const started = Date.now();
+      let deadline = started + getGenTimeoutSecs() * 1000;
+      let fired = false;
+      let stopped = false;
+      const tick = setInterval(() => {
+        if (stopped) return;
+        const now = Date.now();
+        if (now < deadline) return;
+        if (!fired) {
+          fired = true;
+          const elapsed = Math.round((now - started) / 1000);
+          genLog('warn', label + ': ' + elapsed + 's budget reached — asking user (extend / fail)');
+          showGenTimeoutCard(label, elapsed);
+        }
+      }, 1000);
+      const api = {
+        extend(secs) {
+          deadline = Date.now() + secs * 1000;
+          fired = false;
+          genLog('info', label + ': user extended +' + secs + 's (new budget ' + secs + 's)');
+          hideGenTimeoutCard();
+        },
+        stop() {
+          if (stopped) return;
+          stopped = true;
+          clearInterval(tick);
+          hideGenTimeoutCard();
+          if (genWatchdog === api) genWatchdog = null;
+        },
+      };
+      genWatchdog = api;
+      return api;
     }
 
     /** When true, Forge chrome is hidden and only the mini-app is shown. */
@@ -7239,6 +7370,11 @@ termux-reload-settings</div>
         applyProfileToUI(activeProviderId, { keepModel: true });
         // ensure active provider key is flushed into vault + profile
         saveCurrentProfile();
+        // Generation-timeout setting (default 600s, clamped 30–1800)
+        try {
+          const gt = parseInt(localStorage.getItem(LS.genTimeout), 10);
+          if (el.genTimeoutSecs && Number.isFinite(gt) && gt >= 30 && gt <= 1800) el.genTimeoutSecs.value = String(gt);
+        } catch (_) {}
 
         const draft = localStorage.getItem(LS.draft);
         if (draft) {
@@ -7258,6 +7394,10 @@ termux-reload-settings</div>
 
     function savePrefs() {
       saveCurrentProfile();
+      try {
+        const gt = parseInt(el.genTimeoutSecs && el.genTimeoutSecs.value, 10);
+        if (Number.isFinite(gt) && gt >= 30 && gt <= 1800) localStorage.setItem(LS.genTimeout, String(gt));
+      } catch (_) {}
     }
 
     function openOaiEditor(mode) {
@@ -15980,7 +16120,7 @@ Permission & safety UX:
       const headers = Object.assign({ 'Content-Type': 'application/json' }, providerAuthHeaders());
       let data;
       if (Capacitor.isNativePlatform()) {
-        const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
+        const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: aiReadTimeoutMs() });
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
         if (res.status < 200 || res.status >= 300) {
@@ -16416,7 +16556,7 @@ Permission & safety UX:
         url = urlFor(usedModel);
         try {
           if (Capacitor.isNativePlatform()) {
-            const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
+            const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: aiReadTimeoutMs() });
             if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
             const payload = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
             let parsed;
@@ -17104,14 +17244,14 @@ Permission & safety UX:
       // Keep model in body for OpenAI-compatible providers.
 
       if (Capacitor.isNativePlatform()) {
-        const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
+        const res = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: aiReadTimeoutMs() });
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         if (res.status < 200 || res.status >= 300) {
           const errText = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
           // Retry once without response_format if provider rejects it
           if (body.response_format && /response_format|unknown.?parameter|unsupported/i.test(errText)) {
             delete body.response_format;
-            const res2 = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
+            const res2 = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: aiReadTimeoutMs() });
             if (res2.status < 200 || res2.status >= 300) {
               throw new Error(`API ${res2.status}: ${typeof res2.data === 'string' ? res2.data : JSON.stringify(res2.data)}`);
             }
@@ -17122,7 +17262,7 @@ Permission & safety UX:
           if (body.tools && /tools|tool_choice|unknown.?parameter|unsupported/i.test(errText)) {
             delete body.tools;
             delete body.tool_choice;
-            const res2 = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: 600000 });
+            const res2 = await nativeHttpPost({ url, headers, data: body, signal, connectTimeout: 60000, readTimeout: aiReadTimeoutMs() });
             if (res2.status < 200 || res2.status >= 300) {
               throw new Error(`API ${res2.status}: ${typeof res2.data === 'string' ? res2.data : JSON.stringify(res2.data)}`);
             }
@@ -18024,18 +18164,38 @@ Return complete html, not a diff.`;
       ];
 
       await bgStart('Reforge', `Updating “${app.title || 'app'}” for latest ForgeHost…`);
+      try {
+        const rt = getAiRuntime();
+        const who = [rt.provider?.label || rt.providerId, rt.model].filter(Boolean).join(' · ') || 'unknown';
+        genLog('info', 'reforge start · app "' + (app.title || app.id) + '" · ' + who + ' · prompt ' + userText.length + ' chars');
+      } catch (_) {}
 
       let raw;
-      // Prefer JSON mode; Gemini path when host provider is Gemini (long HTML ok either way)
+      let recvChars = 0;
+      let lastGenLogTick = 0;
+      const onDelta = (d) => {
+        try {
+          recvChars += String(d || '').length;
+          const now = Date.now();
+          if (now - lastGenLogTick > 20000) {
+            lastGenLogTick = now;
+            const kb = recvChars >= 1024 ? (recvChars / 1024).toFixed(1) + 'k' : String(recvChars);
+            genLog('info', 'reforge receiving… ' + kb + ' chars');
+          }
+        } catch (_) {}
+      };
+      // Prefer streaming so tokens keep the connection alive (no single-call
+      // 600s socket cliff); the stream fns fall back to non-streaming internally.
       if (isGeminiHostProvider()) {
         try {
-          raw = await geminiGenerateContent(msgs, abortController?.signal);
+          raw = await geminiStreamGenerateContent(msgs, abortController?.signal, { jsonMode: true, onDelta });
         } catch (_) {
           raw = await chatCompletions(msgs, abortController?.signal, { jsonMode: true });
         }
       } else {
-        raw = await chatCompletions(msgs, abortController?.signal, { jsonMode: true });
+        raw = await chatCompletionsStream(msgs, abortController?.signal, { jsonMode: true, onDelta });
       }
+      genLog('info', 'reforge received ' + raw.length + ' chars · parsing');
       const parsed = extractJson(raw);
       if (!parsed?.html) throw new Error('Reforge payload missing html');
 
@@ -18477,6 +18637,8 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       setPreviewStatus(`Reforging (${modeLabel}, ${toolsLabel}) with latest ForgeHost…`, '');
       setBusy(true);
       abortController = new AbortController();
+      const watchdog = startGenWatchdog('Reforge');
+      genFailedByTimeout = false;
 
       try {
         savePrefs();
@@ -18485,6 +18647,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         currentApp = next;
         loadPreview(next);
         setReforgeDirty(true);
+        genLog('info', 'reforge done · "' + (next.title || next.id) + '" · html ' + (next.html.length / 1024).toFixed(1) + 'k chars');
         setPreviewStatus(message + ' · Save to keep · Discard reforge to restore', 'ok');
         setLibStatus(t('reforge.donePreview', { name: next.title }), 'ok');
         try { setPreviewStatus(t('reforge.ready'), 'ok'); } catch (_) {}
@@ -18496,7 +18659,11 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           );
         } catch (_) {}
       } catch (e) {
-        const msg = e?.name === 'AbortError' ? t('reforge.cancelled') : (e?.message || String(e));
+        if (e?.name === 'AbortError') genLog('warn', 'reforge aborted' + (genFailedByTimeout ? ' (time limit)' : ''));
+        else genLog('error', 'reforge failed: ' + (e?.message || e));
+        const msg = e?.name === 'AbortError'
+          ? (t('reforge.cancelled') + (genFailedByTimeout ? ' (time limit)' : ''))
+          : (e?.message || String(e));
         setPreviewStatus(msg, 'err');
         setLibStatus(msg, 'err');
         // Restore snapshot into preview if we still have original
@@ -18507,6 +18674,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         clearReforgePending();
         try { addMessage('assistant', t('reforge.failed', { msg: msg })); } catch (_) {}
       } finally {
+        watchdog.stop();
         setBusy(false);
         abortController = null;
         try { await bgStop(); } catch (_) {}
@@ -18581,11 +18749,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         const rt = getAiRuntime();
         const who = [rt.provider?.label || rt.providerId, rt.model].filter(Boolean).join(' · ');
         status('Querying ' + who + '…');
+        genLog('info', 'forge start · ' + who + ' · user ' + userText.length + ' chars · history ' + (msgs.length - 2) + ' · attachments ' + (attachments?.length || 0));
       } catch (_) {}
 
       let raw;
       let recvChars = 0;
       let lastRecvTick = 0;
+      let lastGenLogTick = 0;
       const onDelta = (d) => {
         try {
           recvChars += String(d || '').length;
@@ -18594,6 +18764,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
             lastRecvTick = now;
             const kb = recvChars >= 1024 ? (recvChars / 1024).toFixed(1) + 'k' : String(recvChars);
             status('Receiving blueprint… ' + kb + ' chars');
+            if (now - lastGenLogTick > 20000) {
+              lastGenLogTick = now;
+              genLog('info', 'receiving… ' + kb + ' chars');
+            }
           }
         } catch (_) {}
       };
@@ -18606,6 +18780,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         raw = await chatCompletionsStream(msgs, abortController.signal, { jsonMode: true, onDelta });
       }
       status('Parsing app payload…');
+      genLog('info', 'received ' + raw.length + ' chars · parsing');
       const parsed = extractJson(raw);
       if (!parsed.html) throw new Error('Payload missing html');
       status('Validating HTML…');
@@ -18619,6 +18794,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         carCompatible: !!wantCar,
       };
       const message = String(parsed.message || t('chat.builtDefault', { name: app.title }));
+      genLog('info', 'forge done · "' + app.title + '" · html ' + (app.html.length / 1024).toFixed(1) + 'k chars');
       return { app, message };
     }
 
@@ -18644,6 +18820,8 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       setBusy(true);
       abortController = new AbortController();
       const forgeProgress = startForgeProgress();
+      const watchdog = startGenWatchdog('Forge');
+      genFailedByTimeout = false;
 
       try {
         const { app, message } = await forgeApp(userText, attachments, (s) => forgeProgress.status(s));
@@ -18652,9 +18830,15 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         loadPreview(app);
         showTab('preview');
       } catch (err) {
-        if (err?.name === 'AbortError') addMessage('assistant', t('chat.stopped'));
-        else addMessage('assistant', forgeFailMessage(err));
+        if (err?.name === 'AbortError') {
+          genLog('warn', 'forge aborted' + (genFailedByTimeout ? ' (time limit)' : ''));
+          addMessage('assistant', genFailedByTimeout ? t('chat.genTimeoutMsg') : t('chat.stopped'));
+        } else {
+          genLog('error', 'forge failed: ' + (err?.message || err));
+          addMessage('assistant', forgeFailMessage(err));
+        }
       } finally {
+        watchdog.stop();
         forgeProgress.stop();
         setBusy(false);
         abortController = null;
@@ -20729,10 +20913,22 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       savePrefs();
     });
 
-    ['apiBase','apiKey','model','temperature','jsonMode',
+    ['apiBase','apiKey','model','temperature','jsonMode','genTimeoutSecs',
      'azureResource','azureDeployment','azureApiVersion','azureAuth'].forEach(id => {
       el[id]?.addEventListener('change', savePrefs);
       el[id]?.addEventListener('blur', savePrefs);
+    });
+    // Generation-timeout card actions (non-blocking popup)
+    el.btnGenExtend?.addEventListener('click', () => {
+      let v = parseInt(el.genExtendSecs && el.genExtendSecs.value, 10);
+      if (!Number.isFinite(v) || v < 10 || v > 3600) v = getGenTimeoutSecs();
+      genWatchdog?.extend(v);
+    });
+    el.btnGenFail?.addEventListener('click', () => {
+      genLog('warn', 'user chose Fail now (time limit)');
+      genFailedByTimeout = true;
+      genWatchdog?.stop();
+      try { abortController?.abort(); } catch (_) {}
     });
     el.rememberKey?.addEventListener('change', () => {
       if (!el.rememberKey.checked) {
