@@ -1724,3 +1724,29 @@ Smoke:
 [ ] Console shows receiving… Nk growing past previous ~default cutoff
 ```
 
+## Stream parser: non-standard content fields (2026-08-21)
+
+**2.6.98 / versionCode 128** (from 2.6.97/127). Host-only.
+
+### Symptom
+GLM 5.3 returned 0 chars → `JSON parse failed · len 0`. Chunks arrived but no
+content was extracted.
+
+### Root cause
+`chatCompletionsStream` flushEvent only checked `choice.delta.content`. GLM
+(Zhipu) uses a different field name for the text piece.
+
+### Fix
+- Accept `delta.content | delta.text | delta.reasoning | delta.output`
+- Accept top-level `ev.content | ev.text | ev.output | ev.response` (no choices)
+- Also check `choice.message` (some providers send full message in stream)
+- Log the first SSE chunk (400 chars) when no delta.content yet → console
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.6.98 (128)
+[ ] GLM 5.3 + Chat Pro prompt → console shows first chunk shape → builds or
+    clear error
+[ ] Opus/Grok still work (regression)
+```
+
