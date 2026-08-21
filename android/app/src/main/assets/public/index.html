@@ -1745,6 +1745,7 @@ termux-reload-settings</div>
     "chat.failServer": "The AI provider had an error (error {code}). Try again in a moment, or switch providers in AI settings.",
     "chat.failParse": "The model didn’t return a buildable app this time (no JSON payload). Try rephrasing your request, or tap Create again — it often works on retry.",
     "chat.failTruncated": "The model ran out of output room mid-build (HTML cut off). Use a model with a larger max output, simplify the prompt, or try again.\n[{msg}]",
+    "chat.failReasoningOnly": "The model spent its entire output budget thinking and never produced an answer. Try a simpler prompt, a non-reasoning model, or increase max generation time.\n[{msg}]",
     "chat.imageBtn": "🖼 Image",
     "chat.imageTitle": "Attach image / UI sketch",
     "chat.imgTooLarge": "Image too large (max ~5MB). Try a smaller sketch or screenshot.",
@@ -15211,7 +15212,7 @@ Permission & safety UX:
         // 3b) Scan every '{' from left to right; first slice-to-last-'}' that
         //     parses AND has an html string wins. Prose braces fail fast.
         let idx = -1, tries = 0, fallback = null;
-        while ((idx = s.indexOf('{', idx + 1)) >= 0 && idx < b && tries < 400) {
+        while ((idx = s.indexOf('{', idx + 1)) >= 0 && idx < b && tries < 2000) {
           tries++;
           const slice = s.slice(idx, b + 1);
           let parsed = null;
@@ -15266,6 +15267,9 @@ Permission & safety UX:
       // Output truncated at the provider max-token limit (finish_reason: length)
       if (err?.truncated || /max.?token|output hit|was cut off|truncated/i.test(low))
         return t('chat.failTruncated', { msg: raw.slice(0, 200) });
+      // Model only produced reasoning (thinking), no answer
+      if (err?.reasoningOnly || /reasoning but no answer|thinking budget/i.test(low))
+        return t('chat.failReasoningOnly', { msg: raw.slice(0, 200) });
       // Model returned text/markdown instead of JSON (the most common build failure)
       if (/did not return valid json|payload missing html|json/i.test(low))
         return t('chat.failParse') + '\n[' + raw.slice(0, 200) + ']';
@@ -17060,6 +17064,7 @@ Permission & safety UX:
       const decoder = new TextDecoder('utf-8');
       let buf = '';
       let contentAcc = '';
+      let reasoningAcc = '';   // thinking/reasoning tokens — NOT the answer
       const toolAcc = {};       // index -> { id, function:{ name, arguments:'' } }
       let finishReason = null;
       let modelUsed = model;
@@ -17097,8 +17102,14 @@ Permission & safety UX:
           return;
         }
         const delta = choice.delta || choice.message || {};
-        // Accept multiple content field names (OpenAI=content, some compat=text)
-        const piece = delta.content || delta.text || delta.reasoning || delta.output;
+        // Reasoning/thinking tokens (GLM, DeepSeek, o1) are NOT the answer —
+        // accumulate separately so they don't pollute contentAcc / extractJson.
+        const reasoning = delta.reasoning || delta.reasoning_content || delta.thinking;
+        if (typeof reasoning === 'string' && reasoning) {
+          reasoningAcc += reasoning;
+        }
+        // Actual content: OpenAI=content, some compat providers=text/output
+        const piece = delta.content || delta.text || delta.output;
         if (typeof piece === 'string' && piece) {
           contentAcc += piece;
           if (onDelta) try { onDelta(piece, { done: false }); } catch (_) {}
@@ -17140,6 +17151,15 @@ Permission & safety UX:
       if (!anyChunk) {
         // Some providers return a single non-SSE JSON on error; surface it.
         throw new Error('Empty stream response');
+      }
+      // Model only produced reasoning (thinking) and never emitted a content
+      // answer — the thinking budget consumed the output limit. Common with
+      // GLM/DeepSeek reasoning models on complex prompts.
+      if (!contentAcc && reasoningAcc) {
+        const err = new Error('Model produced ' + Math.round(reasoningAcc.length / 1024) + 'k chars of reasoning but no answer — the thinking budget consumed the output limit. Try a simpler prompt, a non-reasoning model, or increase max_tokens.');
+        err.reasoningOnly = true;
+        try { genLog('warn', 'reasoning-only: ' + reasoningAcc.length + ' chars thinking, 0 chars content'); } catch (_) {}
+        throw err;
       }
       // Truncation: finish_reason length means the HTML JSON was cut mid-payload.
       if (finishReason === 'length' && contentAcc) {
