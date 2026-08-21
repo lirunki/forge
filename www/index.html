@@ -8787,17 +8787,30 @@ termux-reload-settings</div>
         txt.className = 'prog-text';
         div.appendChild(dot); div.appendChild(txt);
         let i = Math.floor(Math.random() * FORGE_PROGRESS_LINES.length);
+        let realStatus = null;   // latest injected build status ("Querying…", "Receiving…")
+        let realUntil = 0;       // show it for this long before falling back to mumbo-jumbo
+        const REAL_STICKY_MS = 7000;
+        const render = () => { txt.textContent = (realStatus && Date.now() < realUntil) ? realStatus : FORGE_PROGRESS_LINES[i]; };
         txt.textContent = FORGE_PROGRESS_LINES[i];
         el.messages.appendChild(div);
         el.messages.scrollTop = el.messages.scrollHeight;
         const timer = setInterval(() => {
-          i = (i + 1) % FORGE_PROGRESS_LINES.length;
-          txt.textContent = FORGE_PROGRESS_LINES[i];
+          // If a real status is still fresh, keep showing it (no rotation); else advance.
+          if (!(realStatus && Date.now() < realUntil)) i = (i + 1) % FORGE_PROGRESS_LINES.length;
+          render();
         }, 3800);
         return {
           stop() { clearInterval(timer); try { div.remove(); } catch (_) {} },
+          // Inject a REAL build status ("Querying Groq · llama-3.3-70b…").
+          // Shown immediately and held for REAL_STICKY_MS, then the rotation resumes.
+          status(text) {
+            if (!text) return;
+            realStatus = String(text);
+            realUntil = Date.now() + REAL_STICKY_MS;
+            render();
+          },
         };
-      } catch (_) { return { stop() {} }; }
+      } catch (_) { return { stop() {}, status() {} }; }
     }
 
     function addMessage(role, content, extras = {}) {
@@ -18514,7 +18527,8 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       setLibStatus(t('reforge.discarded'), '');
     }
 
-    async function forgeApp(userText, attachments = []) {
+    async function forgeApp(userText, attachments = [], onStatus) {
+      const status = typeof onStatus === 'function' ? onStatus : () => {};
       savePrefs();
       // One system message only, and it must be first (provider requirement).
       let system = SYSTEM_PROMPT;
@@ -18561,16 +18575,40 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
 
       await bgStart('Forge', attachments?.length ? 'Reading sketch & building…' : 'Building your app…');
 
+      // Real build status for the progress line (interleaved with the mumbo-jumbo).
+      try {
+        if (attachments?.length) status('Reading sketch & attachments…');
+        const rt = getAiRuntime();
+        const who = [rt.provider?.label || rt.providerId, rt.model].filter(Boolean).join(' · ');
+        status('Querying ' + who + '…');
+      } catch (_) {}
+
       let raw;
+      let recvChars = 0;
+      let lastRecvTick = 0;
+      const onDelta = (d) => {
+        try {
+          recvChars += String(d || '').length;
+          const now = Date.now();
+          if (now - lastRecvTick > 800) {
+            lastRecvTick = now;
+            const kb = recvChars >= 1024 ? (recvChars / 1024).toFixed(1) + 'k' : String(recvChars);
+            status('Receiving blueprint… ' + kb + ' chars');
+          }
+        } catch (_) {}
+      };
       // Force JSON for the factory payload even when vision parts are present.
       // Gemini native path is better for sketches when the active host provider is Gemini.
+      // Stream variants give live progress; both fall back to non-streaming automatically.
       if (isGeminiHostProvider() && attachments?.length) {
-        raw = await geminiGenerateContent(msgs, abortController.signal);
+        raw = await geminiStreamGenerateContent(msgs, abortController.signal, { jsonMode: true, onDelta });
       } else {
-        raw = await chatCompletions(msgs, abortController.signal, { jsonMode: true });
+        raw = await chatCompletionsStream(msgs, abortController.signal, { jsonMode: true, onDelta });
       }
+      status('Parsing app payload…');
       const parsed = extractJson(raw);
       if (!parsed.html) throw new Error('Payload missing html');
+      status('Validating HTML…');
       const app = {
         id: currentApp?.id || uid(),
         title: String(parsed.title || 'Untitled app').slice(0, 80),
@@ -18608,7 +18646,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       const forgeProgress = startForgeProgress();
 
       try {
-        const { app, message } = await forgeApp(userText, attachments);
+        const { app, message } = await forgeApp(userText, attachments, (s) => forgeProgress.status(s));
         currentApp = app;
         addMessage('assistant', message + '\n\n' + t('chat.openAppTab', { name: app.title }));
         loadPreview(app);
