@@ -1693,3 +1693,34 @@ Smoke (device pending — no adb at build time):
 [ ] Simpler prompts still build (regression)
 [ ] AI tab → Console: on any parse failure shows 'JSON parse failed · len N · head/tail'
 ```
+
+## Forge-it max_tokens + truncation detect (2026-08-21)
+
+**2.6.97 / versionCode 127** (from 2.6.96/126). Host-only.
+
+### Symptom
+Tic-tac-toe builds; the long Chat Pro prompt still failed with invalid JSON
+even after the 2.6.96 fence-hijack fix.
+
+### Root cause
+No `max_tokens` / `maxOutputTokens` was ever set on factory LLM calls. Providers
+default to a small completion budget (often 4k–8k tokens). Complex mini-app HTML
+exceeds that → stream ends with `finish_reason: length` → incomplete JSON →
+`extractJson` fails. Simple apps fit; Chat Pro does not.
+
+### Fix
+- `maxTokens: 32768` on forgeApp + reforge (stream + non-stream fallbacks)
+- OpenAI-compat `max_tokens`; Gemini `generationConfig.maxOutputTokens`
+- Retry once without the param if the provider 4xx-rejects it
+- Detect `finish_reason === 'length'` (and Gemini MAX_TOKENS) → throw clear
+  truncated error with `err.truncated`; `forgeFailMessage` → `chat.failTruncated`
+- Console: genLog on truncation
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.6.97 (127)
+[ ] Paste Chat Pro prompt → Forge it → should complete (or clear truncation msg)
+[ ] Tic-tac-toe still builds (regression)
+[ ] Console shows receiving… Nk growing past previous ~default cutoff
+```
+
