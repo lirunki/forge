@@ -1783,3 +1783,38 @@ Smoke:
 [ ] Opus/Grok still build (regression)
 ```
 
+## Stream: reasoning vs content separation (2.7.0, 2026-08-21)
+
+**2.7.0 / versionCode 130** (from 2.6.99/129). Host-only.
+
+### Symptom
+GLM 5.3 run 2: received 93,825 chars, JSON parse failed. Tail ended
+mid-regex (no closing brace) — the model produced ONLY thinking text and
+never emitted the JSON payload.
+
+### Root cause (two parts)
+1. 2.6.98 wrongly treated `delta.reasoning` as content (my bug — reasoning is
+   the scratchpad, not the answer). It polluted contentAcc.
+2. GLM reasoning models can burn the entire output budget on thinking when the
+   prompt is complex. No error existed for 'reasoning but no answer'.
+
+### Fix
+- `reasoning`/`reasoning_content`/`thinking` accumulate into reasoningAcc,
+  excluded from contentAcc/onDelta/extractJson
+- reasoning-only stream → `err.reasoningOnly` → `chat.failReasoningOnly`
+  message with actionable advice
+- brace-scan cap 400→2000 (thinking-echo produces 300+ prose braces)
+
+### Verdict on GLM for Forge-it
+GLM 5.3 is fundamentally poorly suited to Forge-it with complex prompts: it
+emits reasoning as content and can exhaust the budget before the payload.
+Opus produced the best result; Grok also works.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.0 (130)
+[ ] GLM 5.3 + Chat Pro → either builds (if it emits content) or shows the
+    clear 'spent its entire output budget thinking' message
+[ ] Opus/Grok unchanged (regression)
+```
+
