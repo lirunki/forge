@@ -1588,3 +1588,67 @@ Smoke (device pending — adb offline at build time):
 [ ] Spot-check: ja lib.confirmDel, drive.backupDone, txs.playNeedsAgent show proper 日本語
 [ ] es/fr/pt still full; en default unchanged
 ```
+
+## Generation watchdog: max-time setting, extend-or-fail popup, console turn log (2026-08-21)
+
+**2.6.95 / versionCode 125** (from 2.6.93/123). Host-only, no native Java.
+
+### Problem
+The generation timeout was a hardcoded **600s per-HTTP-call** `readTimeout`
+scattered across the AI call sites. When a slow model exceeded it the call hard-failed
+with the friendly “Provider took longer than 600s…” error and the user had no recourse —
+no way to wait longer, no record of what was happening. The user asked for:
+1. a **setting** for max generation time (was hardcoded 600s);
+2. on timeout, a **popup** (not a hard fail) offering **Fail now** or **Extend +Ns**;
+3. **console turn details** appended to the AI-tab console as generation happens;
+4. the popup must **not block** the AI tab / console while visible.
+
+User insight that shaped the design: *if the 600s is on a single LLM call, a better
+(complementary) fix is to use the streaming API* — a streaming connection keeps
+receiving bytes so it rarely trips a socket read timeout (read timeout is gap-between-
+packets, not total duration). So streaming removes the whole class of single-call
+cliffs, and the watchdog becomes the right mechanism for streams (which otherwise
+stall silently forever).
+
+### What landed
+
+| Piece | State |
+|---|---|
+| **Setting** | AI settings card: *Max generation time (s)* — input `#genTimeoutSecs`, 30–1800, default 600, `LS.genTimeout = 'forge_gen_timeout_v1'`; loaded in `loadPrefs`, saved in `savePrefs`, change/blur wired. |
+| **Watchdog** | `startGenWatchdog(label)` wraps the whole `forgeApp` / `reforgeAppWithAi` await (1s tick). Budget = `getGenTimeoutSecs()*1000`. On elapse → **non-blocking** floating card (`#genTimeoutWrap`, `pointer-events:none` wrapper, card only, z-index 150 — below the console sheet so opening Console covers it) with **Fail now** / **Extend +Ns** (N editable, default = setting). Auto-hides when the generation settles. Tabs + console stay usable while it is up (`setBusy` only gates the send button). |
+| **Console turn log** | `genLog(level, text)` → `pushMiniConsole(level, text, 'forge-gen')`. Logs: start (provider · model · prompt chars · history · attachments), receiving progress (~20s throttle so the 500-line ring isn't flooded), received+parse, done (title · html size), timeout event + user choice (extend/fail), aborts, failures. Badge counts unread as before. |
+| **readTimeout plumbing** | The 5 AI call sites (`responsesApiCompletion`, `geminiGenerateContent`, `chatCompletions` ×3) now use `aiReadTimeoutMs() = max(600000, settingMs)` so the socket never dies before the watchdog popup can extend (lets “Extend” actually work on non-stream fallbacks). Image-gen (`xAI /images`, 300s) and cloud TTS (300s) untouched. |
+| **Reforge → streaming** | `reforgeAppWithAi` now uses `chatCompletionsStream` / `geminiStreamGenerateContent` (both auto-fall-back to non-streaming internally) instead of the non-stream variants. Tokens keep the connection alive → no 600s single-call cliff for slow models; also gives live receive progress. Forge-it already streamed. |
+| **i18n** | en keys added: `ai.genTimeout`, `ai.genTimeoutHint`, `gen.title/body/extendBy/extend/fail`, `chat.genTimeoutMsg`. Other langs fall back to en via `t()`. |
+| **Version** | 2.6.95 / 125; docs baselines + package.json synced; gate green; both flavor debug APKs built. |
+
+### Non-blocking popup — why it satisfies “still explore the console”
+The card is `position:fixed; inset:0; pointer-events:none` (only the inner card
+captures clicks), z-index 150 — **below** the console sheet (`.setup-overlay` z-200).
+So while the card is visible the user can tap the AI tab and open Console; the console
+sheet renders above the card. Closing the sheet reveals the still-present card. The
+watchdog keeps running (it only stops on generation settle / Fail now / Stop).
+
+### Files
+`www/index.html` + assets sync (CSS, popup HTML, AI-settings input, i18n en keys,
+LS key, el map, loadPrefs/savePrefs, listener array, watchdog+genLog helpers,
+forgeApp milestones, onSend watchdog, reforge streaming+watchdog, 5× readTimeout
+swap), `android/app/build.gradle`, `docs/api.md` + `docs/tools.md` baselines,
+`package.json`.
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.6.95 (125) · 4891e32
+[ ] AI tab → Advanced → 'Max generation time (s)' = 600 (editable, persists)
+[ ] Forge it a big app with a slow model → AI tab → Console shows forge-gen lines:
+    start · provider/model · receiving… Nk · received · parsing · done · html Nk
+[ ] Set max-gen-time to 30s, Forge it → after 30s the floating card appears;
+    switch to AI tab → open Console (sheet covers card, still readable); close sheet
+[ ] Card: Extend +120s → card hides, generation continues; reaches 120s again → card returns
+[ ] Card: Fail now → generation stops, chat shows 'Generation stopped — time limit reached.'
+    console line 'forge aborted (time limit)'
+[ ] Stop button mid-generation → card hides, 'Stopped.' (not the time-limit message)
+[ ] Reforge a big app → console shows 'reforge start / receiving… / reforge done';
+    no 600s hard fail on a slow model (streaming keeps connection alive)
+[ ] Tabs / selects / theme unchanged (regression)
+```
