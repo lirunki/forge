@@ -1652,3 +1652,44 @@ Smoke (device pending — no adb at build time):
     no 600s hard fail on a slow model (streaming keeps connection alive)
 [ ] Tabs / selects / theme unchanged (regression)
 ```
+
+## extractJson: triple-backtick fence hijack fix (2026-08-21)
+
+**2.6.96 / versionCode 126** (from 2.6.95/125). Host-only.
+
+### Symptom
+The Chat Pro prompt (and any prompt whose generated app embeds triple-backtick
+sequences — e.g. a markdown renderer with `/```...```/g` regexes) failed Forge-it
+**every time** with `Model did not return valid JSON app payload`.
+
+### Root cause
+`extractJson` matched the FIRST ```` ```...``` ```` pair anywhere in the model
+reply and replaced the whole payload with the captured text. The model returns
+valid raw JSON whose `html` string value contains literal ```` ``` ```` sequences
+(backticks aren't JSON-escaped); the extractor then grabbed the text between two
+INNER fences (garbage), so every parse path failed. Deterministic for those
+prompts; harmless for simple apps whose HTML has no fences.
+
+### Fix
+Parse the full text first. Strip fences only when a single fence spans the
+whole reply (anchored `^\s*```(?:json)?\s*([\s\S]*?)```\s*$`). Keep the
+first`{`…last`}` slice + trailing-comma repair fallbacks. On failure, `genLog`
+a head/tail preview (len + 200 chars each) to the AI-tab console so future
+parse failures are debuggable instead of a bare 'invalid JSON'.
+
+### Verified
+Node unit test: old extractor fails the killer payload; new one passes
+raw-JSON-with-inner-fences / whole-```json-fence-wrap / prose+JSON / trailing-
+comma cases.
+
+### Files
+`www/index.html` (+ assets sync), `android/app/build.gradle`, `docs/api.md` +
+`docs/tools.md` baselines, `package.json`.
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.6.96 (126) · 68f7e1a
+[ ] Paste the Chat Pro prompt → Forge it → builds (no 'invalid JSON' error)
+[ ] Simpler prompts still build (regression)
+[ ] AI tab → Console: on any parse failure shows 'JSON parse failed · len N · head/tail'
+```
