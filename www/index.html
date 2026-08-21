@@ -15197,14 +15197,39 @@ Permission & safety UX:
         const inner = wholeFence[1].trim();
         try { return JSON.parse(inner); } catch {}
       }
-      // 3) Leading/trailing prose around the JSON object — slice first { … last }.
-      const a = s.indexOf('{');
+      // 3) Prose/thinking text around the JSON object (GLM & co. think out loud
+      //    in the content stream, echoing prompt fragments that contain braces).
       const b = s.lastIndexOf('}');
-      if (a >= 0 && b > a) {
-        const slice = s.slice(a, b + 1);
-        try { return JSON.parse(slice); } catch {}
-        // mild repair: trailing commas
-        try { return JSON.parse(slice.replace(/,\s*([}\]])/g, '$1')); } catch {}
+      if (b > 0) {
+        // 3a) Fast path: the canonical payload opener {"title":
+        const m = s.match(/\{\s*"title"\s*:/);
+        if (m && m.index < b) {
+          const slice = s.slice(m.index, b + 1);
+          try { return JSON.parse(slice); } catch {}
+          try { return JSON.parse(slice.replace(/,\s*([}\]])/g, '$1')); } catch {}
+        }
+        // 3b) Scan every '{' from left to right; first slice-to-last-'}' that
+        //     parses AND has an html string wins. Prose braces fail fast.
+        let idx = -1, tries = 0, fallback = null;
+        while ((idx = s.indexOf('{', idx + 1)) >= 0 && idx < b && tries < 400) {
+          tries++;
+          const slice = s.slice(idx, b + 1);
+          let parsed = null;
+          try { parsed = JSON.parse(slice); } catch {}
+          if (!parsed) { try { parsed = JSON.parse(slice.replace(/,\s*([}\]])/g, '$1')); } catch {} }
+          if (parsed && typeof parsed === 'object') {
+            if (typeof parsed.html === 'string') return parsed;
+            if (!fallback) fallback = parsed;
+          }
+        }
+        // 3c) Legacy: first { … last } without the html requirement
+        if (fallback) return fallback;
+        const a = s.indexOf('{');
+        if (a >= 0 && b > a) {
+          const slice = s.slice(a, b + 1);
+          try { return JSON.parse(slice); } catch {}
+          try { return JSON.parse(slice.replace(/,\s*([}\]])/g, '$1')); } catch {}
+        }
       }
       // Diagnostic: log a head/tail preview so future parse failures are
       // debuggable from the AI-tab console instead of a bare 'invalid JSON'.
@@ -17053,8 +17078,10 @@ Permission & safety UX:
         if (!firstChunkLogged) {
           firstChunkLogged = true;
           try {
+            const d0 = ev.choices && ev.choices[0] && ev.choices[0].delta;
+            const roleOnly = d0 && d0.role != null && d0.content == null && d0.text == null && !d0.tool_calls;
             const preview = JSON.stringify(ev).slice(0, 400);
-            if (!ev.choices || !ev.choices[0]?.delta?.content) {
+            if ((!ev.choices || !d0 || d0.content == null) && !roleOnly) {
               genLog('warn', 'first SSE chunk (no delta.content yet): ' + preview);
             }
           } catch (_) {}

@@ -1,7 +1,7 @@
 {
   "name": "forge-live",
   "private": true,
-  "version": "2.6.98",
+  "version": "2.6.99",
   "dependencies": {
     "@capacitor/android": "6.1.2",
     "@capacitor/app": "6.0.1",
