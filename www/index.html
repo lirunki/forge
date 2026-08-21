@@ -15183,20 +15183,35 @@ Permission & safety UX:
 
     function extractJson(text) {
       let s = String(text || '').trim();
-      // strip markdown fences if model ignores instructions
-      const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
-      if (fence) s = fence[1].trim();
-      // direct parse
+      // 1) Most common: model returns raw JSON. Parse the WHOLE text first so
+      //    triple-backtick sequences inside the html string value (e.g. a
+      //    generated markdown parser with /```...```/ regexes) are NOT mistaken
+      //    for a wrapping fence and used to truncate the payload.
       try { return JSON.parse(s); } catch {}
-      // find first { ... last }
+      // 2) Model wrapped the ENTIRE reply in a single ```json ... ``` fence.
+      //    Only strip when the fence spans the whole text (anchored), so inner
+      //    backticks in the html value can't hijack extraction.
+      const wholeFence = s.match(/^\s*```(?:json)?\s*([\s\S]*?)```\s*$/i);
+      if (wholeFence) {
+        const inner = wholeFence[1].trim();
+        try { return JSON.parse(inner); } catch {}
+      }
+      // 3) Leading/trailing prose around the JSON object — slice first { … last }.
       const a = s.indexOf('{');
       const b = s.lastIndexOf('}');
       if (a >= 0 && b > a) {
         const slice = s.slice(a, b + 1);
         try { return JSON.parse(slice); } catch {}
-        // attempt mild repair: trailing commas
+        // mild repair: trailing commas
         try { return JSON.parse(slice.replace(/,\s*([}\]])/g, '$1')); } catch {}
       }
+      // Diagnostic: log a head/tail preview so future parse failures are
+      // debuggable from the AI-tab console instead of a bare 'invalid JSON'.
+      try {
+        const head = s.slice(0, 200).replace(/\s+/g, ' ');
+        const tail = s.slice(-200).replace(/\s+/g, ' ');
+        genLog('error', 'JSON parse failed · len ' + s.length + ' · head: ' + head + ' · tail: ' + tail);
+      } catch (_) {}
       throw new Error('Model did not return valid JSON app payload');
     }
 
