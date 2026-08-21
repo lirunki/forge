@@ -1750,3 +1750,36 @@ Smoke:
 [ ] Opus/Grok still work (regression)
 ```
 
+## extractJson: thinking-in-content brace scan (2026-08-21)
+
+**2.6.99 / versionCode 129** (from 2.6.98/128). Host-only.
+
+### Symptom
+GLM 5.3 received 97,462 chars but `JSON parse failed · len 97461`. Head was
+prose ('Build a complete single-file HTML app...'), tail ended with
+`</html>" }` (valid JSON end). The 2.6.98 stream-field fix worked (content
+arrived); the failure was in extraction.
+
+### Root cause
+GLM 'thinks out loud' in the content stream before emitting the payload,
+echoing prompt fragments that contain braces
+(`ForgeHost.state.save({ chats, activeChatId, settings })`). The old
+first-`{`-to-last-`}` slice started at the prose brace → unparseable.
+
+### Fix
+- Fast path: anchor on `{"title":` and parse to last `}`
+- Scan every `{` left→right (cap 400), accept first parse with an html string
+- Keep legacy first-brace slice as last resort
+- Skip first-chunk warning for role-only headers (standard OpenAI stream start)
+
+### Verified
+Thinking-prose + payload, inner-fence killer (2.6.96), and fence-wrap (2.6.96)
+all parse.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.6.99 (129)
+[ ] GLM 5.3 + Chat Pro → builds (no 'invalid JSON')
+[ ] Opus/Grok still build (regression)
+```
+
