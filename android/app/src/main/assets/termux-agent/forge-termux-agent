@@ -8,6 +8,25 @@ PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 mkdir -p "$ROOT/inbox" "$ROOT/outbox"
 
+# Precondition: python must be present — auto-install via pkg when missing.
+# Runs BEFORE --daemon so the install happens in the foreground (the daemon
+# child discards output and would fail silently otherwise).
+if ! command -v python3 >/dev/null && ! command -v python >/dev/null; then
+  if ! command -v pkg >/dev/null; then
+    echo "python required but pkg not found — install it with: pkg install python" >&2
+    exit 1
+  fi
+  echo "python not found — installing (this can take a minute)…" >&2
+  pkg install -y python || {
+    pkg update -y >/dev/null 2>&1 || true
+    pkg install -y python
+  } || {
+    echo "failed to install python — run manually: pkg install python" >&2
+    exit 1
+  }
+fi
+PY="$(command -v python3 || command -v python)"
+
 if [[ "${1:-}" == "--daemon" ]]; then
   shift
   nohup "$0" "$@" >/dev/null 2>&1 &
@@ -15,11 +34,6 @@ if [[ "${1:-}" == "--daemon" ]]; then
   exit 0
 fi
 
-if ! command -v python3 >/dev/null && ! command -v python >/dev/null; then
-  echo "python required: pkg install python" >&2
-  exit 1
-fi
-PY="$(command -v python3 || command -v python)"
 
 export FORGE_AGENT_PORT="$PORT" FORGE_BRIDGE_ROOT="$ROOT" FORGE_AGENT_VERSION="$VERSION"
 export PREFIX HOME

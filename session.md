@@ -1818,3 +1818,47 @@ Smoke:
 [ ] Opus/Grok unchanged (regression)
 ```
 
+
+## Termux agent: python auto-install precondition (2026-08-23)
+
+**2.7.2 / versionCode 132** (from 2.7.0/130). Native assets + Java builtins; no host JS.
+
+### Problem
+The Termux agent needed python but only **errored out** when missing — on a fresh
+Termux the documented one-liner
+(`bash install.sh && forge-termux-agent --daemon`) died with
+"python required: pkg install python". Worse, in the agent the check ran
+**after** the `--daemon` branch, so `--daemon` printed its "daemon pid" line and
+then the child failed **silently** (`nohup >/dev/null`).
+
+### Fix (all copies kept in sync)
+| Copy | Change |
+|---|---|
+| `assets/termux-agent/forge-termux-agent` (APK asset, canonical) | ensure-python block moved **before** `--daemon`; auto-installs |
+| `TermuxBridgePlugin.builtinAgentFile("forge-termux-agent")` (fallback) | same change |
+| `TermuxBridgePlugin.builtinAgentFile("install.sh")` | **new** ensure-python precondition (previously had none) |
+| exported `README.txt` text | notes "Python is installed automatically if missing (needs internet once)" |
+
+### Ensure-python logic
+- `python3`/`python` on PATH → no-op
+- missing → `pkg install -y python`; on failure retry (`pkg update -y` then install once more — covers stale apt lists)
+- no `pkg` (not Termux) → clear manual-install error, exit 1
+- install still failing → clear error, exit 1 (install.sh failing stops the `&& forge-termux-agent` chain — correct)
+
+Why **before** `--daemon`: the daemon child's output is discarded, so the install
+must run in the foreground where the user sees progress; the child re-check is a no-op.
+
+### Verified
+- `bash -n` clean on the asset + both decoded Java builtin strings
+- Built APK's `assets/termux-agent/forge-termux-agent` contains `pkg install -y python` and parses
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.2 (132)
+[ ] Fresh Termux (no python): AI → Device bridges → Install agent → in Termux run
+    bash /storage/emulated/0/Download/ForgeBridge/install.sh && forge-termux-agent --daemon
+    → "python not found — installing…" prints → agent daemonizes → Test Termux OK
+[ ] Termux with python already installed → no install output, starts instantly
+[ ] Re-export agent files after install (Settings → Device bridges) so old on-disk
+    copy at /storage/emulated/0/Download/ForgeBridge is replaced
+```
