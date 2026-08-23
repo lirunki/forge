@@ -3,7 +3,7 @@
 set -euo pipefail
 PORT="${FORGE_AGENT_PORT:-8787}"
 ROOT="${FORGE_BRIDGE_DIR:-/storage/emulated/0/Download/ForgeBridge}"
-VERSION="1.0.0"
+VERSION="1.1.0"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 mkdir -p "$ROOT/inbox" "$ROOT/outbox"

@@ -1862,3 +1862,43 @@ Smoke (device pending — no adb at build time):
 [ ] Re-export agent files after install (Settings → Device bridges) so old on-disk
     copy at /storage/emulated/0/Download/ForgeBridge is replaced
 ```
+
+## Termux agent: full-path command + idempotent install (2026-08-23)
+
+**2.7.4 / versionCode 134** (from 2.7.2/132). Java strings + host i18n; agent v1.1.0.
+
+### Changes
+1. **Full-path invocation** — every user-facing command now calls the agent by
+   its installed path instead of relying on `~/bin` being on PATH:
+   `bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent [--daemon]`
+   (Reason: install.sh's `export PATH` only affects its own child shell — the
+   bare `forge-termux-agent` after `&&` ran in the *parent* Termux shell, which
+   hasn't re-sourced `.bashrc` → "command not found" on first install.)
+   Updated: Java `command`/`setupCommand`/notes/reject/help/README, host
+   `txCmdBox` + `TERMUX_AGENT_CMD` + reboot hint, i18n keys
+   `tx.fdroidC2` / `tx.pathAgent` / `tx.stayHint` / `txs.failedStartAgent`
+   in **all 6 languages**. Host `--daemon`-append regex still works (matches tail).
+2. **Idempotent install.sh** — re-running is now a clean success:
+   - `rm -f` before `cp` (replaces cleanly even if the agent binary is running — ETXTBSY)
+   - `ALREADY` flag → "Already installed — updated: …" (exit 0 both paths)
+   - **Fixed pre-existing bug:** `.bashrc` guard grepped `home/bin` (lowercase)
+     but the appended line contains `$HOME/bin` → **every run appended a
+     duplicate PATH line**. Guard now matches `HOME/bin`.
+   - install.sh + agent echos print full `$BIN/forge-termux-agent` paths
+3. Agent `VERSION` 1.0.0 → **1.1.0** (asset + Java builtin; heartbeat/status).
+
+### Verified
+- `bash -n` clean on asset + both decoded Java builtins
+- Functional: 3× install.sh runs → exit 0, exactly ONE `.bashrc` PATH line,
+  "Already installed — updated" on re-runs (HOME overridden to temp dir)
+- APK contains agent v1.1.0 asset; host shows full-path command ×2; www ≡ assets
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.4 (134)
+[ ] AI → Device bridges → Install agent → copy command → paste in fresh Termux:
+    bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent --daemon
+    → works even on FIRST install (no PATH re-source needed)
+[ ] Run install.sh again → "Already installed — updated: …" exit 0; ~/.bashrc has ONE PATH line
+[ ] Test Termux → agent live (status version 1.1.0)
+```

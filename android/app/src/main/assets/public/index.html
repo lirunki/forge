@@ -1017,7 +1017,7 @@
           <div class="setup-check-item" id="txCkOpen"><span class="ck">3</span><div><b data-i18n="tx.ck3">Open Termux &amp; run it</b><div class="field-hint" style="margin:0.15rem 0 0;" data-i18n="tx.ck3h">Needs storage access once (termux-setup-storage)</div></div></div>
           <div class="setup-check-item" id="txCkLive"><span class="ck">4</span><div><b data-i18n="tx.ck4">Wait until agent is live</b><div class="field-hint" style="margin:0.15rem 0 0;" data-i18n="tx.ck4h">Forge polls automatically</div></div></div>
         </div>
-        <div class="cmd-box" id="txCmdBox">bash /storage/emulated/0/Download/ForgeBridge/install.sh && forge-termux-agent --daemon</div>
+        <div class="cmd-box" id="txCmdBox">bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent --daemon</div>
         <div class="agent-pulse wait" id="txAgentPulse" style="margin:0.35rem 0 0.55rem;"><span class="dot"></span><span class="lbl" data-i18n="tx.agentChecking">Agent: checking…</span></div>
         <div class="setup-actions">
           <button class="btn" id="btnTxExport" type="button" data-i18n="tx.step1Export">1 · Export files</button>
@@ -1030,7 +1030,7 @@
           <button class="btn" id="btnTxToTest" type="button" disabled data-i18n="tx.nextTest">Next: Test</button>
         </div>
         <p class="field-hint" style="margin-top:0.65rem;" data-i18n-html="tx.stayHint">
-          Stay running: <code>forge-termux-agent --daemon</code>.
+          Stay running: <code>$HOME/bin/forge-termux-agent --daemon</code>.
           After reboot, run that again (or add to <code>~/.bashrc</code>).
         </p>
       </div>
@@ -2039,7 +2039,7 @@ termux-reload-settings</div>
     "tx.fdS2": "Enable <b>Allow external apps</b> / RUN_COMMAND",
     "tx.fdS3": "Or set in <code>~/.termux/termux.properties</code>:<br><code>allow-external-apps = true</code><br>then run <code>termux-reload-settings</code>",
     "tx.fdroidC1": "<b>Recommended:</b> allow-external-apps = true",
-    "tx.fdroidC2": "Or run forge-termux-agent (same as Play path)",
+    "tx.fdroidC2": "Or run $HOME/bin/forge-termux-agent (same as Play path)",
     "tx.fdroidLead": "F-Droid / GitHub Termux can run commands from Forge directly. Turn on external apps, then test.",
     "tx.fdroidLead2": "This build can use RUN_COMMAND. Enable external apps, then test — no agent required (agent still works as fallback).",
     "tx.fdroidTitle": "Enable RUN_COMMAND",
@@ -2047,7 +2047,7 @@ termux-reload-settings</div>
     "tx.nextTest": "Next: Test",
     "tx.openTermux": "Open Termux",
     "tx.optionalHint": "Optional — only needed if mini-apps should use the terminal.",
-    "tx.pathAgent": "Path: forge-termux-agent",
+    "tx.pathAgent": "Path: $HOME/bin/forge-termux-agent",
     "tx.pathMissingC1": "Install <b>Termux</b>, open it, allow storage if asked.",
     "tx.pathMissingC2": "Play Termux → agent path. F-Droid Termux → RUN_COMMAND path.",
     "tx.pathMissingLead": "Forge looks for package com.termux. Install Termux from Play or F-Droid, open it once, then return here.",
@@ -2062,7 +2062,7 @@ termux-reload-settings</div>
     "tx.runTest": "Run test",
     "tx.skipForNow": "Skip for now",
     "tx.startSetup": "Start setup",
-    "tx.stayHint": "Stay running: <code>forge-termux-agent --daemon</code>. After reboot, run that again (or add to <code>~/.bashrc</code>).",
+    "tx.stayHint": "Stay running: <code>$HOME/bin/forge-termux-agent --daemon</code>. After reboot, run that again (or add to <code>~/.bashrc</code>).",
     "tx.step1Export": "1 · Export files",
     "tx.step2Copy": "2 · Copy command",
     "tx.step3Open": "3 · Open Termux",
@@ -2086,7 +2086,7 @@ termux-reload-settings</div>
     "txs.connectedVia": "Connected via {bridge}. Mini-apps can call ForgeHost.termux.exec / run.",
     "txs.exporting": "Exporting agent files…",
     "txs.exportingLong": "Exporting agent files to Download/ForgeBridge…",
-    "txs.failedStartAgent": "Failed — start forge-termux-agent (Easy Termux setup).",
+    "txs.failedStartAgent": "Failed — start $HOME/bin/forge-termux-agent (Easy Termux setup).",
     "txs.filesExported": "Files exported. Copy the command, open Termux, paste & Enter.",
     "txs.foundNoBridge": "Termux{ver} found but no bridge. Easy Termux setup → enable RUN_COMMAND or start agent.",
     "txs.installFailed": "Install agent failed: {msg}",
@@ -2595,7 +2595,7 @@ termux-reload-settings</div>
     "tx.fdS2": "Activa <b>Allow external apps</b> / RUN_COMMAND",
     "tx.fdS3": "O ponlo en <code>~/.termux/termux.properties</code>:<br><code>allow-external-apps = true</code><br>y ejecuta <code>termux-reload-settings</code>",
     "tx.fdroidC1": "<b>Recomendado:</b> allow-external-apps = true",
-    "tx.fdroidC2": "O ejecuta forge-termux-agent (igual que la ruta Play)",
+    "tx.fdroidC2": "O ejecuta $HOME/bin/forge-termux-agent (igual que la ruta Play)",
     "tx.fdroidLead": "Termux de F-Droid / GitHub puede ejecutar comandos de Forge directamente. Activa apps externas y prueba.",
     "tx.fdroidLead2": "Esta build puede usar RUN_COMMAND. Activa apps externas y prueba — no hace falta agente (el agente sigue funcionando como respaldo).",
     "tx.fdroidTitle": "Activar RUN_COMMAND",
@@ -2603,7 +2603,7 @@ termux-reload-settings</div>
     "tx.nextTest": "Siguiente: Probar",
     "tx.openTermux": "Abrir Termux",
     "tx.optionalHint": "Opcional — solo si las mini-apps deben usar la terminal.",
-    "tx.pathAgent": "Ruta: forge-termux-agent",
+    "tx.pathAgent": "Ruta: $HOME/bin/forge-termux-agent",
     "tx.pathMissingC1": "Instala <b>Termux</b>, ábrelo y permite almacenamiento si lo pide.",
     "tx.pathMissingC2": "Termux de Play → ruta del agente. Termux de F-Droid → ruta RUN_COMMAND.",
     "tx.pathMissingLead": "Forge busca el paquete com.termux. Instala Termux de Play o F-Droid, ábrelo una vez y vuelve aquí.",
@@ -2618,7 +2618,7 @@ termux-reload-settings</div>
     "tx.runTest": "Ejecutar prueba",
     "tx.skipForNow": "Omitir por ahora",
     "tx.startSetup": "Empezar configuración",
-    "tx.stayHint": "Manténlo activo: <code>forge-termux-agent --daemon</code>. Tras reiniciar, ejecútalo otra vez (o añádelo a <code>~/.bashrc</code>).",
+    "tx.stayHint": "Manténlo activo: <code>$HOME/bin/forge-termux-agent --daemon</code>. Tras reiniciar, ejecútalo otra vez (o añádelo a <code>~/.bashrc</code>).",
     "tx.step1Export": "1 · Exportar archivos",
     "tx.step2Copy": "2 · Copiar comando",
     "tx.step3Open": "3 · Abrir Termux",
@@ -2642,7 +2642,7 @@ termux-reload-settings</div>
     "txs.connectedVia": "Conectado vía {bridge}. Las mini-apps pueden llamar a ForgeHost.termux.exec / run.",
     "txs.exporting": "Exportando archivos del agente…",
     "txs.exportingLong": "Exportando archivos del agente a Download/ForgeBridge…",
-    "txs.failedStartAgent": "Falló — inicia forge-termux-agent (Configuración fácil de Termux).",
+    "txs.failedStartAgent": "Falló — inicia $HOME/bin/forge-termux-agent (Configuración fácil de Termux).",
     "txs.filesExported": "Archivos exportados. Copia el comando, abre Termux, pega y Enter.",
     "txs.foundNoBridge": "Termux{ver} encontrado pero sin puente. Configuración fácil de Termux → activa RUN_COMMAND o inicia el agente.",
     "txs.installFailed": "Falló la instalación del agente: {msg}",
@@ -3151,7 +3151,7 @@ termux-reload-settings</div>
     "tx.fdS2": "Activez <b>Allow external apps</b> / RUN_COMMAND",
     "tx.fdS3": "Ou définissez dans <code>~/.termux/termux.properties</code> :<br><code>allow-external-apps = true</code><br>puis lancez <code>termux-reload-settings</code>",
     "tx.fdroidC1": "<b>Recommandé :</b> allow-external-apps = true",
-    "tx.fdroidC2": "Ou lancez forge-termux-agent (comme le parcours Play)",
+    "tx.fdroidC2": "Ou lancez $HOME/bin/forge-termux-agent (comme le parcours Play)",
     "tx.fdroidLead": "Termux de F-Droid / GitHub peut exécuter des commandes de Forge directement. Activez les apps externes puis testez.",
     "tx.fdroidLead2": "Cette version peut utiliser RUN_COMMAND. Activez les apps externes puis testez — aucun agent requis (l’agent reste en solution de repli).",
     "tx.fdroidTitle": "Activer RUN_COMMAND",
@@ -3159,7 +3159,7 @@ termux-reload-settings</div>
     "tx.nextTest": "Ensuite : Tester",
     "tx.openTermux": "Ouvrir Termux",
     "tx.optionalHint": "Facultatif — uniquement si les mini-apps doivent utiliser le terminal.",
-    "tx.pathAgent": "Parcours : forge-termux-agent",
+    "tx.pathAgent": "Parcours : $HOME/bin/forge-termux-agent",
     "tx.pathMissingC1": "Installez <b>Termux</b>, ouvrez-le, autorisez le stockage si demandé.",
     "tx.pathMissingC2": "Termux Play → parcours agent. Termux F-Droid → parcours RUN_COMMAND.",
     "tx.pathMissingLead": "Forge cherche le paquet com.termux. Installez Termux depuis Play ou F-Droid, ouvrez-le une fois, puis revenez ici.",
@@ -3174,7 +3174,7 @@ termux-reload-settings</div>
     "tx.runTest": "Lancer le test",
     "tx.skipForNow": "Passer pour l’instant",
     "tx.startSetup": "Commencer",
-    "tx.stayHint": "Rester actif : <code>forge-termux-agent --daemon</code>. Après un redémarrage, relancez-le (ou ajoutez-le à <code>~/.bashrc</code>).",
+    "tx.stayHint": "Rester actif : <code>$HOME/bin/forge-termux-agent --daemon</code>. Après un redémarrage, relancez-le (ou ajoutez-le à <code>~/.bashrc</code>).",
     "tx.step1Export": "1 · Exporter les fichiers",
     "tx.step2Copy": "2 · Copier la commande",
     "tx.step3Open": "3 · Ouvrir Termux",
@@ -3198,7 +3198,7 @@ termux-reload-settings</div>
     "txs.connectedVia": "Connecté via {bridge}. Les mini-apps peuvent appeler ForgeHost.termux.exec / run.",
     "txs.exporting": "Export des fichiers de l’agent…",
     "txs.exportingLong": "Export des fichiers de l’agent vers Download/ForgeBridge…",
-    "txs.failedStartAgent": "Échec — démarrez forge-termux-agent (Configuration facile de Termux).",
+    "txs.failedStartAgent": "Échec — démarrez $HOME/bin/forge-termux-agent (Configuration facile de Termux).",
     "txs.filesExported": "Fichiers exportés. Copiez la commande, ouvrez Termux, collez et Entrée.",
     "txs.foundNoBridge": "Termux{ver} trouvé mais pas de pont. Configuration facile de Termux → activez RUN_COMMAND ou démarrez l’agent.",
     "txs.installFailed": "Échec de l’installation de l’agent : {msg}",
@@ -3707,7 +3707,7 @@ termux-reload-settings</div>
     "tx.fdS2": "Ative <b>Allow external apps</b> / RUN_COMMAND",
     "tx.fdS3": "Ou defina em <code>~/.termux/termux.properties</code>:<br><code>allow-external-apps = true</code><br>e rode <code>termux-reload-settings</code>",
     "tx.fdroidC1": "<b>Recomendado:</b> allow-external-apps = true",
-    "tx.fdroidC2": "Ou rode forge-termux-agent (igual ao caminho Play)",
+    "tx.fdroidC2": "Ou rode $HOME/bin/forge-termux-agent (igual ao caminho Play)",
     "tx.fdroidLead": "O Termux do F-Droid / GitHub pode executar comandos do Forge diretamente. Ative apps externos e teste.",
     "tx.fdroidLead2": "Este build pode usar RUN_COMMAND. Ative apps externos e teste — sem agente (o agente segue como alternativa).",
     "tx.fdroidTitle": "Ativar RUN_COMMAND",
@@ -3715,7 +3715,7 @@ termux-reload-settings</div>
     "tx.nextTest": "Próximo: Testar",
     "tx.openTermux": "Abrir Termux",
     "tx.optionalHint": "Opcional — só se as mini-apps devem usar o terminal.",
-    "tx.pathAgent": "Caminho: forge-termux-agent",
+    "tx.pathAgent": "Caminho: $HOME/bin/forge-termux-agent",
     "tx.pathMissingC1": "Instale o <b>Termux</b>, abra e permita armazenamento se pedido.",
     "tx.pathMissingC2": "Termux Play → caminho do agente. Termux F-Droid → caminho RUN_COMMAND.",
     "tx.pathMissingLead": "O Forge procura o pacote com.termux. Instale o Termux da Play ou F-Droid, abra uma vez e volte aqui.",
@@ -3730,7 +3730,7 @@ termux-reload-settings</div>
     "tx.runTest": "Rodar teste",
     "tx.skipForNow": "Pular por agora",
     "tx.startSetup": "Começar configuração",
-    "tx.stayHint": "Manter ativo: <code>forge-termux-agent --daemon</code>. Após reiniciar, rode de novo (ou adicione ao <code>~/.bashrc</code>).",
+    "tx.stayHint": "Manter ativo: <code>$HOME/bin/forge-termux-agent --daemon</code>. Após reiniciar, rode de novo (ou adicione ao <code>~/.bashrc</code>).",
     "tx.step1Export": "1 · Exportar arquivos",
     "tx.step2Copy": "2 · Copiar comando",
     "tx.step3Open": "3 · Abrir Termux",
@@ -3754,7 +3754,7 @@ termux-reload-settings</div>
     "txs.connectedVia": "Conectado via {bridge}. As mini-apps podem chamar ForgeHost.termux.exec / run.",
     "txs.exporting": "Exportando arquivos do agente…",
     "txs.exportingLong": "Exportando arquivos do agente para Download/ForgeBridge…",
-    "txs.failedStartAgent": "Falha — inicie o forge-termux-agent (Configuração fácil do Termux).",
+    "txs.failedStartAgent": "Falha — inicie o $HOME/bin/forge-termux-agent (Configuração fácil do Termux).",
     "txs.filesExported": "Arquivos exportados. Copie o comando, abra o Termux, cole e Enter.",
     "txs.foundNoBridge": "Termux{ver} encontrado mas sem ponte. Configuração fácil do Termux → ative RUN_COMMAND ou inicie o agente.",
     "txs.installFailed": "Falha ao instalar o agente: {msg}",
@@ -4263,7 +4263,7 @@ termux-reload-settings</div>
     "tx.fdS2": "<b>Allow external apps</b> / RUN_COMMAND を有効化",
     "tx.fdS3": "あるいは <code>~/.termux/termux.properties</code> に設定：<br><code>allow-external-apps = true</code><br>そのあと <code>termux-reload-settings</code> を実行",
     "tx.fdroidC1": "<b>推奨：</b>allow-external-apps = true",
-    "tx.fdroidC2": "あるいは forge-termux-agent を実行（Play 版と同じ）",
+    "tx.fdroidC2": "あるいは $HOME/bin/forge-termux-agent を実行（Play 版と同じ）",
     "tx.fdroidLead": "F-Droid / GitHub 版 Termux は Forge から直接コマンドを実行できます。外部アプリを有効化してからテストしてください。",
     "tx.fdroidLead2": "このビルドは RUN_COMMAND を利用できます。外部アプリを有効化してテスト — エージェントは不要です（フォールバックとしては利用可能）。",
     "tx.fdroidTitle": "RUN_COMMAND を有効化",
@@ -4271,7 +4271,7 @@ termux-reload-settings</div>
     "tx.nextTest": "次：テスト",
     "tx.openTermux": "Termux を開く",
     "tx.optionalHint": "任意 — ミニアプリで端末を使う場合のみ必要。",
-    "tx.pathAgent": "パス：forge-termux-agent",
+    "tx.pathAgent": "パス：$HOME/bin/forge-termux-agent",
     "tx.pathMissingC1": "<b>Termux</b> をインストールして開き、許可を求められたらストレージを許可してください。",
     "tx.pathMissingC2": "Play 版 Termux → エージェントパス。F-Droid 版 Termux → RUN_COMMAND パス。",
     "tx.pathMissingLead": "Forge はパッケージ com.termux を探します。Play または F-Droid から Termux をインストールし、一度開いてから戻ってください。",
@@ -4286,7 +4286,7 @@ termux-reload-settings</div>
     "tx.runTest": "テストを実行",
     "tx.skipForNow": "今はスキップ",
     "tx.startSetup": "セットアップを開始",
-    "tx.stayHint": "常時起動：<code>forge-termux-agent --daemon</code>。再起動後は再実行（または<code>~/.bashrc</code>に追加）。",
+    "tx.stayHint": "常時起動：<code>$HOME/bin/forge-termux-agent --daemon</code>。再起動後は再実行（または<code>~/.bashrc</code>に追加）。",
     "tx.step1Export": "1 · ファイルをエクスポート",
     "tx.step2Copy": "2 · コマンドをコピー",
     "tx.step3Open": "3 · Termux を開く",
@@ -4310,7 +4310,7 @@ termux-reload-settings</div>
     "txs.connectedVia": "{bridge} 経由で接続。ミニアプリが ForgeHost.termux.exec / run を呼び出し可能です。",
     "txs.exporting": "エージェントファイルをエクスポート中…",
     "txs.exportingLong": "エージェントファイルを Download/ForgeBridge へエクスポート中…",
-    "txs.failedStartAgent": "失敗 — forge-termux-agent を起動してください（Termux 簡単セットアップ）。",
+    "txs.failedStartAgent": "失敗 — $HOME/bin/forge-termux-agent を起動してください（Termux 簡単セットアップ）。",
     "txs.filesExported": "ファイルをエクスポートしました。コマンドをコピーし、Termux を開いてペースト＋Enter。",
     "txs.foundNoBridge": "Termux{ver} を検出しましたがブリッジがありません。Termux 簡単セットアップ → RUN_COMMAND の有効化かエージェントの起動を。",
     "txs.installFailed": "エージェントのインストールに失敗：{msg}",
@@ -4819,7 +4819,7 @@ termux-reload-settings</div>
     "tx.fdS2": "<b>Allow external apps</b> / RUN_COMMAND 활성화",
     "tx.fdS3": "또는 <code>~/.termux/termux.properties</code>에 설정:<br><code>allow-external-apps = true</code><br>그리고 <code>termux-reload-settings</code> 실행",
     "tx.fdroidC1": "<b>추천:</b> allow-external-apps = true",
-    "tx.fdroidC2": "또는 forge-termux-agent 실행(Play 경로와 동일)",
+    "tx.fdroidC2": "또는 $HOME/bin/forge-termux-agent 실행(Play 경로와 동일)",
     "tx.fdroidLead": "F-Droid / GitHub Termux는 Forge에서 직접 명령을 실행할 수 있습니다. 외부 앱을 켜고 테스트하세요.",
     "tx.fdroidLead2": "이 빌드는 RUN_COMMAND를 사용할 수 있습니다. 외부 앱을 활성화한 뒤 테스트 — 에이전트 불필요(에이전트는 여전히 대체로 작동).",
     "tx.fdroidTitle": "RUN_COMMAND 활성화",
@@ -4827,7 +4827,7 @@ termux-reload-settings</div>
     "tx.nextTest": "다음: 테스트",
     "tx.openTermux": "Termux 열기",
     "tx.optionalHint": "선택 — 미니 앱이 터미널을 사용해야 할 때만 필요.",
-    "tx.pathAgent": "경로: forge-termux-agent",
+    "tx.pathAgent": "경로: $HOME/bin/forge-termux-agent",
     "tx.pathMissingC1": "<b>Termux</b>를 설치하고 열어, 요청 시 저장소를 허용하세요.",
     "tx.pathMissingC2": "Play Termux → 에이전트 경로. F-Droid Termux → RUN_COMMAND 경로.",
     "tx.pathMissingLead": "Forge가 com.termux 패키지를 찾습니다. Play나 F-Droid에서 Termux를 설치하고 한 번 연 뒤 돌아오세요.",
@@ -4842,7 +4842,7 @@ termux-reload-settings</div>
     "tx.runTest": "테스트 실행",
     "tx.skipForNow": "지금은 건너뛰기",
     "tx.startSetup": "설치 시작",
-    "tx.stayHint": "계속 실행: <code>forge-termux-agent --daemon</code>. 재부팅 후 다시 실행(또는 <code>~/.bashrc</code>에 추가).",
+    "tx.stayHint": "계속 실행: <code>$HOME/bin/forge-termux-agent --daemon</code>. 재부팅 후 다시 실행(또는 <code>~/.bashrc</code>에 추가).",
     "tx.step1Export": "1 · 파일 내보내기",
     "tx.step2Copy": "2 · 명령 복사",
     "tx.step3Open": "3 · Termux 열기",
@@ -4866,7 +4866,7 @@ termux-reload-settings</div>
     "txs.connectedVia": "{bridge} 통해 연결. 미니 앱이 ForgeHost.termux.exec / run을 호출할 수 있습니다.",
     "txs.exporting": "에이전트 파일 내보내는 중…",
     "txs.exportingLong": "Download/ForgeBridge에 에이전트 파일 내보내는 중…",
-    "txs.failedStartAgent": "실패 — forge-termux-agent 시작(간편 Termux 설정).",
+    "txs.failedStartAgent": "실패 — $HOME/bin/forge-termux-agent 시작(간편 Termux 설정).",
     "txs.filesExported": "파일 내보냄. 명령 복사, Termux 열기, 붙여 넣기 & Enter.",
     "txs.foundNoBridge": "Termux{ver} 발견했으나 브리지 없음. 간편 Termux 설정 → RUN_COMMAND 활성화 또는 에이전트 시작.",
     "txs.installFailed": "에이전트 설치 실패: {msg}",
@@ -17473,7 +17473,7 @@ Permission & safety UX:
     }
 
     const TERMUX_AGENT_CMD =
-      'bash /storage/emulated/0/Download/ForgeBridge/install.sh && forge-termux-agent --daemon';
+      'bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent --daemon';
     const TERMUX_FDROID_CMD =
       "mkdir -p ~/.termux\ngrep -q 'allow-external-apps' ~/.termux/termux.properties 2>/dev/null || echo 'allow-external-apps = true' >> ~/.termux/termux.properties\ntermux-reload-settings";
 
@@ -17850,7 +17850,7 @@ Permission & safety UX:
             'In Termux run:',
             cmd,
             '',
-            'Keep it running after reboot: forge-termux-agent --daemon',
+            'Keep it running after reboot: $HOME/bin/forge-termux-agent --daemon',
           ].join('\n')
         );
         setTermuxStatus(t('txs.agentReady'), 'ok');
