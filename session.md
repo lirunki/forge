@@ -1902,3 +1902,16 @@ Smoke (device pending — no adb at build time):
 [ ] Run install.sh again → "Already installed — updated: …" exit 0; ~/.bashrc has ONE PATH line
 [ ] Test Termux → agent live (status version 1.1.0)
 ```
+
+## Release artifacts @ 2.7.4/134 (2026-08-23)
+
+`release_forge.sh` from clean tree @ `e1f4931` — BUILD SUCCESSFUL (1m20s):
+
+- `release-out/Forge-full-release.apk` (6.47 MB, F-Droid/website/sideload)
+- `release-out/Forge-play-release.aab` (5.81 MB, Play Console)
+- both copied to `/sdcard/Download/`; stamp `2.7.4/134 · e1f4931` in both
+  (built after commit → sha is the real HEAD); APK v1-signed (CERT.RSA+MANIFEST);
+  agent v1.1.0 asset inside; 3 dex.
+
+Includes: termux agent python auto-install (2.7.2) + full-path command &
+idempotent install.sh (2.7.4).
