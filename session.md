@@ -1903,6 +1903,10 @@ Smoke (device pending — no adb at build time):
 [ ] Test Termux → agent live (status version 1.1.0)
 ```
 
+## Graphify knowledge graph (2026-08-23)
+
+`forge/graphify-out/` — queryable knowledge graph of the project (1033 nodes / 2318 edges / 74 labeled communities; AST for Java/JS + LLM semantic layer for session.md/docs/samples; resource icons + duplicate assets host copy excluded by design; `recovered/` excluded by detect). Query with `graphify query "..."` from the project root. Provider: cheaperinference glm-5.3 via `~/.graphify/providers.json` — **no `extra_body`** (the gateway chokes on top-level `thinking` key: finish=length, empty content). Large-file extraction wedges at 600s read timeout → use `token_budget=6000` slices. Nested `graphify-out/graphify-out/` is a pipeline checkpoint artifact — harmless, don't ship.
+
 ## Release artifacts @ 2.7.4/134 (2026-08-23)
 
 `release_forge.sh` from clean tree @ `e1f4931` — BUILD SUCCESSFUL (1m20s):
@@ -1915,3 +1919,46 @@ Smoke (device pending — no adb at build time):
 
 Includes: termux agent python auto-install (2.7.2) + full-path command &
 idempotent install.sh (2.7.4).
+
+## Max output tokens setting (2026-08-24)
+
+**2.7.6 / versionCode 136** (from 2.7.4/134). Host-only, no native Java.
+
+### Problem
+Mini-app generation often failed on token output. 2.6.97 had hardcoded
+`maxTokens: 32768` on the Forge-it/Reforge calls with no way to tune it:
+- providers whose models cap below 32k can 4xx the param → auto retry drops
+  it entirely → provider default (4k–8k) → `finish_reason: length` truncation
+- models that support more never got the room. Either way the payload JSON
+  gets cut mid-html and Forge-it fails.
+
+### What landed
+| Piece | Detail |
+|---|---|
+| Setting | **Max output tokens** input (`#genMaxTokens`) in the second cell of the generation row, directly beside *Max generation time (s)* |
+| Range | default **32768**, clamped 1024–262144, step 1024 |
+| Persistence | `LS.genMaxTokens = forge_gen_max_tokens_v1`; loaded in `loadPrefs`, saved in `savePrefs`, wired into the change/blur listener list |
+| Helper | `getGenMaxTokens()` beside `getGenTimeoutSecs()` |
+| Call sites | all 5 factory paths use it (forgeApp: gemini stream + OAI stream; reforge: gemini stream + non-stream fallback + OAI stream) — was hardcoded 32768 |
+| Errors | truncation messages (stream `finish_reason=length`, non-stream twin, Gemini `MAX_TOKENS`, i18n `chat.failTruncated`) now say **“Raise Max output tokens (AI settings)…”** |
+| Console | `forge start` / `reforge start` genLog lines append `· budget N tok` |
+| i18n | en keys `ai.maxTokens`, `ai.maxTokensHint` (other langs fall back to en — same pattern as the 2.6.95 gen-timeout keys) |
+
+### Files
+`www/index.html` (+ assets sync), `android/app/build.gradle` (2.7.6/136),
+`docs/api.md` + `docs/tools.md` baselines, `package.json`.
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (syntax/parity/backticks/docs 2.7.6/136)
+- Both flavor debug APKs built; APK assets contain the input, LS key, label
+  (19 `genMaxTokens` refs)
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.6 (136)
+[ ] AI tab → generation row: 'Max output tokens' 32768 beside 'Max generation time (s)'
+[ ] Change to 65536 → persists across restart; hint line under the row explains it
+[ ] Console: forge/reforge start shows 'budget 65536 tok'
+[ ] Big app (Chat Pro prompt) builds; if truncated, error mentions Max output tokens
+[ ] Provider that rejects large max_tokens still builds (auto retry without param)
+```
