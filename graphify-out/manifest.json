@@ -1,0 +1,320 @@
+{
+  "android/app/build.gradle": {
+    "mtime": 1787469016.8300943,
+    "seen": 1787474177.1342275,
+    "ast_hash": "8f625fb1af1b7936fae612a664e7dffd",
+    "semantic_hash": "8f625fb1af1b7936fae612a664e7dffd"
+  },
+  "android/app/src/main/assets/capacitor.config.json": {
+    "mtime": 347187662.0,
+    "seen": 1787474177.1342463,
+    "ast_hash": "1b839071e5e0f18b0b05fa69feed2171",
+    "semantic_hash": "1b839071e5e0f18b0b05fa69feed2171"
+  },
+  "android/app/src/main/assets/capacitor.plugins.json": {
+    "mtime": 347187662.0,
+    "seen": 1787474177.134256,
+    "ast_hash": "0a2defc21ec30f7202940c9195964a83",
+    "semantic_hash": "0a2defc21ec30f7202940c9195964a83"
+  },
+  "android/app/src/main/assets/native-bridge.js": {
+    "mtime": 347187662.0,
+    "seen": 1787474177.1342626,
+    "ast_hash": "6a6588098ecff69bdc7b068214213843",
+    "semantic_hash": "6a6588098ecff69bdc7b068214213843"
+  },
+  "android/app/src/main/assets/public/cordova.js": {
+    "mtime": 1787469813.8130338,
+    "seen": 1787474177.1342688,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "android/app/src/main/assets/public/cordova_plugins.js": {
+    "mtime": 1787469813.8210337,
+    "seen": 1787474177.1342745,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "android/app/src/main/assets/termux-agent/forge-termux-agent": {
+    "mtime": 1787468850.6660943,
+    "seen": 1787474177.1342807,
+    "ast_hash": "3848e7327470fb99ce72802691434b48",
+    "semantic_hash": "3848e7327470fb99ce72802691434b48"
+  },
+  "android/app/src/main/assets/termux-agent/install.sh": {
+    "mtime": 347187662.0,
+    "seen": 1787474177.1342869,
+    "ast_hash": "5bc7bd5969d9dfadc904368ee86e3aa7",
+    "semantic_hash": "5bc7bd5969d9dfadc904368ee86e3aa7"
+  },
+  "android/app/src/main/java/com/forge/live/AppsBridgePlugin.java": {
+    "mtime": 1786077261.3517962,
+    "seen": 1787474177.1342924,
+    "ast_hash": "b3cbd08de105e72245526a620507bd96",
+    "semantic_hash": "b3cbd08de105e72245526a620507bd96"
+  },
+  "android/app/src/main/java/com/forge/live/AudioRouteBridgePlugin.java": {
+    "mtime": 1786450079.723998,
+    "seen": 1787474177.1342983,
+    "ast_hash": "5af7da33f8d6f1fcf611d2e010ab0b18",
+    "semantic_hash": "5af7da33f8d6f1fcf611d2e010ab0b18"
+  },
+  "android/app/src/main/java/com/forge/live/AudioRouteHelper.java": {
+    "mtime": 1786450079.723998,
+    "seen": 1787474177.1343038,
+    "ast_hash": "aa1949591d2f8be1f70035b4740074d4",
+    "semantic_hash": "aa1949591d2f8be1f70035b4740074d4"
+  },
+  "android/app/src/main/java/com/forge/live/BackgroundForgePlugin.java": {
+    "mtime": 1786076960.2446196,
+    "seen": 1787474177.1343102,
+    "ast_hash": "bcbb073ef8af6b5cbb721dcb223352d9",
+    "semantic_hash": "bcbb073ef8af6b5cbb721dcb223352d9"
+  },
+  "android/app/src/main/java/com/forge/live/BackgroundForgeService.java": {
+    "mtime": 1786076960.2446196,
+    "seen": 1787474177.1343162,
+    "ast_hash": "eef20f90ccffacf314c2ce8caf00c290",
+    "semantic_hash": "eef20f90ccffacf314c2ce8caf00c290"
+  },
+  "android/app/src/main/java/com/forge/live/CameraBridgePlugin.java": {
+    "mtime": 1786622098.2567794,
+    "seen": 1787474177.1343222,
+    "ast_hash": "7341d65cf42015327c23713e615b3ba4",
+    "semantic_hash": "7341d65cf42015327c23713e615b3ba4"
+  },
+  "android/app/src/main/java/com/forge/live/CameraXCaptureActivity.java": {
+    "mtime": 1786622034.0402863,
+    "seen": 1787474177.1343281,
+    "ast_hash": "af81a9216238b685d027c77e07ca08ee",
+    "semantic_hash": "af81a9216238b685d027c77e07ca08ee"
+  },
+  "android/app/src/main/java/com/forge/live/DriveBridgePlugin.java": {
+    "mtime": 1786505656.826348,
+    "seen": 1787474177.1343334,
+    "ast_hash": "e79c6ee9296cdcca6e49420a346e881e",
+    "semantic_hash": "e79c6ee9296cdcca6e49420a346e881e"
+  },
+  "android/app/src/main/java/com/forge/live/FilesBridgePlugin.java": {
+    "mtime": 1786077330.8717961,
+    "seen": 1787474177.1343386,
+    "ast_hash": "944feae5a37acdc70807508a44bea69c",
+    "semantic_hash": "944feae5a37acdc70807508a44bea69c"
+  },
+  "android/app/src/main/java/com/forge/live/ForgeJobReceiver.java": {
+    "mtime": 1786077078.8366196,
+    "seen": 1787474177.1343448,
+    "ast_hash": "5bf09209733c5236544a8e36dbc3e5df",
+    "semantic_hash": "5bf09209733c5236544a8e36dbc3e5df"
+  },
+  "android/app/src/main/java/com/forge/live/JobBridgePlugin.java": {
+    "mtime": 1786077556.1518047,
+    "seen": 1787474177.1343503,
+    "ast_hash": "1b19162624ee3cfcb8c7925946a419cd",
+    "semantic_hash": "1b19162624ee3cfcb8c7925946a419cd"
+  },
+  "android/app/src/main/java/com/forge/live/MainActivity.java": {
+    "mtime": 1787315157.9696805,
+    "seen": 1787474177.134356,
+    "ast_hash": "8dcec6165f3f00a77eaa922980cf0cc5",
+    "semantic_hash": "8dcec6165f3f00a77eaa922980cf0cc5"
+  },
+  "android/app/src/main/java/com/forge/live/MicBridgePlugin.java": {
+    "mtime": 1786920258.9436784,
+    "seen": 1787474177.1343613,
+    "ast_hash": "73d2844efca06cb4d2bb6b3462e50b39",
+    "semantic_hash": "73d2844efca06cb4d2bb6b3462e50b39"
+  },
+  "android/app/src/main/java/com/forge/live/NotifyBridgePlugin.java": {
+    "mtime": 1786077058.4126196,
+    "seen": 1787474177.134367,
+    "ast_hash": "0526f2192c3ff37c0ed89f6c7f94b341",
+    "semantic_hash": "0526f2192c3ff37c0ed89f6c7f94b341"
+  },
+  "android/app/src/main/java/com/forge/live/OpenHtmlBridgePlugin.java": {
+    "mtime": 1786511663.7900436,
+    "seen": 1787474177.1343744,
+    "ast_hash": "8d967e3685f51c88bbd8e7545b947d4a",
+    "semantic_hash": "8d967e3685f51c88bbd8e7545b947d4a"
+  },
+  "android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java": {
+    "mtime": 1786771384.7911053,
+    "seen": 1787474177.1343796,
+    "ast_hash": "2ee281ac2b85f7e5296f3691a90791e6",
+    "semantic_hash": "2ee281ac2b85f7e5296f3691a90791e6"
+  },
+  "android/app/src/main/java/com/forge/live/QrBridgePlugin.java": {
+    "mtime": 1786110728.718664,
+    "seen": 1787474177.1343853,
+    "ast_hash": "4430e9742954f35a1d4a3522b2912b9c",
+    "semantic_hash": "4430e9742954f35a1d4a3522b2912b9c"
+  },
+  "android/app/src/main/java/com/forge/live/QrScanActivity.java": {
+    "mtime": 1786076960.2486196,
+    "seen": 1787474177.1343908,
+    "ast_hash": "e8a2c146f3267c27d8a514c62a27e34a",
+    "semantic_hash": "e8a2c146f3267c27d8a514c62a27e34a"
+  },
+  "android/app/src/main/java/com/forge/live/RunActivity.java": {
+    "mtime": 1786076960.2486196,
+    "seen": 1787474177.134396,
+    "ast_hash": "ec8f8e08a2764d323a320b09a6cbf495",
+    "semantic_hash": "ec8f8e08a2764d323a320b09a6cbf495"
+  },
+  "android/app/src/main/java/com/forge/live/ShortcutBridgePlugin.java": {
+    "mtime": 1786759870.7666242,
+    "seen": 1787474177.1344016,
+    "ast_hash": "c579b2d7a225535c586c3cb1dcad068b",
+    "semantic_hash": "c579b2d7a225535c586c3cb1dcad068b"
+  },
+  "android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java": {
+    "mtime": 1787469162.8932111,
+    "seen": 1787474177.1344073,
+    "ast_hash": "4f2d89b5aa34194d65f9b914513526c8",
+    "semantic_hash": "4f2d89b5aa34194d65f9b914513526c8"
+  },
+  "android/app/src/main/java/com/forge/live/TtsBridgePlugin.java": {
+    "mtime": 1786450184.759998,
+    "seen": 1787474177.1344125,
+    "ast_hash": "1ef6951240ebcc210fb268464dffdc18",
+    "semantic_hash": "1ef6951240ebcc210fb268464dffdc18"
+  },
+  "android/build.gradle": {
+    "mtime": 1787093779.9950173,
+    "seen": 1787474177.134418,
+    "ast_hash": "513ae9aeb19ba0985deda1a03ae0b7d3",
+    "semantic_hash": "513ae9aeb19ba0985deda1a03ae0b7d3"
+  },
+  "android/gradlew": {
+    "mtime": 1786076331.2662897,
+    "seen": 1787474177.1344235,
+    "ast_hash": "a43be8432bac3ffd05b3769aa42fe996",
+    "semantic_hash": "a43be8432bac3ffd05b3769aa42fe996"
+  },
+  "android/settings.gradle": {
+    "mtime": 1786076616.2886198,
+    "seen": 1787474177.134429,
+    "ast_hash": "c89f2b47019da0f89a26c8b534f946e8",
+    "semantic_hash": "c89f2b47019da0f89a26c8b534f946e8"
+  },
+  "android/variables.gradle": {
+    "mtime": 1787093780.0910172,
+    "seen": 1787474177.1344354,
+    "ast_hash": "5779fcfb165689d21154e0b527818c51",
+    "semantic_hash": "5779fcfb165689d21154e0b527818c51"
+  },
+  "package.json": {
+    "mtime": 1787469016.9380944,
+    "seen": 1787474177.1344404,
+    "ast_hash": "5bf2637a60f1b5bf6d7c01d95f3424ec",
+    "semantic_hash": "5bf2637a60f1b5bf6d7c01d95f3424ec"
+  },
+  "release_forge.sh": {
+    "mtime": 1786970844.5238914,
+    "seen": 1787474177.134446,
+    "ast_hash": "ec645c935cc3ede01eafacbd96cc75c4",
+    "semantic_hash": "ec645c935cc3ede01eafacbd96cc75c4"
+  },
+  "www/cordova.js": {
+    "mtime": 347187662.0,
+    "seen": 1787474177.1344512,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "www/cordova_plugins.js": {
+    "mtime": 347187662.0,
+    "seen": 1787474177.1344566,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "BUILD.md": {
+    "mtime": 1787192292.5627692,
+    "seen": 1787488482.9682221,
+    "ast_hash": "dd8e903485495862ceef5bf10b04ce66",
+    "semantic_hash": "dd8e903485495862ceef5bf10b04ce66"
+  },
+  "INVARIANTS.md": {
+    "mtime": 1786079131.9366128,
+    "seen": 1787488482.9682248,
+    "ast_hash": "cc8cada9bcda0b6ed2238eb3bdf38653",
+    "semantic_hash": "cc8cada9bcda0b6ed2238eb3bdf38653"
+  },
+  "README.md": {
+    "mtime": 1786925903.5274694,
+    "seen": 1787488482.9682262,
+    "ast_hash": "88bd71270acf8c086e2cccfda57cfcd2",
+    "semantic_hash": "88bd71270acf8c086e2cccfda57cfcd2"
+  },
+  "docs/api.md": {
+    "mtime": 1787469016.8700943,
+    "seen": 1787488482.9682279,
+    "ast_hash": "7dc4054b35450bdf8bf8955d818ec842",
+    "semantic_hash": "7dc4054b35450bdf8bf8955d818ec842"
+  },
+  "docs/privacy-policy.html": {
+    "mtime": 1787009912.3410995,
+    "seen": 1787488482.9682293,
+    "ast_hash": "59df167bf7584c9dd29964ecc392b116",
+    "semantic_hash": "59df167bf7584c9dd29964ecc392b116"
+  },
+  "docs/tools.md": {
+    "mtime": 1787469016.9020944,
+    "seen": 1787488482.9682317,
+    "ast_hash": "303aff31087ff04e36c04d1268f1a1fd",
+    "semantic_hash": "303aff31087ff04e36c04d1268f1a1fd"
+  },
+  "samples/ForgeCam.html": {
+    "mtime": 1786669599.094351,
+    "seen": 1787488482.9682329,
+    "ast_hash": "c15479d5716549b080ec723a6d0dc364",
+    "semantic_hash": "c15479d5716549b080ec723a6d0dc364"
+  },
+  "samples/Forge_Car_Assist.html": {
+    "mtime": 1786576470.330535,
+    "seen": 1787488482.9682345,
+    "ast_hash": "9987d0dd773599547146f4d02a3a2ea3",
+    "semantic_hash": "9987d0dd773599547146f4d02a3a2ea3"
+  },
+  "samples/Forge_Chat.html": {
+    "mtime": 1786797979.369794,
+    "seen": 1787488482.9682357,
+    "ast_hash": "d433fff111254fa4420b1106cb2c2cd8",
+    "semantic_hash": "d433fff111254fa4420b1106cb2c2cd8"
+  },
+  "samples/Forge_Prompt_AI_Chat_Rich.md": {
+    "mtime": 1786576470.362535,
+    "seen": 1787488482.9682372,
+    "ast_hash": "a8258b31a934494d9c7f1d7b82d715f4",
+    "semantic_hash": "a8258b31a934494d9c7f1d7b82d715f4"
+  },
+  "samples/Forge_Prompt_Car_Voice_Assistant.md": {
+    "mtime": 1786576470.3905349,
+    "seen": 1787488482.9682384,
+    "ast_hash": "6ed832722812192eccd5533f0c6fa4d9",
+    "semantic_hash": "6ed832722812192eccd5533f0c6fa4d9"
+  },
+  "samples/Forge_Prompt_Reforge_Chat_CameraX.md": {
+    "mtime": 1786622492.648481,
+    "seen": 1787488482.9682398,
+    "ast_hash": "1278b1e96f5b9b92b4a44f87d9f2aba8",
+    "semantic_hash": "1278b1e96f5b9b92b4a44f87d9f2aba8"
+  },
+  "samples/Sms_Conversation_Copy.html": {
+    "mtime": 1786771596.828995,
+    "seen": 1787488482.9682412,
+    "ast_hash": "3e88bdba52a24f918f7d54292dd435b1",
+    "semantic_hash": "3e88bdba52a24f918f7d54292dd435b1"
+  },
+  "session.md": {
+    "mtime": 1787469950.4130337,
+    "seen": 1787488482.9682426,
+    "ast_hash": "004198e82097687c19baed37b3a57c5c",
+    "semantic_hash": "004198e82097687c19baed37b3a57c5c"
+  },
+  "www/index.html": {
+    "mtime": 1787468933.5660944,
+    "seen": 1787488482.9682443,
+    "ast_hash": "65f7a0c76940915542ca350cb178dfce",
+    "semantic_hash": "65f7a0c76940915542ca350cb178dfce"
+  }
+}

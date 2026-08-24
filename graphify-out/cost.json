@@ -1,0 +1,13 @@
+{
+  "runs": [
+    {
+      "date": "2026-08-23T12:34:42.977446+00:00",
+      "input_tokens": 56531,
+      "output_tokens": 42989,
+      "files": 53,
+      "note": "semantic: s2+s3+banked checkpoints (incl. earlier truncated-attempt spend ~90k in / ~75k out not counted here)"
+    }
+  ],
+  "total_input_tokens": 56531,
+  "total_output_tokens": 42989
+}

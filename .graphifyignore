@@ -1,0 +1,5 @@
+# graphify scan excludes (gitignore-style, merged with .gitignore)
+# recovered/ holds decoded-APK reconstruction reference (smali), not project source
+recovered/
+# agent tooling, not project content
+.pi/

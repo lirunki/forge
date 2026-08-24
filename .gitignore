@@ -38,3 +38,6 @@ forge-build.json
 android/keystore.properties
 android/.keystore/
 android/app/keystore.properties
+
+# Agent tooling, not project content
+.pi/

@@ -1,0 +1,394 @@
+{
+  "nodes": [
+    {
+      "id": "www_index",
+      "label": "Forge Web App (index.html)",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_view_chat",
+      "label": "Chat View",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": "#view-chat",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_view_preview",
+      "label": "Preview View",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": "#view-preview",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_view_library",
+      "label": "Library View",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": "#view-library",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_view_settings",
+      "label": "Settings View",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": "#view-settings",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_composer",
+      "label": "Message Composer",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".composer",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_bubble",
+      "label": "Chat Message Bubble",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".bubble",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_progress_bubble",
+      "label": "Progress Bubble",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".bubble.progress",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Transient rotating progress line shown while the LLM is forging (2.6.55)."
+    },
+    {
+      "id": "www_index_attach_strip",
+      "label": "Attachment Strip",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".attach-strip",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_app_exit",
+      "label": "Immersive Run Mode Exit Button",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".app-exit",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Immersive run mode — library / shortcut apps hide Forge chrome."
+    },
+    {
+      "id": "www_index_hints_overlay",
+      "label": "Hints Overlay",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".hints-overlay",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_tour_overlay",
+      "label": "Tour Overlay",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".tour-overlay",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_tour_tools",
+      "label": "Tour Tools Section",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".tour-tools (REFORGE_TOOLS_CSS_BEGIN)",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_lib_item",
+      "label": "Library Item Card",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".lib-item",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    },
+    {
+      "id": "www_index_preview_frame",
+      "label": "Preview iframe Frame",
+      "file_type": "code",
+      "source_file": "www/index.html",
+      "source_location": ".preview-frame-wrap iframe",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "www_index",
+      "target": "www_index_view_chat",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "www/index.html",
+      "source_location": "#view-chat",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index",
+      "target": "www_index_view_preview",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "www/index.html",
+      "source_location": "#view-preview",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index",
+      "target": "www_index_view_library",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "www/index.html",
+      "source_location": "#view-library",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index",
+      "target": "www_index_view_settings",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "www/index.html",
+      "source_location": "#view-settings",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index_view_chat",
+      "target": "www_index_composer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "www/index.html",
+      "source_location": "#view-chat grid rows",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index_view_chat",
+      "target": "www_index_bubble",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "www/index.html",
+      "source_location": ".messages .bubble",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index_view_chat",
+      "target": "www_index_progress_bubble",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "www/index.html",
+      "source_location": ".bubble.progress",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index_composer",
+      "target": "www_index_attach_strip",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "www/index.html",
+      "source_location": ".composer-attach-row .attach-strip",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index_bubble",
+      "target": "www_index_attach_strip",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "www/index.html",
+      "source_location": ".bubble-attachments",
+      "weight": 0.7
+    },
+    {
+      "source": "www_index_view_preview",
+      "target": "www_index_preview_frame",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "www/index.html",
+      "source_location": ".preview-frame-wrap",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index_view_library",
+      "target": "www_index_lib_item",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "www/index.html",
+      "source_location": ".lib-list .lib-item",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index_view_library",
+      "target": "www_index_app_exit",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "www/index.html",
+      "source_location": ".app-exit comment",
+      "weight": 0.8
+    },
+    {
+      "source": "www_index_tour_overlay",
+      "target": "www_index_tour_tools",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "www/index.html",
+      "source_location": ".tour-card .tour-tools",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index",
+      "target": "www_index_hints_overlay",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "www/index.html",
+      "source_location": ".hints-overlay",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index",
+      "target": "www_index_tour_overlay",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "www/index.html",
+      "source_location": ".tour-overlay",
+      "weight": 1.0
+    },
+    {
+      "source": "www_index",
+      "target": "www_index_app_exit",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "www/index.html",
+      "source_location": ".app-exit",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "forge_tabbed_views",
+      "label": "Forge Tabbed App Views",
+      "nodes": [
+        "www_index_view_chat",
+        "www_index_view_preview",
+        "www_index_view_library",
+        "www_index_view_settings"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "www/index.html"
+    },
+    {
+      "id": "forge_chat_flow_components",
+      "label": "Chat Conversation Flow Components",
+      "nodes": [
+        "www_index_composer",
+        "www_index_attach_strip",
+        "www_index_bubble",
+        "www_index_progress_bubble"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.85,
+      "source_file": "www/index.html"
+    },
+    {
+      "id": "forge_onboarding_overlays",
+      "label": "Onboarding and Hints Overlays",
+      "nodes": [
+        "www_index_tour_overlay",
+        "www_index_tour_tools",
+        "www_index_hints_overlay"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "www/index.html"
+    }
+  ],
+  "input_tokens": 7241,
+  "output_tokens": 2248,
+  "failed_chunks": 0,
+  "out_of_scope_dropped": 0,
+  "uncovered_files": []
+}
