@@ -1920,6 +1920,52 @@ Smoke (device pending — no adb at build time):
 Includes: termux agent python auto-install (2.7.2) + full-path command &
 idempotent install.sh (2.7.4).
 
+## Forge chat progress feed for agentic builds (2026-08-24)
+
+**2.7.10 / versionCode 140** (from 2.7.8/138). Host-only, no native Java.
+
+### What the user asked for
+Mini status messages in the chat while forging — like the mumbo-jumbo line,
+but **persistent/accumulating** (turns, tool calls), all removed when the
+result lands.
+
+### What landed
+- `.forge-progress-feed` container + `.progress-item` rows (CSS after the
+  `.bubble.progress` rules): compact muted lines, left accent bar, fade-in,
+  level variants `warn`/`ok`/`err`, per-event glyph icons
+  (⚙ offered · 📄 write · 👁 read · 🗑 delete · ⚡ js · 🖼 image · 🧩 finish ·
+  ✓ done · ↪ classic · ⚠ warn).
+- `genProgress(text, level, icon)` — DOM-only feed (`forgeProgressItems` array,
+  cap 80 with oldest-trim; never persisted into `chat`/draft).
+  `clearForgeProgress()` removes all rows. `loopStatus()` = chat feed +
+  AI-tab console (`loop · …`) in one call.
+- Feed renders **above** the cycling ticker (inserted before
+  `.bubble.progress`); re-appended by `renderChat` after rebuilds (hook at
+  function end).
+- Wired events: workspace offered · model chose single-shot · model chose
+  workspace (LOOP.md) · fs_write/fs_delete · run_js ok/FAILED · gen_image ·
+  finish assembled · done (rounds/files/html) · prose-reply nudge (warn).
+- Cleared in `onSend` `finally` (success, error, Stop, watchdog-fail — all
+  paths).
+
+### Verified
+- Gate PASS (`node --check`, parity, backticks, LOOP.md, docs baselines)
+- DOM-shim unit test with real `querySelector('.a.b')` semantics: feed before
+  ticker · 3 items → 3 rows (innerHTML reset) · level classes · clear removes
+  feed but keeps ticker · 80-item cap
+- Both flavor debug APKs built
+
+Smoke (device pending):
+```text
+[ ] Flag ON → forge a big app → chat shows: ticker line + accumulating
+    ⚙/📄/⚡/🧩 rows above it, one per loop event
+[ ] Result lands (or Stop / error) → all progress rows disappear; ticker gone;
+    chat shows only user + assistant bubbles
+[ ] Flag OFF or model declines → '↪ model chose single-shot' row appears,
+    cleared at settle — no other change
+[ ] Flag ON + fail (e.g. run_js error) → ⚠ warn rows visible during build
+```
+
 ## Agentic builder loop — workspace mode (2026-08-24)
 
 **2.7.8 / versionCode 138** (from 2.7.6/136). Host-only, no native Java.

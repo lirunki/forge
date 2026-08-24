@@ -181,6 +181,38 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* Persistent build-progress feed (agentic loop turns/tool calls; 2.7.10).
+       Items accumulate below the chat while forging and are removed when the
+       result lands. Distinct from .bubble.progress (single cycling line). */
+    .forge-progress-feed {
+      align-self: stretch;
+      max-width: min(92%, 560px);
+      margin: 0.15rem 0 0.2rem 0.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.12rem;
+    }
+    .progress-item {
+      display: flex;
+      align-items: baseline;
+      gap: 0.45rem;
+      padding: 0.16rem 0.2rem 0.16rem 0.6rem;
+      border-left: 2px solid var(--border);
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.35;
+      animation: forge-item-in 0.25s ease-out both;
+      word-break: break-word;
+    }
+    .progress-item .pi-icon { flex: 0 0 auto; font-size: 0.72rem; opacity: 0.9; }
+    .progress-item .pi-text { flex: 1 1 auto; min-width: 0; }
+    .progress-item.warn { border-left-color: var(--warn); color: var(--warn); }
+    .progress-item.ok   { border-left-color: var(--ok); color: var(--ok); }
+    .progress-item.err  { border-left-color: var(--err); color: var(--err); }
+    @keyframes forge-item-in {
+      from { opacity: 0; transform: translateY(3px); }
+      to   { opacity: 1; transform: none; }
+    }
     @keyframes forge-prog-pulse {
       0%, 100% { opacity: .25; transform: scale(.8); }
       50% { opacity: 1; transform: scale(1.15); }
@@ -9003,6 +9035,69 @@ termux-reload-settings</div>
       } catch (_) { return { stop() {}, status() {} }; }
     }
 
+    // ——— Persistent build-progress feed (2.7.10) ———
+    // Mini status lines appended to the chat while the agentic loop runs
+    // (turns, tool calls). Unlike the cycling mumbo-jumbo line these STAY and
+    // accumulate; all of them are removed when the build settles (onSend
+    // finally). DOM-only + this array — never persisted into chat/draft.
+    const forgeProgressItems = [];
+    const FORGE_PROGRESS_MAX_ITEMS = 80;
+    const PROGRESS_ICONS = {
+      info: '▸', write: '📄', read: '👁', del: '🗑', js: '⚡', img: '🖼',
+      finish: '🧩', done: '✓', classic: '↪', warn: '⚠', err: '✗', start: '⚙',
+    };
+    function renderForgeProgressFeed() {
+      try {
+        let feed = el.messages.querySelector('.forge-progress-feed');
+        if (!forgeProgressItems.length) {
+          if (feed) feed.remove();
+          return;
+        }
+        if (!feed) {
+          feed = document.createElement('div');
+          feed.className = 'forge-progress-feed';
+          // keep the feed above the cycling ticker line when present
+          const ticker = el.messages.querySelector('.bubble.progress');
+          if (ticker) el.messages.insertBefore(feed, ticker);
+          else el.messages.appendChild(feed);
+        }
+        feed.innerHTML = '';
+        for (const it of forgeProgressItems) {
+          const row = document.createElement('div');
+          row.className = 'progress-item ' + (it.level || 'info');
+          const ic = document.createElement('span');
+          ic.className = 'pi-icon';
+          ic.textContent = PROGRESS_ICONS[it.icon] || PROGRESS_ICONS.info;
+          const tx = document.createElement('span');
+          tx.className = 'pi-text';
+          tx.textContent = it.text;
+          row.appendChild(ic); row.appendChild(tx);
+          feed.appendChild(row);
+        }
+        el.messages.scrollTop = el.messages.scrollHeight;
+      } catch (_) {}
+    }
+    /** Append a persistent progress line to the chat feed (level: info|ok|warn|err). */
+    function genProgress(text, level = 'info', icon = 'info') {
+      try {
+        forgeProgressItems.push({ text: String(text || ''), level, icon, at: Date.now() });
+        if (forgeProgressItems.length > FORGE_PROGRESS_MAX_ITEMS) forgeProgressItems.splice(0, forgeProgressItems.length - FORGE_PROGRESS_MAX_ITEMS);
+        renderForgeProgressFeed();
+      } catch (_) {}
+    }
+    function clearForgeProgress() {
+      try {
+        forgeProgressItems.length = 0;
+        const feed = el.messages.querySelector('.forge-progress-feed');
+        if (feed) feed.remove();
+      } catch (_) {}
+    }
+    /** Loop event → chat progress feed + AI-tab console (single call site). */
+    function loopStatus(text, level = 'info', icon = 'info') {
+      genProgress(text, level, icon);
+      try { genLog(level === 'warn' || level === 'err' ? level : 'info', 'loop · ' + text); } catch (_) {}
+    }
+
     function addMessage(role, content, extras = {}) {
       const msg = { role, content };
       if (Array.isArray(extras.attachments) && extras.attachments.length) {
@@ -9052,6 +9147,9 @@ termux-reload-settings</div>
         }
         el.messages.appendChild(div);
       }
+      // Re-append the persistent progress feed after a rebuild (it lives in the
+      // DOM only; renderChat wipes el.messages). Cleared at build settle.
+      if (forgeProgressItems.length) renderForgeProgressFeed();
       if (scroll) el.messages.scrollTop = el.messages.scrollHeight;
     }
 
@@ -19213,19 +19311,19 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         case 'fs_write': {
           const b64 = String(a.encoding || 'text').toLowerCase() === 'base64';
           const r = fs.write(a.path, a.content, a.mime, b64);
-          if (r.ok) genLog('info', 'loop · fs_write ' + r.path + ' · ' + (r.bytes / 1024).toFixed(1) + 'k');
+          if (r.ok) loopStatus('fs_write ' + r.path + ' · ' + (r.bytes / 1024).toFixed(1) + 'k', 'info', 'write');
           return r;
         }
         case 'fs_read': return fs.read(a.path);
         case 'fs_list': return { ok: true, files: fs.list(), totalBytes: fs.totalBytes() };
         case 'fs_delete': {
           const r = fs.delete(a.path);
-          if (r.ok) genLog('info', 'loop · fs_delete ' + r.deleted);
+          if (r.ok) loopStatus('fs_delete ' + r.deleted, 'info', 'del');
           return r;
         }
         case 'run_js': {
           const r = await builderRunJs(a.code, fs);
-          genLog('info', 'loop · run_js ' + (r.ok ? 'ok' : 'FAILED') + (r.wrote && r.wrote.length ? ' · wrote ' + r.wrote.join(', ') : ''));
+          loopStatus('run_js ' + (r.ok ? 'ok' : 'FAILED') + (r.wrote && r.wrote.length ? ' · wrote ' + r.wrote.join(', ') : ''), r.ok ? 'ok' : 'warn', 'js');
           const out = { ok: r.ok, wrote: r.wrote || [], error: r.error || undefined };
           if (r.printed && r.printed.length) out.printed = r.printed.slice(-40).join('\n').slice(0, 8000);
           if (r.result != null) { try { out.result = JSON.stringify(r.result).slice(0, 4000); } catch (_) { out.result = String(r.result).slice(0, 4000); } }
@@ -19234,13 +19332,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         }
         case 'gen_image': {
           const r = await builderGenImage(a, fs, ctx.state);
-          genLog('info', 'loop · gen_image ' + (r.ok ? r.path : 'FAILED ' + (r.error || '')));
+          loopStatus('gen_image ' + (r.ok ? r.path : 'FAILED ' + (r.error || '')), r.ok ? 'info' : 'warn', 'img');
           return r;
         }
         case 'finish': {
           const app = await builderAssemble(fs, a);
           ctx.state.result = app;
-          genLog('info', 'loop · finish · assembled html ' + (app.html.length / 1024).toFixed(1) + 'k chars');
+          loopStatus('finish · assembled html ' + (app.html.length / 1024).toFixed(1) + 'k chars', 'info', 'finish');
           return { ok: true, htmlChars: app.html.length, title: app.title };
         }
         default:
@@ -19264,7 +19362,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       const state = { images: 0, imgSeq: 0, result: null };
       const messages = msgs.slice();
       let armed = false;
-      genLog('info', 'agentic loop armed · round 1 offers read_loop_md');
+      loopStatus('workspace mode offered (read_loop_md)', 'info', 'start');
       for (let round = 1; round <= BUILDER_MAX_ROUNDS; round++) {
         const tools = armed ? BUILDER_TOOLS : [BUILDER_TOOL_READ_LOOP];
         const res = await builderRound(messages, tools, signal);
@@ -19272,10 +19370,11 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         const content = String((res && res.content) || '');
         if (!tcs.length) {
           if (!armed) {
-            genLog('info', 'agentic loop: model skipped read_loop_md · classic path');
+            loopStatus('model chose single-shot (classic) mode', 'info', 'classic');
             return { classicRaw: content };
           }
           messages.push({ role: 'assistant', content });
+          loopStatus('prose reply in workspace mode — nudging for tool calls', 'warn', 'warn');
           messages.push({ role: 'user', content: 'Continue building with the workspace tools and call finish when the app is assembled. Do not answer in prose.' });
           continue;
         }
@@ -19285,7 +19384,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           const tcId = String(tc.id || '');
           if (name === 'read_loop_md') {
             const md = await getLoopMd();
-            genLog('info', 'agentic loop: model opted in · LOOP.md ' + md.length + ' chars');
+            loopStatus('model chose workspace mode · LOOP.md ' + md.length + ' chars', 'info', 'start');
             try { status && status('Builder mode: loading protocol…'); } catch (_) {}
             messages.push({ role: 'tool', tool_call_id: tcId, name, content: md });
             armed = true;
@@ -19305,7 +19404,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           }
           messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify(out).slice(0, 60000) });
           if (state.result) {
-            genLog('info', 'agentic loop finished in ' + round + ' rounds · ' + fs.count() + ' files · html ' + (state.result.html.length / 1024).toFixed(1) + 'k chars');
+            loopStatus('done · ' + round + ' rounds · ' + fs.count() + ' files · html ' + (state.result.html.length / 1024).toFixed(1) + 'k chars', 'ok', 'done');
             return { app: state.result };
           }
         }
@@ -19487,6 +19586,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       } finally {
         watchdog.stop();
         forgeProgress.stop();
+        clearForgeProgress();
         setBusy(false);
         abortController = null;
         bgStop();
