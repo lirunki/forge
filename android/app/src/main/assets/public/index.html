@@ -1493,6 +1493,11 @@ termux-reload-settings</div>
           </div>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.genTimeoutHint">Watchdog for Forge it / Reforge: when time is up you can extend or stop. Progress lands in Console.</p>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.maxTokensHint">Output budget for Forge it / Reforge. Raise it if big apps get cut off (max-token limit); lower it if a provider rejects the request.</p>
+          <div class="check" style="margin-top:0.45rem;">
+            <input type="checkbox" id="genAgenticLoop" />
+            <label for="genAgenticLoop" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.agenticLoop">Allow agentic builder loop</label>
+          </div>
+          <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.agenticLoopHint">Per provider: for apps too big for one response, the model can opt into workspace mode (scratch files, JS runner, image tools, host-side assembly). Off = classic one-shot JSON only.</p>
 
           <div class="settings-block" style="margin-top:0.25rem;">
             <button class="btn secondary small" id="btnTestAi" type="button" data-i18n="ai.test">Test connection</button>
@@ -1671,6 +1676,8 @@ termux-reload-settings</div>
     "ai.genTimeoutHint": "Watchdog for Forge it / Reforge: when time is up you can extend or stop. Progress lands in Console.",
     "ai.maxTokens": "Max output tokens",
     "ai.maxTokensHint": "Output budget for Forge it / Reforge. Raise it if big apps get cut off (max-token limit); lower it if a provider rejects the request.",
+    "ai.agenticLoop": "Allow agentic builder loop",
+    "ai.agenticLoopHint": "Per provider: for apps too big for one response, the model can opt into workspace mode (scratch files, JS runner, image tools, host-side assembly). Off = classic one-shot JSON only.",
     "gen.title": "Still building…",
     "gen.body": "{label}: {secs}s so far. The model is still working — keep waiting or stop.",
     "gen.extendBy": "Extend by",
@@ -5037,6 +5044,7 @@ termux-reload-settings</div>
       termuxSetupDone: 'forge_termux_setup_done_v1',
       genTimeout: 'forge_gen_timeout_v1',
       genMaxTokens: 'forge_gen_max_tokens_v1',
+      agenticLoop: 'forge_agentic_loop_v1',
     };
 
     /**
@@ -5510,6 +5518,7 @@ termux-reload-settings</div>
       btnExitApp: document.getElementById('btnExitApp'),
       genTimeoutSecs: document.getElementById('genTimeoutSecs'),
       genMaxTokens: document.getElementById('genMaxTokens'),
+      genAgenticLoop: document.getElementById('genAgenticLoop'),
       genTimeoutWrap: document.getElementById('genTimeoutWrap'),
       genTimeoutBody: document.getElementById('genTimeoutBody'),
       genExtendSecs: document.getElementById('genExtendSecs'),
@@ -5636,6 +5645,23 @@ termux-reload-settings</div>
       let v = parseInt(String(localStorage.getItem(LS.genMaxTokens) || ''), 10);
       if (!Number.isFinite(v)) v = 32768;
       return Math.min(262144, Math.max(1024, v));
+    }
+    /** Per-provider agentic builder loop flag (localStorage map keyed by provider id). */
+    function getAgenticLoopMap() {
+      try { return JSON.parse(localStorage.getItem(LS.agenticLoop) || '{}') || {}; } catch (_) { return {}; }
+    }
+    function isAgenticLoopEnabled() {
+      try { return !!getAgenticLoopMap()[activeProviderId]; } catch (_) { return false; }
+    }
+    function setAgenticLoopEnabled(on) {
+      try {
+        const m = getAgenticLoopMap();
+        if (on) m[activeProviderId] = true; else delete m[activeProviderId];
+        localStorage.setItem(LS.agenticLoop, JSON.stringify(m));
+      } catch (_) {}
+    }
+    function syncAgenticLoopCheckbox() {
+      try { if (el.genAgenticLoop) el.genAgenticLoop.checked = isAgenticLoopEnabled(); } catch (_) {}
     }
     /** Read-timeout for AI HTTP calls: never shorter than the old 600s default, grows with the setting. */
     function aiReadTimeoutMs() {
@@ -7396,6 +7422,7 @@ termux-reload-settings</div>
           const mt = parseInt(localStorage.getItem(LS.genMaxTokens), 10);
           if (el.genMaxTokens && Number.isFinite(mt) && mt >= 1024 && mt <= 262144) el.genMaxTokens.value = String(mt);
         } catch (_) {}
+        syncAgenticLoopCheckbox();
 
         const draft = localStorage.getItem(LS.draft);
         if (draft) {
@@ -18859,6 +18886,433 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       setLibStatus(t('reforge.discarded'), '');
     }
 
+    // ——— Agentic builder workspace (per-provider flag, LOOP.md protocol) —————
+    // Classic single-shot JSON stays the DEFAULT. When the provider flag is on,
+    // round 1 offers exactly ONE tool: read_loop_md. Only if the model calls it
+    // does the full builder toolset appear (scratch FS, JS runner, image gen,
+    // finish + host-side assembly). If the model never calls it, the round-1
+    // content flows through the classic extractJson path unchanged.
+
+    const BUILDER_FS_MAX_FILES = 200;
+    const BUILDER_FS_MAX_FILE_BYTES = 10 * 1024 * 1024;
+    const BUILDER_FS_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+    const BUILDER_MAX_ROUNDS = 24;
+    const BUILDER_JS_TIMEOUT_MS = 10000;
+    const BUILDER_JS_MAX_CODE_BYTES = 256 * 1024;
+    const BUILDER_IMAGE_MAX = 6;
+
+    function builderNormPath(p) {
+      let s = String(p || '').trim().replace(/\\/g, '/');
+      s = s.replace(/^\/+/, '');
+      const parts = [];
+      for (const seg of s.split('/')) {
+        if (!seg || seg === '.') continue;
+        if (seg === '..') { parts.pop(); continue; }
+        parts.push(seg);
+      }
+      return parts.join('/');
+    }
+
+    /** Ephemeral per-build workspace: Map<path, {data:string, mime, b64, updatedAt}>. */
+    function builderNewFs() {
+      const files = new Map();
+      const totalBytes = () => { let n = 0; for (const f of files.values()) n += f.data.length; return n; };
+      return {
+        norm: builderNormPath,
+        has: (p) => files.has(builderNormPath(p)),
+        get: (p) => files.get(builderNormPath(p)) || null,
+        count: () => files.size,
+        totalBytes,
+        list: () => [...files.entries()]
+          .map(([path, f]) => ({ path, mime: f.mime || '', b64: !!f.b64, bytes: f.data.length, updatedAt: f.updatedAt }))
+          .sort((a, b) => (a.path < b.path ? -1 : 1)),
+        write(p, data, mime, b64) {
+          const path = builderNormPath(p);
+          if (!path) return { ok: false, error: 'invalid path' };
+          const s = typeof data === 'string' ? data : String(data == null ? '' : data);
+          if (!s.length) return { ok: false, error: 'empty write refused' };
+          const prev = files.get(path);
+          if (files.size >= BUILDER_FS_MAX_FILES && !prev) return { ok: false, error: 'file count limit reached (' + BUILDER_FS_MAX_FILES + ')' };
+          if (s.length > BUILDER_FS_MAX_FILE_BYTES) return { ok: false, error: 'file too large (' + s.length + ' > ' + BUILDER_FS_MAX_FILE_BYTES + ' bytes)' };
+          if (totalBytes() - (prev ? prev.data.length : 0) + s.length > BUILDER_FS_MAX_TOTAL_BYTES)
+            return { ok: false, error: 'workspace total-size limit reached (' + BUILDER_FS_MAX_TOTAL_BYTES + ' bytes)' };
+          files.set(path, { data: s, mime: mime || (b64 ? 'application/octet-stream' : 'text/plain'), b64: !!b64, updatedAt: Date.now() });
+          return { ok: true, path, bytes: s.length, replaced: !!prev };
+        },
+        read(p) {
+          const path = builderNormPath(p);
+          const f = files.get(path);
+          if (!f) return { ok: false, error: 'no such file: ' + path };
+          const out = { ok: true, path, mime: f.mime || '', b64: !!f.b64, bytes: f.data.length };
+          if (f.b64) out.contentHead = f.data.slice(0, 200);
+          else if (f.data.length > 100000) { out.content = f.data.slice(0, 100000); out.truncated = true; }
+          else out.content = f.data;
+          return out;
+        },
+        delete(p) {
+          const path = builderNormPath(p);
+          if (!files.delete(path)) return { ok: false, error: 'no such file: ' + path };
+          return { ok: true, deleted: path };
+        },
+        snapshot: () => [...files.entries()].map(([path, f]) => ({ path, data: f.data, mime: f.mime, b64: !!f.b64 })),
+      };
+    }
+
+    // Worker source: built from plain strings (no closing-script-tag literal
+    // anywhere; runs with fetch/XHR neutered — offline pure computation only).
+    const BUILDER_WORKER_SRC = [
+      'self.fetch = undefined;',
+      'try { self.XMLHttpRequest = undefined; } catch (e) {}',
+      'self.onmessage = async function (ev) {',
+      '  const d = ev.data || {};',
+      '  const files = d.files || {};',
+      '  const writes = {};',
+      '  const printed = [];',
+      '  const stringify = function (x) { try { return typeof x === "string" ? x : JSON.stringify(x); } catch (e) { return String(x); } };',
+      '  const api = {',
+      '    list: function () { return Object.keys(files); },',
+      '    readText: function (p) { const f = files[p]; if (!f) throw new Error("no file: " + p); if (f.b64) throw new Error("binary file (use readBase64): " + p); return f.data; },',
+      '    readBase64: function (p) { const f = files[p]; if (!f) throw new Error("no file: " + p); return f.b64 ? f.data : null; },',
+      '    write: function (p, data, mime, b64) { writes[p] = { data: String(data == null ? "" : data), mime: mime || "", b64: !!b64 }; },',
+      '    print: function () { for (let i = 0; i < arguments.length; i++) printed.push(stringify(arguments[i])); },',
+      '  };',
+      '  try {',
+      '    const fn = new Function("api", "return (async () => {" + d.code + "\\n})();");',
+      '    const result = await fn(api);',
+      '    let r = null;',
+      '    try { r = result === undefined ? null : JSON.parse(JSON.stringify(result)); } catch (er) { r = String(result); }',
+      '    self.postMessage({ ok: true, result: r, printed: printed, writes: writes });',
+      '  } catch (e) {',
+      '    self.postMessage({ ok: false, error: String((e && e.stack) || e), printed: printed, writes: writes });',
+      '  }',
+      '};',
+    ].join('\n');
+
+    /** Run untrusted build JS in a throwaway Worker: 10s hard cap, offline, no DOM. */
+    function builderRunJs(code, fs) {
+      return new Promise((resolve) => {
+        if (typeof code !== 'string' || !code.trim()) return resolve({ ok: false, error: 'run_js: code is required' });
+        if (code.length > BUILDER_JS_MAX_CODE_BYTES) return resolve({ ok: false, error: 'run_js: code too large (>' + BUILDER_JS_MAX_CODE_BYTES + ' bytes)' });
+        let url = null, worker = null, settled = false;
+        const finish = (r) => {
+          if (settled) return;
+          settled = true;
+          try { if (worker) worker.terminate(); } catch (_) {}
+          try { if (url) URL.revokeObjectURL(url); } catch (_) {}
+          resolve(r);
+        };
+        try {
+          const snap = {};
+          for (const f of fs.snapshot()) snap[f.path] = { data: f.data, mime: f.mime, b64: f.b64 };
+          const blob = new Blob([BUILDER_WORKER_SRC], { type: 'text/javascript' });
+          url = URL.createObjectURL(blob);
+          worker = new Worker(url);
+          const timer = setTimeout(
+            () => finish({ ok: false, error: 'run_js timed out after ' + (BUILDER_JS_TIMEOUT_MS / 1000) + 's (terminated)', printed: [], wrote: [] }),
+            BUILDER_JS_TIMEOUT_MS
+          );
+          worker.onmessage = (ev) => {
+            clearTimeout(timer);
+            const d = ev.data || {};
+            const wrote = [];
+            const writeErrors = [];
+            if (d.writes) {
+              for (const p of Object.keys(d.writes)) {
+                const w = d.writes[p];
+                const r2 = fs.write(p, w.data, w.mime, w.b64);
+                if (r2.ok) wrote.push(p); else writeErrors.push(p + ': ' + r2.error);
+              }
+            }
+            finish({ ok: !!d.ok, result: d.result != null ? d.result : null, printed: d.printed || [], wrote, writeErrors, error: d.error || null });
+          };
+          worker.onerror = (e) => {
+            clearTimeout(timer);
+            finish({ ok: false, error: 'worker error: ' + (e && e.message ? e.message : 'unknown'), printed: [], wrote: [] });
+          };
+          worker.postMessage({ code, files: snap });
+        } catch (e) {
+          finish({ ok: false, error: 'worker failed to start: ' + (e && e.message ? e.message : String(e)), printed: [], wrote: [] });
+        }
+      });
+    }
+
+    function builderB64ToBlob(b64, mime) {
+      const bin = atob(b64);
+      const arr = new Uint8Array(bin.length);
+      for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+      return new Blob([arr], { type: mime || 'application/octet-stream' });
+    }
+
+    /** Workspace entry → data URL for assembly. Big images are downscaled to keep html sane. */
+    async function builderAssetDataUrl(entry) {
+      const mime = entry.mime || 'application/octet-stream';
+      if (entry.b64) {
+        if (/^image\//i.test(mime) && entry.data.length > 300000) {
+          try {
+            const bmp = await createImageBitmap(builderB64ToBlob(entry.data, mime));
+            const maxDim = 768;
+            const scale = Math.min(1, maxDim / Math.max(bmp.width || 1, bmp.height || 1));
+            const w = Math.max(1, Math.round((bmp.width || 1) * scale));
+            const h = Math.max(1, Math.round((bmp.height || 1) * scale));
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+            try { bmp.close(); } catch (_) {}
+            const out = cv.toDataURL('image/jpeg', 0.85);
+            if (out && out.length > 32) return out;
+          } catch (_) { /* fall through to raw */ }
+        }
+        return 'data:' + mime + ';base64,' + entry.data;
+      }
+      return 'data:' + (/^text\//i.test(mime) ? mime + ';charset=utf-8' : mime) + ',' + encodeURIComponent(entry.data);
+    }
+
+    /** gen_image: existing xAI image path → workspace file (images/gen_N.png). */
+    async function builderGenImage(args, fs, state) {
+      if (state.images >= BUILDER_IMAGE_MAX) return { ok: false, error: 'image generation limit reached (' + BUILDER_IMAGE_MAX + ' per build)' };
+      const prompt = String(args?.prompt || '').trim();
+      if (!prompt) return { ok: false, error: 'gen_image: prompt is required' };
+      const r = await generateImage({ prompt, n: 1 });
+      const imgs = (r && r.images) || [];
+      if (!imgs.length) return { ok: false, error: 'gen_image: provider returned no image' };
+      state.images++;
+      const im = imgs[0];
+      const url = String(im.url || '');
+      let mime = 'image/png', b64 = null;
+      const mData = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i.exec(url);
+      if (mData) { mime = mData[1]; b64 = mData[2]; }
+      else if (/^https?:\/\//i.test(url)) {
+        try {
+          const d = await fetchUrlAsDataUrl(url, { maxBytes: 12 * 1024 * 1024 });
+          const m2 = /^data:([^;]+);base64,([\s\S]+)$/i.exec(String((d && d.dataUrl) || ''));
+          if (!m2) return { ok: false, error: 'gen_image: image url fetch failed' };
+          mime = m2[1]; b64 = m2[2];
+        } catch (e) { return { ok: false, error: 'gen_image: image url fetch failed — ' + (e && e.message ? e.message : String(e)) }; }
+      } else return { ok: false, error: 'gen_image: provider returned an unsupported image payload' };
+      state.imgSeq = (state.imgSeq || 0) + 1;
+      const ext = /jpeg|jpg/i.test(mime) ? 'jpg' : /webp/i.test(mime) ? 'webp' : 'png';
+      const path = 'images/gen_' + state.imgSeq + '.' + ext;
+      const w = fs.write(path, b64, mime, true);
+      if (!w.ok) return { ok: false, error: 'gen_image: ' + w.error };
+      return { ok: true, path, mime, bytes: b64.length, revised_prompt: im.revised_prompt || '' };
+    }
+
+    /** finish(): assemble a self-contained index.html from workspace files.
+     *  - <script src="x"> where x is a text file → inlined
+     *  - <link rel=stylesheet href="x"> → <style> inlined
+     *  - @asset("x") tokens anywhere → data URLs (images downscaled when big)
+     *  Regexes are built via new RegExp so no closing-script-tag literal appears in source. */
+    async function builderAssemble(fs, args) {
+      const entryPath = builderNormPath(args?.entry || 'index.html');
+      const entry = fs.get(entryPath);
+      if (!entry) throw new Error('finish: "' + entryPath + '" not found in the workspace — write it first');
+      if (entry.b64) throw new Error('finish: "' + entryPath + '" is binary; it must be HTML text');
+      let html = String(entry.data);
+      const scriptRe = new RegExp('<script\\b([^>]*?)\\bsrc=["\']([^"\']+)["\']([^>]*?)>\\s*</scr' + 'ipt>', 'gi');
+      html = html.replace(scriptRe, (m0, pre, src, post) => {
+        const p = builderNormPath(src);
+        const f = fs.get(p);
+        if (!f || f.b64) return m0;
+        return '<script' + pre + post + '>\n' + f.data + '\n</scr' + 'ipt>';
+      });
+      const linkRe = /<link\b([^>]*)\brel=["']stylesheet["']([^>]*)\bhref=["']([^"']+)["']([^>]*)>/gi;
+      html = html.replace(linkRe, (m0, pre, _rel, href, post) => {
+        const p = builderNormPath(href);
+        const f = fs.get(p);
+        if (!f || f.b64) return m0;
+        return '<style>' + f.data + '</style>';
+      });
+      const assetRe = /@asset\(\s*["']([^"']+)["']\s*\)/g;
+      const tokens = new Map();
+      let m;
+      while ((m = assetRe.exec(html)) !== null) {
+        const p = builderNormPath(m[1]);
+        if (fs.has(p) && !tokens.has(m[0])) tokens.set(m[0], p);
+      }
+      for (const [token, p] of tokens) {
+        const url = await builderAssetDataUrl(fs.get(p));
+        html = html.split(token).join(url);
+      }
+      if (!/<[a-z!/]/i.test(html)) throw new Error('finish: assembled entry does not look like HTML');
+      return {
+        title: String(args?.title || 'Untitled app').slice(0, 80),
+        summary: String(args?.summary || '').slice(0, 240),
+        message: String(args?.message || ''),
+        html,
+      };
+    }
+
+    const BUILDER_TOOL_READ_LOOP = {
+      type: 'function',
+      function: {
+        name: 'read_loop_md',
+        description: 'Load the Forge workspace builder protocol. Call this FIRST (instead of answering) only when the app is too large or complex to deliver as a single JSON payload. Returns the full builder instructions.',
+        parameters: { type: 'object', properties: {}, required: [] },
+      },
+    };
+
+    const BUILDER_TOOLS = [
+      { type: 'function', function: { name: 'fs_write', description: 'Write a file into the build workspace (text or base64 binary). Paths are relative; directories are implicit.', parameters: { type: 'object', properties: {
+        path: { type: 'string', description: 'e.g. index.html, src/main.js, assets/style.css' },
+        content: { type: 'string', description: 'File content (text, or base64 when encoding=base64)' },
+        mime: { type: 'string', description: 'Optional MIME type, e.g. text/html, image/png' },
+        encoding: { type: 'string', enum: ['text', 'base64'], description: 'Default text' },
+      }, required: ['path', 'content'] } } },
+      { type: 'function', function: { name: 'fs_read', description: 'Read a workspace file (metadata + content; binary files return contentHead only).', parameters: { type: 'object', properties: {
+        path: { type: 'string' },
+      }, required: ['path'] } } },
+      { type: 'function', function: { name: 'fs_list', description: 'List workspace files (path, bytes, mime).', parameters: { type: 'object', properties: {} } } },
+      { type: 'function', function: { name: 'fs_delete', description: 'Delete a workspace file.', parameters: { type: 'object', properties: {
+        path: { type: 'string' },
+      }, required: ['path'] } } },
+      { type: 'function', function: { name: 'run_js', description: 'Run JavaScript in a sandboxed worker over the workspace: api.readText/readBase64/write/list/print. Offline, no DOM, 10s limit. Use to compute/generate/validate data files.', parameters: { type: 'object', properties: {
+        code: { type: 'string', description: 'JS body; may use await. Writes via api.write(path, data, mime, b64) land back in the workspace.' },
+      }, required: ['code'] } } },
+      { type: 'function', function: { name: 'gen_image', description: 'Generate an image with the provider image model (xAI Grok) and store it in the workspace. Reference it as @asset(path). Limited per build.', parameters: { type: 'object', properties: {
+        prompt: { type: 'string' },
+      }, required: ['prompt'] } } },
+      { type: 'function', function: { name: 'finish', description: 'Assemble the final self-contained mini-app from workspace files (index.html entry; local <script src>/<link> are inlined; @asset(path) tokens become data URLs) and end the build.', parameters: { type: 'object', properties: {
+        title: { type: 'string' },
+        summary: { type: 'string' },
+        message: { type: 'string', description: 'Short friendly reply to the user' },
+        entry: { type: 'string', description: 'Entry HTML file, default index.html' },
+      }, required: ['title'] } } },
+    ];
+
+    let builderLoopMdCache = null;
+    const BUILDER_LOOP_MD_FALLBACK = [
+      '# Forge workspace builder protocol',
+      '',
+      'You are building a mini-app in a persistent build workspace instead of one giant JSON payload.',
+      'Workflow: plan briefly, write files with fs_write (index.html plus js/css modules), compute or validate data with run_js, generate art with gen_image, then call finish.',
+      'Rules:',
+      '- index.html stays SMALL: reference local files via <script src="src/main.js">' + '</scr' + 'ipt>, <link rel="stylesheet" href="assets/style.css">, and @asset("images/gen_1.png") tokens. finish() inlines all of them.',
+      '- The final app must use only the ForgeHost APIs from the system prompt. No external CDNs.',
+      '- run_js is offline pure JS (no DOM, no fetch); use api.readText, api.readBase64, api.write, api.list, api.print.',
+      '- Call finish with {title, summary, message} when the app is complete. finish is the only way to deliver.',
+      '- Limits: 200 files, 10MB/file, 64MB total, 6 images, 10s per run_js, 24 rounds.',
+    ].join('\n');
+    async function getLoopMd() {
+      if (builderLoopMdCache != null) return builderLoopMdCache;
+      let txt = null;
+      try {
+        const r = await fetch('LOOP.md', { cache: 'no-store' });
+        if (r && r.ok) txt = await r.text();
+      } catch (_) {}
+      if (!txt || txt.length < 200) txt = BUILDER_LOOP_MD_FALLBACK;
+      builderLoopMdCache = txt;
+      return txt;
+    }
+
+    async function builderExecTool(name, argsRaw, ctx) {
+      let a = {};
+      try { a = typeof argsRaw === 'string' ? JSON.parse(argsRaw || '{}') : (argsRaw || {}); }
+      catch (_) { return { ok: false, error: 'bad tool arguments (not valid JSON)' }; }
+      const fs = ctx.fs;
+      switch (name) {
+        case 'fs_write': {
+          const b64 = String(a.encoding || 'text').toLowerCase() === 'base64';
+          const r = fs.write(a.path, a.content, a.mime, b64);
+          if (r.ok) genLog('info', 'loop · fs_write ' + r.path + ' · ' + (r.bytes / 1024).toFixed(1) + 'k');
+          return r;
+        }
+        case 'fs_read': return fs.read(a.path);
+        case 'fs_list': return { ok: true, files: fs.list(), totalBytes: fs.totalBytes() };
+        case 'fs_delete': {
+          const r = fs.delete(a.path);
+          if (r.ok) genLog('info', 'loop · fs_delete ' + r.deleted);
+          return r;
+        }
+        case 'run_js': {
+          const r = await builderRunJs(a.code, fs);
+          genLog('info', 'loop · run_js ' + (r.ok ? 'ok' : 'FAILED') + (r.wrote && r.wrote.length ? ' · wrote ' + r.wrote.join(', ') : ''));
+          const out = { ok: r.ok, wrote: r.wrote || [], error: r.error || undefined };
+          if (r.printed && r.printed.length) out.printed = r.printed.slice(-40).join('\n').slice(0, 8000);
+          if (r.result != null) { try { out.result = JSON.stringify(r.result).slice(0, 4000); } catch (_) { out.result = String(r.result).slice(0, 4000); } }
+          if (r.writeErrors && r.writeErrors.length) out.writeErrors = r.writeErrors;
+          return out;
+        }
+        case 'gen_image': {
+          const r = await builderGenImage(a, fs, ctx.state);
+          genLog('info', 'loop · gen_image ' + (r.ok ? r.path : 'FAILED ' + (r.error || '')));
+          return r;
+        }
+        case 'finish': {
+          const app = await builderAssemble(fs, a);
+          ctx.state.result = app;
+          genLog('info', 'loop · finish · assembled html ' + (app.html.length / 1024).toFixed(1) + 'k chars');
+          return { ok: true, htmlChars: app.html.length, title: app.title };
+        }
+        default:
+          return { ok: false, error: 'unknown tool: ' + name };
+      }
+    }
+
+    /** One loop round over the active backend (Gemini native or OpenAI-compatible). */
+    async function builderRound(messages, tools, signal) {
+      const opts = { tools, tool_choice: 'auto', fullResponse: true, jsonMode: 'off', maxTokens: getGenMaxTokens() };
+      if (backendForRuntime(getAiRuntime()) === 'gemini') {
+        return await geminiGenerateContent(messages, signal, opts);
+      }
+      return await chatCompletions(messages, signal, opts);
+    }
+
+    /** Drive the agentic build. Returns { app } on success, { classicRaw } when the
+     *  model never opts in (classic path reuses the round-1 content), or throws. */
+    async function runBuilderLoop({ msgs, signal, wantCar, status }) {
+      const fs = builderNewFs();
+      const state = { images: 0, imgSeq: 0, result: null };
+      const messages = msgs.slice();
+      let armed = false;
+      genLog('info', 'agentic loop armed · round 1 offers read_loop_md');
+      for (let round = 1; round <= BUILDER_MAX_ROUNDS; round++) {
+        const tools = armed ? BUILDER_TOOLS : [BUILDER_TOOL_READ_LOOP];
+        const res = await builderRound(messages, tools, signal);
+        const tcs = Array.isArray(res && res.tool_calls) ? res.tool_calls : [];
+        const content = String((res && res.content) || '');
+        if (!tcs.length) {
+          if (!armed) {
+            genLog('info', 'agentic loop: model skipped read_loop_md · classic path');
+            return { classicRaw: content };
+          }
+          messages.push({ role: 'assistant', content });
+          messages.push({ role: 'user', content: 'Continue building with the workspace tools and call finish when the app is assembled. Do not answer in prose.' });
+          continue;
+        }
+        messages.push({ role: 'assistant', content: content || '', tool_calls: tcs });
+        for (const tc of tcs) {
+          const name = String((tc.function && tc.function.name) || tc.name || '');
+          const tcId = String(tc.id || '');
+          if (name === 'read_loop_md') {
+            const md = await getLoopMd();
+            genLog('info', 'agentic loop: model opted in · LOOP.md ' + md.length + ' chars');
+            try { status && status('Builder mode: loading protocol…'); } catch (_) {}
+            messages.push({ role: 'tool', tool_call_id: tcId, name, content: md });
+            armed = true;
+            continue;
+          }
+          if (!armed) {
+            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, error: 'call read_loop_md first to load the builder protocol' }) });
+            continue;
+          }
+          if (signal && signal.aborted) { const e = new Error('Aborted'); e.name = 'AbortError'; throw e; }
+          try { status && status('Builder round ' + round + ' · ' + name + '…'); } catch (_) {}
+          let out;
+          try {
+            out = await builderExecTool(name, tc.function && tc.function.arguments, { fs, state, wantCar, signal });
+          } catch (e) {
+            out = { ok: false, error: String((e && e.message) || e) };
+          }
+          messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify(out).slice(0, 60000) });
+          if (state.result) {
+            genLog('info', 'agentic loop finished in ' + round + ' rounds · ' + fs.count() + ' files · html ' + (state.result.html.length / 1024).toFixed(1) + 'k chars');
+            return { app: state.result };
+          }
+        }
+      }
+      throw new Error('Builder loop ended after ' + BUILDER_MAX_ROUNDS + ' rounds without finish. Try a simpler app, or turn off "Allow agentic builder loop" for this provider in AI settings.');
+    }
+
     async function forgeApp(userText, attachments = [], onStatus) {
       const status = typeof onStatus === 'function' ? onStatus : () => {};
       savePrefs();
@@ -18880,6 +19334,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           summary: currentApp.summary,
           html: currentApp.html,
         });
+      }
+      // Agentic builder pointer (per-provider flag): one short paragraph, one tool.
+      if (isAgenticLoopEnabled()) {
+        system += '\n\nBUILD OPTION (agentic): If this app is too large or complex to deliver as one JSON payload, call the tool read_loop_md now to load the workspace builder protocol (scratch files, JS runner, image generation, host-side assembly) and build it in rounds instead. Use it only when a single response would not be enough; otherwise ignore this option and return the JSON payload exactly as specified.';
       }
       const msgs = [{ role: 'system', content: system }];
 
@@ -18916,7 +19374,27 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         genLog('info', 'forge start · ' + who + ' · user ' + userText.length + ' chars · history ' + (msgs.length - 2) + ' · attachments ' + (attachments?.length || 0) + ' · budget ' + getGenMaxTokens() + ' tok');
       } catch (_) {}
 
-      let raw;
+      // Agentic builder loop (per-provider flag). Round 1 offers read_loop_md;
+      // if the model never calls it, round-1 content flows into the classic path.
+      let raw = null;
+      if (isAgenticLoopEnabled()) {
+        const built = await runBuilderLoop({ msgs, signal: abortController.signal, wantCar, status });
+        if (built && built.app) {
+          const app = {
+            id: currentApp?.id || uid(),
+            title: String(built.app.title || 'Untitled app').slice(0, 80),
+            summary: String(built.app.summary || '').slice(0, 240),
+            html: String(built.app.html),
+            createdAt: currentApp?.createdAt || Date.now(),
+            updatedAt: Date.now(),
+            carCompatible: !!wantCar,
+          };
+          const message = String(built.app.message || t('chat.builtDefault', { name: app.title }));
+          genLog('info', 'forge done · "' + app.title + '" · html ' + (app.html.length / 1024).toFixed(1) + 'k chars');
+          return { app, message };
+        }
+        if (built && built.classicRaw != null) raw = built.classicRaw;
+      }
       let recvChars = 0;
       let lastRecvTick = 0;
       let lastGenLogTick = 0;
@@ -18941,10 +19419,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // maxTokens: large mini-app payloads routinely exceed provider default output
       // limits (4k-8k) — without an explicit budget the HTML gets cut off mid-JSON.
       // Budget comes from the AI tab setting (getGenMaxTokens, default 32768).
-      if (isGeminiHostProvider() && attachments?.length) {
-        raw = await geminiStreamGenerateContent(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
-      } else {
-        raw = await chatCompletionsStream(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
+      if (raw == null) {
+        if (isGeminiHostProvider() && attachments?.length) {
+          raw = await geminiStreamGenerateContent(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
+        } else {
+          raw = await chatCompletionsStream(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
+        }
       }
       status('Parsing app payload…');
       genLog('info', 'received ' + raw.length + ' chars · parsing');
@@ -21070,6 +21550,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
 
     el.provider?.addEventListener('change', () => {
       switchProvider(el.provider.value, { fromUser: true });
+      syncAgenticLoopCheckbox();
     });
 
     el.azureDeployment?.addEventListener('change', () => {
@@ -21084,6 +21565,11 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
      'azureResource','azureDeployment','azureApiVersion','azureAuth'].forEach(id => {
       el[id]?.addEventListener('change', savePrefs);
       el[id]?.addEventListener('blur', savePrefs);
+    });
+    // Per-provider agentic builder loop flag (stored separately from profiles)
+    el.genAgenticLoop?.addEventListener('change', () => {
+      setAgenticLoopEnabled(!!el.genAgenticLoop.checked);
+      try { genLog('info', 'agentic builder loop ' + (el.genAgenticLoop.checked ? 'enabled' : 'disabled') + ' for ' + activeProviderId); } catch (_) {}
     });
     // Generation-timeout card actions (non-blocking popup)
     el.btnGenExtend?.addEventListener('click', () => {

@@ -2,7 +2,7 @@
 
 > Canonical source: `forge/www/index.html` (the `SYSTEM_PROMPT` + `ForgeHost` bridge).
 > This file is a human-readable mirror — regenerate from the host when the bridge changes.
-> Version baseline: `2.7.6 / versionCode 136`.
+> Version baseline: `2.7.8 / versionCode 138`.
 
 `window.ForgeHost` (alias `window.forge`) is injected into every mini-app
 iframe by the host before `ready`. **All host APIs are async (Promises).
@@ -369,3 +369,37 @@ Include Settings: enable tools, riskMax, confirm side effects, optional tool mul
 - No `alert()` spam; polished empty states; refine = full new html.
 - No stealing host LLM API keys. If the mini-app needs AI, use `ForgeHost.ai.*` and offer a provider menu via `listProviders`/`setProvider`.
 - JSON-escape the html string properly when returning from Forge-it.
+
+## Agentic builder loop (host-internal, 2.7.8+)
+
+Not a mini-app API — this is the host-side workspace mode for **Forge it** on
+providers whose models handle tool loops well. Enabled per provider in AI
+settings ("Allow agentic builder loop", stored in `localStorage
+forge_agentic_loop_v1` keyed by provider id; default off).
+
+Flow (classic single-shot JSON stays the default path):
+
+1. Flag on → forge system prompt gains one short BUILD OPTION paragraph and
+   round 1 registers exactly **one** tool: `read_loop_md`.
+2. Model ignores it → round-1 content flows through the classic
+   `extractJson` path unchanged (no second call).
+3. Model calls it → `LOOP.md` (shipped as `www/LOOP.md` ≡ asset, fetched at
+   runtime) is returned as the tool result and the full builder toolset is
+   registered for subsequent rounds (max 24):
+   - `fs_write` / `fs_read` / `fs_list` / `fs_delete` — ephemeral per-build
+     workspace (200 files · 10 MB/file · 64 MB total; path-normalized)
+   - `run_js` — sandboxed Web Worker (offline, no DOM, fetch/XHR neutered,
+     10 s hard cap; `api.readText/readBase64/write/list/print`; writes land
+     back in the workspace)
+   - `gen_image` — provider image model (xAI Grok path) → `images/gen_N.png`
+     in the workspace (max 6/build; big images downscaled to ≤768px at assembly)
+   - `finish({title, summary, message, entry?})` — host-side assembly:
+     inlines `<script src>`/`<link rel=stylesheet>` from the workspace and
+     replaces `@asset("path")` tokens with data URLs → self-contained app
+     (library/backup/AA-share runtime contract unchanged)
+4. Loop runs under the existing generation watchdog (extend/fail popup) and
+   honors the max-output-tokens setting per round; every tool call is logged
+   to the AI-tab console (`loop · <tool> …` lines).
+
+Errors from tools return to the model as `{ok:false,error}`; exhaustion of
+rounds without `finish` fails with guidance to simplify or turn the flag off.

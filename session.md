@@ -1920,6 +1920,77 @@ Smoke (device pending — no adb at build time):
 Includes: termux agent python auto-install (2.7.2) + full-path command &
 idempotent install.sh (2.7.4).
 
+## Agentic builder loop — workspace mode (2026-08-24)
+
+**2.7.8 / versionCode 138** (from 2.7.6/136). Host-only, no native Java.
+
+### Design (locked with user)
+Mini-apps kept outgrowing the single-shot JSON payload (truncation class:
+2.6.97 max_tokens, 2.6.96/99 extractJson rewrites, 2.7.0 reasoning
+separation). Instead of a global mode switch, the builder framework is gated
+by a **per-provider flag** and the **model decides per build** whether to use
+it via a two-stage tool opt-in. Protocol lives in **LOOP.md**, an editable
+asset — not baked into the system prompt.
+
+### What landed
+| Piece | Detail |
+|---|---|
+| Flag | AI settings: **Allow agentic builder loop** checkbox under the generation row (per-provider, `LS.agenticLoop = forge_agentic_loop_v1` map keyed by provider id; synced on provider switch; default **off**) |
+| Opt-in | Flag on → system prompt gains ONE short BUILD OPTION paragraph + round 1 registers exactly ONE tool: `read_loop_md`. Model ignores it → round-1 content flows through the **classic path unchanged** (no extra API call). Model calls it → `LOOP.md` returned as tool result + full toolset registered (max 24 rounds) |
+| LOOP.md | `www/LOOP.md` ≡ asset (synced by build_forge.sh; parity-checked by forge_check step 2; inline fallback constant if fetch fails). Protocol: workflow, assembly rules, tool reference, limits |
+| Scratch FS | `fs_write/fs_read/fs_list/fs_delete` — ephemeral per-build Map, path-normalized (`..` stripped), caps 200 files / 10 MB per file / 64 MB total |
+| JS runner | `run_js` — throwaway Web Worker (offline: fetch/XHR neutered; no DOM; 10 s hard cap + terminate; 256 KB code cap). Worker API: `api.list/readText/readBase64/write/print`; writes merge back into the workspace (caps enforced host-side) |
+| Image gen | `gen_image` — wraps existing xAI `/images/generations` path; result stored as `images/gen_N.png` in the workspace (≤ 6 per build); remote URLs fetched via `fetchUrlAsDataUrl` |
+| Assembly | `finish({title,summary,message,entry?})` → host-side assembly: inlines `<script src>`/`<link rel=stylesheet>` from workspace files, replaces `@asset("path")` tokens with data URLs (images >300 KB downscaled ≤768px JPEG). Library/backup/AA-share runtime contract **unchanged** — final app is still one self-contained html |
+| Loop driver | `runBuilderLoop` — accumulates OpenAI-shaped messages (assistant.tool_calls + role:tool preserved by `normalizeChatMessages`; Gemini native converts to functionCall/functionResponse). Per-round `maxTokens = getGenMaxTokens()`, `jsonMode:'off'`, abort-signal honored. Prose-when-armed → one nudge; rounds exhausted → clear error telling user to simplify or flip the flag off |
+| Console | `genLog` lines: `agentic loop armed`, `model opted in · LOOP.md N chars`, `loop · fs_write path · Nk`, `loop · run_js ok/FAILED`, `loop · gen_image …`, `loop · finish · assembled html Nk`, `agentic loop finished in N rounds · N files` |
+| Watchdog | Loop runs inside `forgeApp` → existing generation watchdog (extend/fail popup) + FGS keep-alive + retry layer apply unchanged |
+| i18n | en keys `ai.agenticLoop`, `ai.agenticLoopHint` (other langs fall back to en) |
+
+### Safety / containment
+- Worker: offline-only, no DOM, no ForgeHost, 10 s terminate — an infinite loop
+cannot freeze the host UI.
+- Classic fallback is structural: flag off (or model disinterest) → byte-for-byte
+  the pre-2.7.8 code path.
+- Assembly regexes built via `new RegExp` + `'</scr' + 'ipt>'` splices — no raw
+closing-script-tag literal anywhere in host source (the gate enforces 1).
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (incl. new LOOP.md parity check;
+the gate caught two stray closing-tag literals in my own comments — fixed)
+- `node --check` clean (951 KB module block)
+- `builderAssemble` unit-tested from the real file source: script/style inline,
+  remote CDN left as-is, `@asset` → data URL, missing-entry throws
+- `BUILDER_WORKER_SRC` simulated in a VM: read/write/print/result, error stack,
+  fetch neutered
+- APK contains `assets/public/LOOP.md` (4377 B) + all builder refs
+
+### Files
+`www/index.html` + `www/LOOP.md` (+ assets sync), `android/app/build.gradle`
+(2.7.8/138), `docs/api.md` (builder section + baseline), `docs/tools.md`
+(baseline), `package.json`, `~/downloads/build_forge.sh` (LOOP.md sync),
+`~/downloads/forge_check.sh` (LOOP.md parity step).
+
+### Not in v1 (follow-ups)
+- Reforge in workspace mode (seed FS with current app.html as reference)
+- agenticLoop flag not yet in provider profiles → not in Drive settings backup
+  (localStorage-only, like other gen settings)
+- OPFS persistence across refine turns (workspace is per-build)
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.8 (138)
+[ ] Flag OFF → Forge it tic-tac-toe → classic path, identical behavior
+[ ] Flag ON (capable provider) → simple prompt → model skips read_loop_md →
+    console 'model skipped read_loop_md · classic path' → builds classic
+[ ] Flag ON → big prompt (Chat Pro) → console: opted in · LOOP.md · fs_write
+    rounds · finish assembled html → app runs like any mini-app
+[ ] Export/share/library-save of a workspace-built app works (single html)
+[ ] Stop button aborts mid-loop; watchdog extend/fail popup works mid-loop
+[ ] run_js infinite loop (ask model to compute while(true)) → tool errors at
+    10 s, host UI stays responsive
+```
+
 ## Max output tokens setting (2026-08-24)
 
 **2.7.6 / versionCode 136** (from 2.7.4/134). Host-only, no native Java.
