@@ -482,7 +482,7 @@
     }
     .card h2 { font-size: 0.95rem; margin-bottom: 0.75rem; }
     label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 600; }
-    input[type="password"], input[type="text"], input[type="url"], select, textarea.field {
+    input[type="password"], input[type="text"], input[type="url"], input[type="number"], select, textarea.field {
       width: 100%;
       background: var(--bg);
       border: 1px solid var(--border);
@@ -1426,18 +1426,32 @@ termux-reload-settings</div>
       <!-- SETTINGS -->
       <section id="view-settings" class="view">
         <div class="card">
+          <h2 data-i18n="about.title">About Forge</h2>
+          <p id="forgeBuildInfo" style="color:var(--muted);font-size:0.8rem;margin:0 0 8px;font-family:monospace;">Forge (dev build)</p>
+          <p style="color:var(--muted);font-size:0.9rem;" data-i18n-html="about.body">
+            Forge runs <b>HTML mini-apps</b> on your phone. <b>Open with Forge</b> or <b>Share → Forge</b>
+            from WhatsApp, Files, Drive, etc. to import a .html and run it. You can also Import from Library,
+            generate with AI, or try the Kitchen sink API lab.
+            Bridges: phone/SMS/location, TTS/audio, mic, camera/QR, files, Termux, share, notify/jobs, AI, storage.
+            Pin to Home screen. Backup library under Settings → Library backup.
+          </p>
+          <div class="settings-block" style="margin-top:0.6rem;">
+            <label for="langSelect" style="margin:0 0 0.35rem 0;" data-i18n="about.lang">Language</label>
+            <select id="langSelect"></select>
+            <p class="field-hint hidden" id="langRestartHint" style="margin:0.45rem 0 0;" data-i18n="about.langRestart">Saved — restart Forge to apply.</p>
+          </div>
+          <div class="settings-block" style="margin-top:0.6rem;padding-top:0.55rem;border-top:1px solid var(--border);">
+            <button class="btn secondary small" id="btnDonate" type="button" data-i18n="ai.donate">☕ Support development</button>
+            <p class="field-hint" style="margin:0.35rem 0 0;" data-i18n-html="ai.donateHint">Optional tip via PayPal — opens in your browser.</p>
+          </div>
+        </div>
+
+        <div class="card">
           <h2 data-i18n="ai.title">AI settings</h2>
           <p class="field-hint" style="margin-top:0;" data-i18n-html="ai.hint">
             <b>Easiest:</b> use <b>Turn-key setup</b> for a free Google / Grok / Groq key, or paste any API key below —
             Forge picks the provider from the key shape. Advanced options stay collapsed unless you need them.
           </p>
-
-          <div class="settings-block" style="margin:0 0 0.75rem;padding-bottom:0.65rem;border-bottom:1px solid var(--border);">
-            <button class="btn secondary small" id="btnMiniConsole" type="button"><span data-i18n="ai.console">Console</span><span class="mini-console-badge hidden" id="miniConsoleBadge">0</span></button>
-            <button class="btn secondary small" id="btnMiniConsoleClear" type="button" data-i18n="common.clear">Clear</button>
-            <button class="btn secondary small" id="btnMiniConsoleCopy" type="button" data-i18n="common.copy">Copy</button>
-          </div>
-          <p class="field-hint" style="margin-top:-0.35rem;margin-bottom:0.65rem;" data-i18n="ai.consoleHint">Debug mini-app, bridge, and ForgeHost errors.</p>
 
           <div id="aiQuickSetup" style="border:1px solid var(--border);border-radius:12px;padding:0.75rem 0.85rem;margin-bottom:0.9rem;background:var(--bg);">
             <p class="field-hint" style="margin:0 0 0.55rem;" data-i18n-html="ai.turnkeyHint">
@@ -1536,7 +1550,6 @@ termux-reload-settings</div>
           <label for="model" data-i18n="ai.model">Model</label>
           <input id="model" type="text" list="modelSuggestions" placeholder="grok-2-latest" autocomplete="off" />
           <datalist id="modelSuggestions"></datalist>
-          <div class="pill-row" id="modelPills" aria-label="Suggested models"></div>
           <div class="settings-block" style="margin:0.15rem 0 0.55rem;">
             <button class="btn secondary small" id="btnRefreshModels" type="button" data-i18n="ai.refreshModels">Refresh models</button>
             <span class="field-hint" id="modelCatalogStatus" style="margin-left:6px;"></span>
@@ -1583,11 +1596,16 @@ termux-reload-settings</div>
 
             </div>
           </details>
+        </div>
 
-          <div class="settings-block" style="margin-top:0.6rem;padding-top:0.55rem;border-top:1px solid var(--border);">
-            <button class="btn secondary small" id="btnDonate" type="button" data-i18n="ai.donate">☕ Support development</button>
-            <p class="field-hint" style="margin:0.35rem 0 0;" data-i18n-html="ai.donateHint">Optional tip via PayPal — opens in your browser.</p>
+        <div class="card">
+          <h2 data-i18n="ai.console">Console</h2>
+          <div class="settings-block">
+            <button class="btn secondary small" id="btnMiniConsole" type="button"><span data-i18n="ai.console">Console</span><span class="mini-console-badge hidden" id="miniConsoleBadge">0</span></button>
+            <button class="btn secondary small" id="btnMiniConsoleClear" type="button" data-i18n="common.clear">Clear</button>
+            <button class="btn secondary small" id="btnMiniConsoleCopy" type="button" data-i18n="common.copy">Copy</button>
           </div>
+          <p class="field-hint" style="margin-top:0;" data-i18n="ai.consoleHint">Debug mini-app, bridge, and ForgeHost errors.</p>
         </div>
 
         <div class="card">
@@ -1631,23 +1649,6 @@ termux-reload-settings</div>
             <button class="btn secondary small" id="btnRefreshTermux" type="button" data-i18n="common.refresh">Refresh</button>
           </div>
           <pre id="termuxTestOut" class="hidden" style="margin:0.65rem 0 0;padding:0.65rem 0.75rem;border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--muted);font-size:0.78rem;white-space:pre-wrap;word-break:break-word;max-height:12rem;overflow:auto;"></pre>
-        </div>
-
-        <div class="card">
-          <h2 data-i18n="about.title">About Forge</h2>
-          <p id="forgeBuildInfo" style="color:var(--muted);font-size:0.8rem;margin:0 0 8px;font-family:monospace;">Forge (dev build)</p>
-          <p style="color:var(--muted);font-size:0.9rem;" data-i18n-html="about.body">
-            Forge runs <b>HTML mini-apps</b> on your phone. <b>Open with Forge</b> or <b>Share → Forge</b>
-            from WhatsApp, Files, Drive, etc. to import a .html and run it. You can also Import from Library,
-            generate with AI, or try the Kitchen sink API lab.
-            Bridges: phone/SMS/location, TTS/audio, mic, camera/QR, files, Termux, share, notify/jobs, AI, storage.
-            Pin to Home screen. Backup library under Settings → Library backup.
-          </p>
-          <div class="settings-block" style="margin-top:0.6rem;">
-            <label for="langSelect" style="margin:0 0 0.35rem 0;" data-i18n="about.lang">Language</label>
-            <select id="langSelect"></select>
-            <p class="field-hint hidden" id="langRestartHint" style="margin:0.45rem 0 0;" data-i18n="about.langRestart">Saved — restart Forge to apply.</p>
-          </div>
         </div>
       </section>
     </main>
@@ -5692,7 +5693,6 @@ termux-reload-settings</div>
       rememberKey: document.getElementById('rememberKey'),
       model: document.getElementById('model'),
       modelSuggestions: document.getElementById('modelSuggestions'),
-      modelPills: document.getElementById('modelPills'),
       btnRefreshModels: document.getElementById('btnRefreshModels'),
       modelCatalogStatus: document.getElementById('modelCatalogStatus'),
       temperature: document.getElementById('temperature'),
@@ -7490,7 +7490,6 @@ termux-reload-settings</div>
       }
 
       el.modelSuggestions.innerHTML = '';
-      el.modelPills.innerHTML = '';
       const models = p.azure
         ? (el.azureDeployment.value.trim() ? [el.azureDeployment.value.trim()] : [])
         : (p.models || []);
@@ -7498,16 +7497,6 @@ termux-reload-settings</div>
         const opt = document.createElement('option');
         opt.value = m;
         el.modelSuggestions.appendChild(opt);
-        const pill = document.createElement('button');
-        pill.type = 'button';
-        pill.className = 'pill';
-        pill.textContent = m;
-        pill.addEventListener('click', () => {
-          el.model.value = m;
-          if (p.azure) el.azureDeployment.value = m;
-          savePrefs();
-        });
-        el.modelPills.appendChild(pill);
       }
       if (p.azure) {
         el.model.placeholder = 'Usually same as deployment name';

@@ -2260,3 +2260,30 @@ Smoke:
 [ ] While a chat build runs, tap grey Stop → generation aborts
 [ ] With a mini-app streaming AI + chat build at once, Stop kills both
 ```
+
+## AI tab reorganization — 5 blades, model pills → combobox (2026-08-25)
+
+**2.7.26 / versionCode 156** (from 2.7.24/154). Host-only, no native Java.
+
+AI tab blade order is now:
+1. **About Forge** — build info, description, **Language** selector, **☕ Support development** (moved here from AI settings card)
+2. **AI settings** — unchanged structure minus console buttons/hint and donate block
+3. **Console** — own blade: Console · Clear · Copy buttons + hint (overlay itself unchanged)
+4. **Library backup** — as-is
+5. **Device bridges** — as-is
+
+Model picker: the pill row (`#modelPills`) is removed; all models (provider suggestions + fetched catalog after Refresh models) appear as datalist entries of the free-text model combobox.
+
+Styling fix: `input[type="number"]` added to the themed input selector — Max generation time / Max output tokens now render white-on-dark like every other field.
+
+Gate PASS; both flavor debug APKs built @ 2.7.26/156.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.26 (156)
+[ ] AI tab order: About Forge → AI settings → Console → Library backup → Device bridges
+[ ] About Forge has Language select + ☕ Support development at bottom
+[ ] Console blade opens the same mini-console overlay; badge still updates
+[ ] Advanced: no pill row under Model; typing filters combobox entries; custom ids still accepted
+[ ] Max generation time / Max output tokens fields are white text on dark background
+```
