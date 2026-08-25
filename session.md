@@ -2111,3 +2111,29 @@ Smoke:
 [ ] Chat / Forge it works on the free model ($0 usage)
 [ ] Existing paid Cheaper Inference card unchanged; other cards unaffected
 ```
+
+## Turn-key Ox Alpha copy — all 6 languages (2026-08-25)
+
+**2.7.14 / versionCode 144** (from 2.7.12/142). Host-only, no native Java.
+
+Follow-up to the 2.7.12 turn-key card: the wizard prose that lists the free options now
+mentions **Ox Alpha** in **en / es / fr / pt / ja / ko**:
+
+| Key | Change |
+|---|---|
+| `setup.turnkeyNote` | pick list becomes "Google / Grok / Groq / Ox Alpha" (ko also fixes a pre-existing "Google / Groq / Groq" typo) |
+| `ai.turnkeyHint` | free list adds "Ox Alpha (free model on Cheaper Inference)" (en HTML default + dict both updated) |
+| `boot.aiTip` | boot tip adds Ox Alpha to the free options |
+| `hints.i8` | tour line adds "Ox Alpha (free)" (en HTML default + dict) |
+
+All 24 string replacements validated with exact-match counts before write (two strings exist
+both as HTML defaults and dict values — both copies updated). Gate PASS; both flavor debug
+APKs built @ 2.7.14/144.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.14 (144)
+[ ] Switch Language to es/fr/pt/日本語/한국어 → restart → wizard note, AI hint,
+    boot tip and tour line each mention Ox Alpha
+[ ] English unchanged except the added mentions (regression)
+```
