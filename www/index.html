@@ -5195,6 +5195,31 @@ termux-reload-settings</div>
         keyHint: 'ir_live_…',
       },
       {
+        id: 'oxalpha',
+        kind: 'builtin',
+        providerId: 'cheaperinference',
+        turnkey: true,
+        badge: 'free',
+        name: 'Ox Alpha (free)',
+        blurb: 'Free stealth model (ox-alpha) behind a Cheaper Inference key. Model usage is currently $0 — one ir_live_ key unlocks it.',
+        whyEasy: 'The ox-alpha model costs $0 right now (100% discount). The same key also reaches paid models (GLM, Claude, GPT…) later if you ever want them.',
+        guide: [
+          'Tap “Open Cheaper Inference” below and create an account.',
+          'Create an API key (starts with ir_live_) and copy it once.',
+          'Return to Forge, paste the key, Save & test — Forge picks the free Ox Alpha brain automatically.',
+          'If the model list looks stale, use Refresh models in AI settings.',
+        ],
+        registrationUrl: 'https://cheaperinference.com/',
+        keysUrl: 'https://cheaperinference.com/',
+        steps: [
+          'Sign up at cheaperinference.com and open the dashboard.',
+          'Create an API key (ir_live_…).',
+          'Paste the key below — Save & test sets Ox Alpha (stealth/ox-alpha) as the brain.',
+        ],
+        keyHint: 'ir_live_…',
+        setupDefaultModel: 'stealth/ox-alpha',
+      },
+      {
         id: 'xai',
         kind: 'builtin',
         providerId: 'xai',
@@ -6770,7 +6795,8 @@ termux-reload-settings</div>
       el.apiKey.value = finalKey;
       if (el.quickKey) el.quickKey.value = key || '';
       if (p.custom?.defaultModel) el.model.value = p.custom.defaultModel;
-      if (p.kind === 'builtin') {
+      if (p.setupDefaultModel) el.model.value = p.setupDefaultModel;
+      else if (p.kind === 'builtin') {
         const bp = BUILTIN_PROVIDERS[p.providerId];
         // Always apply setup default model (avoid leftover grok-*/paid model ids)
         if (bp?.defaultModel) el.model.value = bp.defaultModel;

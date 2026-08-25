@@ -2079,3 +2079,35 @@ Smoke (device pending — no adb at build time):
 [ ] Big app (Chat Pro prompt) builds; if truncated, error mentions Max output tokens
 [ ] Provider that rejects large max_tokens still builds (auto retry without param)
 ```
+
+## Ox Alpha (free) turn-key option (2026-08-25)
+
+**2.7.12 / versionCode 142** (from 2.7.10/140). Host-only, no native Java.
+
+### What the user asked for
+Add **stealth/ox-alpha** (on cheaperinference) as a new **free** option on the Turn-key setup wizard.
+
+- Model verified free beforehand: live chat test through the gateway returned `cost: 0.0`
+  (`is_free: true`, discount 100%, vision/reasoning/streaming flags on).
+- New `SETUP_PROVIDERS` entry `id: 'oxalpha'`, `providerId: 'cheaperinference'`,
+  `turnkey: true`, badge **free**, positioned between the paid Cheaper Inference card and xAI.
+  Reuses the builtin provider (same ir_live_ key flow) — no custom provider needed.
+- `setupSaveAndTest`: new per-entry **`setupDefaultModel`** override — after Save & test the
+  model field is set to `stealth/ox-alpha` (takes precedence over the builtin default glm-5.2;
+  custom.defaultModel still first). The post-test refresh block doesn't clobber it (model not empty/grok).
+- Other languages fall back to the English blurb/steps via `tf()` (established pattern).
+
+### Not changed
+Provider model seed lists (the earlier ox-alpha model-refresh was reverted at user request),
+AAForge, visibility recipe, i18n marketing copy (turnkey note still lists "Google / Grok /
+Groq" in prose — optional follow-up to mention Ox Alpha per language).
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.12 (142)
+[ ] AI tab → Turn-key setup → 'Ox Alpha (free)' card with Free badge present
+[ ] Pick it → guide steps show; paste ir_live_ key → Save & test → connected,
+    brain = stealth/ox-alpha
+[ ] Chat / Forge it works on the free model ($0 usage)
+[ ] Existing paid Cheaper Inference card unchanged; other cards unaffected
+```
