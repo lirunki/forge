@@ -2241,3 +2241,22 @@ Smoke:
 [ ] After abort or natural finish → button back to blue "Forge it"
 [ ] AI tab → donate line no longer claims "Forge is free" in any language
 ```
+
+## Tour car-mode step + Stop aborts every LLM query (2026-08-25)
+
+**2.7.24 / versionCode 154** (from 2.7.22/152). Host-only, no native Java.
+
+| Change | Detail |
+|---|---|
+| Tour | New step 3 of 6 "Car mode 🚗" (chat tab) between Sketches and Run-the-App: explains the 🚗 toggle next to Forge it → car-ready app (Android Auto via AAForge), green/red readiness dot in library. Keys `tour.s2bTitle`/`tour.s2bBody` × en/es/fr/pt/ja/ko |
+| Stop scope | New `abortAllLlmQueries()`: aborts `abortController` (chat/reforge generation) **plus** every controller in `streamAbortControllers` (mini-app ai.chat/ai.chatStream/agent rounds) plus `liveTranslate.translateAbort`. Wired to the morphed Stop button |
+
+Gate PASS; both flavor debug APKs built @ 2.7.24/154.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.24 (154)
+[ ] Tour (or 💡 → Tour) shows 6 dots; step 3 = "Car mode 🚗" in each language
+[ ] While a chat build runs, tap grey Stop → generation aborts
+[ ] With a mini-app streaming AI + chat build at once, Stop kills both
+```
