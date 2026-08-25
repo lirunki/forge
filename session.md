@@ -2177,3 +2177,25 @@ Smoke:
 [ ] Collapse root → everything hidden but root row persists
 [ ] Drive backup+restore round-trips folders; old pre-folder backup restores flat
 ```
+
+## Library tab slim-down — backup/restore live in AI tab, Kitchen sink in root menu (2026-08-25)
+
+**2.7.18 / versionCode 148** (from 2.7.16/146). Host-only, no native Java.
+
+| Change | Detail |
+|---|---|
+| Lib-bar | Removed "New folder", "Backup", "Restore", "Kitchen sink" buttons → bar is now Import + Refresh only |
+| Root folder menu | Long-press "Library" = **Create subfolder · Kitchen sink** (reuses `installKitchenSink()`) |
+| Backup/Restore | Full functionality (apps + settings + LLM profiles) lives in the AI tab's "Library backup" blade — its existing "Backup now" / "Restore…" buttons were already wired to the same `backupLibraryToDrive()` / `restoreLibraryFromDrive()`; status reports to the AI tab's driveStatusLine |
+| i18n prune | Removed 6 unused keys × 6 languages (`lib.backup`, `lib.backupTitle`, `lib.restore`, `lib.restoreTitle`, `lib.kitchenTitle`, `lib.newFolder`); `lib.kitchen` kept for the root menu item |
+
+Gate PASS; both flavor debug APKs built @ 2.7.18/148.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.18 (148)
+[ ] Library bar shows only Import + Refresh; no stray buttons
+[ ] Long-press "Library" root → Create subfolder first, then Kitchen sink; both work
+[ ] AI tab → Library backup → Backup now / Restore… still perform full backup/restore, messages appear on the AI tab status line
+[ ] All languages: no missing-key fallbacks visible in library or AI tab after prune
+```
