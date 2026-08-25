@@ -2137,3 +2137,43 @@ Smoke:
     boot tip and tour line each mention Ox Alpha
 [ ] English unchanged except the added mentions (regression)
 ```
+
+## Library folders — accordion tree, long-press menus, move picker (2026-08-25)
+
+**2.7.16 / versionCode 146** (from 2.7.14/144). Host-only, no native Java.
+
+Library redesigned per locked decisions: single **accordion tree** with a readonly
+"Library" root; items are **single-line rows (icon + title + AA dot)** — tap opens,
+long-press opens an action sheet. **No drag-and-drop**; a "Move…" sheet item opens a
+folder picker instead.
+
+Data model:
+| Piece | Detail |
+|---|---|
+| `forge_lib_folders_v1` | `[{id, name, parentId}]`; apps get `folderId` (`null` = root) |
+| `forge_lib_expanded_v1` | expanded folder ids; defaults to root expanded |
+| Depth cap | 3 levels below root (`LIB_MAX_DEPTH`); enforced on create/move, violations re-parent to root on restore |
+| Tombstones | app deletes via folder-delete reuse `addDriveTombstone`; folder ids also tombstoned |
+
+Menus:
+- App row: Change icon · Rename · **Summary** · Move · Pin to Home · Share · Reforge · Delete. Plain .html Export dropped from the library row (exportApp kept for preview).
+- Folder row: Rename · Create subfolder · Move · Delete.
+- Root row (long-press): Create subfolder only. Plus visible "＋ New folder" button in the lib-bar.
+
+Folder delete with contents offers **A) delete everything** (confirm dialog, all descendant apps tombstoned) vs **B) move contents up one level**.
+
+Backup compatibility: Drive manifest + ZIP backup now carry `folders:[{id,name,parentId}]` and per-app `folderId` in meta.json/manifest entries. Old backups restore flat to root unchanged; restores merge folders and sanitize (unknown parent → root, cycles broken, depth >3 re-parented).
+
+i18n: 24 new `lib.*` keys × en/es/fr/pt/ja/ko. Gate PASS (28 host tools, docs baselines bumped); both flavor debug APKs built @ 2.7.16/146.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.16 (146)
+[ ] Library → readonly "Library" root row with total count; ＋ New folder creates level-1 folder
+[ ] Long-press app → menu order icon/rename/summary/move/pin/share/reforge/delete; Summary shows blurb
+[ ] Move → folder sheet lists tree indented incl. "Library (root)"; app relocates
+[ ] Folder at depth 3 → Create subfolder disabled ("Depth limit reached")
+[ ] Delete non-empty folder → sheet offers delete-all vs keep-contents-up; both work
+[ ] Collapse root → everything hidden but root row persists
+[ ] Drive backup+restore round-trips folders; old pre-folder backup restores flat
+```

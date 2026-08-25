@@ -416,6 +416,50 @@
     .lib-item h3 { font-size: 1rem; }
     .lib-item p { color: var(--muted); font-size: 0.85rem; }
     .lib-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem; }
+    /* Library tree (folders) */
+    .lib-row {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.55rem 0.7rem;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      box-shadow: var(--shadow);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .lib-row.folder-row { background: rgba(109,40,217,.14); font-weight: 600; }
+    .lib-row.folder-row.root-row { border-color: rgba(109,40,217,.55); }
+    .lib-chevron { width: 1em; text-align: center; color: var(--muted); flex: none; }
+    .lib-ficon { flex: none; }
+    .lib-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem; }
+    .lib-count { color: var(--muted); font-size: 0.78rem; font-weight: 400; margin-left: 0.35rem; }
+    .lib-approw .lib-icon { width: 2rem; height: 2rem; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; flex: none; }
+    .aa-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; margin-left: auto; }
+    .aa-dot.ok { background: #34d058; box-shadow: 0 0 4px #34d05888; }
+    .aa-dot.bad { background: #e5534b; box-shadow: 0 0 4px #e5534b88; }
+    /* Action sheet */
+    .forge-sheet-overlay {
+      position: fixed; inset: 0; z-index: 260;
+      background: rgba(0,0,0,.5);
+      display: flex; align-items: flex-end; justify-content: center;
+    }
+    .forge-sheet {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 16px 16px 0 0; padding: 0.9rem 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
+      width: min(480px, 100%); max-height: 78vh; overflow: auto;
+      display: flex; flex-direction: column; gap: 0.45rem;
+    }
+    .forge-sheet h3 { font-size: 0.95rem; margin: 0 0 0.15rem; }
+    .forge-sheet-msg { color: var(--muted); font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; margin: 0 0 0.35rem; }
+    .forge-sheet-btn {
+      text-align: left; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 12px; color: var(--text); padding: 0.7rem 0.85rem; font: inherit; cursor: pointer;
+    }
+    .forge-sheet-btn.danger { color: #ff6b6b; border-color: rgba(229,83,75,.45); }
+    .forge-sheet-btn.disabled { opacity: 0.45; pointer-events: auto; }
+    .forge-sheet-cancel { background: transparent; border: none; color: var(--muted); padding: 0.5rem; font: inherit; cursor: pointer; }
 
     /* Settings */
     #view-settings {
@@ -1372,6 +1416,7 @@ termux-reload-settings</div>
           <button class="btn secondary small" id="btnDriveBackup" type="button" title="Backup library to Google Drive / folder" data-i18n="lib.backup" data-i18n-title="lib.backupTitle">Backup</button>
           <button class="btn secondary small" id="btnDriveRestore" type="button" title="Restore library from backup folder" data-i18n="lib.restore" data-i18n-title="lib.restoreTitle">Restore</button>
           <button class="btn secondary small" id="btnKitchenSink" type="button" title="Install full ForgeHost kitchen sink" data-i18n="lib.kitchen" data-i18n-title="lib.kitchenTitle">Kitchen sink</button>
+          <button class="btn secondary small" id="btnLibNewFolder" type="button" title="New folder in Library" data-i18n="lib.newFolder">New folder</button>
           <button class="btn secondary small" id="btnRefreshLib" type="button" data-i18n="common.refresh">Refresh</button>
           <input type="file" id="importFile" accept=".html,.htm,text/html" hidden />
         </div>
@@ -1938,6 +1983,30 @@ termux-reload-settings</div>
     "lang.auto": "Auto (device language)",
     "lib.backup": "Backup",
     "lib.backupTitle": "Backup library to Google Drive / folder",
+    "lib.newFolder": "New folder",
+    "lib.rootTitle": "Library",
+    "lib.changeIcon": "Change icon",
+    "lib.summary": "Summary",
+    "lib.move": "Move…",
+    "lib.share": "Share",
+    "lib.createSubfolder": "Create subfolder",
+    "lib.renameFolder": "Rename folder",
+    "lib.deleteFolder": "Delete folder",
+    "lib.folderPromptNew": "New folder name",
+    "lib.folderPromptRename": "Rename folder",
+    "lib.folderCreated": "Folder “{name}” created",
+    "lib.folderRenamed": "Renamed to “{name}”",
+    "lib.folderDeleted": "Folder deleted",
+    "lib.folderNameEmpty": "Folder name cannot be empty",
+    "lib.movedTo": "Moved to “{name}”",
+    "lib.movePickTitle": "Move to…",
+    "lib.moveToRoot": "Library (root)",
+    "lib.depthLimitReached": "Depth limit reached (3 levels)",
+    "lib.folderNotEmpty": "Folder “{name}” is not empty.",
+    "lib.folderContents": "{folders} subfolder(s), {apps} app(s) inside.",
+    "lib.folderDelAll": "Delete folder and ALL contents ({n})",
+    "lib.folderDelKeep": "Move contents up one level & delete folder",
+    "lib.folderDelAllConfirm": "Really delete {n} app(s) inside “{name}”? Cannot be undone.",
     "lib.confirmDel": "Delete \"{name}\" from the library?\n\nThis removes it from this device. Undo is not available.",
     "lib.delete": "Delete from library",
     "lib.deleted": "Deleted \"{name}\"",
@@ -2425,6 +2494,30 @@ termux-reload-settings</div>
     "lang.auto": "Auto (idioma del dispositivo)",
     "lib.backup": "Copia",
     "lib.backupTitle": "Copia de la biblioteca a Google Drive / carpeta",
+    "lib.newFolder": "Nueva carpeta",
+    "lib.rootTitle": "Biblioteca",
+    "lib.changeIcon": "Cambiar icono",
+    "lib.summary": "Resumen",
+    "lib.move": "Mover…",
+    "lib.share": "Compartir",
+    "lib.createSubfolder": "Crear subcarpeta",
+    "lib.renameFolder": "Renombrar carpeta",
+    "lib.deleteFolder": "Eliminar carpeta",
+    "lib.folderPromptNew": "Nombre de la nueva carpeta",
+    "lib.folderPromptRename": "Renombrar carpeta",
+    "lib.folderCreated": "Carpeta «{name}» creada",
+    "lib.folderRenamed": "Renombrada a «{name}»",
+    "lib.folderDeleted": "Carpeta eliminada",
+    "lib.folderNameEmpty": "El nombre de la carpeta no puede estar vacío",
+    "lib.movedTo": "Movido a «{name}»",
+    "lib.movePickTitle": "Mover a…",
+    "lib.moveToRoot": "Biblioteca (raíz)",
+    "lib.depthLimitReached": "Límite de profundidad alcanzado (3 niveles)",
+    "lib.folderNotEmpty": "La carpeta «{name}» no está vacía.",
+    "lib.folderContents": "{folders} subcarpeta(s), {apps} app(s) dentro.",
+    "lib.folderDelAll": "Eliminar la carpeta y TODO el contenido ({n})",
+    "lib.folderDelKeep": "Subir el contenido un nivel y eliminar la carpeta",
+    "lib.folderDelAllConfirm": "¿Seguro que quieres eliminar {n} app(s) dentro de «{name}»? No se puede deshacer.",
     "lib.confirmDel": "¿Eliminar “{name}” de la biblioteca?\n\nSe quita de este dispositivo. No se puede deshacer.",
     "lib.delete": "Eliminar de la biblioteca",
     "lib.deleted": "Eliminado “{name}”",
@@ -2981,6 +3074,30 @@ termux-reload-settings</div>
     "lang.auto": "Auto (langue de l’appareil)",
     "lib.backup": "Sauvegarde",
     "lib.backupTitle": "Sauvegarder la bibliothèque vers Google Drive / dossier",
+    "lib.newFolder": "Nouveau dossier",
+    "lib.rootTitle": "Bibliothèque",
+    "lib.changeIcon": "Changer l’icône",
+    "lib.summary": "Résumé",
+    "lib.move": "Déplacer…",
+    "lib.share": "Partager",
+    "lib.createSubfolder": "Créer un sous-dossier",
+    "lib.renameFolder": "Renommer le dossier",
+    "lib.deleteFolder": "Supprimer le dossier",
+    "lib.folderPromptNew": "Nom du nouveau dossier",
+    "lib.folderPromptRename": "Renommer le dossier",
+    "lib.folderCreated": "Dossier « {name} » créé",
+    "lib.folderRenamed": "Renommé en « {name} »",
+    "lib.folderDeleted": "Dossier supprimé",
+    "lib.folderNameEmpty": "Le nom du dossier ne peut pas être vide",
+    "lib.movedTo": "Déplacé vers « {name} »",
+    "lib.movePickTitle": "Déplacer vers…",
+    "lib.moveToRoot": "Bibliothèque (racine)",
+    "lib.depthLimitReached": "Limite de profondeur atteinte (3 niveaux)",
+    "lib.folderNotEmpty": "Le dossier « {name} » n’est pas vide.",
+    "lib.folderContents": "{folders} sous-dossier(s), {apps} app(s) à l’intérieur.",
+    "lib.folderDelAll": "Supprimer le dossier et TOUT le contenu ({n})",
+    "lib.folderDelKeep": "Remonter le contenu d’un niveau & supprimer le dossier",
+    "lib.folderDelAllConfirm": "Vraiment supprimer {n} app(s) dans « {name} » ? Irréversible.",
     "lib.confirmDel": "Supprimer « {name} » de la bibliothèque ?\n\nElle sera retirée de cet appareil. Annulation impossible.",
     "lib.delete": "Supprimer de la bibliothèque",
     "lib.deleted": "« {name} » supprimée",
@@ -3537,6 +3654,30 @@ termux-reload-settings</div>
     "lang.auto": "Auto (idioma do dispositivo)",
     "lib.backup": "Backup",
     "lib.backupTitle": "Backup da biblioteca para Google Drive / pasta",
+    "lib.newFolder": "Nova pasta",
+    "lib.rootTitle": "Biblioteca",
+    "lib.changeIcon": "Alterar ícone",
+    "lib.summary": "Resumo",
+    "lib.move": "Mover…",
+    "lib.share": "Compartilhar",
+    "lib.createSubfolder": "Criar subpasta",
+    "lib.renameFolder": "Renomear pasta",
+    "lib.deleteFolder": "Excluir pasta",
+    "lib.folderPromptNew": "Nome da nova pasta",
+    "lib.folderPromptRename": "Renomear pasta",
+    "lib.folderCreated": "Pasta “{name}” criada",
+    "lib.folderRenamed": "Renomeada para “{name}”",
+    "lib.folderDeleted": "Pasta excluída",
+    "lib.folderNameEmpty": "O nome da pasta não pode ficar vazio",
+    "lib.movedTo": "Movido para “{name}”",
+    "lib.movePickTitle": "Mover para…",
+    "lib.moveToRoot": "Biblioteca (raiz)",
+    "lib.depthLimitReached": "Limite de profundidade atingido (3 níveis)",
+    "lib.folderNotEmpty": "A pasta “{name}” não está vazia.",
+    "lib.folderContents": "{folders} subpasta(s), {apps} app(s) dentro.",
+    "lib.folderDelAll": "Excluir a pasta e TODO o conteúdo ({n})",
+    "lib.folderDelKeep": "Mover o conteúdo um nível acima & excluir a pasta",
+    "lib.folderDelAllConfirm": "Excluir mesmo {n} app(s) dentro de “{name}”? Não dá para desfazer.",
     "lib.confirmDel": "Excluir “{name}” da biblioteca?\n\nIsto remove do dispositivo. Não é possível desfazer.",
     "lib.delete": "Excluir da biblioteca",
     "lib.deleted": "“{name}” excluído",
@@ -4093,6 +4234,30 @@ termux-reload-settings</div>
     "lang.auto": "自動（端末の言語）",
     "lib.backup": "バックアップ",
     "lib.backupTitle": "ライブラリを Google Drive / フォルダーへバックアップ",
+    "lib.newFolder": "新規フォルダ",
+    "lib.rootTitle": "ライブラリ",
+    "lib.changeIcon": "アイコンを変更",
+    "lib.summary": "概要",
+    "lib.move": "移動…",
+    "lib.share": "共有",
+    "lib.createSubfolder": "サブフォルダを作成",
+    "lib.renameFolder": "フォルダ名を変更",
+    "lib.deleteFolder": "フォルダを削除",
+    "lib.folderPromptNew": "新しいフォルダ名",
+    "lib.folderPromptRename": "フォルダ名を変更",
+    "lib.folderCreated": "フォルダ「{name}」を作成しました",
+    "lib.folderRenamed": "「{name}」に変更しました",
+    "lib.folderDeleted": "フォルダを削除しました",
+    "lib.folderNameEmpty": "フォルダ名は空にできません",
+    "lib.movedTo": "「{name}」へ移動しました",
+    "lib.movePickTitle": "移動先…",
+    "lib.moveToRoot": "ライブラリ（ルート）",
+    "lib.depthLimitReached": "深さの上限に達しました（3レベル）",
+    "lib.folderNotEmpty": "フォルダ「{name}」は空ではありません。",
+    "lib.folderContents": "サブフォルダ {folders} 件、アプリ {apps} 件が含まれます。",
+    "lib.folderDelAll": "フォルダと中身をすべて削除（{n}）",
+    "lib.folderDelKeep": "中身を1つ上の階層へ移してフォルダを削除",
+    "lib.folderDelAllConfirm": "「{name}」内のアプリ {n} 件を本当に削除しますか？元に戻せません。",
     "lib.confirmDel": "ライブラリから「{name}」を削除しますか？\n\nこの端末から削除されます。元に戻せません。",
     "lib.delete": "ライブラリから削除",
     "lib.deleted": "“{name}” を削除しました",
@@ -4649,6 +4814,30 @@ termux-reload-settings</div>
     "lang.auto": "자동(기기 언어)",
     "lib.backup": "백업",
     "lib.backupTitle": "라이브러리를 Google Drive / 폴더에 백업",
+    "lib.newFolder": "새 폴더",
+    "lib.rootTitle": "라이브러리",
+    "lib.changeIcon": "아이콘 변경",
+    "lib.summary": "요약",
+    "lib.move": "이동…",
+    "lib.share": "공유",
+    "lib.createSubfolder": "하위 폴더 만들기",
+    "lib.renameFolder": "폴더 이름 변경",
+    "lib.deleteFolder": "폴더 삭제",
+    "lib.folderPromptNew": "새 폴더 이름",
+    "lib.folderPromptRename": "폴더 이름 변경",
+    "lib.folderCreated": "폴더 “{name}”(이)가 생성되었습니다",
+    "lib.folderRenamed": "“{name}”(으)로 변경되었습니다",
+    "lib.folderDeleted": "폴더가 삭제되었습니다",
+    "lib.folderNameEmpty": "폴더 이름은 비워 둘 수 없습니다",
+    "lib.movedTo": "“{name}”(으)로 이동되었습니다",
+    "lib.movePickTitle": "이동 위치…",
+    "lib.moveToRoot": "라이브러리(루트)",
+    "lib.depthLimitReached": "깊이 제한 도달(3단계)",
+    "lib.folderNotEmpty": "폴더 “{name}”이(가) 비어 있지 않습니다.",
+    "lib.folderContents": "하위 폴더 {folders}개, 앱 {apps}개가 있습니다.",
+    "lib.folderDelAll": "폴더와 모든 내용 삭제({n})",
+    "lib.folderDelKeep": "내용을 한 단계 위로 올기 & 폴더 삭제",
+    "lib.folderDelAllConfirm": "“{name}” 안의 앱 {n}개를 정말 삭제하시겠습니까? 되돌릴 수 없습니다.",
     "lib.confirmDel": "라이브러리에서 \"{name}\"을(를) 삭제하시겠습니까?\n\n이 기기에서 제거됩니다. 실행 취소할 수 없습니다.",
     "lib.delete": "라이브러리에서 삭제",
     "lib.deleted": "\"{name}\" 삭제됨",
@@ -5067,6 +5256,8 @@ termux-reload-settings</div>
       azureApiVersion: 'forge_azure_api_version',
       azureAuth: 'forge_azure_auth',
       library: 'forge_library_v1',
+      libFolders: 'forge_lib_folders_v1',
+      libExpanded: 'forge_lib_expanded_v1',
       driveMeta: 'forge_drive_meta_v1',
       driveTombs: 'forge_drive_tombstones_v1',
       draft: 'forge_draft_v1',
@@ -5477,6 +5668,7 @@ termux-reload-settings</div>
       tourOverlay: document.getElementById('tourOverlay'),
       hintsOverlay: document.getElementById('hintsOverlay'),
       libList: document.getElementById('libList'),
+      btnLibNewFolder: document.getElementById('btnLibNewFolder'),
       btnRefreshLib: document.getElementById('btnRefreshLib'),
       btnImportLib: document.getElementById('btnImportLib'),
       btnDriveBackup: document.getElementById('btnDriveBackup'),
@@ -7784,6 +7976,7 @@ termux-reload-settings</div>
         updatedAt: Date.now(),
         deviceId: getDriveDeviceId(),
         apps: [],
+        folders: [],
         tombstones: [],
       };
     }
@@ -7791,10 +7984,36 @@ termux-reload-settings</div>
     function normalizeDriveManifest(raw) {
       const m = raw && typeof raw === 'object' ? raw : emptyDriveManifest();
       if (!Array.isArray(m.apps)) m.apps = [];
+      if (!Array.isArray(m.folders)) m.folders = [];
       if (!Array.isArray(m.tombstones)) m.tombstones = [];
       m.format = DRIVE_FORMAT;
       m.version = 1;
       return m;
+    }
+
+    // Sanitize a folder list: valid parents, no cycles, depth ≤ LIB_MAX_DEPTH (violators re-parent to root)
+    function sanitizeFolderList(list) {
+      const byId = new Map();
+      for (const f of Array.isArray(list) ? list : []) {
+        if (f && f.id && !byId.has(f.id)) byId.set(f.id, { id: f.id, name: String(f.name || '').slice(0, 60) || 'Folder', parentId: f.parentId || null });
+      }
+      const out = [];
+      for (const f of byId.values()) {
+        let cur = f;
+        const chain = new Set([f.id]);
+        let ok = true;
+        let depth = 1;
+        while (cur && cur.parentId) {
+          if (chain.has(cur.parentId) || depth > LIB_MAX_DEPTH) { ok = false; break; }
+          const p = byId.get(cur.parentId);
+          if (!p) break; // parent unknown → treat as root child
+          chain.add(p.id);
+          cur = p;
+          depth++;
+        }
+        out.push(ok ? f : { ...f, parentId: null });
+      }
+      return out;
     }
 
     function mergeTombstones(a, b) {
@@ -8085,6 +8304,7 @@ termux-reload-settings</div>
               iconColor: app.iconColor || '',
               carCompatible: !!app.carCompatible,
               aaScan: app.aaScan || null,
+              folderId: app.folderId || null,
               createdAt: app.createdAt || app.updatedAt || Date.now(),
               updatedAt: app.updatedAt || Date.now(),
               contentSha256: sha,
@@ -8100,6 +8320,7 @@ termux-reload-settings</div>
               iconEmoji: meta.iconEmoji,
               iconColor: meta.iconColor,
               carCompatible: meta.carCompatible,
+              folderId: app.folderId || null,
               updatedAt: meta.updatedAt,
               contentSha256: sha,
               path: 'apps/' + app.id + '/',
@@ -8114,6 +8335,7 @@ termux-reload-settings</div>
               iconEmoji: app.iconEmoji || prev.iconEmoji,
               iconColor: app.iconColor || prev.iconColor,
               carCompatible: !!app.carCompatible,
+              folderId: app.folderId ?? prev.folderId ?? null,
               updatedAt: app.updatedAt || prev.updatedAt,
               path: 'apps/' + app.id + '/',
             });
@@ -8121,6 +8343,7 @@ termux-reload-settings</div>
         }
 
         manifest.apps = [...byId.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        manifest.folders = getFolders().map(f => ({ id: f.id, name: f.name || 'Folder', parentId: f.parentId || null }));
         manifest.updatedAt = Date.now();
         manifest.deviceId = getDriveDeviceId();
         try {
@@ -8267,6 +8490,7 @@ termux-reload-settings</div>
             iconEmoji: meta.iconEmoji || entry.iconEmoji || '⚡',
             iconColor: meta.iconColor || entry.iconColor || 'rgba(109,40,217,.45)',
             carCompatible: !!(meta.carCompatible ?? entry.carCompatible),
+            folderId: (meta.folderId ?? entry.folderId) || null,
             createdAt: meta.createdAt || Date.now(),
             updatedAt: meta.updatedAt || entry.updatedAt || Date.now(),
           };
@@ -8312,6 +8536,18 @@ termux-reload-settings</div>
         }
 
         local = [...localById.values()];
+        // Merge folder structure from the backup (older backups have none)
+        if (Array.isArray(manifest.folders) && manifest.folders.length) {
+          const byIdF = new Map(getFolders().map(x => [x.id, x]));
+          for (const rf of manifest.folders) {
+            if (!rf?.id) continue;
+            if (!byIdF.has(rf.id)) byIdF.set(rf.id, { id: rf.id, name: rf.name || 'Folder', parentId: rf.parentId || null });
+          }
+          setFolders(sanitizeFolderList([...byIdF.values()]));
+        }
+        // Drop folderIds pointing at unknown folders
+        const validFolderIds = new Set(getFolders().map(f => f.id));
+        local = local.map(a => (a.folderId && !validFolderIds.has(a.folderId)) ? { ...a, folderId: null } : a);
         setLibrary(local);
         setDriveTombs(tombs);
         setDriveMeta({
@@ -8520,7 +8756,7 @@ termux-reload-settings</div>
           if (settingsBundle) files.push({ name: 'ForgeLibrary/settings.json', data: JSON.stringify(settingsBundle, null, 2) });
         }
         const apps = getLibrary();
-        const manifest = { format: DRIVE_FORMAT, updatedAt: Date.now(), deviceId: getDriveDeviceId(), apps: [], tombstones: [] };
+        const manifest = { format: DRIVE_FORMAT, updatedAt: Date.now(), deviceId: getDriveDeviceId(), apps: [], folders: [], tombstones: [] };
         for (const id of appIds) {
           const app = apps.find(a => a.id === id);
           if (!app || !app.html) continue;
@@ -8529,13 +8765,15 @@ termux-reload-settings</div>
             format: DRIVE_APP_FORMAT, id: app.id, title: app.title || 'Untitled',
             summary: app.summary || '', iconEmoji: app.iconEmoji || '⚡', iconColor: app.iconColor || '',
             carCompatible: !!app.carCompatible, aaScan: app.aaScan || null,
+            folderId: app.folderId || null,
             createdAt: app.createdAt || app.updatedAt || Date.now(), updatedAt: app.updatedAt || Date.now(),
             contentSha256: sha, htmlFile: 'app.html',
           };
           files.push({ name: 'ForgeLibrary/apps/' + app.id + '/meta.json', data: JSON.stringify(meta, null, 2) });
           files.push({ name: 'ForgeLibrary/apps/' + app.id + '/app.html', data: String(app.html) });
-          manifest.apps.push({ id: app.id, title: meta.title, summary: meta.summary, iconEmoji: meta.iconEmoji, iconColor: meta.iconColor, carCompatible: meta.carCompatible, updatedAt: meta.updatedAt, contentSha256: sha, path: 'apps/' + app.id + '/' });
+          manifest.apps.push({ id: app.id, title: meta.title, summary: meta.summary, iconEmoji: meta.iconEmoji, iconColor: meta.iconColor, carCompatible: meta.carCompatible, folderId: app.folderId || null, updatedAt: meta.updatedAt, contentSha256: sha, path: 'apps/' + app.id + '/' });
         }
+        manifest.folders = getFolders().map(f => ({ id: f.id, name: f.name || 'Folder', parentId: f.parentId || null }));
         files.unshift({ name: 'ForgeLibrary/manifest.json', data: JSON.stringify(manifest, null, 2) });
         const zip = buildZip(files);
         const stamp = new Date().toISOString().slice(0, 10);
@@ -8778,6 +9016,7 @@ termux-reload-settings</div>
               iconEmoji: meta.iconEmoji || '⚡',
               iconColor: meta.iconColor || '',
               carCompatible: !!meta.carCompatible,
+              folderId: meta.folderId || entry.folderId || null,
               createdAt: meta.createdAt || Date.now(),
               updatedAt: meta.updatedAt || Date.now(),
             };
@@ -8792,6 +9031,20 @@ termux-reload-settings</div>
             } else skipped++;
           }
           setLibrary([...byId.values()]);
+          // Merge folder structure from the ZIP backup
+          try {
+            const zFolders = Array.isArray(_mergeBackupData?.manifest?.folders) ? _mergeBackupData.manifest.folders : [];
+            if (zFolders.length) {
+              const byIdF = new Map(getFolders().map(x => [x.id, x]));
+              for (const rf of zFolders) {
+                if (!rf?.id) continue;
+                if (!byIdF.has(rf.id)) byIdF.set(rf.id, { id: rf.id, name: rf.name || 'Folder', parentId: rf.parentId || null });
+              }
+              setFolders(sanitizeFolderList([...byIdF.values()]));
+            }
+          } catch (_) {}
+          const _validFids = new Set(getFolders().map(f => f.id));
+          setLibrary(getLibrary().map(a => (a.folderId && !_validFids.has(a.folderId)) ? { ...a, folderId: null } : a));
           renderLibrary();
         }
         // Merge settings (filtered to selected providers)
@@ -19905,161 +20158,483 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       setLibStatus(`Renamed to “${title}”`, 'ok');
     }
 
-function renderLibrary() {
-      const list = getLibrary().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    // ─── Library folders ───
+    const LIB_ROOT_ID = 'root';
+    const LIB_MAX_DEPTH = 3; // folder levels below the (readonly) root
+
+    function getFolders() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(LS.libFolders) || '[]');
+        return Array.isArray(raw) ? raw.filter(f => f && f.id) : [];
+      } catch { return []; }
+    }
+    function setFolders(list) {
+      localStorage.setItem(LS.libFolders, JSON.stringify(Array.isArray(list) ? list : []));
+    }
+    function getFolder(id) {
+      if (!id || id === LIB_ROOT_ID) return null;
+      return getFolders().find(f => f.id === id) || null;
+    }
+    function childFolders(parentId) {
+      const pid = parentId && parentId !== LIB_ROOT_ID ? parentId : null;
+      return getFolders()
+        .filter(f => (f.parentId || null) === pid)
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    }
+    function appsInFolder(parentId) {
+      const pid = parentId && parentId !== LIB_ROOT_ID ? parentId : null;
+      return getLibrary().filter(a => (a.folderId || null) === pid)
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }
+    function folderDepth(f) { // edges from root; root children are depth 1
+      let d = 0, cur = f;
+      const seen = new Set();
+      while (cur && cur.parentId && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        const p = getFolder(cur.parentId);
+        if (!p) break;
+        cur = p; d++;
+      }
+      return d + 1;
+    }
+    function subtreeHeight(fid) {
+      let h = 1;
+      for (const c of childFolders(fid)) h = Math.max(h, 1 + subtreeHeight(c.id));
+      return h;
+    }
+    function isDescendantFolder(maybeChildId, ancestorId) {
+      let cur = getFolder(maybeChildId);
+      const seen = new Set();
+      while (cur && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        if (cur.parentId === ancestorId) return true;
+        cur = cur.parentId ? getFolder(cur.parentId) : null;
+      }
+      return false;
+    }
+    function canMoveFolderUnder(folderId, targetPid) {
+      // targetPid 'root' | folder id — moving under own subtree is a cycle
+      if (!folderId) return false;
+      if (targetPid === folderId) return false;
+      if (targetPid !== LIB_ROOT_ID) {
+        if (!getFolder(targetPid)) return false;
+        if (isDescendantFolder(targetPid, folderId)) return false;
+      }
+      const targetDepth = targetPid === LIB_ROOT_ID ? 0 : folderDepth(getFolder(targetPid));
+      return targetDepth + subtreeHeight(folderId) <= LIB_MAX_DEPTH;
+    }
+    function collectSubtreeFolderIds(fid) {
+      const out = [];
+      const walk = (pid) => { for (const c of childFolders(pid)) { out.push(c.id); walk(c.id); } };
+      walk(fid);
+      return out;
+    }
+
+    let _libExpandedCache = null;
+    function getExpandedSet() {
+      if (_libExpandedCache) return _libExpandedCache;
+      try {
+        const raw = localStorage.getItem(LS.libExpanded);
+        _libExpandedCache = raw == null ? new Set([LIB_ROOT_ID]) : new Set(JSON.parse(raw) || []);
+      } catch { _libExpandedCache = new Set([LIB_ROOT_ID]); }
+      return _libExpandedCache;
+    }
+    function saveExpandedSet(set) {
+      _libExpandedCache = set;
+      try { localStorage.setItem(LS.libExpanded, JSON.stringify([...set])); } catch (_) {}
+    }
+
+    // Generic bottom action sheet. items: [{id,label,danger?,disabled?}]
+    function showActionSheet({ title, message, items }) {
+      return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'forge-sheet-overlay';
+        const sheet = document.createElement('div');
+        sheet.className = 'forge-sheet';
+        if (title) {
+          const h = document.createElement('h3');
+          h.textContent = title;
+          sheet.appendChild(h);
+        }
+        if (message) {
+          const p = document.createElement('p');
+          p.className = 'forge-sheet-msg';
+          p.textContent = message;
+          sheet.appendChild(p);
+        }
+        const done = (val) => { overlay.remove(); resolve(val); };
+        for (const it of items || []) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'forge-sheet-btn' + (it.danger ? ' danger' : '') + (it.disabled ? ' disabled' : '');
+          b.textContent = it.label + (it.disabled && it.hint ? ' — ' + it.hint : '');
+          b.addEventListener('click', () => done(it.disabled ? null : it.id));
+          sheet.appendChild(b);
+        }
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'forge-sheet-cancel';
+        cancel.textContent = tf('common.cancel', 'Cancel');
+        cancel.addEventListener('click', () => done(null));
+        sheet.appendChild(cancel);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) done(null); });
+        overlay.appendChild(sheet);
+        document.body.appendChild(overlay);
+      });
+    }
+
+    function showAppSummary(app) {
+      const name = app.title || t('lib.untitled');
+      const sum = String(app.summary || '').trim() || t('lib.savedMiniApp');
+      showActionSheet({ title: name, message: sum, items: [] });
+    }
+
+    // Folder picker for Move. Returns LIB_ROOT_ID | folder id | null (cancel).
+    async function pickTargetFolder({ movingFolderId } = {}) {
+      const items = [{ id: LIB_ROOT_ID, label: t('lib.moveToRoot'), depth: 0 }];
+      const walk = (pid, depth) => {
+        for (const f of childFolders(pid)) {
+          items.push({ id: f.id, label: f.name || t('lib.untitled'), depth });
+          walk(f.id, depth + 1);
+        }
+      };
+      walk(null, 1);
+      const sheetItems = [];
+      for (const it of items) {
+        let disabled = false, hint = '';
+        if (movingFolderId) {
+          if (it.id !== LIB_ROOT_ID) {
+            if (it.id === movingFolderId || isDescendantFolder(it.id, movingFolderId)) continue; // hide self+subtree
+            if (!canMoveFolderUnder(movingFolderId, it.id)) { disabled = true; hint = t('lib.depthLimitReached'); }
+          }
+        }
+        sheetItems.push({
+          id: it.id,
+          label: '\u00a0\u00a0'.repeat(it.depth * 2) + '\ud83d\udcc1 ' + it.label,
+          disabled,
+          hint,
+        });
+      }
+      return showActionSheet({ title: t('lib.movePickTitle'), items: sheetItems });
+    }
+
+    async function createFolderFlow(parentId) {
+      if (parentId && parentId !== LIB_ROOT_ID) {
+        const p = getFolder(parentId);
+        if (!p) return;
+        if (folderDepth(p) >= LIB_MAX_DEPTH) {
+          setLibStatus(t('lib.depthLimitReached'), 'err');
+          return;
+        }
+      }
+      let name;
+      try { name = prompt(t('lib.folderPromptNew'), ''); } catch (_) { name = null; }
+      if (name == null) return;
+      const nm = String(name).trim().slice(0, 60);
+      if (!nm) { setLibStatus(t('lib.folderNameEmpty'), 'err'); return; }
+      const list = getFolders();
+      list.push({ id: 'fld_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: nm, parentId: (parentId && parentId !== LIB_ROOT_ID) ? parentId : null });
+      setFolders(list);
+      const exp = getExpandedSet();
+      exp.add(parentId || LIB_ROOT_ID);
+      saveExpandedSet(exp);
+      renderLibrary();
+      setLibStatus(t('lib.folderCreated', { name: nm }), 'ok');
+    }
+
+    function renameFolderFlow(f) {
+      if (!f?.id) return;
+      let name;
+      try { name = prompt(t('lib.folderPromptRename'), f.name || ''); } catch (_) { name = null; }
+      if (name == null) return;
+      const nm = String(name).trim().slice(0, 60);
+      if (!nm) { setLibStatus(t('lib.folderNameEmpty'), 'err'); return; }
+      const list = getFolders();
+      const idx = list.findIndex(x => x.id === f.id);
+      if (idx < 0) return;
+      list[idx] = { ...list[idx], name: nm };
+      setFolders(list);
+      renderLibrary();
+      setLibStatus(t('lib.folderRenamed', { name: nm }), 'ok');
+    }
+
+    async function deleteFolderFlow(fid) {
+      const f = getFolder(fid);
+      if (!f) return;
+      const subtreeIds = collectSubtreeFolderIds(fid);
+      let totalApps = appsInFolder(fid).length;
+      for (const sid of subtreeIds) totalApps += appsInFolder(sid).length;
+      if (!subtreeIds.length && !totalApps) {
+        if (!confirm(t('lib.confirmDel', { name: f.name }))) return;
+        removeFolderRow(fid);
+        return;
+      }
+      const choice = await showActionSheet({
+        title: t('lib.folderNotEmpty', { name: f.name || '' }),
+        message: subtreeIds.length || totalApps
+          ? t('lib.folderContents', { folders: subtreeIds.length, apps: totalApps })
+          : '',
+        items: [
+          { id: 'all', label: t('lib.folderDelAll', { n: totalApps }), danger: true },
+          { id: 'keep', label: t('lib.folderDelKeep') },
+        ],
+      });
+      if (!choice) return;
+      if (choice === 'all') {
+        if (totalApps && !confirm(t('lib.folderDelAllConfirm', { n: totalApps, name: f.name || '' }))) return;
+        const killIds = [fid].concat(subtreeIds);
+        const killSet = new Set(killIds);
+        addDriveTombstone(fid);
+        for (const sid of subtreeIds) addDriveTombstone(sid);
+        const kept = getLibrary().filter((a) => {
+          const afid = a.folderId || null;
+          if (afid && killSet.has(afid)) { addDriveTombstone(a.id); return false; }
+          return true;
+        });
+        setLibrary(kept);
+        setFolders(getFolders().filter(x => !killSet.has(x.id)));
+      } else {
+        // keep contents: move direct children up to deleted folder's parent
+        const parentPid = f.parentId || null;
+        setFolders(getFolders()
+          .filter(x => x.id !== fid)
+          .map(x => (x.parentId === fid ? { ...x, parentId: parentPid } : x)));
+        setLibrary(getLibrary().map(a => ((a.folderId || null) === fid ? { ...a, folderId: parentPid } : a)));
+        addDriveTombstone(fid);
+      }
+      renderLibrary();
+      setLibStatus(t('lib.folderDeleted'), 'ok');
+    }
+
+    function removeFolderRow(fid) {
+      setFolders(getFolders().filter(x => x.id !== fid));
+      addDriveTombstone(fid);
+      renderLibrary();
+      setLibStatus(t('lib.folderDeleted'), 'ok');
+    }
+
+    async function moveItemFlow({ kind, app, folder }) {
+      const movingFolderId = kind === 'folder' ? folder.id : null;
+      const target = await pickTargetFolder({ movingFolderId });
+      if (target == null) return;
+      const newFid = target === LIB_ROOT_ID ? null : target;
+      if (kind === 'app') {
+        if ((app.folderId || null) === newFid) return;
+        setLibrary(getLibrary().map(a => (a.id === app.id ? { ...a, folderId: newFid } : a)));
+      } else {
+        if ((folder.parentId || null) === newFid) return;
+        setFolders(getFolders().map(x => (x.id === folder.id ? { ...x, parentId: newFid } : x)));
+      }
+      const targetName = newFid ? (getFolder(newFid)?.name || '') : t('lib.rootTitle');
+      renderLibrary();
+      setLibStatus(t('lib.movedTo', { name: targetName }), 'ok');
+    }
+
+    // Tap opens / hold opens menu (shared by folder + app rows)
+    function bindTapAndHold(elx, { onTap, onHold }) {
+      let timer = null, fired = false, sx = 0, sy = 0;
+      const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      elx.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        fired = false;
+        sx = e.clientX; sy = e.clientY;
+        clear();
+        timer = setTimeout(() => {
+          timer = null;
+          fired = true;
+          try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+          onHold();
+        }, 500);
+      });
+      elx.addEventListener('pointermove', (e) => {
+        if (!timer) return;
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        if (dx * dx + dy * dy > 100) clear();
+      });
+      elx.addEventListener('pointerup', (e) => {
+        const wasHold = fired;
+        clear();
+        if (wasHold) { e.preventDefault(); return; }
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        onTap();
+      });
+      elx.addEventListener('pointercancel', clear);
+      elx.addEventListener('pointerleave', clear);
+      elx.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    function renderLibrary() {
       el.libList.innerHTML = '';
-      if (!list.length) {
+      const folders = getFolders();
+      const expanded = getExpandedSet();
+
+      const mkRow = (cls, level) => {
+        const row = document.createElement('div');
+        row.className = 'lib-row' + (cls ? ' ' + cls : '');
+        row.style.marginLeft = 'calc(' + Math.max(0, level) + ' * 0.9rem)';
+        el.libList.appendChild(row);
+        return row;
+      };
+
+      const renderFolderRow = (f, level) => {
+        const row = mkRow('folder-row', level);
+        const chev = document.createElement('span');
+        chev.className = 'lib-chevron';
+        chev.textContent = expanded.has(f.id) ? '\u25be' : '\u25b8';
+        row.appendChild(chev);
+        const ic = document.createElement('span');
+        ic.className = 'lib-ficon';
+        ic.textContent = expanded.has(f.id) ? '\ud83d\udcc2' : '\ud83d\udcc1';
+        row.appendChild(ic);
+        const nm = document.createElement('span');
+        nm.className = 'lib-name';
+        nm.textContent = f.name || t('lib.untitled');
+        row.appendChild(nm);
+        const cnt = document.createElement('span');
+        cnt.className = 'lib-count';
+        const subCount = childFolders(f.id).length;
+        const appCount = appsInFolder(f.id).length;
+        cnt.textContent = '(' + (subCount + appCount) + ')';
+        row.appendChild(cnt);
+        bindTapAndHold(row, {
+          onTap: () => {
+            const exp = getExpandedSet();
+            if (exp.has(f.id)) exp.delete(f.id); else exp.add(f.id);
+            saveExpandedSet(exp);
+            renderLibrary();
+          },
+          onHold: async () => {
+            const atLimit = folderDepth(f) >= LIB_MAX_DEPTH;
+            const choice = await showActionSheet({
+              title: f.name || t('lib.untitled'),
+              items: [
+                { id: 'rename', label: t('lib.renameFolder') },
+                { id: 'newfolder', label: t('lib.createSubfolder'), disabled: atLimit, hint: atLimit ? t('lib.depthLimitReached') : '' },
+                { id: 'move', label: t('lib.move') },
+                { id: 'delete', label: t('lib.deleteFolder'), danger: true },
+              ],
+            });
+            if (choice === 'rename') renameFolderFlow(f);
+            else if (choice === 'newfolder') createFolderFlow(f.id);
+            else if (choice === 'move') moveItemFlow({ kind: 'folder', folder: getFolder(f.id) || f });
+            else if (choice === 'delete') deleteFolderFlow(f.id);
+          },
+        });
+      };
+
+      const renderAppRow = (app, level) => {
+        const row = mkRow('approw', level);
+        const icon = document.createElement('div');
+        icon.className = 'lib-icon';
+        icon.textContent = app.iconEmoji || '\u26a1';
+        icon.style.background = app.iconColor || 'rgba(109,40,217,.45)';
+        icon.title = t('lib.tapToOpen');
+        row.appendChild(icon);
+        const nm = document.createElement('span');
+        nm.className = 'lib-name';
+        nm.textContent = app.title || t('lib.untitled');
+        row.appendChild(nm);
+        const aaReady = !!(app.aaScan?.ready ?? app.carCompatible);
+        const dot = document.createElement('span');
+        dot.className = 'aa-dot ' + (aaReady ? 'ok' : 'bad');
+        dot.title = aaReadyTitle(app);
+        row.appendChild(dot);
+        const openApp = () => {
+          try {
+            loadPreview(app);
+            enterAppMode('library');
+          } catch (e) {
+            try { openAppInNewWindow(app); } catch (_) {
+              setLibStatus(e?.message || 'Could not open app', 'err');
+            }
+          }
+        };
+        bindTapAndHold(row, {
+          onTap: openApp,
+          onHold: async () => {
+            const fresh = getLibrary().find(x => x.id === app.id) || app;
+            const choice = await showActionSheet({
+              title: fresh.title || t('lib.untitledApp'),
+              items: [
+                { id: 'icon', label: t('lib.changeIcon') },
+                { id: 'rename', label: t('lib.rename') },
+                { id: 'summary', label: t('lib.summary') },
+                { id: 'move', label: t('lib.move') },
+                { id: 'pin', label: t('lib.pin') },
+                { id: 'share', label: t('lib.share'), hint: aaReadyTitle(fresh) },
+                { id: 'reforge', label: t('lib.reforge') },
+                { id: 'delete', label: t('lib.delete'), danger: true },
+              ],
+            });
+            if (choice === 'icon') editAppIcon(fresh, { fromLibrary: true });
+            else if (choice === 'rename') renameLibraryApp(fresh);
+            else if (choice === 'summary') showAppSummary(fresh);
+            else if (choice === 'move') moveItemFlow({ kind: 'app', app: fresh });
+            else if (choice === 'pin') pinAppToLauncher(fresh);
+            else if (choice === 'share') shareAppToAaforge(fresh);
+            else if (choice === 'reforge') reforgeLibraryApp(fresh);
+            else if (choice === 'delete') {
+              const name = fresh.title || t('lib.thisApp');
+              if (!confirm(t('lib.confirmDel', { name }))) return;
+              addDriveTombstone(fresh.id);
+              setLibrary(getLibrary().filter(x => x.id !== fresh.id));
+              renderLibrary();
+              try { setLibStatus(t('lib.deleted', { name }), 'ok'); } catch (_) {}
+            }
+          },
+        });
+      };
+
+      // Root header — readonly, always present
+      const rootRow = mkRow('folder-row root-row', 0);
+      const rootChev = document.createElement('span');
+      rootChev.className = 'lib-chevron';
+      rootChev.textContent = expanded.has(LIB_ROOT_ID) ? '\u25be' : '\u25b8';
+      rootRow.appendChild(rootChev);
+      const rootIc = document.createElement('span');
+      rootIc.className = 'lib-ficon';
+      rootIc.textContent = '\ud83d\udcc1';
+      rootRow.appendChild(rootIc);
+      const rootNm = document.createElement('span');
+      rootNm.className = 'lib-name';
+      rootNm.textContent = t('lib.rootTitle');
+      rootRow.appendChild(rootNm);
+      const rootCnt = document.createElement('span');
+      rootCnt.className = 'lib-count';
+      const countAll = (pid) => childFolders(pid).reduce((acc, f) => acc + countAll(f.id), appsInFolder(pid).length);
+      rootCnt.textContent = '(' + countAll(null) + ')';
+      rootRow.appendChild(rootCnt);
+      bindTapAndHold(rootRow, {
+        onTap: () => {
+          const exp = getExpandedSet();
+          if (exp.has(LIB_ROOT_ID)) exp.delete(LIB_ROOT_ID); else exp.add(LIB_ROOT_ID);
+          saveExpandedSet(exp);
+          renderLibrary();
+        },
+        onHold: async () => {
+          const choice = await showActionSheet({
+            title: t('lib.rootTitle'),
+            items: [{ id: 'newfolder', label: t('lib.createSubfolder') }],
+          });
+          if (choice === 'newfolder') createFolderFlow(null);
+        },
+      });
+
+      const renderChildren = (parentId, level) => {
+        for (const f of childFolders(parentId)) {
+          renderFolderRow(f, level);
+          if (expanded.has(f.id)) renderChildren(f.id, level + 1);
+        }
+        for (const app of appsInFolder(parentId)) renderAppRow(app, level);
+      };
+      if (expanded.has(LIB_ROOT_ID)) renderChildren(null, 1);
+
+      if (!folders.length && !getLibrary().length) {
         const empty = document.createElement('div');
         empty.className = 'bubble system';
         empty.style.alignSelf = 'stretch';
         empty.textContent = t('lib.empty');
         el.libList.appendChild(empty);
-        return;
-      }
-
-      const openApp = (app) => {
-        try {
-          loadPreview(app);
-          enterAppMode('library');
-        } catch (e) {
-          try { openAppInNewWindow(app); } catch (_) {
-            setLibStatus(e?.message || 'Could not open app', 'err');
-          }
-        }
-      };
-
-      const bindIconOpenAndEdit = (elIcon, app) => {
-        elIcon.title = t('lib.iconHint');
-        elIcon.setAttribute('role', 'button');
-        elIcon.tabIndex = 0;
-        elIcon.setAttribute(
-          'aria-label',
-          t('lib.iconAria', { name: app.title || t('lib.untitledApp') })
-        );
-        let timer = null;
-        let longPress = false;
-        let startX = 0;
-        let startY = 0;
-        const clear = () => {
-          if (timer) {
-            clearTimeout(timer);
-            timer = null;
-          }
-        };
-        elIcon.addEventListener('pointerdown', (e) => {
-          if (e.pointerType === 'mouse' && e.button !== 0) return;
-          longPress = false;
-          startX = e.clientX;
-          startY = e.clientY;
-          clear();
-          timer = setTimeout(() => {
-            timer = null;
-            longPress = true;
-            try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
-            editAppIcon(app, { fromLibrary: true });
-          }, 500);
-        });
-        elIcon.addEventListener('pointermove', (e) => {
-          if (!timer) return;
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-          if (dx * dx + dy * dy > 100) clear();
-        });
-        elIcon.addEventListener('pointerup', (e) => {
-          const wasLong = longPress;
-          clear();
-          if (wasLong) {
-            longPress = false;
-            e.preventDefault();
-            return;
-          }
-          if (e.pointerType === 'mouse' && e.button !== 0) return;
-          openApp(app);
-        });
-        elIcon.addEventListener('pointercancel', clear);
-        elIcon.addEventListener('pointerleave', clear);
-        elIcon.addEventListener('contextmenu', (e) => e.preventDefault());
-        elIcon.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openApp(app);
-          }
-        });
-      };
-
-      for (const app of list) {
-        const item = document.createElement('div');
-        item.className = 'lib-item';
-
-        const icon = document.createElement('div');
-        icon.className = 'lib-icon';
-        icon.textContent = app.iconEmoji || '⚡';
-        icon.style.background = app.iconColor || 'rgba(109,40,217,.45)';
-        bindIconOpenAndEdit(icon, app);
-
-        const main = document.createElement('div');
-        main.className = 'lib-main';
-        main.title = t('lib.tapToOpen');
-        const h3 = document.createElement('h3');
-        h3.textContent = app.title || t('lib.untitled');
-        const p = document.createElement('p');
-        p.textContent = app.summary || t('lib.savedMiniApp');
-        main.appendChild(h3);
-        main.appendChild(p);
-        main.addEventListener('click', () => openApp(app));
-
-        const actions = document.createElement('div');
-        actions.className = 'lib-actions';
-
-        const mkIconBtn = (emoji, title, onClick, extraClass) => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'icon-btn' + (extraClass ? (' ' + extraClass) : '');
-          b.textContent = emoji;
-          b.title = title;
-          b.setAttribute('aria-label', title);
-          b.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            onClick();
-          });
-          return b;
-        };
-
-        const homeBtn = mkIconBtn('🏠', t('lib.pin'), () => pinAppToLauncher(app));
-        const reforgeBtn = mkIconBtn('⚒️', t('lib.reforge'), () => reforgeLibraryApp(app));
-        const aaReady = !!(app.aaScan?.ready ?? app.carCompatible);
-        const shareAaBtn = mkIconBtn(
-          '🚗',
-          aaReadyTitle(app),
-          () => shareAppToAaforge(app),
-          aaReady ? 'lib-aa-ok' : 'lib-aa-bad'
-        );
-        const delBtn = mkIconBtn('🗑️', t('lib.delete'), () => {
-          const name = app.title || t('lib.thisApp');
-          if (!confirm(t('lib.confirmDel', { name: name }))) {
-            return;
-          }
-          addDriveTombstone(app.id);
-          setLibrary(getLibrary().filter(x => x.id !== app.id));
-          renderLibrary();
-          try { setLibStatus(t('lib.deleted', { name: name }), 'ok'); } catch (_) {}
-        }, 'lib-del');
-
-        const exportBtn = mkIconBtn('📤', t('lib.export'), () => exportApp(app, { source: 'library' }));
-        const renameBtn = mkIconBtn('✏️', t('lib.rename'), () => renameLibraryApp(app));
-
-        actions.appendChild(homeBtn);
-        actions.appendChild(renameBtn);
-        actions.appendChild(exportBtn);
-        actions.appendChild(reforgeBtn);
-        actions.appendChild(shareAaBtn);
-        actions.appendChild(delBtn);
-
-        item.appendChild(icon);
-        item.appendChild(main);
-        item.appendChild(actions);
-        el.libList.appendChild(item);
       }
     }
 
@@ -21509,6 +22084,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.btnOpenWindow?.addEventListener('click', () => currentApp && openAppInNewWindow(currentApp));
     el.btnExport?.addEventListener('click', exportCurrentApp);
     el.btnRefreshLib?.addEventListener('click', renderLibrary);
+    el.btnLibNewFolder?.addEventListener('click', () => createFolderFlow(null));
     el.btnDriveBackup?.addEventListener('click', () => backupLibraryToDrive({ source: 'library' }));
     el.btnDriveRestore?.addEventListener('click', () => restoreLibraryFromDrive({ source: 'library', mode: 'merge' }));
     el.btnDriveConnect?.addEventListener('click', async () => {
