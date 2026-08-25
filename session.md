@@ -2199,3 +2199,24 @@ Smoke:
 [ ] AI tab → Library backup → Backup now / Restore… still perform full backup/restore, messages appear on the AI tab status line
 [ ] All languages: no missing-key fallbacks visible in library or AI tab after prune
 ```
+
+## AI backup status shows apps + keys counts (2026-08-25)
+
+**2.7.20 / versionCode 150** (from 2.7.18/148). Host-only, no native Java.
+
+- `backupLibraryToDrive()` now persists `lastSettingsKeys` / `lastSettingsProfiles` into drive meta (hoisted out of the settings-try block).
+- Persistent AI-tab status line (`driveStatusLine`) after connect/backup now reads:
+  "Connected · {folder}/{root} · last backup: {when} · **{apps} apps · {keys} keys**" ("—" when never backed up).
+  Localized in all 6 languages.
+- The transient completion toast already reported "{up} uploaded, {same} unchanged, {total} in folder, settings ✓ (N profiles, M keys)" — unchanged.
+
+Gate PASS; both flavor debug APKs built @ 2.7.20/150.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.20 (150)
+[ ] AI tab → Library backup → Backup now → done toast lists uploaded/unchanged + profiles/keys
+[ ] After backup, status line shows "… · N apps · M keys" with real counts
+[ ] Fresh install (never backed up): status line shows "— —" placeholders
+[ ] Language switch: counts phrased per locale
+```

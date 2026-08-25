@@ -1909,7 +1909,7 @@ termux-reload-settings</div>
     "drive.checking": "Checking backup folder…",
     "drive.choose": "Choose folder",
     "drive.connected": "Folder connected",
-    "drive.connectedStatus": "Connected · {folder}/{root} · last backup: {when}",
+    "drive.connectedStatus": "Connected · {folder}/{root} · last backup: {when} · {apps} apps · {keys} keys",
     "drive.connecting": "Connecting backup folder…",
     "drive.disconnect": "Disconnect",
     "drive.disconnected": "Disconnected — files stay in the folder",
@@ -2414,7 +2414,7 @@ termux-reload-settings</div>
     "drive.checking": "Comprobando carpeta de copia…",
     "drive.choose": "Elegir carpeta",
     "drive.connected": "Carpeta conectada",
-    "drive.connectedStatus": "Conectado · {folder}/{root} · última copia: {when}",
+    "drive.connectedStatus": "Conectado · {folder}/{root} · última copia: {when} · {apps} apps · {keys} claves",
     "drive.connecting": "Conectando carpeta de copia…",
     "drive.disconnect": "Desconectar",
     "drive.disconnected": "Desconectado — los archivos se quedan en la carpeta",
@@ -2988,7 +2988,7 @@ termux-reload-settings</div>
     "drive.checking": "Vérification du dossier de sauvegarde…",
     "drive.choose": "Choisir un dossier",
     "drive.connected": "Dossier connecté",
-    "drive.connectedStatus": "Connecté · {folder}/{root} · dernière sauvegarde : {when}",
+    "drive.connectedStatus": "Connecté · {folder}/{root} · dernière sauvegarde : {when} · {apps} applis · {keys} clés",
     "drive.connecting": "Connexion du dossier de sauvegarde…",
     "drive.disconnect": "Déconnecter",
     "drive.disconnected": "Déconnecté — les fichiers restent dans le dossier",
@@ -3562,7 +3562,7 @@ termux-reload-settings</div>
     "drive.checking": "Verificando pasta de backup…",
     "drive.choose": "Escolher pasta",
     "drive.connected": "Pasta conectada",
-    "drive.connectedStatus": "Conectado · {folder}/{root} · último backup: {when}",
+    "drive.connectedStatus": "Conectado · {folder}/{root} · último backup: {when} · {apps} apps · {keys} chaves",
     "drive.connecting": "Conectando pasta de backup…",
     "drive.disconnect": "Desconectar",
     "drive.disconnected": "Desconectado — os arquivos ficam na pasta",
@@ -4136,7 +4136,7 @@ termux-reload-settings</div>
     "drive.checking": "バックアップフォルダー確認中…",
     "drive.choose": "フォルダーを選択",
     "drive.connected": "フォルダーを接続しました",
-    "drive.connectedStatus": "接続済み · {folder}/{root} · 最終バックアップ：{when}",
+    "drive.connectedStatus": "接続済み · {folder}/{root} · 最終バックアップ：{when} · アプリ{apps}件・キー{keys}個",
     "drive.connecting": "バックアップフォルダーに接続中…",
     "drive.disconnect": "切断",
     "drive.disconnected": "切断しました — ファイルはフォルダーに残ります",
@@ -4710,7 +4710,7 @@ termux-reload-settings</div>
     "drive.checking": "백업 폴더 확인 중…",
     "drive.choose": "폴더 선택",
     "drive.connected": "폴더 연결됨",
-    "drive.connectedStatus": "연결됨 · {folder}/{root} · 마지막 백업: {when}",
+    "drive.connectedStatus": "연결됨 · {folder}/{root} · 마지막 백업: {when} · 앱 {apps}개 · 키 {keys}개",
     "drive.connecting": "백업 폴더 연결 중…",
     "drive.disconnect": "연결 해제",
     "drive.disconnected": "연결 해제됨 — 폴더의 파일은 유지됩니다",
@@ -7865,8 +7865,10 @@ termux-reload-settings</div>
         const meta = getDriveMeta();
         if (st?.connected) {
           const when = meta.lastBackupAt ? new Date(meta.lastBackupAt).toLocaleString() : t('drive.never');
+          const appsTxt = meta.lastBackupAt ? String(Number(meta.lastBackupCount) || 0) : '\u2014';
+          const keysTxt = meta.lastBackupAt ? String(Number(meta.lastSettingsKeys) || 0) : '\u2014';
           setDriveStatus(
-            t('drive.connectedStatus', { folder: st.displayName || t('drive.folder'), root: st.rootDir || 'ForgeLibrary', when: when }),
+            t('drive.connectedStatus', { folder: st.displayName || t('drive.folder'), root: st.rootDir || 'ForgeLibrary', when: when, apps: appsTxt, keys: keysTxt }),
             'ok'
           );
         } else {
@@ -8310,6 +8312,7 @@ termux-reload-settings</div>
 
         // AI settings + API keys (private backup folder)
         let settingsNote = '';
+        let keyN = null, profN = null;
         try {
           status('Backing up AI settings & keys…', '');
           // Flush current UI into profiles first
@@ -8317,9 +8320,10 @@ termux-reload-settings</div>
           const settingsBundle = collectSettingsForBackup();
           settingsBundle.contentSha256 = await sha256Hex(settingsBackupFingerprint(settingsBundle));
           await driveWriteJson(DRIVE_SETTINGS_PATH, settingsBundle);
-          const keyN = (settingsBundle.knownKeys || []).length;
-          const profN = Object.keys(settingsBundle.profiles || {}).length;
-          settingsNote = `, settings ✓ (${profN} profiles, ${keyN} keys)`;
+          const keyN_ = (settingsBundle.knownKeys || []).length;
+          const profN_ = Object.keys(settingsBundle.profiles || {}).length;
+          keyN = keyN_; profN = profN_;
+          settingsNote = `, settings ✓ (${profN_} profiles, ${keyN_} keys)`;
           setDriveMeta({
             ...getDriveMeta(),
             lastSettingsBackupAt: Date.now(),
@@ -8337,6 +8341,7 @@ termux-reload-settings</div>
           lastBackupAt: Date.now(),
           lastBackupCount: localApps.length,
           lastUploaded: uploaded,
+          ...(keyN != null ? { lastSettingsKeys: keyN, lastSettingsProfiles: profN } : {}),
         });
 
         status(t('drive.backupDone', { up: uploaded, same: skipped, total: manifest.apps.length, note: settingsNote }), 'ok');
