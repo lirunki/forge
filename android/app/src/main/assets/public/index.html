@@ -320,6 +320,11 @@
       background: linear-gradient(135deg, var(--accent), #6d28d9);
     }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn.stop {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
     .btn.secondary {
       background: var(--panel2);
       border: 1px solid var(--border);
@@ -1359,7 +1364,6 @@ termux-reload-settings</div>
       </div>
       <div style="display:flex;gap:0.4rem;align-items:center;">
         <button class="icon-btn bulb" id="btnHints" title="Hints" type="button" aria-label="Hints" data-i18n-title="header.hintsTitle" data-i18n-aria="header.hintsTitle">💡</button>
-        <button class="icon-btn car" id="btnCar" title="Car-compatible (AAForge)" type="button" aria-pressed="false" data-i18n-title="header.carTitle">🚗</button>
         <button class="icon-btn" id="btnNew" title="New chat" type="button" data-i18n-title="header.newChat">＋</button>
       </div>
     </header>
@@ -1384,8 +1388,7 @@ termux-reload-settings</div>
               <button class="btn secondary small iconish" id="btnAttachCamera" type="button" title="Take a photo of a sketch" data-i18n="chat.cameraBtn" data-i18n-title="chat.cameraTitle">📷 Camera</button>
             </div>
             <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
-              <button class="btn secondary small" id="btnStop" type="button" disabled data-i18n="chat.stop">Stop</button>
-
+              <button class="icon-btn car" id="btnCar" title="Car-compatible (AAForge)" type="button" aria-pressed="false" data-i18n-title="header.carTitle">🚗</button>
               <button class="btn" id="btnSend" type="button" data-i18n="chat.send">Forge it</button>
             </div>
           </div>
@@ -1583,7 +1586,7 @@ termux-reload-settings</div>
 
           <div class="settings-block" style="margin-top:0.6rem;padding-top:0.55rem;border-top:1px solid var(--border);">
             <button class="btn secondary small" id="btnDonate" type="button" data-i18n="ai.donate">☕ Support development</button>
-            <p class="field-hint" style="margin:0.35rem 0 0;" data-i18n-html="ai.donateHint">Optional tip via PayPal — opens in your browser. Forge is free; donating unlocks nothing, it just helps the dev.</p>
+            <p class="field-hint" style="margin:0.35rem 0 0;" data-i18n-html="ai.donateHint">Optional tip via PayPal — opens in your browser.</p>
           </div>
         </div>
 
@@ -1736,7 +1739,7 @@ termux-reload-settings</div>
     "ai.detectedTapSave": "Detected {name} — tap Save & use.",
     "ai.detects": "Detects xAI, OpenAI, Hugging Face, Groq, OpenRouter, Azure from the key prefix.",
     "ai.donate": "☕ Support development",
-    "ai.donateHint": "Optional tip via PayPal — opens in your browser. Forge is free; donating unlocks nothing, it just helps the dev.",
+    "ai.donateHint": "Optional tip via PayPal — opens in your browser.",
     "ai.forget": "Forget this key",
     "ai.groupBuiltin": "Built-in",
     "ai.groupCustoms": "Custom",
@@ -2243,7 +2246,7 @@ termux-reload-settings</div>
     "ai.detectedTapSave": "Detectado {name} — toca Guardar y usar.",
     "ai.detects": "Detecta xAI, OpenAI, Hugging Face, Groq, OpenRouter, Azure por el prefijo de la clave.",
     "ai.donate": "☕ Apoya el desarrollo",
-    "ai.donateHint": "Propina opcional vía PayPal — se abre en tu navegador. Forge es gratis; donar no desbloquea nada, solo ayuda al desarrollador.",
+    "ai.donateHint": "Propina opcional vía PayPal — se abre en tu navegador.",
     "ai.forget": "Olvidar esta clave",
     "ai.groupBuiltin": "Integrados",
     "ai.groupCustoms": "Personalizados",
@@ -2817,7 +2820,7 @@ termux-reload-settings</div>
     "ai.detectedTapSave": "{name} détecté — touchez Enregistrer et utiliser.",
     "ai.detects": "Détecte xAI, OpenAI, Hugging Face, Groq, OpenRouter, Azure selon le préfixe de la clé.",
     "ai.donate": "☕ Soutenir le développement",
-    "ai.donateHint": "Pourboire facultatif via PayPal — s’ouvre dans votre navigateur. Forge est gratuit ; un don ne débloque rien, il aide juste le dév.",
+    "ai.donateHint": "Pourboire facultatif via PayPal — s’ouvre dans votre navigateur.",
     "ai.forget": "Oublier cette clé",
     "ai.groupBuiltin": "Intégrés",
     "ai.groupCustoms": "Personnalisés",
@@ -3391,7 +3394,7 @@ termux-reload-settings</div>
     "ai.detectedTapSave": "{name} detectado — toque em Salvar e usar.",
     "ai.detects": "Detecta xAI, OpenAI, Hugging Face, Groq, OpenRouter, Azure pelo prefixo da chave.",
     "ai.donate": "☕ Apoie o desenvolvimento",
-    "ai.donateHint": "Gorjeta opcional via PayPal — abre no seu navegador. O Forge é grátis; doar não desbloqueia nada, só ajuda o desenvolvedor.",
+    "ai.donateHint": "Gorjeta opcional via PayPal — abre no seu navegador.",
     "ai.forget": "Esquecer esta chave",
     "ai.groupBuiltin": "Integrados",
     "ai.groupCustoms": "Personalizados",
@@ -3965,7 +3968,7 @@ termux-reload-settings</div>
     "ai.detectedTapSave": "{name} を検出 — 保存して使用をタップ。",
     "ai.detects": "キーの接頭辞から xAI、OpenAI、Hugging Face、Groq、OpenRouter、Azure を判別します。",
     "ai.donate": "☕ 開発をサポート",
-    "ai.donateHint": "PayPalによる任意のチップ — ブラウザで開きます。Forgeは無料。寄付で解放される機能はなく、開発者を支援するだけです。",
+    "ai.donateHint": "PayPalによる任意のチップ — ブラウザで開きます。",
     "ai.forget": "このキーを破棄",
     "ai.groupBuiltin": "内蔵",
     "ai.groupCustoms": "カスタム",
@@ -4539,7 +4542,7 @@ termux-reload-settings</div>
     "ai.detectedTapSave": "{name} 감지됨 — 저장 및 사용을 누르세요.",
     "ai.detects": "키 접두사로 xAI, OpenAI, Hugging Face, Groq, OpenRouter, Azure를 감지합니다.",
     "ai.donate": "☕ 개발 지원",
-    "ai.donateHint": "PayPal로 선택적 후원 — 브라우저에서 열립니다. Forge는 무료이며 후원으로 잠금 해제되는 기능은 없고 개발자에게 도움만 됩니다.",
+    "ai.donateHint": "PayPal로 선택적 후원 — 브라우저에서 열립니다.",
     "ai.forget": "이 키 잊기",
     "ai.groupBuiltin": "내장",
     "ai.groupCustoms": "사용자 지정",
@@ -5607,7 +5610,6 @@ termux-reload-settings</div>
       btnAttachCamera: document.getElementById('btnAttachCamera'),
       chatImageInput: document.getElementById('chatImageInput'),
       btnSend: document.getElementById('btnSend'),
-      btnStop: document.getElementById('btnStop'),
       btnNew: document.getElementById('btnNew'),
       subtitle: document.getElementById('subtitle'),
       previewFrame: document.getElementById('previewFrame'),
@@ -9059,13 +9061,15 @@ termux-reload-settings</div>
     }
     function setBusy(on) {
       busy = on;
-      el.btnSend.disabled = on;
-      el.btnStop.disabled = !on;
       if (el.btnAttachImage) el.btnAttachImage.disabled = on;
       if (el.btnAttachCamera) el.btnAttachCamera.disabled = on;
-      el.btnSend.innerHTML = on
-        ? '<span class="spinner"></span> Forging…'
-        : 'Forge it';
+      // The Forge button morphs into a grey Stop while generating
+      if (el.btnSend) {
+        el.btnSend.classList.toggle('stop', on);
+        el.btnSend.innerHTML = on
+          ? '<span class="spinner"></span> ' + t('chat.stop')
+          : t('chat.send');
+      }
     }
 
     function renderAttachStrip() {
@@ -21972,8 +21976,10 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     }
 
     // ——— Events ———
-    el.btnSend?.addEventListener('click', onSend);
-    el.btnStop?.addEventListener('click', () => abortController?.abort());
+    el.btnSend?.addEventListener('click', () => {
+      if (busy) { abortController?.abort(); return; }
+      onSend();
+    });
     el.btnAttachImage?.addEventListener('click', () => { if (!busy) pickChatImages(); });
     el.btnAttachCamera?.addEventListener('click', () => { if (!busy) captureChatImage(); });
     el.chatImageInput?.addEventListener('change', async () => {

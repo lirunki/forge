@@ -2220,3 +2220,24 @@ Smoke:
 [ ] Fresh install (never backed up): status line shows "— —" placeholders
 [ ] Language switch: counts phrased per locale
 ```
+
+## Chat button morphs to Stop; car icon beside Forge; donate hint trimmed (2026-08-25)
+
+**2.7.22 / versionCode 152** (from 2.7.20/150). Host-only, no native Java.
+
+| Change | Detail |
+|---|---|
+| "Forge is free" | Sentence removed from `ai.donateHint` (en HTML default + all 6 dict values); hint now just says the PayPal tip opens in your browser |
+| 🚗 car icon | Moved from header top-right into the chat composer, directly left of the blue "Forge it" button (same id/handlers/`header.carTitle`) |
+| Stop button | Removed entirely. `setBusy(true)` morphs the Forge button: grey `.btn.stop` style + spinner + localized "Stop"; click aborts (`abortController.abort()`). On finish/cancel `setBusy(false)` restores blue "Forge it" |
+
+Gate PASS; both flavor debug APKs built @ 2.7.22/152.
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.22 (152)
+[ ] Header top-right shows only 💡 and ＋; 🚗 sits next to the Forge button in the composer
+[ ] Send a prompt → Forge button turns grey with spinner + "Stop"; tapping it aborts generation
+[ ] After abort or natural finish → button back to blue "Forge it"
+[ ] AI tab → donate line no longer claims "Forge is free" in any language
+```
