@@ -16608,14 +16608,28 @@ Permission & safety UX:
       const s = String((e && (e.message || e)) || '');
       return /unable to resolve|no address associated|unknownhost|unknown host|network is unreachable|network unavailable|failed to fetch|connection reset|connection timed out|timed out|econn|etimedout|ehostunreach|enetunreach|err_name_not_resolved|err_internet_disconnected|err_network_changed/i.test(s);
     }
-    function waitForVisible(maxMs) {
+    function waitForVisible(maxMs, signal) {
       return new Promise((resolve) => {
         if (typeof document === 'undefined' || !document.hidden) return resolve(true);
         let done = false;
-        const finish = (v) => { if (done) return; done = true; document.removeEventListener('visibilitychange', onVis); clearTimeout(t); resolve(v); };
+        const finish = (v) => { if (done) return; done = true; document.removeEventListener('visibilitychange', onVis); if (onAbort && signal) signal.removeEventListener('abort', onAbort); clearTimeout(t); resolve(v); };
         const onVis = () => { if (!document.hidden) finish(true); };
+        const onAbort = signal ? () => finish(false) : null;
         document.addEventListener('visibilitychange', onVis);
+        if (onAbort) signal.addEventListener('abort', onAbort);
         const t = setTimeout(() => finish(false), maxMs);
+      });
+    }
+    // Abortable backoff sleep: resolves EARLY (without throwing) when the
+    // signal aborts, so the retry loop's own guard throws the AbortError
+    // immediately instead of blocking Stop for the full backoff window.
+    function abortableSleep(ms, signal) {
+      return new Promise((resolve) => {
+        if (signal && signal.aborted) return resolve();
+        let t;
+        const onAbort = signal ? () => { clearTimeout(t); resolve(); } : null;
+        if (onAbort) signal.addEventListener('abort', onAbort, { once: true });
+        t = setTimeout(() => { if (onAbort && signal) signal.removeEventListener('abort', onAbort); resolve(); }, ms);
       });
     }
     async function nativeHttp(opts) {
@@ -16648,8 +16662,8 @@ Permission & safety UX:
           }
           if (opts.signal && opts.signal.aborted) throw new DOMException('Aborted', 'AbortError');
           if (!isTransientNetworkError(e) || i === maxAttempts - 1) throw e;
-          if (typeof document !== 'undefined' && document.hidden) await waitForVisible(30000);
-          await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+          if (typeof document !== 'undefined' && document.hidden) await waitForVisible(30000, opts.signal);
+          await abortableSleep(1200 * (i + 1), opts.signal);
         }
       }
       throw lastErr;
@@ -16668,8 +16682,8 @@ Permission & safety UX:
           lastErr = e;
           if (init && init.signal && init.signal.aborted) throw new DOMException('Aborted', 'AbortError');
           if (!isTransientNetworkError(e) || i === tries - 1) throw e;
-          if (typeof document !== 'undefined' && document.hidden) await waitForVisible(30000);
-          await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+          if (typeof document !== 'undefined' && document.hidden) await waitForVisible(30000, init && init.signal);
+          await abortableSleep(1200 * (i + 1), init && init.signal);
         }
       }
       throw lastErr;
@@ -22034,14 +22048,30 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
 
     // Stop = abort EVERY llm query in flight: the chat/reforge generation,
     // any mini-app ai.chat/ai.chatStream call, and live translate.
+    // Stop = abort EVERY llm query in flight: the chat/reforge generation,
+    // any mini-app ai.chat/ai.chatStream/agent call, and live translate.
     function abortAllLlmQueries() {
+      try { genLog('warn', 'stop requested — aborting all LLM queries'); } catch (_) {}
+      // 1. chat/reforge generation signal (also aborts in-flight fetch/stream)
       try { abortController?.abort(); } catch (_) {}
+      // 2. every mini-app stream/agent AbortController (ai.chatStream/agent rounds)
       try {
         for (const c of (streamAbortControllers ? streamAbortControllers.values() : [])) {
           try { c.abort(); } catch (_) {}
         }
       } catch (_) {}
+      // 3. every agent cancel flag → breaks the loop at the next round boundary
+      //    (between-round tool execution / risk-sheet awaits have no signal)
+      try {
+        for (const f of (agentCancelFlags ? agentCancelFlags.values() : [])) {
+          try { if (f) f.cancelled = true; } catch (_) {}
+        }
+      } catch (_) {}
+      // 4. live translate
       try { liveTranslate?.translateAbort?.abort(); } catch (_) {}
+      // 5. stop the generation watchdog so the Extend/Fail card + 1s tick stop
+      //    immediately (forgeApp/reforge finally calls .stop() again — idempotent)
+      try { genWatchdog?.stop(); } catch (_) {}
     }
 
     el.btnAttachImage?.addEventListener('click', () => { if (!busy) pickChatImages(); });

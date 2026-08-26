@@ -2356,3 +2356,73 @@ Smoke (device pending — no adb at build time):
     file unchanged — model adapts on next round
 [ ] Classic path (flag OFF or model skips read_loop_md) unchanged
 ```
+
+## Aggressive Stop: abort every ongoing LLM query (2026-08-26)
+
+**2.7.30 / versionCode 160** (from 2.7.28/158). Host-only, no native Java.
+
+### Problem
+The Stop button (2.7.24) aborted the signal but didn't actually take effect
+promptly in several paths — Stop felt "not aggressive enough":
+
+1. **Retry-layer sleeps ignored the abort signal.** `waitForVisible(30000)`
+   and the backoff `setTimeout(1200*(i+1))` in `nativeHttp` / `fetchWithTransientRetry`
+   blocked for up to ~30s when the app was backgrounded or in a transient-error
+   retry cycle. The abort only took effect at the next loop iteration's guard,
+   after the full sleep elapsed.
+2. **Agent cancel flags were never set by Stop.** Mini-app `ai.agent` loops only
+   check `agentCancelFlags` at round boundaries; between-round awaits (tool
+   execution, host risk sheet `agentConfirmTool`, mini-app `onToolCall` veto)
+   have no signal. Stop aborted the in-flight stream but the agent kept looping
+   at the next round.
+3. **Generation watchdog kept ticking.** The Extend/Fail card + 1s tick could
+   linger during the abort unwind.
+
+### Fix (`www/index.html`)
+
+| Piece | Change |
+|---|---|
+| `waitForVisible(maxMs, signal)` | Now abortable: attaches an `abort` listener so it resolves early (`false`) when the signal fires — Stop no longer waits up to 30s on a backgrounded retry. |
+| `abortableSleep(ms, signal)` | New helper. Backoff sleep that resolves EARLY (without throwing) when the signal aborts, so the retry loop's own `if (signal.aborted) throw AbortError` guard fires immediately instead of after the full 1.2s–2.4s backoff. |
+| `nativeHttp` retry loop | Backoff + `waitForVisible` now pass `opts.signal` → Stop propagates through the non-stream fallback (`chatCompletions`, Gemini non-stream, `/responses`, cloud TTS) instantly. |
+| `fetchWithTransientRetry` | Same — passes `init && init.signal` to both sleeps (STT multipart). |
+| `abortAllLlmQueries` | Now aborts ALL five surfaces: (1) `abortController` (chat/reforge), (2) every `streamAbortControllers` entry (mini-app ai.chatStream/agent streams), (3) every `agentCancelFlags` entry → breaks the agent loop at the next round boundary, (4) `liveTranslate.translateAbort`, (5) `genWatchdog.stop()` → kills the Extend/Fail card + tick immediately. Logs `stop requested — aborting all LLM queries` to the AI-tab console. |
+
+### Net effect
+Stop now takes effect within ~tens of ms through the retry layer (was up to
+~30s), and through the agent loop at the next round boundary (was: next round
+after in-flight stream finished). The watchdog card + tick stop immediately.
+The existing catch blocks (`'Stopped.'` / `t('reforge.cancelled')`) still drive
+the UI as before.
+
+### Caveat (unfixable at host level)
+A native `CapacitorHttp.request` already in flight cannot be cancelled from
+JS — the abort only prevents the JS layer from *waiting/retrying*. The in-flight
+native call runs to its `readTimeout` (≥600s by design so the watchdog Extend
+popup can work). The streaming path (`fetch(url, {signal})` + `reader.read()`)
+is unaffected — its abort fires through the fetch signal. The retry-layer fix
+above closes the post-native-call window; the during-native-call window remains
+for non-stream fallbacks only.
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (2.7.30/160, parity, 28 tools)
+- Unit test of `waitForVisible`/`abortableSleep`: 6/6 — early-resolve on abort
+  (~50ms vs 10–30s), normal resolve, already-aborted instant, no-signal
+  backcompat, not-hidden fast-path
+- End-to-end retry-loop simulation: abort during a backoff sleep throws
+  `AbortError` in ~65ms (was ~1.2–30s); full backoff path still exercised
+  when no abort
+- Both flavor debug APKs built; APK contains `abortableSleep` + agent-flag loop
+  + `genWatchdog.stop()` in `abortAllLlmQueries`
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.30 (160) · b585ade
+[ ] Forge it a big app → mid-generation tap grey Stop → generation stops within
+    ~1s; chat shows 'Stopped.' (not a long hang then stop)
+[ ] Background the app mid-generation → return → tap Stop fast (no 30s wait)
+[ ] Mini-app running ai.agent multi-round + chat Forge-it at once → Stop kills
+    both; agent breaks at next round boundary
+[ ] Extend/Fail popup, if visible, hides immediately on Stop
+[ ] Reforge Stop → 'Reforge cancelled' fast
+```
