@@ -2,7 +2,7 @@
 
 > Canonical source: `forge/www/index.html` (the `SYSTEM_PROMPT` + `ForgeHost` bridge).
 > This file is a human-readable mirror — regenerate from the host when the bridge changes.
-> Version baseline: `2.7.30 / versionCode 160`.
+> Version baseline: `2.7.32 / versionCode 162`.
 
 `window.ForgeHost` (alias `window.forge`) is injected into every mini-app
 iframe by the host before `ready`. **All host APIs are async (Promises).
@@ -406,3 +406,26 @@ Flow (classic single-shot JSON stays the default path):
 
 Errors from tools return to the model as `{ok:false,error}`; exhaustion of
 rounds without `finish` fails with guidance to simplify or turn the flag off.
+
+## Easy-setup / turn-key catalog (remote-updatable)
+
+The turn-key setup wizard (free AI providers + steps) is data-driven, not
+hardcoded. `forge/www/turnkey-config.json` is the canonical catalog (committed
+to git; also shipped as an Android asset). At boot `initSetupProviders()`
+layers the available copies:
+
+1. **compiled-in** — the `SETUP_PROVIDERS_BUILTIN` JS array in `index.html`
+   (kept byte-equivalent to `turnkey-config.json` by `forge_check.sh`).
+2. **cached remote** — a previously fetched copy of the git file in
+   `localStorage` (`forge_turnkey_config_cache_v1`); overrides compiled-in.
+3. **fresh remote** — `GET https://raw.githubusercontent.com/lirunki/forge/main/www/turnkey-config.json`
+   (via `fetchWithTransientRetry`); on a valid payload it is cached and an
+   open wizard re-renders with the new list.
+
+This lets the turn-key options (free models, signup steps, provider blurb) be
+updated without an app release — push `turnkey-config.json` to git and the
+next boot picks it up. The remote payload is validated (`validateSetupConfigPayload`):
+must be `{ providers: [...] }` (or a bare array), ≤ 50 entries, each with a
+string `id`/`name`/`kind`; `builtin` entries need `providerId`, `custom`
+entries need `custom.{slug,base}`; `badge` must be a known value. A malformed
+or hostile remote file is rejected and the cache/compiled-in is used instead.

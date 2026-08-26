@@ -1,0 +1,217 @@
+{
+  "$schema": "https://forge.live/turnkey-config.schema.json",
+  "version": 1,
+  "updatedAt": "2026-08-26",
+  "remoteUrl": "https://raw.githubusercontent.com/lirunki/forge/main/www/turnkey-config.json",
+  "providers": [
+    {
+      "id": "gemini",
+      "kind": "builtin",
+      "providerId": "gemini",
+      "turnkey": true,
+      "recommended": true,
+      "badge": "best",
+      "name": "Google Gemini",
+      "blurb": "Easiest on Android. Free Google AI Studio key with your Google account — no credit card.",
+      "whyEasy": "Use the Google account already on this phone. In AI Studio tap Get API key → Create API key, then paste the WHOLE key back here (prefix can vary).",
+      "guide": [
+        "Tap “Open Google AI Studio keys” below (browser opens).",
+        "Sign in with the Google account on this phone.",
+        "Get API key → Create API key (new project is fine). Accept any Google prompts to enable the API.",
+        "Copy the FULL key (do not worry about the prefix) → return to Forge → paste → Save & test."
+      ],
+      "registrationUrl": "https://aistudio.google.com/apikey",
+      "keysUrl": "https://aistudio.google.com/apikey",
+      "steps": [
+        "Open Google AI Studio API keys and sign in with Google.",
+        "Create API key (free). If Google asks to enable Generative Language API, allow it.",
+        "Paste the full key below — any prefix is OK; do not add quotes or “API_KEY=”."
+      ],
+      "keyHint": "Paste full Google AI key"
+    },
+    {
+      "id": "groq",
+      "kind": "custom",
+      "turnkey": true,
+      "badge": "free",
+      "name": "Groq",
+      "blurb": "Truly free tier (rate-limited). Sign up with Google/GitHub/email, copy a gsk_ key.",
+      "whyEasy": "No credit card for the free tier. Fast models — great if Gemini misbehaves.",
+      "guide": [
+        "Tap “Open Groq Console” below.",
+        "Sign up or log in (Google / GitHub / email).",
+        "API Keys → Create API Key → copy (usually starts with gsk_).",
+        "Return to Forge, paste the key, tap Save & test."
+      ],
+      "registrationUrl": "https://console.groq.com/login",
+      "keysUrl": "https://console.groq.com/keys",
+      "steps": [
+        "Open Groq Console and sign up (Google/GitHub/email).",
+        "Go to API Keys → Create API Key.",
+        "Copy the key (starts with gsk_) and paste below."
+      ],
+      "keyHint": "gsk_…",
+      "custom": {
+        "slug": "groq",
+        "label": "Groq",
+        "base": "https://api.groq.com/openai/v1",
+        "defaultModel": "llama-3.3-70b-versatile",
+        "models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+      }
+    },
+    {
+      "id": "openrouter",
+      "kind": "custom",
+      "turnkey": true,
+      "badge": "free",
+      "name": "OpenRouter (free models)",
+      "blurb": "One key; pick free models (names ending in :free). Good backup brain.",
+      "whyEasy": "Sign up, create a key, Forge defaults to a free model router. No need to pay to try.",
+      "guide": [
+        "Tap “Open OpenRouter” below and sign up.",
+        "Keys → Create key → copy (often sk-or-…).",
+        "Return to Forge, paste, Save & test.",
+        "Stay on free models (Forge sets a free default)."
+      ],
+      "registrationUrl": "https://openrouter.ai/",
+      "keysUrl": "https://openrouter.ai/keys",
+      "steps": [
+        "Sign up at OpenRouter.",
+        "Create an API key.",
+        "Paste it below (often starts with sk-or-)."
+      ],
+      "keyHint": "sk-or-…",
+      "custom": {
+        "slug": "openrouter",
+        "label": "OpenRouter",
+        "base": "https://openrouter.ai/api/v1",
+        "defaultModel": "openrouter/free",
+        "models": ["openrouter/free", "google/gemma-2-9b-it:free", "meta-llama/llama-3.2-3b-instruct:free"]
+      }
+    },
+    {
+      "id": "cheaperinference",
+      "kind": "builtin",
+      "providerId": "cheaperinference",
+      "turnkey": false,
+      "badge": "paid",
+      "name": "Cheaper Inference",
+      "blurb": "One OpenAI-compatible key for many models (GLM, DeepSeek, GPT, Claude…) often below list price. Wallet-backed — not a free tier.",
+      "whyEasy": "Create an account, fund the wallet (first top-up often includes bonus credit), mint an ir_live_ key, then Forge pulls the live model catalog (includes glm-5.2).",
+      "guide": [
+        "Tap “Open Cheaper Inference” and create an account.",
+        "Add wallet credit (check dashboard for any first-fund bonus).",
+        "Create an API key (starts with ir_live_) and copy it once.",
+        "Return to Forge, paste the key, Save & test. Use Refresh models if the list looks stale."
+      ],
+      "registrationUrl": "https://cheaperinference.com/",
+      "keysUrl": "https://cheaperinference.com/",
+      "steps": [
+        "Sign up at cheaperinference.com and open the dashboard.",
+        "Fund the wallet, then create an API key (ir_live_…).",
+        "Paste the key below. Default model is glm-5.2; Refresh models loads the live catalog."
+      ],
+      "keyHint": "ir_live_…"
+    },
+    {
+      "id": "xai",
+      "kind": "builtin",
+      "providerId": "xai",
+      "turnkey": false,
+      "badge": "paid",
+      "name": "xAI Grok (API)",
+      "blurb": "Grok chat apps can be free, but the developer API usually needs paid xAI credits.",
+      "whyEasy": "Only use this if you already bought xAI API credits. For free setup pick Gemini or Groq instead.",
+      "guide": [
+        "Open the xAI console and sign in.",
+        "Add billing / credits if the console requires it.",
+        "Create an API key (starts with xai-) and paste below."
+      ],
+      "registrationUrl": "https://console.x.ai/",
+      "keysUrl": "https://console.x.ai/",
+      "steps": [
+        "Open the xAI API console (not only the Grok consumer app).",
+        "API access normally needs credits — free Grok chat ≠ free API.",
+        "Create a key (xai-…) only after billing allows API calls."
+      ],
+      "keyHint": "xai-…"
+    },
+    {
+      "id": "huggingface",
+      "kind": "builtin",
+      "providerId": "huggingface",
+      "badge": "free",
+      "name": "Hugging Face",
+      "blurb": "Free token; rate limits apply. Use router OpenAI-compatible API.",
+      "registrationUrl": "https://huggingface.co/join",
+      "keysUrl": "https://huggingface.co/settings/tokens",
+      "steps": [
+        "Create a Hugging Face account.",
+        "Settings → Access Tokens → New token (read is enough to start).",
+        "Paste the token (starts with hf_)."
+      ],
+      "keyHint": "hf_…"
+    },
+    {
+      "id": "cerebras",
+      "kind": "custom",
+      "badge": "free",
+      "name": "Cerebras",
+      "blurb": "Free tier with very fast inference.",
+      "registrationUrl": "https://cloud.cerebras.ai/",
+      "keysUrl": "https://cloud.cerebras.ai/",
+      "steps": [
+        "Sign up on Cerebras Cloud.",
+        "Create an API key in the dashboard.",
+        "Paste the key below."
+      ],
+      "keyHint": "API key",
+      "custom": {
+        "slug": "cerebras",
+        "label": "Cerebras",
+        "base": "https://api.cerebras.ai/v1",
+        "defaultModel": "llama-3.3-70b",
+        "models": ["llama-3.3-70b", "llama3.1-8b"]
+      }
+    },
+    {
+      "id": "ollama",
+      "kind": "local",
+      "badge": "local",
+      "name": "Ollama (on this phone)",
+      "blurb": "Fully free via Termux — no cloud key. Needs Ollama or an OpenAI-compatible local server.",
+      "registrationUrl": "",
+      "keysUrl": "",
+      "steps": [
+        "In Termux (with forge-termux-agent running): install/run a local OpenAI-compatible server, or use a PC on your LAN.",
+        "Default assumes http://127.0.0.1:11434/v1 (Ollama).",
+        "Leave API key blank or use ollama — then Save & test."
+      ],
+      "keyHint": "(optional)",
+      "allowEmptyKey": true,
+      "custom": {
+        "slug": "ollama",
+        "label": "Ollama local",
+        "base": "http://127.0.0.1:11434/v1",
+        "defaultModel": "llama3.2",
+        "models": ["llama3.2", "qwen2.5", "mistral"]
+      }
+    },
+    {
+      "id": "openai",
+      "kind": "builtin",
+      "providerId": "openai",
+      "badge": "paid",
+      "name": "OpenAI",
+      "blurb": "Official OpenAI API. Requires billing on most accounts.",
+      "registrationUrl": "https://platform.openai.com/signup",
+      "keysUrl": "https://platform.openai.com/api-keys",
+      "steps": [
+        "Sign up / log in to OpenAI Platform.",
+        "Create a secret key.",
+        "Paste it (starts with sk-)."
+      ],
+      "keyHint": "sk-…"
+    }
+  ]
+}

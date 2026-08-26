@@ -54,6 +54,8 @@ echo "  stamped forge-build.json"
 
 # Ensure www/index.html parity with assets (guarantee before build).
 cp -f "$WWW/index.html" "$ASSETS/index.html"
+# Turn-key config ships as an asset (host fetches it locally + remote git URL).
+[ -f "$WWW/turnkey-config.json" ] && cp -f "$WWW/turnkey-config.json" "$ASSETS/turnkey-config.json"
 for f in cordova.js cordova_plugins.js; do
   [ -f "$WWW/$f" ] && cp -f "$WWW/$f" "$ASSETS/$f"
 done
