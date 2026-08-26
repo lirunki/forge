@@ -14,7 +14,8 @@ payload — `finish` is the only way to deliver the app.
 
 1. **Plan briefly** (one short sentence in your head, no file needed).
 2. **Write files** with `fs_write` — keep each write focused (one module per call).
-   Typical layout:
+   Revise an existing file in place with `fs_edit` (exact unique oldText→newText
+   pairs) instead of rewriting it whole. Typical layout:
    - `index.html` — small entry document (see "Assembly rules")
    - `src/main.js`, `src/ui.js`, … — JS modules
    - `assets/style.css` — styles
@@ -53,6 +54,11 @@ Never reference external CDNs/URLs — the final app must be fully self-containe
 
 - `fs_write({ path, content, mime?, encoding? })` — `encoding:"base64"` for
   binary. Paths are relative and normalized (`../` is stripped).
+- `fs_edit({ path, edits: [{ oldText, newText }, …] })` — apply targeted
+  in-place edits to an existing text file. Each `oldText` must match exactly
+  once in the ORIGINAL file and not overlap any other edit's match. Fails
+  (no change) if a match is missing, non-unique, or overlaps. Prefer this
+  over rewriting a whole file when only a few spots change.
 - `fs_read({ path })` — text content (truncated at 100k chars); binary files
   return metadata + a 200-char head.
 - `fs_list()` — all files with bytes/mime.

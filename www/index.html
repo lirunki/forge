@@ -19297,6 +19297,43 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           if (!files.delete(path)) return { ok: false, error: 'no such file: ' + path };
           return { ok: true, deleted: path };
         },
+        edit(p, edits) {
+          const path = builderNormPath(p);
+          const f = files.get(path);
+          if (!f) return { ok: false, error: 'no such file: ' + path };
+          if (f.b64) return { ok: false, error: 'cannot edit binary file: ' + path };
+          if (!Array.isArray(edits) || !edits.length) return { ok: false, error: 'fs_edit: edits must be a non-empty array' };
+          const orig = f.data;
+          const ranges = [];
+          for (let i = 0; i < edits.length; i++) {
+            const e = edits[i];
+            if (!e || typeof e !== 'object') return { ok: false, error: 'fs_edit: edits[' + i + '] must be an object' };
+            const oldText = e.oldText;
+            const newText = e.newText;
+            if (typeof oldText !== 'string' || !oldText.length) return { ok: false, error: 'fs_edit: edits[' + i + '].oldText is required' };
+            if (typeof newText !== 'string') return { ok: false, error: 'fs_edit: edits[' + i + '].newText must be a string' };
+            const idx = orig.indexOf(oldText);
+            if (idx === -1) return { ok: false, error: 'fs_edit: edits[' + i + '].oldText not found in ' + path };
+            const next = orig.indexOf(oldText, idx + 1);
+            if (next !== -1) return { ok: false, error: 'fs_edit: edits[' + i + '].oldText is not unique (' + (orig.split(oldText).length - 1) + ' matches) in ' + path };
+            ranges.push({ start: idx, end: idx + oldText.length, newText });
+          }
+          ranges.sort((a, b) => a.start - b.start);
+          for (let i = 1; i < ranges.length; i++) {
+            if (ranges[i].start < ranges[i - 1].end) return { ok: false, error: 'fs_edit: edits[' + i + '] overlaps edits[' + (i - 1) + '] in ' + path };
+          }
+          let data = orig;
+          for (let i = ranges.length - 1; i >= 0; i--) {
+            const r = ranges[i];
+            data = data.slice(0, r.start) + r.newText + data.slice(r.end);
+          }
+          if (data.length > BUILDER_FS_MAX_FILE_BYTES) return { ok: false, error: 'file too large after edits (' + data.length + ' > ' + BUILDER_FS_MAX_FILE_BYTES + ' bytes)' };
+          const prevBytes = orig.length;
+          if (totalBytes() - prevBytes + data.length > BUILDER_FS_MAX_TOTAL_BYTES)
+            return { ok: false, error: 'workspace total-size limit reached after edits' };
+          files.set(path, { data, mime: f.mime, b64: false, updatedAt: Date.now() });
+          return { ok: true, path, bytes: data.length, editsApplied: ranges.length, delta: data.length - prevBytes };
+        },
         snapshot: () => [...files.entries()].map(([path, f]) => ({ path, data: f.data, mime: f.mime, b64: !!f.b64 })),
       };
     }
@@ -19508,6 +19545,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       { type: 'function', function: { name: 'fs_delete', description: 'Delete a workspace file.', parameters: { type: 'object', properties: {
         path: { type: 'string' },
       }, required: ['path'] } } },
+      { type: 'function', function: { name: 'fs_edit', description: 'Apply targeted text edits to an existing workspace file. Each edit replaces an exact, unique, non-overlapping text match. Fails if oldText is missing, not unique, or edits overlap — read the file first with fs_read.', parameters: { type: 'object', properties: {
+        path: { type: 'string', description: 'Existing workspace file to edit' },
+        edits: { type: 'array', description: 'Ordered list of exact-match replacements', items: { type: 'object', properties: {
+          oldText: { type: 'string', description: 'Exact text to match in the ORIGINAL file (must be unique; no overlaps with other edits)' },
+          newText: { type: 'string', description: 'Replacement text' },
+        }, required: ['oldText', 'newText'] } },
+      }, required: ['path', 'edits'] } } },
       { type: 'function', function: { name: 'run_js', description: 'Run JavaScript in a sandboxed worker over the workspace: api.readText/readBase64/write/list/print. Offline, no DOM, 10s limit. Use to compute/generate/validate data files.', parameters: { type: 'object', properties: {
         code: { type: 'string', description: 'JS body; may use await. Writes via api.write(path, data, mime, b64) land back in the workspace.' },
       }, required: ['code'] } } },
@@ -19564,6 +19608,11 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         case 'fs_delete': {
           const r = fs.delete(a.path);
           if (r.ok) loopStatus('fs_delete ' + r.deleted, 'info', 'del');
+          return r;
+        }
+        case 'fs_edit': {
+          const r = fs.edit(a.path, a.edits);
+          if (r.ok) loopStatus('fs_edit ' + r.path + ' · ' + r.editsApplied + ' edits · ' + (r.bytes / 1024).toFixed(1) + 'k', 'info', 'write');
           return r;
         }
         case 'run_js': {

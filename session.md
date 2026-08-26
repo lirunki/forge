@@ -2287,3 +2287,72 @@ Smoke:
 [ ] Advanced: no pill row under Model; typing filters combobox entries; custom ids still accepted
 [ ] Max generation time / Max output tokens fields are white text on dark background
 ```
+
+## Agentic builder: fs_edit tool — in-place text edits (2026-08-26)
+
+**2.7.28 / versionCode 158** (from 2.7.26/156). Host-only, no native Java.
+
+### Why
+The agentic builder loop could only *write whole files* (`fs_write`) — revising a
+module meant resending the entire file, wasting tokens and risking truncation on
+big files. `fs_edit` lets the model patch exact regions of an existing workspace
+file with a handful of small `oldText→newText` replacements.
+
+### Signature
+```js
+fs_edit({
+  path: string,                  // existing workspace file (text only)
+  edits: Array<{
+    oldText: string,             // exact text to match in the ORIGINAL file
+                                 //   (must be unique; no overlaps with other edits)
+    newText: string,             // replacement text
+  }>,
+})
+// → { ok:true, path, bytes, editsApplied, delta }
+//   { ok:false, error } on any failure (missing match / non-unique / overlap /
+//    binary file / missing file / empty edits) — no mutation on failure
+```
+
+### Semantics (made robust)
+- All edits are validated against the **ORIGINAL** text before any change. A
+  failure on edit `i` aborts the whole call with **no mutation** (atomic).
+- `oldText` must match **exactly once** in the original file (non-unique →
+  rejected with the match count).
+- Match ranges must **not overlap** (sorted by start, checked pairwise).
+- Edits apply by **position order** (descending), not array order, so the
+  model can hand them in any order and indices stay valid.
+- Binary files (base64 workspace entries) are refused with a clear error.
+- `newText: ""` is a valid deletion (removes the matched span).
+- Enforces the same per-file (10 MB) and workspace-total (64 MB) caps as
+  `fs_write`; `updatedAt` refreshed.
+
+### Where it landed
+| File | Change |
+|---|---|
+| `www/index.html` (+ assets sync) | `edit(p, edits)` method on `builderNewFs()`; `fs_edit` entry in `BUILDER_TOOLS`; `case 'fs_edit'` in `builderExecTool` (logs `fs_edit path · N edits · Xk` via `loopStatus` 'write'/📄) |
+| `www/LOOP.md` (+ assets sync) | Tool reference: `fs_edit` documented; workflow note “revise in place with fs_edit instead of rewriting whole” |
+| `docs/api.md` | Builder section lists `fs_write / fs_edit / fs_read / fs_list / fs_delete` with one-line semantics; baseline bumped |
+| `android/app/build.gradle`, `package.json`, `docs/tools.md` | version 2.7.26/156 → **2.7.28/158** |
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (syntax, www≡assets parity incl.
+  LOOP.md, backtick sanity, 1 raw `</script>`, 28 host tools, docs baselines
+  2.7.28/158)
+- 11-case functional unit test of the extracted `edit()` method: multi-edit,
+  missing match, non-unique, overlap, binary refusal, empty edits, missing
+  file, deletion span, enlarging edit, no-mutation-on-failure, out-of-order
+  edits — all correct
+- Both flavor debug APKs built; APK contains `fs_edit` in `LOOP.md` (2×) and
+  `index.html` (10×: tool def, handler, workspace method, loopStatus, docs)
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.28 (158) · cb164ba
+[ ] Flag agenticLoop ON (capable provider) → forge a multi-file app → console
+    shows fs_edit path · N edits · Xk rows between fs_write rounds
+[ ] Ask the model (in a follow-up refine) to tweak one function via fs_edit →
+    only the targeted region changes; file size delta reported
+[ ] Bad oldText (missing/non-unique/overlap) → console shows the clear error,
+    file unchanged — model adapts on next round
+[ ] Classic path (flag OFF or model skips read_loop_md) unchanged
+```
