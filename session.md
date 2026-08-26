@@ -2426,3 +2426,69 @@ Smoke (device pending — no adb at build time):
 [ ] Extend/Fail popup, if visible, hides immediately on Stop
 [ ] Reforge Stop → 'Reforge cancelled' fast
 ```
+
+## Stop confirmation + abandon (discard late in-flight results) (2026-08-26)
+
+**2.7.30 / versionCode 160** (same versionCode; host-only refinement of the
+Stop path above). Host-only, no native Java.
+
+### What the user asked for
+1. **Confirmation dialog on the Stop button** so the user can change their mind
+   (a stray tap no longer kills a 2-minute build).
+2. **Abandon the current LLM query the moment Stop is confirmed.** The native
+   HTTP may continue (a `CapacitorHttp.request` in flight can't be cancelled
+   from JS), but if we abandon it + clean up all the trigger events, it's as
+   good as aborted for the user experience.
+
+### What landed (`www/index.html` + assets sync)
+
+| Piece | Detail |
+|---|---|
+| `forgeConfirmDialog({title,body,okLabel,okClass})` | New promise-returning confirm sheet (Cancel / Ok), reuses the `.tour-overlay`/`.tour-card` pattern. Ok button styled `.btn small danger` for the destructive action. |
+| Stop button | Tapping grey Stop while busy now opens the confirm (`chat.stopTitle` / `chat.stopBody` / `chat.stopOk`); Cancel returns to the busy state unchanged, confirming calls `abandonCurrentGeneration()`. |
+| `abandonCurrentGeneration()` | The "abandon" primitive. Sets `genAbandoned=true`, calls `abortAllLlmQueries()` (the 5-surface abort from the prior land), stops the cycling ticker (`activeForgeProgress.stop()`), clears the progress feed, restores the Forge button to idle (`setBusy(false)`), and does **mode-specific** user-facing cleanup: **forge** → `addMessage('assistant','Stopped.')`; **reforge** → restore the pre-reforge preview snapshot + `setPreviewStatus('Reforge cancelled')`. The UI is fully detached from the in-flight task immediately. |
+| **Late-result discard** (`genAbandoned` gate) | `onSend`/reforge `try`/`catch` now gate on `const stale = genAbandoned \|\| myToken !== genToken`. A stale generation's late-arriving result (native HTTP that finally completed) is **discarded** — never `loadPreview`/`addMessage`/`showTab`, never a duplicate "Stopped." message (the catch only logs). |
+| **Generation token** (`genToken`) | Monotonically incremented at the start of each forge/reforge. The `finally` only mutates shared state (`setBusy`/`abortController`/`bgStop`/`clearForgeProgress`/`genMode`) when `myToken === genToken` — a **stale** finally (Stop → immediately send a new prompt) skips the reset so it cannot clobber the newer generation's `busy=true`. Local-safe cleanup (`watchdog.stop()` idempotent, the local `forgeProgress.stop()`) still runs. |
+| Watchdog "Fail now" | Routed through `abandonCurrentGeneration()` (the popup is itself the confirm); gains the full 5-surface abort + UI detach (previously only aborted `abortController`). `genFailedByTimeout=true` first so the mode message reads as the time-limit variant. |
+| i18n | en keys `chat.stopTitle`/`stopBody`/`stopOk` added; other langs fall back to en via `tf()` (established pattern). |
+
+### The race this guards
+Naïve "abandon" has a classic late-arrival race: user stops gen A → UI resets →
+user sends a new prompt (gen B starts, `busy=true`) → gen A's native HTTP
+finally resolves → A's `finally` runs `setBusy(false)` + `loadPreview(A)` and
+clobbers B. The `genToken` guard (A's finally skips the reset because
+`myToken !== genToken`) + the `stale` gate (A's try discards because
+`myToken !== genToken`) close it: A's late result is ignored and B's state is
+untouched.
+
+### Caveat (unchanged from prior land)
+A native `CapacitorHttp.request` already in flight runs to its readTimeout —
+that's irreducible from JS. The abandon makes the *user experience* instant
+(button idle, "Stopped." shown, progress cleared) and guarantees the late
+response is discarded; it does not kill the native socket. The streaming path
+(`fetch(url,{signal})` + `reader.read()`, which Forge-it uses) aborts promptly
+as before.
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (2.7.30/160, parity, 28 tools)
+- 10/10 race-discard unit tests pass: normal load, stream-abort msg, abandon+
+late-resolve discard, abandon+late-reject no-dup-msg, **Stop→new-prompt race**
+(A discarded, B owns state, A finally skipped), **in-flight B keeps busy=true**
+when A finally runs, consecutive normals both load
+- Both flavor debug APKs built; APK contains `forgeConfirmDialog`,
+  `abandonCurrentGeneration`, `let genToken`, the `stale` gate, `chat.stopTitle`
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.30 (160) · f980a04
+[ ] Forge it a big app → tap grey Stop → confirm dialog (Stop generation?) →
+    Cancel → generation CONTINUES (button back to grey Stop, build proceeds)
+[ ] Same → confirm Stop → UI resets to idle immediately, chat shows 'Stopped.';
+    the in-flight request, when it eventually completes, does NOT load a preview
+    or switch tabs (discarded)
+[ ] Stop → immediately type a new prompt → Forge it → new build runs; the OLD
+    build's late result is discarded (no clobber: new build's preview is what lands)
+[ ] Reforge → Stop confirm → preview restored to original, 'Reforge cancelled'
+[ ] Watchdog Extend/Fail popup → Fail now → same abandon behavior (no extra confirm)
+[ ] Console: 'generation abandoned — UI detached from in-flight request'
+```

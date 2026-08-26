@@ -1846,6 +1846,9 @@ termux-reload-settings</div>
     "chat.send": "Forge it",
     "chat.stop": "Stop",
     "chat.stopped": "Stopped.",
+    "chat.stopTitle": "Stop generation?",
+    "chat.stopBody": "Stop the current build? Any in-flight request is abandoned and the UI resets to idle.",
+    "chat.stopOk": "Stop",
     "chips.dark": "Dark mode",
     "chips.notify": "Notifications",
     "chips.perms": "Permission pack",
@@ -5963,6 +5966,18 @@ termux-reload-settings</div>
     let currentApp = null;
     let abortController = null;
     let busy = false;
+    // Generation token: incremented at the start of each forge/reforge so a
+    // late settle of an ABANDONED generation cannot clobber a newer one's state.
+    let genToken = 0;
+    // True after the user confirms Stop — gates result handling so a late-arriving
+    // (uncancellable native HTTP) response is discarded instead of loaded.
+    let genAbandoned = false;
+    // 'forge' | 'reforge' | null — what the active generation is, so the Stop
+    // confirm can do mode-specific UI cleanup (chat msg vs preview restore).
+    let genMode = null;
+    // Ref to the active forge-progress ticker so abandon can stop it immediately
+    // (the const is local to onSend/reforge; published here for the stop path).
+    let activeForgeProgress = null;
     /** Optional provider override for a single host AI call (mini-app provider menu). */
     let aiCallContext = null;
 
@@ -19185,47 +19200,72 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       setPreviewStatus(`Reforging (${modeLabel}, ${toolsLabel}) with latest ForgeHost…`, '');
       setBusy(true);
       abortController = new AbortController();
+      const myToken = ++genToken;
+      genAbandoned = false;
+      genMode = 'reforge';
       const watchdog = startGenWatchdog('Reforge');
       genFailedByTimeout = false;
 
       try {
         savePrefs();
         const { app: next, message } = await reforgeAppWithAi(app, { wantCar, tools: toolSettings });
-        // Preview only — library row unchanged until Save
-        currentApp = next;
-        loadPreview(next);
-        setReforgeDirty(true);
-        genLog('info', 'reforge done · "' + (next.title || next.id) + '" · html ' + (next.html.length / 1024).toFixed(1) + 'k chars');
-        setPreviewStatus(message + ' · Save to keep · Discard reforge to restore', 'ok');
-        setLibStatus(t('reforge.donePreview', { name: next.title }), 'ok');
-        try { setPreviewStatus(t('reforge.ready'), 'ok'); } catch (_) {}
-        // Also drop a short note in Chat for transparency
-        try {
-          addMessage(
-            'assistant',
-            `🔨 Reforged “${next.title}” (${wantCar ? 'AA-compat' : 'Standard'}). Review the App tab, then **Save** to overwrite the library copy, or **Discard reforge** to restore the previous version.`
-          );
-        } catch (_) {}
-      } catch (e) {
-        if (e?.name === 'AbortError') genLog('warn', 'reforge aborted' + (genFailedByTimeout ? ' (time limit)' : ''));
-        else genLog('error', 'reforge failed: ' + (e?.message || e));
-        const msg = e?.name === 'AbortError'
-          ? (t('reforge.cancelled') + (genFailedByTimeout ? ' (time limit)' : ''))
-          : (e?.message || String(e));
-        setPreviewStatus(msg, 'err');
-        setLibStatus(msg, 'err');
-        // Restore snapshot into preview if we still have original
-        if (pendingReforgeOriginal?.html) {
-          loadPreview({ ...pendingReforgeOriginal });
-          currentApp = { ...pendingReforgeOriginal };
+        // Stale = user abandoned this reforge OR a newer generation started while
+        // this native (uncancellable) request was still in flight. Either way
+        // discard the late result — don't touch preview/library.
+        const stale = genAbandoned || myToken !== genToken;
+        if (stale) {
+          genLog('info', 'reforge result discarded (' + (genAbandoned ? 'abandoned' : 'stale') + ') · html ' + (next?.html?.length / 1024).toFixed(1) + 'k chars');
+        } else {
+          // Preview only — library row unchanged until Save
+          currentApp = next;
+          loadPreview(next);
+          setReforgeDirty(true);
+          genLog('info', 'reforge done · "' + (next.title || next.id) + '" · html ' + (next.html.length / 1024).toFixed(1) + 'k chars');
+          setPreviewStatus(message + ' · Save to keep · Discard reforge to restore', 'ok');
+          setLibStatus(t('reforge.donePreview', { name: next.title }), 'ok');
+          try { setPreviewStatus(t('reforge.ready'), 'ok'); } catch (_) {}
+          // Also drop a short note in Chat for transparency
+          try {
+            addMessage(
+              'assistant',
+              `🔨 Reforged “${next.title}” (${wantCar ? 'AA-compat' : 'Standard'}). Review the App tab, then **Save** to overwrite the library copy, or **Discard reforge** to restore the previous version.`
+            );
+          } catch (_) {}
         }
-        clearReforgePending();
-        try { addMessage('assistant', t('reforge.failed', { msg: msg })); } catch (_) {}
+      } catch (e) {
+        const stale = genAbandoned || myToken !== genToken;
+        if (stale) {
+          // abandon already restored the preview + showed the cancel message
+          // (or a newer gen took over) — never add a duplicate message.
+          genLog('info', 'reforge ' + (genAbandoned ? 'abandoned' : 'stale') + ' task settled: ' + (e?.name || 'resolved'));
+        } else {
+          if (e?.name === 'AbortError') genLog('warn', 'reforge aborted' + (genFailedByTimeout ? ' (time limit)' : ''));
+          else genLog('error', 'reforge failed: ' + (e?.message || e));
+          const msg = e?.name === 'AbortError'
+            ? (t('reforge.cancelled') + (genFailedByTimeout ? ' (time limit)' : ''))
+            : (e?.message || String(e));
+          setPreviewStatus(msg, 'err');
+          setLibStatus(msg, 'err');
+          // Restore snapshot into preview if we still have original
+          if (pendingReforgeOriginal?.html) {
+            loadPreview({ ...pendingReforgeOriginal });
+            currentApp = { ...pendingReforgeOriginal };
+          }
+          clearReforgePending();
+          try { addMessage('assistant', t('reforge.failed', { msg: msg })); } catch (_) {}
+        }
       } finally {
         watchdog.stop();
-        setBusy(false);
-        abortController = null;
-        try { await bgStop(); } catch (_) {}
+        // Only mutate shared generation state if no newer generation took over
+        // (Stop-then-immediately-start-another race). A stale finally must not
+        // reset busy/abortController/bgStop of the newer generation.
+        if (myToken === genToken) {
+          setBusy(false);
+          abortController = null;
+          genAbandoned = false;
+          genMode = null;
+          try { await bgStop(); } catch (_) {}
+        }
       }
     }
 
@@ -19873,18 +19913,35 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       addMessage('user', userText, { attachments });
       setBusy(true);
       abortController = new AbortController();
+      const myToken = ++genToken;
+      genAbandoned = false;
+      genMode = 'forge';
       const forgeProgress = startForgeProgress();
+      activeForgeProgress = forgeProgress;
       const watchdog = startGenWatchdog('Forge');
       genFailedByTimeout = false;
 
       try {
         const { app, message } = await forgeApp(userText, attachments, (s) => forgeProgress.status(s));
-        currentApp = app;
-        addMessage('assistant', message + '\n\n' + t('chat.openAppTab', { name: app.title }));
-        loadPreview(app);
-        showTab('preview');
+        // Stale = user abandoned this generation OR a newer one started while
+        // this native (uncancellable) request was still in flight. Either way
+        // discard the late result — don't load/preview, don't clobber the new gen.
+        const stale = genAbandoned || myToken !== genToken;
+        if (stale) {
+          genLog('info', 'forge result discarded (' + (genAbandoned ? 'abandoned' : 'stale') + ') · html ' + (app?.html?.length / 1024).toFixed(1) + 'k chars');
+        } else {
+          currentApp = app;
+          addMessage('assistant', message + '\n\n' + t('chat.openAppTab', { name: app.title }));
+          loadPreview(app);
+          showTab('preview');
+        }
       } catch (err) {
-        if (err?.name === 'AbortError') {
+        const stale = genAbandoned || myToken !== genToken;
+        if (stale) {
+          // abandon already showed the stop message + reset UI (or a newer gen
+          // took over); just log the late settle — never add a duplicate message.
+          genLog('info', 'forge ' + (genAbandoned ? 'abandoned' : 'stale') + ' task settled: ' + (err?.name || 'resolved'));
+        } else if (err?.name === 'AbortError') {
           genLog('warn', 'forge aborted' + (genFailedByTimeout ? ' (time limit)' : ''));
           addMessage('assistant', genFailedByTimeout ? t('chat.genTimeoutMsg') : t('chat.stopped'));
         } else {
@@ -19894,10 +19951,18 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       } finally {
         watchdog.stop();
         forgeProgress.stop();
-        clearForgeProgress();
-        setBusy(false);
-        abortController = null;
-        bgStop();
+        if (activeForgeProgress === forgeProgress) activeForgeProgress = null;
+        // Only mutate shared generation state if no newer generation took over
+        // (Stop-then-immediately-send-a-new-prompt race). A stale finally must
+        // NOT reset busy/abortController/bgStop of the new generation.
+        if (myToken === genToken) {
+          clearForgeProgress();
+          setBusy(false);
+          abortController = null;
+          genAbandoned = false;
+          genMode = null;
+          bgStop();
+        }
       }
     }
 
@@ -22041,8 +22106,18 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     }
 
     // ——— Events ———
-    el.btnSend?.addEventListener('click', () => {
-      if (busy) { abortAllLlmQueries(); return; }
+    el.btnSend?.addEventListener('click', async () => {
+      if (busy) {
+        // Confirm before abandoning — user can change their mind.
+        const ok = await forgeConfirmDialog({
+          title: t('chat.stopTitle'),
+          body: tf('chat.stopBody', 'Stop the current build? Any in-flight request is abandoned and the UI resets to idle.'),
+          okLabel: t('chat.stopOk'),
+          okClass: 'btn small danger',
+        });
+        if (ok) abandonCurrentGeneration();
+        return;
+      }
       onSend();
     });
 
@@ -22072,6 +22147,72 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       // 5. stop the generation watchdog so the Extend/Fail card + 1s tick stop
       //    immediately (forgeApp/reforge finally calls .stop() again — idempotent)
       try { genWatchdog?.stop(); } catch (_) {}
+    }
+
+    /** Small promise-returning confirm sheet (Cancel / Ok). Reuses the
+     *  tour-overlay pattern. okClass optional (e.g. 'btn small danger'). */
+    function forgeConfirmDialog({ title, body, okLabel, cancelLabel, okClass }) {
+      return new Promise((resolve) => {
+        try {
+          const wrap = document.createElement('div');
+          wrap.className = 'tour-overlay';
+          wrap.setAttribute('role', 'dialog');
+          wrap.setAttribute('aria-modal', 'true');
+          wrap.innerHTML =
+            '<div class="tour-card">' +
+              '<h2></h2>' +
+              '<p></p>' +
+              '<div class="tour-actions" style="margin-top:0.4rem">' +
+                '<button class="btn secondary small" type="button" data-act="cancel"></button>' +
+                '<button class="' + (okClass || 'btn small') + '" type="button" data-act="ok"></button>' +
+              '</div>' +
+            '</div>';
+          wrap.querySelector('h2').textContent = String(title || '');
+          wrap.querySelector('p').textContent = String(body || '');
+          wrap.querySelector('[data-act="cancel"]').textContent = String(cancelLabel || t('common.cancel'));
+          const okBtn = wrap.querySelector('[data-act="ok"]');
+          okBtn.textContent = String(okLabel || 'OK');
+          const finish = (v) => { try { wrap.remove(); } catch (_) {} resolve(v); };
+          wrap.addEventListener('click', (ev) => { if (ev.target === wrap) finish(false); });
+          wrap.querySelector('[data-act="cancel"]').onclick = () => finish(false);
+          okBtn.onclick = () => finish(true);
+          document.body.appendChild(wrap);
+          try { okBtn.focus(); } catch (_) {}
+        } catch (e) { resolve(false); }
+      });
+    }
+
+    /** Abandon the current generation immediately — the user confirmed Stop.
+     *  Aborts all LLM queries AND detaches the UI from the in-flight task so
+     *  the app feels stopped right now, even if a native CapacitorHttp request
+     *  is still running (it can't be cancelled from JS; its late result is
+     *  discarded via the genAbandoned gate in onSend/reforge's try/catch). */
+    function abandonCurrentGeneration() {
+      genAbandoned = true;
+      abortAllLlmQueries();
+      // stop the cycling ticker + clear the progress feed immediately
+      try { activeForgeProgress?.stop(); } catch (_) {}
+      activeForgeProgress = null;
+      clearForgeProgress();
+      // mode-specific user-facing cleanup so it looks "stopped" right now
+      if (genMode === 'reforge') {
+        const msg = t('reforge.cancelled') + (genFailedByTimeout ? ' (time limit)' : '');
+        try { setPreviewStatus(msg, 'err'); } catch (_) {}
+        try { setLibStatus(msg, 'err'); } catch (_) {}
+        try {
+          if (pendingReforgeOriginal?.html) {
+            loadPreview({ ...pendingReforgeOriginal });
+            currentApp = { ...pendingReforgeOriginal };
+          }
+        } catch (_) {}
+        try { clearReforgePending(); } catch (_) {}
+      } else {
+        try { addMessage('assistant', genFailedByTimeout ? t('chat.genTimeoutMsg') : t('chat.stopped')); } catch (_) {}
+      }
+      // restore the Forge button to idle — the background await's finally will
+      // also call setBusy(false), but only if no newer generation took over
+      setBusy(false);
+      genLog('warn', 'generation abandoned — UI detached from in-flight request');
     }
 
     el.btnAttachImage?.addEventListener('click', () => { if (!busy) pickChatImages(); });
@@ -22343,8 +22484,10 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.btnGenFail?.addEventListener('click', () => {
       genLog('warn', 'user chose Fail now (time limit)');
       genFailedByTimeout = true;
-      genWatchdog?.stop();
-      try { abortController?.abort(); } catch (_) {}
+      // The watchdog popup is itself the confirm — abandon aggressively (also
+      // aborts stream/agent/live-translate + detaches UI; genFailedByTimeout
+      // makes the mode-specific message read as the time-limit variant).
+      abandonCurrentGeneration();
     });
     el.rememberKey?.addEventListener('change', () => {
       if (!el.rememberKey.checked) {
