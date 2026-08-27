@@ -3,14 +3,13 @@
 set -euo pipefail
 PORT="${FORGE_AGENT_PORT:-8787}"
 ROOT="${FORGE_BRIDGE_DIR:-/storage/emulated/0/Download/ForgeBridge}"
-VERSION="1.1.0"
+VERSION="1.2.0"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 mkdir -p "$ROOT/inbox" "$ROOT/outbox"
 
-# Precondition: python must be present — auto-install via pkg when missing.
-# Runs BEFORE --daemon so the install happens in the foreground (the daemon
-# child discards output and would fail silently otherwise).
+# Precondition: Python is deliberately eager. It runs before --daemon so a
+# missing interpreter is visible to the user rather than hidden in nohup.
 if ! command -v python3 >/dev/null && ! command -v python >/dev/null; then
   if ! command -v pkg >/dev/null; then
     echo "python required but pkg not found — install it with: pkg install python" >&2
@@ -27,13 +26,166 @@ if ! command -v python3 >/dev/null && ! command -v python >/dev/null; then
 fi
 PY="$(command -v python3 || command -v python)"
 
+# Stop only an older Forge agent for this root/port. A live agent with the
+# same version is left untouched, making .bashrc auto-start safe and cheap.
+# The mkdir lock also serializes two shells opening at the same time.
+START_LOCK="$ROOT/.agent-start.lock"
+acquire_start_lock() {
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    if mkdir "$START_LOCK" 2>/dev/null; then
+      printf '%s\n' "$$" > "$START_LOCK/pid"
+      trap 'rm -f "$START_LOCK/pid" 2>/dev/null || true; rmdir "$START_LOCK" 2>/dev/null || true' EXIT INT TERM
+      return 0
+    fi
+    # Recover only a demonstrably stale lock; never race a live launcher.
+    local owner=""
+    owner="$(cat "$START_LOCK/pid" 2>/dev/null || true)"
+    if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
+      rmdir "$START_LOCK" 2>/dev/null || true
+    fi
+    sleep 0.1
+  done
+  echo "could not acquire Forge agent start lock; try again" >&2
+  exit 1
+}
+
+agent_process_matches() {
+  local pid="$1" env cmd
+  [ "$pid" != "$$" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  [ -r "/proc/$pid/environ" ] && [ -r "/proc/$pid/cmdline" ] || return 1
+  env="$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null || true)"
+  cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+  [[ "$env" == *"FORGE_BRIDGE_ROOT=$ROOT"* ]] || return 1
+  [[ "$env" == *"FORGE_AGENT_PORT=$PORT"* ]] || return 1
+  [[ "$cmd" == *"python"* ]] || return 1
+  return 0
+}
+
+agent_process_version() {
+  local pid="$1"
+  tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^FORGE_AGENT_VERSION=//p' | head -1
+}
+
+# Last-resort port lookup when agent.json is absent or stale. The returned
+# PIDs are still passed through agent_process_matches before any signal.
+port_agent_pids() {
+  python3 - "$PORT" <<'PY' 2>/dev/null || true
+import glob, os, sys
+try:
+    port = int(sys.argv[1])
+    wanted = format(port, '04X')
+    inodes = set()
+    for name in ('/proc/net/tcp', '/proc/net/tcp6'):
+        try:
+            for line in open(name, encoding='ascii', errors='ignore'):
+                cols = line.split()
+                if len(cols) > 9 and cols[1].rsplit(':', 1)[-1].upper() == wanted:
+                    inodes.add(cols[9])
+        except Exception:
+            pass
+    for proc in glob.glob('/proc/[0-9]*'):
+        pid = proc.rsplit('/', 1)[-1]
+        try:
+            for fd in glob.glob(proc + '/fd/*'):
+                if os.readlink(fd).startswith('socket:[') and os.readlink(fd)[8:-1] in inodes:
+                    print(pid)
+                    break
+        except Exception:
+            pass
+except Exception:
+    pass
+PY
+}
+
+stop_old_agent() {
+  local pid="$1" v="$2"
+  if agent_process_matches "$pid"; then
+    v="$(agent_process_version "$pid")"
+    if [ "$v" = "$VERSION" ]; then
+      echo "forge-termux-agent already running (pid $pid, v$v, port $PORT)"
+      return 0
+    fi
+    echo "stopping old forge-termux-agent (pid $pid, v${v:-unknown})"
+    kill "$pid" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.1
+    done
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+  return 1
+}
+
+ensure_single_agent() {
+  local recorded="" pid="" v=""
+  if [ -r "$ROOT/agent.json" ]; then
+    recorded="$(python3 - "$ROOT/agent.json" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    d = json.load(open(sys.argv[1], encoding='utf-8'))
+    print(d.get('pid', ''))
+except Exception:
+    pass
+PY
+)"
+    if [[ "$recorded" =~ ^[0-9]+$ ]]; then
+      if agent_process_matches "$recorded"; then
+        v="$(agent_process_version "$recorded")"
+        if [ "$v" = "$VERSION" ]; then
+          echo "forge-termux-agent already running (pid $recorded, v$v, port $PORT)"
+          return 0
+        fi
+        stop_old_agent "$recorded" || true
+      fi
+    fi
+  fi
+
+  # Fallback when agent.json is missing/stale: scan processes belonging to
+  # this ForgeBridge root. Do not kill unrelated Python processes.
+  for proc in /proc/[0-9]*; do
+    pid="${proc##*/}"
+    [ "$pid" != "$$" ] || continue
+    if agent_process_matches "$pid"; then
+      v="$(agent_process_version "$pid")"
+      if [ "$v" = "$VERSION" ]; then
+        echo "forge-termux-agent already running (pid $pid, v$v, port $PORT)"
+        return 0
+      fi
+      stop_old_agent "$pid" || true
+    fi
+  done
+
+  # Port fallback: identify listeners on PORT, but only stop them if their
+  # process also has this ForgeBridge root and Python agent identity.
+  for pid in $(port_agent_pids); do
+    [ "$pid" != "$$" ] || continue
+    if agent_process_matches "$pid"; then
+      v="$(agent_process_version "$pid")"
+      if [ "$v" = "$VERSION" ]; then
+        echo "forge-termux-agent already running (pid $pid, v$v, port $PORT)"
+        return 0
+      fi
+      stop_old_agent "$pid" || true
+    fi
+  done
+  return 1
+}
+
 if [[ "${1:-}" == "--daemon" ]]; then
   shift
+  acquire_start_lock
+  if ensure_single_agent; then exit 0; fi
   nohup "$0" "$@" >/dev/null 2>&1 &
   echo "forge-termux-agent daemon pid $! port $PORT"
   exit 0
 fi
 
+# Direct foreground launch also de-duplicates old agents. The daemon child
+# reaches this branch after its parent has performed the check; a second shell
+# therefore cannot create a second listener.
+acquire_start_lock
+if ensure_single_agent; then exit 0; fi
 
 export FORGE_AGENT_PORT="$PORT" FORGE_BRIDGE_ROOT="$ROOT" FORGE_AGENT_VERSION="$VERSION"
 export PREFIX HOME
