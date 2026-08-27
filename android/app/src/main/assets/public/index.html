@@ -12526,6 +12526,109 @@ termux-reload-settings</div>
       return s.trim();
     }
 
+    /**
+     * Readability-style extraction for article/docs/blog pages (the deferred
+     * #10 fix). Uses DOMParser (safe: detached docs don't run scripts) to pick
+     * the main content container, strip boilerplate, and return structured text.
+     * Returns null when the page doesn't look like an article so the caller can
+     * fall back to the plain toolsStripHtml stripper (no regression for non-content).
+     */
+    function toolsExtractReadable(html, maxChars) {
+      let doc = null;
+      try {
+        doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+      } catch (_) { return null; }
+      if (!doc || !doc.body) return null;
+
+      let title = '';
+      try { title = (doc.title || '').trim(); } catch (_) {}
+      let desc = '';
+      try {
+        const m = doc.querySelector('meta[name="description"], meta[property="og:description"]');
+        if (m) desc = (m.getAttribute('content') || '').trim();
+      } catch (_) {}
+
+      // Strip non-content + boilerplate nodes (scripts already inert in
+      // DOMParser results, but removing them keeps text density clean).
+      const REMOVE = 'script,style,noscript,template,nav,footer,aside,header,form,svg'
+        + ',canvas,iframe,button,input,select,textarea,dialog,menu,figure figcaption';
+      try { doc.querySelectorAll(REMOVE).forEach(function (el) { try { el.remove(); } catch (_) {} }); } catch (_) {}
+      try {
+        doc.querySelectorAll(
+          '[class*="sidebar"],[class*="widget"],[class*="cookie"],[class*="banner"],'
+          + '[class*="advert"],[class*="newsletter"],[class*="subscribe"],'
+          + '[id*="sidebar"],[id*="comment"],[id*="advert"],'
+          + '[role="complementary"],[role="banner"],[aria-hidden="true"]'
+        ).forEach(function (el) { try { el.remove(); } catch (_) {} });
+      } catch (_) {}
+
+      // Prefer an explicit main-content container, then score by text density.
+      let root = null;
+      let explicitRoot = false;
+      try {
+        root = doc.querySelector(
+          'article, main, [role="main"], #content, #main-content, #main, '
+          + '.post-content, .article-content, .entry-content, .post-body, '
+          + '.post, .article, .content, .markdown-body'
+        );
+        if (root) explicitRoot = true;
+      } catch (_) {}
+      if (!root) {
+        let best = null, bestScore = 0;
+        try {
+          const cand = doc.body.querySelectorAll('div, section, article');
+          cand.forEach(function (el) {
+            const text = (el.textContent || '').trim();
+            if (text.length < 200) return;
+            let linkText = 0;
+            try { el.querySelectorAll('a').forEach(function (a) { linkText += (a.textContent || '').length; }); } catch (_) {}
+            const linkRatio = text.length ? linkText / text.length : 1;
+            if (linkRatio > 0.5) return; // mostly a nav/list-of-links block
+            const score = text.length * (1 - Math.min(0.5, linkRatio));
+            if (score > bestScore) { bestScore = score; best = el; }
+          });
+        } catch (_) {}
+        root = best || doc.body;
+      }
+
+      // Walk the chosen root, preserving block structure as newlines.
+      let out = '';
+      const blockTags = { p: 1, div: 1, section: 1, article: 1, li: 1, tr: 1,
+        h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, blockquote: 1, pre: 1, td: 1, hr: 1 };
+      function walk(el) {
+        for (let i = 0; i < el.childNodes.length; i++) {
+          const node = el.childNodes[i];
+          if (node.nodeType === 3) { // text node
+            const t = (node.textContent || '').replace(/\s+/g, ' ');
+            if (t.trim()) out += t;
+          } else if (node.nodeType === 1) { // element
+            const tag = (node.tagName || '').toLowerCase();
+            if (tag === 'ul' || tag === 'ol') { out += '\n'; walk(node); out += '\n'; continue; }
+            if (tag === 'br') { out += '\n'; continue; }
+            if (blockTags[tag]) { out += '\n'; walk(node); out += '\n'; continue; }
+            walk(node);
+          }
+        }
+      }
+      try { walk(root); } catch (_) { return null; }
+      let text = String(out || '').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+      // Explicit main containers are trusted: accept any non-empty text. The
+      // scoring-fallback path (no <article>/<main>) keeps a higher floor so
+      // SPA shells / nav fragments don't masquerade as content.
+      const floor = explicitRoot ? 40 : 120;
+      if (!text || text.length < floor) return null;
+
+      // Prepend title if it isn't already echoed at the very start of the body.
+      const head = text.slice(0, Math.max(8, title.length + 5)).replace(/\s+/g, ' ');
+      if (title && !head.toLowerCase().includes(title.slice(0, 40).toLowerCase())) {
+        text = title + '\n\n' + text;
+      }
+      if (desc && !text.toLowerCase().includes(desc.slice(0, 30).toLowerCase())) {
+        text = (text + '\n\n' + desc).trim();
+      }
+      return toolsClampText(text, maxChars);
+    }
+
     async function toolsHttpRequest(url, opts) {
       opts = opts || {};
       if (!/^https?:\/\//i.test(url || '')) throw new Error('Only http(s) URLs allowed');
@@ -12689,9 +12792,18 @@ termux-reload-settings</div>
       } else if (as === 'raw' || as === 'html') {
         body = toolsClampText(raw, maxChars);
       } else {
-        // text: strip html when content looks like markup
+        // text: try readability extraction first (articles/docs/blogs), fall
+        // back to the plain HTML stripper for non-content pages (no regression).
         const looksHtml = /<html[\s>]|<body[\s>]|<div[\s>]/i.test(raw) || /html/i.test(ct);
-        body = toolsClampText(looksHtml ? toolsStripHtml(raw) : raw, maxChars);
+        let bodyText = null;
+        if (looksHtml) {
+          bodyText = toolsExtractReadable(raw, maxChars);
+          if (bodyText == null) bodyText = toolsStripHtml(raw);
+          bodyText = toolsClampText(bodyText, maxChars);
+        } else {
+          bodyText = toolsClampText(raw, maxChars);
+        }
+        body = bodyText;
       }
       return {
         ok: true,
@@ -12699,6 +12811,7 @@ termux-reload-settings</div>
         status: res.status,
         contentType: ct || undefined,
         length: typeof body === 'string' ? body.length : undefined,
+        extracted: as === 'text',
         body,
       };
     }
@@ -12755,7 +12868,7 @@ termux-reload-settings</div>
       },
       {
         name: 'web_fetch',
-        description: 'Fetch an http(s) URL and return text (HTML stripped by default). Use after web_search to read a page.',
+        description: 'Fetch an http(s) URL and return readable text (article/main-content extraction with fallback to plain HTML strip). Use after web_search to read a page.',
         group: 'web', risk: 'safe',
         parameters: {
           type: 'object',

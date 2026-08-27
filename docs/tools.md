@@ -2,7 +2,7 @@
 
 > Canonical source: `HOST_TOOL_REGISTRY` + `HOST_BRIDGE_ALLOW` in `forge/www/index.html`.
 > This file is a human-readable mirror — regenerate when the registry changes.
-> Version baseline: `2.7.32 / versionCode 162` (28 host tools + app-registered tools).
+> Version baseline: `2.7.34 / versionCode 164` (28 host tools + app-registered tools).
 
 The host exposes a tool catalog over `ForgeHost` bridges so chat/agent mini-apps
 gain power as the host grows. Mini-apps call `ForgeHost.tools.list()` to get
@@ -35,7 +35,7 @@ Filter: `tools.list({ riskMax:'confirm' })` returns everything up to and includi
 | name | risk | description |
 |------|------|-------------|
 | `web_search` | safe | Search the public web (Wikipedia + DuckDuckGo). Returns titles, urls, snippets. No API key. `query` (req), `limit` 1–10 (def 5). |
-| `web_fetch` | safe | Fetch an http(s) URL and return text (HTML stripped by default). `url` (req), `maxChars` (def 12000), `as` text\|html\|json\|raw. |
+| `web_fetch` | safe | Fetch an http(s) URL and return readable text (article/main-content extraction with fallback to plain HTML strip). `url` (req), `maxChars` (def 12000), `as` text\|html\|json\|raw. Result also includes `extracted:true` when the readability path ran. |
 
 ### device
 | name | risk | description |
