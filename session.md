@@ -16,7 +16,7 @@ it's all there.
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.6.72 / versionCode 102** (edge-to-edge insets fix, device-verified 2026-08-19; prior 2.6.71/101 decor-listener, 2.6.70/100 attempt, 2.6.69/99 SDK-36 migration, 2.6.68/98 insets v1, 2.6.67/97 timeouts, 2.6.66/96 FGS keep-alive, 2.6.61/91 Play split, 2.6.60/90 slim SYSTEM_PROMPT)
+| Version | **2.7.38 / versionCode 168** (agentic Reforge + session-persistent workspace + agenticLoop in Drive backup; prior 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -24,7 +24,7 @@ it's all there.
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | **2026-08-19 — 2.6.72/102 edge-to-edge insets fix (margins not padding), DEVICE-VERIFIED** (commit `e2b77a2`) · 2026-08-18 — 2.6.69/99 SDK-36 migration (`5293411`) · 2026-08-18 — 2.6.66/96 FGS keep-alive
+| **Last rebuild** | **2026-08-26 — 2.7.38/168 agentic Reforge + session workspace + agenticLoop backup** (pre-commit sha `61ef99e`; rebuild after commit re-stamps) · 2026-08-26 — 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
 | **Release artifacts** | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`) · GPL-3.0 · upload-key signed
 
 ### Locked product baseline
@@ -2491,4 +2491,107 @@ Smoke (device pending — no adb at build time):
 [ ] Reforge → Stop confirm → preview restored to original, 'Reforge cancelled'
 [ ] Watchdog Extend/Fail popup → Fail now → same abandon behavior (no extra confirm)
 [ ] Console: 'generation abandoned — UI detached from in-flight request'
+```
+
+## Remote-updatable turn-key config; remove Ox Alpha (no longer free) (2026-08-26)
+
+**2.7.32 / versionCode 162** (from 2.7.30/160). Host-only, no native Java.
+
+### What changed
+- **`SETUP_PROVIDERS` catalog → `www/turnkey-config.json`** (canonical, git-served; also shipped as an Android asset). The compiled-in `SETUP_PROVIDERS_BUILTIN` JS array in `index.html` is kept byte-deep-equal to the JSON by `forge_check.sh` (new parity step, like `LOOP.md`).
+- **Boot resolution** (`initSetupProviders`): compiled-in → localStorage cache from a prior remote fetch → fresh `GET` of the git raw URL. An open setup wizard re-renders when a newer remote list lands. Malformed/hostile payloads are rejected by `validateSetupConfigPayload` (≤50 entries, kind/field checks); cache/compiled-in is used instead so the wizard never breaks.
+- **Ox Alpha removed** — `stealth/ox-alpha` on cheaperinference is no longer free, so its turn-key card is gone. Stripped from `ai.turnkeyHint` / `boot.aiTip` / `hints.i8` / `setup.turnkeyNote` across en/es/fr/pt/ja/ko.
+- `build_forge.sh` + `release_forge.sh`: sync `turnkey-config.json` to assets.
+- `docs/api.md`: easy-setup remote-config section; baselines → 2.7.32/162.
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.32 (162) · b090660
+[ ] AI tab → Turn-key setup → no Ox Alpha card (Gemini / Groq / Groq + paid Cheaper Inference)
+[ ] Wizard still renders if git fetch fails (falls back to compiled-in/cache)
+[ ] forge_check.sh turnkey-config.json www==assets step PASS
+```
+
+## web_fetch readability extraction (deferred #10) (2026-08-26)
+
+**2.7.34 / versionCode 164** (from 2.7.32/162). Host-only, no native Java.
+
+Closes deferred item #10 from the 2.6.54 improvement batch (`toolsWebFetch` did raw HTTP get + HTML strip → near-empty on JS-rendered pages).
+
+### What landed
+- `toolsExtractReadable()` — DOMParser-based (safe: detached docs don't run scripts) Readability-style extraction. Strips boilerplate (nav/footer/aside/header/forms/sidebars/ads/`aria-hidden`); prefers an explicit `<article>`/`<main>`/`[role=main]`/`#content`/`.post-content`/`.entry-content` container; falls back to text-density scoring of div/section candidates (`text length * (1 - link ratio)`, rejects >50%-link blocks so nav lists don't win). Walks the chosen root preserving block structure (`p/div/li/h1-6/blockquote/pre`) as newlines; prepends `<title>` + meta/og description if not already in the body.
+- Wired into `web_fetch` `'text'` path: try readability first, fall back to the existing `toolsStripHtml` stripper when the page isn't an article (returns `null` on SPA shells / short non-content). New `'extracted:true'` flag on the result tells callers which path ran. Tool description updated.
+- No regression for non-article pages (stripper path unchanged).
+
+### Verified
+- 16/16 unit tests pass (jsdom): article extraction, SPA-shell rejection, div-soup scoring picks main + excludes sidebar/ads, link-list rejection, short-article acceptance, clamp respected, stripHtml unchanged.
+- `docs/tools.md` + `api.md` baselines → 2.7.34/164.
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.34 (164) · 21207ca
+[ ] Forge Chat: "Fetch this url: <news article>" → web_fetch returns clean article
+    text (extracted:true), not a nav-link soup
+[ ] "Fetch this url: <SPA shell>" → falls back to stripHtml (no extracted flag), no crash
+```
+
+## Idempotent Termux agent startup (2026-08-26)
+
+**2.7.36 / versionCode 166** (from 2.7.34/164). Native assets + Java builtins; no host JS.
+
+### Problem
+The agent (2.7.4) started a fresh daemon on every `.bashrc` auto-start + manual launch — restart churn, and two shells launching at once could race. Re-running install.sh also `cp -f` over a running agent binary (ETXTBSY).
+
+### What landed
+- **Agent v1.1.0 → v1.2.0**; new `FORGE_AGENT_VERSION` env tag identifies the running version.
+- **`ensure_single_agent`** — idempotent startup. A **same-version** live agent for this root/port is a no-op ("already running"); only **older-version** agents are stopped. Three lookup strategies, all guarded by `agent_process_matches` (matches `FORGE_BRIDGE_ROOT` + `FORGE_AGENT_PORT` + python cmdline — **never kills unrelated Python processes**): (1) `agent.json` recorded pid, (2) `/proc` scan for matching env, (3) port-listener scan via `/proc/net/tcp` + fd-inode match (last-resort when `agent.json` is stale).
+- **`acquire_start_lock`** — `mkdir`-based lock serializes concurrent launches (.bashrc auto-start + manual); recovers only demonstrably-stale locks (dead pid). Makes `.bashrc` auto-start safe and cheap.
+- **`install.sh`** — `copy_if_changed` (skip copy when identical → avoids ETXTBSY on a running agent); eager python install moved into `install.sh` too (was agent-only); idempotent `.bashrc` PATH line.
+- Java `TermuxBridgePlugin` builtin strings kept in sync.
+
+### Verified
+- `bash -n` clean on asset + decoded Java builtins; APK contains agent v1.2.0 asset.
+- Gate PASS; both flavor debug APKs built @ 2.7.36/166.
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.36 (166) · 61ef99e
+[ ] Fresh Termux: install.sh + forge-termux-agent --daemon → "already running" on a
+    second launch (same version) — no restart churn
+[ ] Older agent running → launch detects version mismatch → stops old → starts new
+[ ] Two shells launch at once → start lock serializes → one agent wins
+[ ] install.sh re-run while agent live → no ETXTBSY (copy_if_changed skips)
+```
+
+## Agentic Reforge + session-persistent workspace + agenticLoop in Drive backup (2026-08-26)
+
+**2.7.38 / versionCode 168** (from 2.7.36/166). Host-only, no native Java.
+
+Lands the three follow-ups listed under "Not in v1 (follow-ups)" in the 2.7.8 agentic-builder section.
+
+### 1 — Reforge in workspace mode
+`reforgeAppWithAi` calls `runBuilderLoop` when `isAgenticLoopEnabled()`, seeding the workspace with the existing `app.html`. The reforge system prompt gains a `BUILD OPTION (agentic reforge)` paragraph directing the model to `read_loop_md` + use the workspace tools, preserve behavior, then `finish`. The classic fallback (`built.classicRaw`, when the model never opts in) flows into the existing streaming parse path — the Gemini/OAI stream branches now guard on `raw == null` so a builder-produced `classicRaw` is reused rather than re-fetched.
+
+### 2 — Session-persistent workspace
+`activeBuilderFs` / `activeBuilderOwner` (keyed by `currentApp?.id || '__new__'`) replace the per-build ephemeral `Map`. The workspace now **survives refine/Reforge turns for the same app** and is cleared only when **`+`** starts a new Forge environment (`newChat` resets both). `runBuilderLoop` reuses the live fs for the owner and seeds only on a fresh workspace (`!fs.count()`), so a second reforge turn reuses the accumulated files instead of re-seeding.
+
+### 3 — `agenticLoop` flag in Drive settings backup
+`getAgenticLoopMap()` is added to the backup bundle; the restore-merge path persists `remoteAgenticLoop` to `localStorage` + calls `syncAgenticLoopCheckbox()`. Older backups without the field leave local preferences intact. The flag now round-trips through Drive like the other gen settings (was localStorage-only).
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (syntax, www≡assets incl. LOOP.md/turnkey-config.json, backtick sanity, 1 raw `</script>`, 28 host tools, docs baselines 2.7.38/168).
+- `docs/api.md` builder section updated (session-persistent wording + Reforge note); `docs/tools.md` + `api.md` baselines + `package.json` → 2.7.38/168.
+
+Smoke (device pending — no adb at build time):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.38 (168)
+[ ] Flag agenticLoop ON → Reforge an existing app → console: "agentic loop armed" ·
+    workspace seeded with index.html · fs_write/fs_edit rounds · finish assembled
+[ ] Reforge the SAME app again (turn 2) → workspace reused (no re-seed); only deltas
+    written
+[ ] + (new chat) → workspace cleared; next forge/reforge starts fresh
+[ ] Backup → restore on a second device → agenticLoop flag survives (checkbox state
+    restored per provider)
+[ ] Flag OFF → Reforge classic path unchanged (raw == null → streaming parse as before)
+[ ] Classic fallback: model skips read_loop_md → built.classicRaw → existing parse path
 ```

@@ -2,7 +2,7 @@
 
 > Canonical source: `forge/www/index.html` (the `SYSTEM_PROMPT` + `ForgeHost` bridge).
 > This file is a human-readable mirror — regenerate from the host when the bridge changes.
-> Version baseline: `2.7.36 / versionCode 166`.
+> Version baseline: `2.7.38 / versionCode 168`.
 
 `window.ForgeHost` (alias `window.forge`) is injected into every mini-app
 iframe by the host before `ready`. **All host APIs are async (Promises).
@@ -386,8 +386,11 @@ Flow (classic single-shot JSON stays the default path):
 3. Model calls it → `LOOP.md` (shipped as `www/LOOP.md` ≡ asset, fetched at
    runtime) is returned as the tool result and the full builder toolset is
    registered for subsequent rounds (max 24):
-   - `fs_write` / `fs_edit` / `fs_read` / `fs_list` / `fs_delete` — ephemeral per-build
-     workspace (200 files · 10 MB/file · 64 MB total; path-normalized). `fs_edit`
+   - `fs_write` / `fs_edit` / `fs_read` / `fs_list` / `fs_delete` — workspace
+     (200 files · 10 MB/file · 64 MB total; path-normalized). The workspace is
+     **session-persistent**: it survives refine/Reforge turns for the same app
+     (keyed by app id; cleared when a new Forge environment starts), so a
+     follow-up turn reuses the prior files instead of re-seeding. `fs_edit`
      applies ordered exact-match `oldText→newText` replacements to an existing
      text file (each match must be unique and non-overlapping; fails atomically
      on a missing/non-unique/overlapping match).
@@ -406,6 +409,13 @@ Flow (classic single-shot JSON stays the default path):
 
 Errors from tools return to the model as `{ok:false,error}`; exhaustion of
 rounds without `finish` fails with guidance to simplify or turn the flag off.
+
+**Reforge** uses the same loop when the flag is on: the workspace is seeded
+with the existing app's `index.html` (only on a fresh workspace — subsequent
+reforge turns reuse the accumulated files), the system prompt adds a BUILD
+OPTION paragraph directing the model to preserve behavior then `finish`, and
+a classic fallback (`built.classicRaw`) flows into the existing streaming
+parse path unchanged.
 
 ## Easy-setup / turn-key catalog (remote-updatable)
 

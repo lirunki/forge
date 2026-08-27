@@ -8116,6 +8116,7 @@ termux-reload-settings</div>
         profiles: profiles && typeof profiles === 'object' ? profiles : {},
         customProviders: Array.isArray(customProviders) ? customProviders : [],
         knownKeys: Array.isArray(knownKeys) ? knownKeys : [],
+        agenticLoop: getAgenticLoopMap(),
         setupDone: lsGet(LS.setupDone) || '',
         setupProvider: lsGet(LS.setupProvider) || '',
         termuxSetupDone: lsGet(LS.termuxSetupDone) || '',
@@ -8138,6 +8139,7 @@ termux-reload-settings</div>
           setupDone: bundle?.setupDone || '',
           setupProvider: bundle?.setupProvider || '',
           legacy: bundle?.legacy || {},
+          agenticLoop: bundle?.agenticLoop || {},
         });
       } catch (_) {
         return String(Date.now());
@@ -8158,6 +8160,7 @@ termux-reload-settings</div>
       const remoteProfiles = (bundle.profiles && typeof bundle.profiles === 'object') ? bundle.profiles : {};
       const remoteCustoms = Array.isArray(bundle.customProviders) ? bundle.customProviders : [];
       const remoteKeys = Array.isArray(bundle.knownKeys) ? bundle.knownKeys : [];
+      const remoteAgenticLoop = bundle.agenticLoop && typeof bundle.agenticLoop === 'object' ? bundle.agenticLoop : null;
 
       // --- custom OpenAI providers ---
       let customs = getCustomProviders();
@@ -8232,6 +8235,12 @@ termux-reload-settings</div>
       const remember = bundle.rememberKey !== false && bundle.rememberKey !== '0' && bundle.rememberKey !== 0;
       try { localStorage.setItem(LS.remember, remember ? '1' : '0'); } catch (_) {}
       if (el.rememberKey) el.rememberKey.checked = !!remember;
+
+      // Older backups have no agenticLoop field; leave local preferences intact.
+      if (remoteAgenticLoop) {
+        try { localStorage.setItem(LS.agenticLoop, JSON.stringify(remoteAgenticLoop)); } catch (_) {}
+        syncAgenticLoopCheckbox();
+      }
 
       // Ensure every profile key is also in the vault (force even if UI gate would skip)
       try {
@@ -18919,6 +18928,9 @@ Return complete html, not a diff.`;
       }
 
       const userText = buildReforgeUserPrompt(app, { wantCar, tools: toolSettings });
+      if (isAgenticLoopEnabled()) {
+        system += '\n\nBUILD OPTION (agentic reforge): If the existing app is large, call read_loop_md and use the workspace tools. The workspace is seeded with the existing index.html. Preserve behavior, then call finish.';
+      }
       const msgs = [
         { role: 'system', content: system },
         { role: 'user', content: userText },
@@ -18932,6 +18944,24 @@ Return complete html, not a diff.`;
       } catch (_) {}
 
       let raw;
+      if (isAgenticLoopEnabled()) {
+        const built = await runBuilderLoop({
+          msgs, signal: abortController?.signal, wantCar, status: (s) => setPreviewStatus(s, ''),
+          workspaceSeed: app?.html || null,
+        });
+        if (built?.app) {
+          const parsed = built.app;
+          const next = {
+            id: app.id,
+            title: String(parsed.title || app.title || 'Untitled app').slice(0, 80),
+            summary: String(parsed.summary || app.summary || '').slice(0, 240),
+            html: String(parsed.html), iconEmoji: app.iconEmoji || '⚡', iconColor: app.iconColor || '',
+            carCompatible: !!wantCar, createdAt: app.createdAt || Date.now(), updatedAt: Date.now(), reforgedAt: Date.now(),
+          };
+          return { app: next, message: String(parsed.message || `Reforged “${next.title}” with the workspace builder.`) };
+        }
+        if (built?.classicRaw != null) raw = built.classicRaw;
+      }
       let recvChars = 0;
       let lastGenLogTick = 0;
       const onDelta = (d) => {
@@ -18948,13 +18978,13 @@ Return complete html, not a diff.`;
       // Prefer streaming so tokens keep the connection alive (no single-call
       // 600s socket cliff); the stream fns fall back to non-streaming internally.
       // maxTokens: full reforge payloads need a large output budget (see forgeApp).
-      if (isGeminiHostProvider()) {
+      if (raw == null && isGeminiHostProvider()) {
         try {
           raw = await geminiStreamGenerateContent(msgs, abortController?.signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
         } catch (_) {
           raw = await chatCompletions(msgs, abortController?.signal, { jsonMode: true, maxTokens: getGenMaxTokens() });
         }
-      } else {
+      } else if (raw == null) {
         raw = await chatCompletionsStream(msgs, abortController?.signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
       }
       genLog('info', 'reforge received ' + raw.length + ' chars · parsing');
@@ -19509,7 +19539,11 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       return parts.join('/');
     }
 
-    /** Ephemeral per-build workspace: Map<path, {data:string, mime, b64, updatedAt}>. */
+    /** Session workspace: survives refine/Reforge turns for the same app, but is
+     * cleared when + starts a new Forge environment. */
+    let activeBuilderFs = null;
+    let activeBuilderOwner = null;
+
     function builderNewFs() {
       const files = new Map();
       const totalBytes = () => { let n = 0; for (const f of files.values()) n += f.data.length; return n; };
@@ -19904,8 +19938,15 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
 
     /** Drive the agentic build. Returns { app } on success, { classicRaw } when the
      *  model never opts in (classic path reuses the round-1 content), or throws. */
-    async function runBuilderLoop({ msgs, signal, wantCar, status }) {
-      const fs = builderNewFs();
+    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed }) {
+      const owner = currentApp?.id || '__new__';
+      const fs = activeBuilderFs && activeBuilderOwner === owner ? activeBuilderFs : builderNewFs();
+      activeBuilderFs = fs;
+      activeBuilderOwner = owner;
+      if (workspaceSeed && !fs.count()) {
+        const seeded = fs.write('index.html', String(workspaceSeed), 'text/html', false);
+        if (!seeded.ok) throw new Error('Could not seed Reforge workspace: ' + seeded.error);
+      }
       const state = { images: 0, imgSeq: 0, result: null };
       const messages = msgs.slice();
       let armed = false;
@@ -20024,7 +20065,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // if the model never calls it, round-1 content flows into the classic path.
       let raw = null;
       if (isAgenticLoopEnabled()) {
-        const built = await runBuilderLoop({ msgs, signal: abortController.signal, wantCar, status });
+        const built = await runBuilderLoop({
+          msgs, signal: abortController.signal, wantCar, status,
+          workspaceSeed: currentApp?.html || null,
+        });
         if (built && built.app) {
           const app = {
             id: currentApp?.id || uid(),
@@ -22458,6 +22502,9 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       if (busy) return;
       chat = [];
       currentApp = null;
+      // + is a new Forge environment; never carry workspace files across it.
+      activeBuilderFs = null;
+      activeBuilderOwner = null;
       pendingAttachments = [];
       renderAttachStrip();
       el.previewFrame.removeAttribute('srcdoc');
