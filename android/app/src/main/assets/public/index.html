@@ -22433,6 +22433,13 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     function abandonCurrentGeneration() {
       genAbandoned = true;
       abortAllLlmQueries();
+      // Release the generation's host-FGS lease immediately. The native
+      // CapacitorHttp request may remain uncancellable, so waiting for the
+      // stale generation's finally would leave "Building your app…" visible
+      // for the whole native read timeout; bgStop is idempotent and the
+      // generation-token guard prevents a stale finally from touching a new
+      // generation's state.
+      try { bgStop(); } catch (_) {}
       // stop the cycling ticker + clear the progress feed immediately
       try { activeForgeProgress?.stop(); } catch (_) {}
       activeForgeProgress = null;

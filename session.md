@@ -16,7 +16,7 @@ it's all there.
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.7.38 / versionCode 168** (agentic Reforge + session-persistent workspace + agenticLoop in Drive backup; prior 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
+| Version | **2.7.40 / versionCode 170** (FGS notification lifecycle fix; prior 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -24,7 +24,7 @@ it's all there.
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | **2026-08-26 — 2.7.38/168 agentic Reforge + session workspace + agenticLoop backup** (pre-commit sha `61ef99e`; rebuild after commit re-stamps) · 2026-08-26 — 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
+| **Last rebuild** | **2026-08-29 — 2.7.40/170 FGS notification lifecycle fix** · 2026-08-26 — 2.7.38/168 agentic Reforge + session workspace + agenticLoop backup · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
 | **Release artifacts** | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`) · GPL-3.0 · upload-key signed
 
 ### Locked product baseline
@@ -2594,4 +2594,41 @@ Smoke (device pending — no adb at build time):
     restored per provider)
 [ ] Flag OFF → Reforge classic path unchanged (raw == null → streaming parse as before)
 [ ] Classic fallback: model skips read_loop_md → built.classicRaw → existing parse path
+```
+
+## FGS "Building your app" notification lifecycle fix (2026-08-29)
+
+**2.7.40 / versionCode 170** (from 2.7.38/168). Host + native service lifecycle fix.
+
+### Root cause
+Stopping a Forge/Reforge generation called `abortAllLlmQueries()` and detached the UI, but did **not** release the host generation's `bgStart` FGS lease. The native `CapacitorHttp` request cannot be cancelled from JS and could remain in flight until its long read timeout. The old lease therefore kept the ongoing **"Building your app…"** notification visible while the stale generation unwound.
+
+There was also a native orphan path: `BackgroundForgeService.onStartCommand()` returned `START_STICKY` (`1`). If the app process/service was killed, Android could recreate the owner-less service with a null intent and the service would start a fresh ongoing notification indefinitely.
+
+### Fix
+- `abandonCurrentGeneration()` now calls `bgStop()` immediately after aborting. This releases the host generation token without waiting for the uncancellable native request. It is idempotent; the existing generation-token guard prevents a stale `finally` from releasing a newer generation's lease.
+- `BackgroundForgeService` is now `START_NOT_STICKY`; a killed owner-driven service is not recreated. A null `onStartCommand` intent is treated as an orphan and stopped rather than starting a default notification. The explicit stop path also uses `START_NOT_STICKY`.
+
+### Lifecycle after fix
+```text
+Forge/Reforge start → bgStart → host FGS lease → notification
+  normal finish/error → generation finally → bgStop → token release → 1.2s grace → service stop/remove notification
+  confirmed Stop/timeout fail → abort + immediate bgStop → UI detaches immediately
+    late native result → stale token gate discards result; no second release or UI clobber
+  process/service death → START_NOT_STICKY; no owner-less notification resurrection
+```
+
+### Verification
+- `forge_check.sh` + `forge_docs_check` PASS before native build.
+- www/index.html ≡ assets/public/index.html.
+- Debug build compiled native service and both flavor APKs.
+- APK smoke spot-check: version 2.7.40/170 and new host/native lifecycle code present.
+
+Smoke (device pending):
+```text
+[ ] Start Forge-it → notification says "Building your app…"
+[ ] Confirm Stop → notification disappears promptly, without waiting for the native request timeout
+[ ] Stop → immediately start a new Forge generation → new notification belongs to the new generation and old finally does not remove it
+[ ] Normal success/error → notification disappears after the short FGS grace
+[ ] Kill/restart Forge during/after a build → no owner-less "AI working" notification resurrects
 ```

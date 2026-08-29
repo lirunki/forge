@@ -36,12 +36,20 @@ public class BackgroundForgeService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String t;
         String t2;
+        if (intent == null) {
+            // This service is owner-driven by the WebView's FGS leases. A null
+            // intent would be an orphan/restart with no active owner; never
+            // resurrect a permanent "AI working" notification.
+            stopForegroundSafe();
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         if (intent != null) {
             String action = intent.getAction();
             if (ACTION_STOP.equals(action)) {
                 stopForegroundSafe();
                 stopSelf();
-                return 2;
+                return START_NOT_STICKY;
             }
             if (intent.hasExtra("title") && (t2 = intent.getStringExtra("title")) != null && !t2.isEmpty()) {
                 this.title = t2;
@@ -51,7 +59,10 @@ public class BackgroundForgeService extends Service {
             }
         }
         startAsForeground();
-        return 1;
+        // The JS token set owns this service. If the process is killed, the
+        // in-flight generation is gone too, so Android must not recreate the
+        // service and leave an orphaned ongoing notification.
+        return START_NOT_STICKY;
     }
 
     private void startAsForeground() {
