@@ -13579,15 +13579,25 @@ termux-reload-settings</div>
       const model = String(args?.model || 'grok-imagine-image').trim();
 
       const rt = getAiRuntime();
-      const backend = backendForRuntime(rt);
-      if (backend !== 'xai-rich') {
-        const label = rt.provider?.label || rt.providerId || 'this provider';
-        throw new Error('image_generate requires the xAI (Grok) provider — ' + label + ' does not support image generation. Set an xAI API key in AI settings.');
+      const candidates = [];
+      const addCandidate = (r) => {
+        if (!r || !String(r.key || '').trim()) return;
+        const b = String(r.base || r.provider?.base || '').replace(/\/+$/, '');
+        if (!b) return;
+        const endpoint = /\/images\/generations\/?$/i.test(b) ? b : (/\/v1$/i.test(b) ? b + '/images/generations' : b + '/images/generations');
+        if (!candidates.some(c => c.endpoint === endpoint && c.key === String(r.key).trim())) candidates.push({ endpoint, key: String(r.key).trim(), providerId: r.providerId, label: r.provider?.label || r.providerId });
+      };
+      // Prefer the currently selected provider, then fall back to configured xAI.
+      addCandidate(rt);
+      if (String(rt.providerId || '').toLowerCase() !== 'xai') {
+        try {
+          const xaiRt = buildAiRuntime('xai', null);
+          if (xaiRt) addCandidate(xaiRt);
+        } catch (_) {}
       }
-      const key = String(rt.key || '').trim();
-      if (!key) throw new Error('image_generate: xAI API key not set. Add it in AI settings.');
-      let base = String(rt.base || rt.provider?.base || 'https://api.x.ai/v1').replace(/\/+$/, '');
-      if (/\/images\/generations\/?$/i.test(base)) { /* keep */ } else if (/\/v1$/i.test(base)) base = base + '/images/generations'; else base = base + '/images/generations';
+      if (!candidates.length) throw new Error('image_generate: no configured provider has an image-generation endpoint/key. Configure the current provider or xAI in AI settings.');
+      const key = candidates[0].key;
+      let base = candidates[0].endpoint;
       const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key };
 
       // Normalize seed images to image_url entries (data URLs or http URLs).
@@ -13606,24 +13616,37 @@ termux-reload-settings</div>
       const fgs = aiFgsAcquire('Generating image…');
       try {
         let res;
-        if (Capacitor.isNativePlatform()) {
-          res = await nativeHttpPost({ url: base, headers, data: body, connectTimeout: 60000, readTimeout: 300000 });
-          if (res.status < 200 || res.status >= 300) {
-            const errText = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-            throw new Error('xAI image API ' + res.status + ': ' + errText);
+        let lastError = null;
+        for (let ci = 0; ci < candidates.length; ci++) {
+          const candidate = candidates[ci];
+          try {
+            const h = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + candidate.key };
+            if (Capacitor.isNativePlatform()) {
+              res = await nativeHttpPost({ url: candidate.endpoint, headers: h, data: body, connectTimeout: 60000, readTimeout: 300000 });
+              if (res.status < 200 || res.status >= 300) throw new Error('image API ' + res.status + ': ' + (typeof res.data === 'string' ? res.data : JSON.stringify(res.data)));
+              res.data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+            } else {
+              const response = await fetch(candidate.endpoint, { method: 'POST', headers: h, body: JSON.stringify(body) });
+              if (!response.ok) throw new Error('image API ' + response.status + ': ' + await response.text());
+              res = { data: await response.json() };
+            }
+            const imgs0 = Array.isArray(res.data?.data) ? res.data.data : [];
+            if (!imgs0.length) throw new Error('provider returned no image');
+            base = candidate.endpoint;
+            break;
+          } catch (e) {
+            lastError = e;
+            res = null;
+            if (ci + 1 < candidates.length) continue;
           }
-          res.data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-        } else {
-          const r = await fetch(base, { method: 'POST', headers, body: JSON.stringify(body) });
-          if (!r.ok) throw new Error('xAI image API ' + r.status + ': ' + await r.text());
-          res = { data: await r.json() };
         }
+        if (!res) throw lastError || new Error('all image providers failed');
         const imgs = Array.isArray(res.data?.data) ? res.data.data : [];
         const out = imgs.map((im) => {
           const url = im.url || im.image_url || (im.b64_json ? 'data:image/png;base64,' + im.b64_json : '');
           return { url, revised_prompt: im.revised_prompt || '' };
         }).filter((im) => im.url);
-        return { ok: true, images: out, count: out.length, model, backend: 'xai-rich' };
+        return { ok: true, images: out, count: out.length, model, backend: candidates[0].providerId || 'current-provider' };
       } finally {
         fgs();
       }
