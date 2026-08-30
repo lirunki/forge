@@ -1453,7 +1453,21 @@ termux-reload-settings</div>
             Forge picks the provider from the key shape. Advanced options stay collapsed unless you need them.
           </p>
 
-          <div id="aiQuickSetup" style="border:1px solid var(--border);border-radius:12px;padding:0.75rem 0.85rem;margin-bottom:0.9rem;background:var(--bg);">
+          <div id="aiActiveBrain" style="border:1px solid var(--border);border-radius:12px;padding:0.75rem 0.85rem;margin-bottom:0.9rem;background:var(--bg);">
+            <div style="display:flex;align-items:center;gap:0.6rem;">
+              <span aria-hidden="true" style="font-size:1.35rem;line-height:1;">🧠</span>
+              <strong><span data-i18n="ai.activeBrain">Active brain</span> · <span id="aiActiveStatus" style="color:#35c76f;">Not connected</span></strong>
+            </div>
+            <div style="margin-top:0.25rem;font-weight:650;"><span id="aiActiveProvider">—</span> <span aria-hidden="true" style="color:var(--muted);">/</span> <span id="aiActiveModel" style="color:var(--muted);font-size:0.88rem;">—</span></div>
+            <div class="settings-block" style="margin-top:0.55rem;">
+              <button class="btn secondary small" id="btnAiActiveTest" type="button" data-i18n="ai.test">Test</button>
+              <button class="btn secondary small" id="btnAiActiveSwitch" type="button" data-i18n="ai.switch">Switch</button>
+            </div>
+          </div>
+
+          <details id="aiQuickSetupDetails" style="margin-bottom:0.9rem;">
+            <summary style="cursor:pointer;color:#4da3ff;font-weight:650;font-size:0.92rem;user-select:none;" data-i18n="ai.easySetup">Easy setup</summary>
+            <div id="aiQuickSetup" style="border:1px solid var(--border);border-radius:12px;padding:0.75rem 0.85rem;margin-top:0.55rem;background:var(--bg);">
             <p class="field-hint" style="margin:0 0 0.55rem;" data-i18n-html="ai.turnkeyHint">
               <b>Turn-key free AI:</b> Google Gemini (easiest on Android), Groq, OpenRouter free models.
               xAI/Grok API is usually paid — not on the free path. No jargon: we open the page, you paste a key.
@@ -1469,12 +1483,13 @@ termux-reload-settings</div>
               <button class="btn secondary small" id="btnQuickTest" type="button" data-i18n="setup.saveTest">Save &amp; test</button>
             </div>
             <div class="status-line" id="quickSetupStatus" style="margin-top:0.45rem;"></div>
-          </div>
+            </div>
+          </details>
 
-          <details id="aiAdvanced" style="margin-bottom:0.5rem;">
-            <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;user-select:none;" data-i18n="ai.advanced">Advanced: provider, model, endpoint</summary>
-            <div style="padding-top:0.75rem;">
-
+          <div id="aiAdvanced" style="margin-bottom:0.5rem;">
+            <details id="aiProviderSettings" style="margin-bottom:0.5rem;">
+              <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;user-select:none;" data-i18n="ai.providerKeys">Provider &amp; keys</summary>
+              <div style="padding-top:0.75rem;">
           <label for="provider" data-i18n="ai.provider">Provider</label>
           <select id="provider"></select>
           <p class="field-hint" id="providerHint">Grok models via api.x.ai</p>
@@ -1540,7 +1555,12 @@ termux-reload-settings</div>
             <input type="checkbox" id="rememberKey" checked />
             <label for="rememberKey" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.remember">Remember keys &amp; settings on this device</label>
           </div>
+              </div>
+            </details>
 
+            <details id="aiModelSettings" style="margin-bottom:0.5rem;">
+              <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;user-select:none;" data-i18n="ai.modelGeneration">Model &amp; generation</summary>
+              <div style="padding-top:0.75rem;">
           <label for="model" data-i18n="ai.model">Model</label>
           <input id="model" type="text" list="modelSuggestions" placeholder="grok-2-latest" autocomplete="off" />
           <datalist id="modelSuggestions"></datalist>
@@ -1576,6 +1596,12 @@ termux-reload-settings</div>
           </div>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.genTimeoutHint">Watchdog for Forge it / Reforge: when time is up you can extend or stop. Progress lands in Console.</p>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.maxTokensHint">Output budget for Forge it / Reforge. Raise it if big apps get cut off (max-token limit); lower it if a provider rejects the request.</p>
+              </div>
+            </details>
+
+            <details id="aiBuilderSettings" style="margin-bottom:0.5rem;">
+              <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;user-select:none;" data-i18n="ai.builderCapabilities">Builder capabilities</summary>
+              <div style="padding-top:0.75rem;">
           <div class="check" style="margin-top:0.45rem;">
             <input type="checkbox" id="genAgenticLoop" />
             <label for="genAgenticLoop" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.agenticLoop">Allow agentic builder loop</label>
@@ -1592,9 +1618,9 @@ termux-reload-settings</div>
             <button class="btn secondary small" id="btnForgetKey" type="button" data-i18n="ai.forget">Forget this key</button>
           </div>
           <div class="status-line" id="aiStatus" style="margin-top:0.55rem;"></div>
-
-            </div>
-          </details>
+              </div>
+            </details>
+          </div>
         </div>
 
         <div class="card">
@@ -1754,6 +1780,12 @@ termux-reload-settings</div>
     "ai.maxTokensHint": "Output budget for Forge it / Reforge. Raise it if big apps get cut off (max-token limit); lower it if a provider rejects the request.",
     "ai.agenticLoop": "Allow agentic builder loop",
     "ai.agenticLoopHint": "Per provider: for apps too big for one response, the model can opt into workspace mode (scratch files, JS runner, image tools, host-side assembly). Off = classic one-shot JSON only.",
+    "ai.activeBrain": "Active brain",
+    "ai.switch": "Switch",
+    "ai.easySetup": "Easy setup",
+    "ai.providerKeys": "Provider & keys",
+    "ai.modelGeneration": "Model & generation",
+    "ai.builderCapabilities": "Builder capabilities",
     "ai.builderResearch": "Allow web research",
     "ai.builderResearchHint": "Per provider: when the agentic builder loop is enabled, allow web_search and web_fetch for research. Off = no network research tools in the builder.",
     "gen.title": "Still building…",
@@ -5824,6 +5856,11 @@ termux-reload-settings</div>
       btnSaveOai: document.getElementById('btnSaveOai'),
       btnCancelOai: document.getElementById('btnCancelOai'),
       aiStatus: document.getElementById('aiStatus'),
+      aiActiveProvider: document.getElementById('aiActiveProvider'),
+      aiActiveModel: document.getElementById('aiActiveModel'),
+      aiActiveStatus: document.getElementById('aiActiveStatus'),
+      btnAiActiveTest: document.getElementById('btnAiActiveTest'),
+      btnAiActiveSwitch: document.getElementById('btnAiActiveSwitch'),
       btnExitApp: document.getElementById('btnExitApp'),
       genTimeoutSecs: document.getElementById('genTimeoutSecs'),
       genMaxTokens: document.getElementById('genMaxTokens'),
@@ -7634,6 +7671,20 @@ termux-reload-settings</div>
         el.jsonMode.value = p.jsonMode || 'auto';
       }
       updateCustomProviderButtons();
+      syncAiActiveSummary();
+    }
+
+    function syncAiActiveSummary() {
+      try {
+        const p = currentProvider();
+        if (el.aiActiveProvider) el.aiActiveProvider.textContent = p?.label || p?.id || '—';
+        if (el.aiActiveModel) el.aiActiveModel.textContent = el.model?.value?.trim() || p?.defaultModel || '—';
+        if (el.aiActiveStatus) {
+          const connected = !!(el.apiKey?.value?.trim() || providerAllowsEmptyKey());
+          el.aiActiveStatus.textContent = connected ? 'Connected' : 'Not connected';
+          el.aiActiveStatus.style.color = connected ? '#35c76f' : 'var(--muted)';
+        }
+      } catch (_) {}
     }
 
     function buildAzureUrlFrom(rt) {
@@ -7778,6 +7829,7 @@ termux-reload-settings</div>
         const mt = parseInt(el.genMaxTokens && el.genMaxTokens.value, 10);
         if (Number.isFinite(mt) && mt >= 1024 && mt <= 262144) localStorage.setItem(LS.genMaxTokens, String(mt));
       } catch (_) {}
+      syncAiActiveSummary();
     }
 
     function openOaiEditor(mode) {
@@ -22710,6 +22762,12 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       );
     });
     el.btnTestAi?.addEventListener('click', testConnection);
+    el.btnAiActiveTest?.addEventListener('click', testConnection);
+    el.btnAiActiveSwitch?.addEventListener('click', () => {
+      const section = document.getElementById('aiProviderSettings');
+      if (section) section.open = true;
+      el.provider?.focus();
+    });
     el.btnRefreshModels?.addEventListener('click', () => {
       refreshModelsForCurrentProvider({ silent: false }).catch((e) => {
         setModelCatalogStatus(e.message || String(e), 'err');
