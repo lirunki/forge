@@ -2596,6 +2596,34 @@ Smoke (device pending — no adb at build time):
 [ ] Classic fallback: model skips read_loop_md → built.classicRaw → existing parse path
 ```
 
+## Configurable image generation provider fallback + builder progress (2026-08-30)
+
+**2.7.54 / versionCode 184** (from 2.7.40/170). Host-only.
+
+### What landed
+- AI → **Model & generation** now includes **Default image-generation model**, persisted as `forge_image_generation_model_v1` and defaulting to `grok-imagine-image`.
+- `image_generate` / agentic-builder `gen_image` uses the selected model.
+- Image generation first tries the current AI provider endpoint/key, then falls back to the configured xAI provider if the first request fails.
+- Agentic builder progress now emits a visible `gen_image · ...` mini-message for successful and failed image-tool calls, matching `fs_*` and `web_*` progress messages.
+- `www/index.html` and Android assets remain identical.
+
+### Verification
+- `forge_check.sh` PASS: syntax, parity, String.raw backtick sanity, version, and docs registry.
+- Debug APK rebuilt: `~/downloads/Forge-debug-rebuilt.apk`.
+- Release artifacts rebuilt and signed:
+  - `release-out/Forge-full-release.apk`
+  - `release-out/Forge-play-release.aab`
+- Changes committed and pushed: `bd0042c` (fallback) plus the follow-up setting commit in the working history.
+
+Smoke (device pending):
+```text
+[ ] AI → Model & generation shows Default image-generation model = grok-imagine-image
+[ ] Change the model name → restart/reopen Forge → value persists
+[ ] Agentic builder → image tool shows `gen_image · ...` in chat progress and Console
+[ ] Current provider image endpoint is attempted first; configured xAI is fallback
+[ ] No configured image-capable provider → clear error rather than silent failure
+```
+
 ## FGS "Building your app" notification lifecycle fix (2026-08-29)
 
 **2.7.40 / versionCode 170** (from 2.7.38/168). Host + native service lifecycle fix.
