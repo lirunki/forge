@@ -2,7 +2,7 @@
 
 > Canonical source: `forge/www/index.html` (the `SYSTEM_PROMPT` + `ForgeHost` bridge).
 > This file is a human-readable mirror — regenerate from the host when the bridge changes.
-> Version baseline: `2.7.40 / versionCode 170`.
+> Version baseline: `2.7.44 / versionCode 174`.
 
 `window.ForgeHost` (alias `window.forge`) is injected into every mini-app
 iframe by the host before `ready`. **All host APIs are async (Promises).
@@ -369,6 +369,9 @@ Include Settings: enable tools, riskMax, confirm side effects, optional tool mul
 - No `alert()` spam; polished empty states; refine = full new html.
 - No stealing host LLM API keys. If the mini-app needs AI, use `ForgeHost.ai.*` and offer a provider menu via `listProviders`/`setProvider`.
 - JSON-escape the html string properly when returning from Forge-it.
+- Normal `http://` and `https://` links in the Forge preview are routed through
+  the host and opened in the system browser after a user click. Internal/hash,
+  `mailto:`, and `tel:` links retain normal browser behavior.
 
 ## Agentic builder loop (host-internal, 2.7.8+)
 
@@ -403,7 +406,14 @@ Flow (classic single-shot JSON stays the default path):
      inlines `<script src>`/`<link rel=stylesheet>` from the workspace and
      replaces `@asset("path")` tokens with data URLs → self-contained app
      (library/backup/AA-share runtime contract unchanged)
-4. Loop runs under the existing generation watchdog (extend/fail popup) and
+
+When the separate AI setting **Allow web research** is enabled for the active
+provider (`localStorage` key `forge_builder_research_v1`), the post-opt-in
+builder toolset also includes the read-only `web_search` and `web_fetch` tools.
+Round 1 still exposes only `read_loop_md`; research tools are never exposed to
+the classic path or when the research setting is off. `web_fetch` is limited to
+http(s) URLs and bounded output.
+5. Loop runs under the existing generation watchdog (extend/fail popup) and
    honors the max-output-tokens setting per round; every tool call is logged
    to the AI-tab console (`loop · <tool> …` lines).
 

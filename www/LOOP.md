@@ -25,7 +25,11 @@ payload — `finish` is the only way to deliver the app.
    them (levels, puzzles, lookups) or validate them in the runner.
 4. **Generate art with `gen_image`** (if the provider supports it; errors are
    returned to you — fall back to CSS/SVG/emoji if it fails).
-5. **Call `finish`** with `{ "title", "summary", "message" }`.
+5. If the optional research tools are present, use `web_search` for public-web
+   discovery and `web_fetch` to read a relevant http(s) page. They are read-only,
+   bounded, and intended for focused research only; never send secrets or
+   unrelated user data.
+6. **Call `finish`** with `{ "title", "summary", "message" }`.
 
 ## Assembly rules (what `finish` does)
 

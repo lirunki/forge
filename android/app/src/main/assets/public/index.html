@@ -1587,6 +1587,11 @@ termux-reload-settings</div>
             <label for="genAgenticLoop" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.agenticLoop">Allow agentic builder loop</label>
           </div>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.agenticLoopHint">Per provider: for apps too big for one response, the model can opt into workspace mode (scratch files, JS runner, image tools, host-side assembly). Off = classic one-shot JSON only.</p>
+          <div class="check" style="margin-top:0.45rem;">
+            <input type="checkbox" id="genBuilderResearch" />
+            <label for="genBuilderResearch" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.builderResearch">Allow web research</label>
+          </div>
+          <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.builderResearchHint">Per provider: when the agentic builder loop is enabled, allow web_search and web_fetch for research. Off = no network research tools in the builder.</p>
 
           <div class="settings-block" style="margin-top:0.25rem;">
             <button class="btn secondary small" id="btnTestAi" type="button" data-i18n="ai.test">Test connection</button>
@@ -1755,6 +1760,8 @@ termux-reload-settings</div>
     "ai.maxTokensHint": "Output budget for Forge it / Reforge. Raise it if big apps get cut off (max-token limit); lower it if a provider rejects the request.",
     "ai.agenticLoop": "Allow agentic builder loop",
     "ai.agenticLoopHint": "Per provider: for apps too big for one response, the model can opt into workspace mode (scratch files, JS runner, image tools, host-side assembly). Off = classic one-shot JSON only.",
+    "ai.builderResearch": "Allow web research",
+    "ai.builderResearchHint": "Per provider: when the agentic builder loop is enabled, allow web_search and web_fetch for research. Off = no network research tools in the builder.",
     "gen.title": "Still building…",
     "gen.body": "{label}: {secs}s so far. The model is still working — keep waiting or stop.",
     "gen.extendBy": "Extend by",
@@ -5247,6 +5254,7 @@ termux-reload-settings</div>
       genTimeout: 'forge_gen_timeout_v1',
       genMaxTokens: 'forge_gen_max_tokens_v1',
       agenticLoop: 'forge_agentic_loop_v1',
+      builderResearch: 'forge_builder_research_v1',
     };
 
     /**
@@ -5827,6 +5835,7 @@ termux-reload-settings</div>
       genTimeoutSecs: document.getElementById('genTimeoutSecs'),
       genMaxTokens: document.getElementById('genMaxTokens'),
       genAgenticLoop: document.getElementById('genAgenticLoop'),
+      genBuilderResearch: document.getElementById('genBuilderResearch'),
       genTimeoutWrap: document.getElementById('genTimeoutWrap'),
       genTimeoutBody: document.getElementById('genTimeoutBody'),
       genExtendSecs: document.getElementById('genExtendSecs'),
@@ -5970,6 +5979,23 @@ termux-reload-settings</div>
     }
     function syncAgenticLoopCheckbox() {
       try { if (el.genAgenticLoop) el.genAgenticLoop.checked = isAgenticLoopEnabled(); } catch (_) {}
+    }
+    /** Per-provider builder research flag. */
+    function getBuilderResearchMap() {
+      try { return JSON.parse(localStorage.getItem(LS.builderResearch) || '{}') || {}; } catch (_) { return {}; }
+    }
+    function isBuilderResearchEnabled() {
+      try { return !!getBuilderResearchMap()[activeProviderId]; } catch (_) { return false; }
+    }
+    function setBuilderResearchEnabled(on) {
+      try {
+        const m = getBuilderResearchMap();
+        if (on) m[activeProviderId] = true; else delete m[activeProviderId];
+        localStorage.setItem(LS.builderResearch, JSON.stringify(m));
+      } catch (_) {}
+    }
+    function syncBuilderResearchCheckbox() {
+      try { if (el.genBuilderResearch) el.genBuilderResearch.checked = isBuilderResearchEnabled(); } catch (_) {}
     }
     /** Read-timeout for AI HTTP calls: never shorter than the old 600s default, grows with the setting. */
     function aiReadTimeoutMs() {
@@ -7733,6 +7759,7 @@ termux-reload-settings</div>
           if (el.genMaxTokens && Number.isFinite(mt) && mt >= 1024 && mt <= 262144) el.genMaxTokens.value = String(mt);
         } catch (_) {}
         syncAgenticLoopCheckbox();
+        syncBuilderResearchCheckbox();
 
         const draft = localStorage.getItem(LS.draft);
         if (draft) {
@@ -8117,6 +8144,7 @@ termux-reload-settings</div>
         customProviders: Array.isArray(customProviders) ? customProviders : [],
         knownKeys: Array.isArray(knownKeys) ? knownKeys : [],
         agenticLoop: getAgenticLoopMap(),
+        builderResearch: getBuilderResearchMap(),
         setupDone: lsGet(LS.setupDone) || '',
         setupProvider: lsGet(LS.setupProvider) || '',
         termuxSetupDone: lsGet(LS.termuxSetupDone) || '',
@@ -8140,6 +8168,7 @@ termux-reload-settings</div>
           setupProvider: bundle?.setupProvider || '',
           legacy: bundle?.legacy || {},
           agenticLoop: bundle?.agenticLoop || {},
+          builderResearch: bundle?.builderResearch || {},
         });
       } catch (_) {
         return String(Date.now());
@@ -8161,6 +8190,7 @@ termux-reload-settings</div>
       const remoteCustoms = Array.isArray(bundle.customProviders) ? bundle.customProviders : [];
       const remoteKeys = Array.isArray(bundle.knownKeys) ? bundle.knownKeys : [];
       const remoteAgenticLoop = bundle.agenticLoop && typeof bundle.agenticLoop === 'object' ? bundle.agenticLoop : null;
+      const remoteBuilderResearch = bundle.builderResearch && typeof bundle.builderResearch === 'object' ? bundle.builderResearch : null;
 
       // --- custom OpenAI providers ---
       let customs = getCustomProviders();
@@ -8240,6 +8270,11 @@ termux-reload-settings</div>
       if (remoteAgenticLoop) {
         try { localStorage.setItem(LS.agenticLoop, JSON.stringify(remoteAgenticLoop)); } catch (_) {}
         syncAgenticLoopCheckbox();
+      }
+      // Older backups have no builderResearch field; leave local preferences intact.
+      if (remoteBuilderResearch) {
+        try { localStorage.setItem(LS.builderResearch, JSON.stringify(remoteBuilderResearch)); } catch (_) {}
+        syncBuilderResearchCheckbox();
       }
 
       // Ensure every profile key is also in the vault (force even if UI gate would skip)
@@ -9588,6 +9623,22 @@ termux-reload-settings</div>
       return;
     }
   });
+  // Sandboxed srcdoc links cannot reliably open a system browser on Android.
+  // Route user-activated http(s) links through the host's validated openUrl path.
+  document.addEventListener('click', function(ev){
+    try {
+      if (!ev || ev.defaultPrevented || (ev.button != null && ev.button !== 0)) return;
+      if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+      var node = ev.target;
+      while (node && node.nodeType === 1 && String(node.tagName).toLowerCase() !== 'a') node = node.parentElement;
+      if (!node || String(node.tagName).toLowerCase() !== 'a') return;
+      var href = node.href || node.getAttribute('href') || '';
+      if (!/^https?:\/\//i.test(String(href))) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      parent.postMessage({ __forge: true, type: 'external-link', url: String(href) }, '*');
+    } catch (_) {}
+  }, true);
   const _appToolHandlersLocal = new Map();
   /** Make voice lists safe for <select> UIs (never "[object Object]"). */
   function normalizeVoicesResult(r){
@@ -15518,6 +15569,20 @@ termux-reload-settings</div>
       const expected = el && el.previewFrame ? el.previewFrame.contentWindow : null;
       if (expected && ev.source !== expected) return;
 
+      if (d.type === 'external-link') {
+        const url = String(d.url || '').trim();
+        if (!/^https?:\/\//i.test(url)) return;
+        try {
+          await handleHostCall('openUrl', { url });
+        } catch (e) {
+          try {
+            const appLabel = (currentApp && (currentApp.title || currentApp.id)) || 'mini-app';
+            pushMiniConsole('error', 'External link: ' + (e.message || String(e)), appLabel);
+          } catch (_) {}
+        }
+        return;
+      }
+
       if (d.type === 'host-console') {
         try {
           const args = Array.isArray(d.args) ? d.args : [d.message || ''];
@@ -18930,6 +18995,7 @@ Return complete html, not a diff.`;
       const userText = buildReforgeUserPrompt(app, { wantCar, tools: toolSettings });
       if (isAgenticLoopEnabled()) {
         system += '\n\nBUILD OPTION (agentic reforge): If the existing app is large, call read_loop_md and use the workspace tools. The workspace is seeded with the existing index.html. Preserve behavior, then call finish.';
+        if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
       }
       const msgs = [
         { role: 'system', content: system },
@@ -18948,6 +19014,7 @@ Return complete html, not a diff.`;
         const built = await runBuilderLoop({
           msgs, signal: abortController?.signal, wantCar, status: (s) => setPreviewStatus(s, ''),
           workspaceSeed: app?.html || null,
+          researchEnabled: isBuilderResearchEnabled(),
         });
         if (built?.app) {
           const parsed = built.app;
@@ -19818,6 +19885,16 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       },
     };
 
+    // Research is deliberately opt-in and limited to the two read-only web tools.
+    // Derive their schemas from the general registry without exposing the registry's
+    // device, messaging, or other side-effectful tools to the builder.
+    const BUILDER_RESEARCH_TOOLS = HOST_TOOL_REGISTRY
+      .filter((tool) => tool && (tool.name === 'web_search' || tool.name === 'web_fetch'))
+      .map((tool) => ({
+        type: 'function',
+        function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+      }));
+
     const BUILDER_TOOLS = [
       { type: 'function', function: { name: 'fs_write', description: 'Write a file into the build workspace (text or base64 binary). Paths are relative; directories are implicit.', parameters: { type: 'object', properties: {
         path: { type: 'string', description: 'e.g. index.html, src/main.js, assets/style.css' },
@@ -19916,6 +19993,21 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           loopStatus('gen_image ' + (r.ok ? r.path : 'FAILED ' + (r.error || '')), r.ok ? 'info' : 'warn', 'img');
           return r;
         }
+        case 'web_search': {
+          if (!ctx.researchEnabled) return { ok: false, error: 'web research is not enabled for this provider' };
+          const r = await toolsWebSearch(a);
+          loopStatus('web_search · ' + String(a.query || '').slice(0, 80), 'info', 'research');
+          return r;
+        }
+        case 'web_fetch': {
+          if (!ctx.researchEnabled) return { ok: false, error: 'web research is not enabled for this provider' };
+          const fetchArgs = { ...a };
+          const requested = Number(fetchArgs.maxChars);
+          fetchArgs.maxChars = Math.min(24000, Math.max(500, Number.isFinite(requested) && requested > 0 ? requested : 12000));
+          const r = await toolsWebFetch(fetchArgs);
+          loopStatus('web_fetch · ' + String(a.url || '').slice(0, 100), 'info', 'research');
+          return r;
+        }
         case 'finish': {
           const app = await builderAssemble(fs, a);
           ctx.state.result = app;
@@ -19938,7 +20030,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
 
     /** Drive the agentic build. Returns { app } on success, { classicRaw } when the
      *  model never opts in (classic path reuses the round-1 content), or throws. */
-    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed }) {
+    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled = false }) {
       const owner = currentApp?.id || '__new__';
       const fs = activeBuilderFs && activeBuilderOwner === owner ? activeBuilderFs : builderNewFs();
       activeBuilderFs = fs;
@@ -19952,7 +20044,9 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       let armed = false;
       loopStatus('workspace mode offered (read_loop_md)', 'info', 'start');
       for (let round = 1; round <= BUILDER_MAX_ROUNDS; round++) {
-        const tools = armed ? BUILDER_TOOLS : [BUILDER_TOOL_READ_LOOP];
+        const tools = armed
+          ? (researchEnabled ? BUILDER_TOOLS.concat(BUILDER_RESEARCH_TOOLS) : BUILDER_TOOLS)
+          : [BUILDER_TOOL_READ_LOOP];
         const res = await builderRound(messages, tools, signal);
         const tcs = Array.isArray(res && res.tool_calls) ? res.tool_calls : [];
         const content = String((res && res.content) || '');
@@ -19971,7 +20065,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           const name = String((tc.function && tc.function.name) || tc.name || '');
           const tcId = String(tc.id || '');
           if (name === 'read_loop_md') {
-            const md = await getLoopMd();
+            let md = await getLoopMd();
+            if (researchEnabled) {
+              md += '\n\n## Optional research tools enabled\nAfter opting into workspace mode, you may use `web_search` and `web_fetch` for focused public-web research. They are read-only, limited to http(s) requests, and should be used sparingly. Do not send secrets or unrelated user data.\n';
+            }
             loopStatus('model chose workspace mode · LOOP.md ' + md.length + ' chars', 'info', 'start');
             try { status && status('Builder mode: loading protocol…'); } catch (_) {}
             messages.push({ role: 'tool', tool_call_id: tcId, name, content: md });
@@ -19986,7 +20083,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           try { status && status('Builder round ' + round + ' · ' + name + '…'); } catch (_) {}
           let out;
           try {
-            out = await builderExecTool(name, tc.function && tc.function.arguments, { fs, state, wantCar, signal });
+            out = await builderExecTool(name, tc.function && tc.function.arguments, { fs, state, wantCar, signal, researchEnabled });
           } catch (e) {
             out = { ok: false, error: String((e && e.message) || e) };
           }
@@ -20025,6 +20122,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // Agentic builder pointer (per-provider flag): one short paragraph, one tool.
       if (isAgenticLoopEnabled()) {
         system += '\n\nBUILD OPTION (agentic): If this app is too large or complex to deliver as one JSON payload, call the tool read_loop_md now to load the workspace builder protocol (scratch files, JS runner, image generation, host-side assembly) and build it in rounds instead. Use it only when a single response would not be enough; otherwise ignore this option and return the JSON payload exactly as specified.';
+        if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
       }
       const msgs = [{ role: 'system', content: system }];
 
@@ -20068,6 +20166,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         const built = await runBuilderLoop({
           msgs, signal: abortController.signal, wantCar, status,
           workspaceSeed: currentApp?.html || null,
+          researchEnabled: isBuilderResearchEnabled(),
         });
         if (built && built.app) {
           const app = {
@@ -22708,6 +22807,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.provider?.addEventListener('change', () => {
       switchProvider(el.provider.value, { fromUser: true });
       syncAgenticLoopCheckbox();
+      syncBuilderResearchCheckbox();
     });
 
     el.azureDeployment?.addEventListener('change', () => {
@@ -22727,6 +22827,10 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.genAgenticLoop?.addEventListener('change', () => {
       setAgenticLoopEnabled(!!el.genAgenticLoop.checked);
       try { genLog('info', 'agentic builder loop ' + (el.genAgenticLoop.checked ? 'enabled' : 'disabled') + ' for ' + activeProviderId); } catch (_) {}
+    });
+    el.genBuilderResearch?.addEventListener('change', () => {
+      setBuilderResearchEnabled(!!el.genBuilderResearch.checked);
+      try { genLog('info', 'builder web research ' + (el.genBuilderResearch.checked ? 'enabled' : 'disabled') + ' for ' + activeProviderId); } catch (_) {}
     });
     // Generation-timeout card actions (non-blocking popup)
     el.btnGenExtend?.addEventListener('click', () => {
