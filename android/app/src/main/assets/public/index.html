@@ -1485,12 +1485,6 @@ termux-reload-settings</div>
             <button class="btn secondary small hidden" id="btnDelOai" type="button" data-i18n="common.delete">Delete</button>
           </div>
 
-          <!-- Share to AAForge (Android Auto host) -->
-          <div class="settings-block" style="margin:0.25rem 0 0.75rem; padding-top:0.4rem; border-top:1px solid var(--border);">
-            <button class="btn secondary small" id="btnShareAiToAa" type="button" title="Share current AI providers/settings to AAForge (Android Auto)" data-i18n="ai.shareAa" data-i18n-title="ai.shareAaTitle">Share AI settings to AA</button>
-            <span class="field-hint" style="margin-left:6px;">for AAForge</span>
-          </div>
-
           <!-- Add / edit OpenAI-compatible provider -->
           <div id="blockOaiEditor" class="hidden" style="border:1px dashed var(--border);border-radius:12px;padding:0.75rem;margin-bottom:0.85rem;background:var(--bg);">
             <h2 style="font-size:0.88rem;margin-bottom:0.55rem;" id="oaiEditorTitle" data-i18n="ai.oai.title">Add OpenAI-compatible provider</h2>
@@ -5821,7 +5815,6 @@ termux-reload-settings</div>
       btnAddOai: document.getElementById('btnAddOai'),
       btnEditOai: document.getElementById('btnEditOai'),
       btnDelOai: document.getElementById('btnDelOai'),
-      btnShareAiToAa: document.getElementById('btnShareAiToAa'),
       blockOaiEditor: document.getElementById('blockOaiEditor'),
       oaiEditorTitle: document.getElementById('oaiEditorTitle'),
       oaiName: document.getElementById('oaiName'),
@@ -21625,62 +21618,6 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       return exportApp(currentApp, { source: 'preview' });
     }
 
-    // ——— Share to AAForge (Android Auto host) ———
-
-    /** Share current AI providers/settings to AAForge (includes saved keys + custom OAI defs). */
-    async function shareAiSettingsToAaforge() {
-      try {
-        const profiles = readJson(LS.profiles, {});
-        const customProviders = readJson(LS.customProviders, []);
-        const defaultId = currentProviderId();
-        const payload = {
-          __aaforge: 'ai-profiles-v1',
-          version: 1,
-          exportedAt: Date.now(),
-          defaultId,
-          profiles: profiles || {},
-          customProviders: Array.isArray(customProviders) ? customProviders : [],
-        };
-
-        const json = JSON.stringify(payload, null, 2);
-        const filename = 'forge-ai-settings-aa.json';
-
-        if (Capacitor.isNativePlatform()) {
-          const path = 'share/' + filename;
-          await Filesystem.writeFile({
-            path,
-            data: json,
-            directory: Directory.Cache,
-            encoding: Encoding.UTF8,
-            recursive: true,
-          });
-          const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
-          await Share.share({
-            title: 'Forge AI settings for AAForge',
-            text: 'Forge AI providers for Android Auto',
-            files: [uri],
-            dialogTitle: 'Share to AAForge',
-          });
-          setPreviewStatus(t('aa.shared'), 'ok');
-          return;
-        }
-
-        // Web fallback
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
-        setPreviewStatus(t('aa.downloaded'), 'ok');
-      } catch (e) {
-        setPreviewStatus(t('aa.fail', { msg: e?.message || e }), 'err');
-      }
-    }
-
     /** Share a mini-app HTML to AAForge */
     async function shareAppToAaforge(app) {
       if (!app?.html) {
@@ -22675,7 +22612,6 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.mergeBackupOverlay?.addEventListener('click', (e) => {
       if (e.target === el.mergeBackupOverlay) { _mergeBackupData = null; el.mergeBackupOverlay.classList.add('hidden'); }
     });
-    el.btnShareAiToAa?.addEventListener('click', shareAiSettingsToAaforge);
     el.btnHints?.addEventListener('click', () => openHints());
     if (el.btnCar) {
       el.btnCar.addEventListener('click', () => {
