@@ -1,5 +1,47 @@
 # Forge (phone) session log — LOCKED
 
+## Future feature — Forge code mode (not implemented)
+
+**Definition:** Code mode is not another workspace/tool-loop mode. It asks the LLM to generate JavaScript that orchestrates Forge tools, preprocesses their inputs and outputs, and then calls the LLM again with the processed context before producing the final mini-app.
+
+### Intended flow
+```text
+Forge request → LLM generates workflow JS → restricted executor
+  → calls Forge tools → preprocesses/postprocesses results
+  → calls LLM again → final mini-app payload / finish
+```
+
+### Why it may help mini-app forging
+- Parallel asset/data operations with `Promise.all`.
+- Image-generation pipelines with filtering, normalization, selection, and provider/model fallback.
+- Compact preprocessing of web/tool output before the final LLM context.
+- Deterministic retries, branching, aggregation, and validation.
+- Less conversational overhead for complex, asset-heavy, or data-driven apps.
+
+### Recommended scope
+- Optional advanced mode; do not replace classic or current agentic builder behavior.
+- Prefer implementing it first as a builder capability/tool, e.g. `run_code_workflow`, rather than changing the default Forge path.
+- Simple apps should continue using classic generation; complex workflows may opt into code mode.
+- The generated program needs an explicit final result contract, such as returning a final LLM response or calling `finish`.
+
+### Mandatory safety/design constraints
+- Execute generated JS in a restricted sandbox, not unrestricted host `new Function()`.
+- No DOM, `window`, cookies, arbitrary storage, fetch/XHR/WebSocket, Capacitor, native bridge, or unrestricted filesystem access.
+- Expose narrow APIs only, conceptually: `forge.tools.run`, `forge.llm`, `forge.print`, `forge.sleep`, and explicitly scoped workspace/finalization helpers.
+- Route tool calls through existing risk tiers and confirmation/veto controls.
+- Apply code-size, runtime, loop, output-size, tool-call, and cancellation limits.
+- Reuse `ai.cancel(id)` semantics and make all tool/LLM calls abortable.
+- Never expose API keys to generated code or mini-apps.
+
+### Open implementation questions
+1. Dedicated `ai.code` host API versus builder tool `run_code_workflow`.
+2. Sandbox implementation supporting asynchronous allowlisted host functions.
+3. How generated code returns/streams intermediate progress.
+4. Whether code mode should be explicitly selected or automatically offered for complex builds.
+5. How `finish` and final LLM calls are represented without allowing apps to bypass host validation.
+
+**Status:** Design captured for future work only. Do not implement or enable by default without a new plan and smoke tests.
+
 ## ⛔ INVARIANT
 **Never delete folders without explicit user permission.** See [`INVARIANTS.md`](INVARIANTS.md).
 
