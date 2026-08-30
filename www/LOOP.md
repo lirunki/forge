@@ -75,7 +75,7 @@ Never reference external CDNs/URLs — the final app must be fully self-containe
   - `api.print(...)` — debug output, returned to you
   - Offline only (no fetch, no DOM). 10 second hard limit. Returned: `{ ok,
     result, printed, wrote, writeErrors?, error? }`.
-- `gen_image({ prompt })` → `{ path }` (e.g. `images/gen_1.png`). Use it as
+- `gen_image({ prompt })` → `{ path }` (e.g. `images/gen_1.png`). It uses xAI's `grok-imagine-image` model. Use it as
   `@asset('images/gen_1.png')`. Max 6 per build.
 - `finish({ title, summary, message, entry? })` — assembles + delivers.
 

@@ -1594,7 +1594,10 @@ termux-reload-settings</div>
               <input id="genMaxTokens" type="number" inputmode="numeric" min="1024" max="262144" step="1024" value="32768" />
             </div>
           </div>
-          <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.genTimeoutHint">Watchdog for Forge it / Reforge: when time is up you can extend or stop. Progress lands in Console.</p>
+          <label for="imageGenerationModel" data-i18n="ai.imageGenerationModel">Default image-generation model</label>
+ <input id="imageGenerationModel" type="text" value="grok-imagine-image" placeholder="grok-imagine-image" autocomplete="off" />
+ <p class="field-hint" data-i18n="ai.imageGenerationModelHint">Used by the agentic builder image tool.</p>
+ <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.genTimeoutHint">Watchdog for Forge it / Reforge: when time is up you can extend or stop. Progress lands in Console.</p>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.maxTokensHint">Output budget for Forge it / Reforge. Raise it if big apps get cut off (max-token limit); lower it if a provider rejects the request.</p>
               </div>
             </details>
@@ -7801,6 +7804,7 @@ termux-reload-settings</div>
         try {
           const mt = parseInt(localStorage.getItem(LS.genMaxTokens), 10);
           if (el.genMaxTokens && Number.isFinite(mt) && mt >= 1024 && mt <= 262144) el.genMaxTokens.value = String(mt);
+          if (el.imageGenerationModel) el.imageGenerationModel.value = getImageGenerationModel();
         } catch (_) {}
         syncAgenticLoopCheckbox();
         syncBuilderResearchCheckbox();
@@ -7828,6 +7832,8 @@ termux-reload-settings</div>
         if (Number.isFinite(gt) && gt >= 30 && gt <= 1800) localStorage.setItem(LS.genTimeout, String(gt));
         const mt = parseInt(el.genMaxTokens && el.genMaxTokens.value, 10);
         if (Number.isFinite(mt) && mt >= 1024 && mt <= 262144) localStorage.setItem(LS.genMaxTokens, String(mt));
+        const imageModel = String(el.imageGenerationModel?.value || '').trim();
+        if (imageModel) localStorage.setItem(LS.imageGenerationModel, imageModel);
       } catch (_) {}
       syncAiActiveSummary();
     }
@@ -13383,7 +13389,7 @@ termux-reload-settings</div>
               items: { type: 'string' },
             },
             n: { type: 'integer', description: 'Number of images to generate (1-4). Default 1.' },
-            model: { type: 'string', description: 'Model override (default grok-2-image).' },
+            model: { type: 'string', description: 'Model override (default grok-imagine-image).' },
           },
           required: ['prompt'],
         },
@@ -13562,15 +13568,15 @@ termux-reload-settings</div>
 
     // ——— Image generation (xAI Grok image model) ———
     // xAI exposes an OpenAI-compatible /v1/images/generations endpoint. The
-    // grok-2-image model supports text-to-image and image-to-image (seed images
-    // passed as image_url entries). Only the xAI backend is supported; other
-    // providers error out with a clear message.
+    // xAI image generation uses the current image model (grok-imagine-image).
+    // Seed images are passed using the API image_url field. Only the xAI backend
+    // is supported; other providers error out with a clear message.
     async function generateImage(args) {
       const prompt = String(args?.prompt || '').trim();
       if (!prompt) throw new Error('image_generate: prompt is required');
       const n = Math.max(1, Math.min(4, parseInt(args?.n, 10) || 1));
       const seedImages = Array.isArray(args?.images) ? args.images.filter(Boolean) : [];
-      const model = String(args?.model || 'grok-2-image').trim();
+      const model = String(args?.model || 'grok-imagine-image').trim();
 
       const rt = getAiRuntime();
       const backend = backendForRuntime(rt);
@@ -13594,7 +13600,7 @@ termux-reload-settings</div>
       }).filter(Boolean);
 
       const body = { model, prompt, n };
-      // xAI image-to-image: pass seed images as an array of image_url objects.
+      // xAI image-to-image: pass seed images as image_url objects.
       if (imageUrls.length) body.image_url = imageUrls.map((url) => ({ url }));
 
       const fgs = aiFgsAcquire('Generating image…');
@@ -22812,7 +22818,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       savePrefs();
     });
 
-    ['apiBase','apiKey','model','temperature','jsonMode','genTimeoutSecs','genMaxTokens',
+    ['apiBase','apiKey','model','temperature','jsonMode','genTimeoutSecs','genMaxTokens','imageGenerationModel',
      'azureResource','azureDeployment','azureApiVersion','azureAuth'].forEach(id => {
       el[id]?.addEventListener('change', savePrefs);
       el[id]?.addEventListener('blur', savePrefs);
