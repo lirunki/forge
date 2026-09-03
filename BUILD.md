@@ -32,7 +32,7 @@ Package: `com.forge.live` · repo root: `~/downloads/forge` · remote: `https://
   forge-git-push.sh                    ← commit + PAT-authenticated push to origin
   Forge-debug-rebuilt.apk              ← canonical debug APK (full flavor)
   Forge-debug.apk                      ← ORIGINAL user APK (never modify)
-  i18n_salvage/                        ← i18n regen: surgery.py + dict_*.py + stashed.html
+  i18n_salvage/ ← i18n regen: surgery.py + dict_*.py (uses current forge/www/index.html)
 ~/sdk-tools-aarch64/                   ← arm64 SDK (build-tools, platform-tools, others)
 ```
 
@@ -214,18 +214,17 @@ Host UI is localized via an inline `FORGE_I18N` dict in `www/index.html` between
 
 ### Regenerating / adding a language
 
-Source dicts + the regeneration script live in `~/downloads/i18n_salvage/`:
+Source dicts + the regeneration script live in `~/downloads/forge/i18n_salvage/`:
 ```
-surgery.py            ← reads stashed.html + dict_*.py, writes forge/www/index.html
+surgery.py ← reads current forge/www/index.html + dict_*.py, replaces only the i18n block
 dict_en.py            ← canonical English (426 keys incl. gate.*)
 dict_es.py dict_fr.py dict_pt.py dict_ja.py   ← original (double-encoded UTF-8; surgery repairs)
 dict_ko.py            ← Korean (proper UTF-8, 508 keys)
-dict_ja_fix.py        ← 93 re-translations for lossy ja strings (overlaid after repair)
-stashed.html          ← the WIP host with gate machinery (surgery strips the gate)
+dict_ja.py            ← includes the 93 Japanese repairs; no separate overlay file is required
 ```
 
 ```bash
-cd ~/downloads/i18n_salvage && python3 surgery.py
+cd ~/downloads/forge/i18n_salvage && python3 surgery.py
 # then sync + gate + build:
 cp ~/downloads/forge/www/index.html ~/downloads/forge/android/app/src/main/assets/public/index.html
 cd ~/downloads/forge && bash ~/downloads/forge_check.sh
@@ -234,7 +233,7 @@ cd ~/downloads/forge && bash ~/downloads/forge_check.sh
 `surgery.py` mojibake rule: `encode('latin-1').decode('utf-8')` round trip; proper
 text with non-latin1 chars (CJK, …, —) fails the encode → kept; lossy strings
 (dropped C1 bytes) with mojibake lead-pairs → dropped key → `t()` falls back to en.
-The ja-fix overlay re-adds the 93 lossy keys as proper UTF-8.
+The merged `dict_ja.py` entries preserve the 93 recovered Japanese translations as proper UTF-8.
 
 To add a new language: write `dict_<lang>.py` (full 425 common + 81 ns keys, proper
 UTF-8), add the lang to `LANGS` + `FORGE_LANGS` + `RESTART_HINT` in `surgery.py`,

@@ -1573,7 +1573,7 @@ complex — dictionary, N copies, selector." **This land is the minimal shape:**
 - **93 ja strings had dropped bytes** (C1 byte stripped in old pipeline — lossy,
   unrecoverable): dropped keys → `t()` falls back to English for those.
   ja ≈ 414/507 keys translated; es/fr/pt full.
-- Salvage scripts kept in `~/downloads/i18n_salvage/` (surgery.py + dicts + stashed.html).
+- Salvage scripts kept in `~/downloads/forge/i18n_salvage/` (surgery.py + current-host dict sources).
 - The old **stash still exists** (`stash@{0}`) — kept per INVARIANTS; ask user
   before dropping now that salvage is committed.
 
@@ -1616,10 +1616,10 @@ Smoke (device pending — adb offline at build time):
 - `{var}` token parity checked across every key in every language.
 - `forge_check.sh` + `forge_docs_check` PASS; both flavor debug APKs build.
 
-### Salvage artifacts (kept in `~/downloads/i18n_salvage/`)
+### Salvage artifacts (kept in `~/downloads/forge/i18n_salvage/`)
 - `dict_ko.py` (full Korean, 508 incl. gate.* + langRestart)
-- `dict_ja_fix.py` (93 re-translations)
-- `surgery.py` (regeneration script; ko row kept, ja-fix overlay added)
+- `dict_ja.py` (includes the 93 Japanese repairs)
+- `surgery.py` (regeneration script; ko row kept, merged Japanese repairs retained)
 - `dict_en.py` / `dict_es/fr/pt/ja.py` (originals, mojibake-repaired at gen)
 
 Smoke (device pending — adb offline at build time):
