@@ -246,7 +246,6 @@ re-run, sync, gate, build.
 From `INVARIANTS.md` + `session.md`:
 - **Never delete folders** without explicit user permission naming the folder.
 - **Original APK** `~/downloads/Forge-debug.apk` never modified.
-- **`recovered/`** (JADX/APKEditor reference) never delete.
 - **Selects / theme / MainActivity** match original APK behavior — no
   `FORGE_SELECT_FIX`, no `appearance:none` hacks, no `FORCE_DARK`, no custom
   HTML dropdown, no `configureWebViewChrome`/`AppCompatDelegate` night force.

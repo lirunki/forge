@@ -5,7 +5,7 @@
 ```
 ╔══════════════════════════════════════════════════════════════════╗
 ║  DO NOT delete, rm -rf, wipe, or empty ANY folder                ║
-║  (forge/, recovered/, android/, www/, node_modules/, backups)    ║
+║  (forge/, android/, www/, node_modules/, backups)    ║
 ║                                                                  ║
 ║  ONLY with EXPLICIT user permission naming that path.            ║
 ║  “clean up / rebuild / recover / reorganize” ≠ permission.       ║
@@ -20,5 +20,5 @@
 - npm install into existing tree
 
 ### Not allowed without explicit consent
-- Deleting `recovered/`, whole `forge/`, `android/`, original APKs
+- Deleting whole `forge/`, `android/`, original APKs
 - Wiping trees to “start fresh”

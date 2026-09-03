@@ -80,7 +80,7 @@ it's all there.
 | **AI Chat samples** | `~/downloads/Forge_AI_Chat.*.html` pass `attachments` + correct tool bind | Re-import on device if old mini-app HTML still installed |
 | **Menu Translator sample** | `~/downloads/Menu_Translator.html` + prompt `Forge_Prompt_Menu_Translator.md` | Camera thumbs via setImg/fallback; AI attachments never blob:; re-import if device HTML stale |
 | **Original binary** | `Forge-debug.apk` never modified | Prefer for absolute binary identity |
-| **`recovered/`** | JADX / APKEditor reference | **Never delete** without explicit user OK naming the folder |
+| Recovery archive | Removed with explicit user approval; canonical source is retained in Git |
 
 ---
 
@@ -1947,7 +1947,7 @@ Smoke (device pending — no adb at build time):
 
 ## Graphify knowledge graph (2026-08-23)
 
-`forge/graphify-out/` — queryable knowledge graph of the project (1033 nodes / 2318 edges / 74 labeled communities; AST for Java/JS + LLM semantic layer for session.md/docs/samples; resource icons + duplicate assets host copy excluded by design; `recovered/` excluded by detect). Query with `graphify query "..."` from the project root. Provider: cheaperinference glm-5.3 via `~/.graphify/providers.json` — **no `extra_body`** (the gateway chokes on top-level `thinking` key: finish=length, empty content). Large-file extraction wedges at 600s read timeout → use `token_budget=6000` slices. Nested `graphify-out/graphify-out/` is a pipeline checkpoint artifact — harmless, don't ship.
+`forge/graphify-out/` — queryable knowledge graph of the project (1033 nodes / 2318 edges / 74 labeled communities; AST for Java/JS + LLM semantic layer for session.md/docs/samples; resource icons + duplicate assets host copy excluded by design; recovery archive excluded by detect). Query with `graphify query "..."` from the project root. Provider: cheaperinference glm-5.3 via `~/.graphify/providers.json` — **no `extra_body`** (the gateway chokes on top-level `thinking` key: finish=length, empty content). Large-file extraction wedges at 600s read timeout → use `token_budget=6000` slices. Nested `graphify-out/graphify-out/` is a pipeline checkpoint artifact — harmless, don't ship.
 
 ## Release artifacts @ 2.7.4/134 (2026-08-23)
 
