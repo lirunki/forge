@@ -9748,16 +9748,17 @@ termux-reload-settings</div>
     clear: () => call('storage.clear'),
     getAll: () => call('storage.getAll'),
   };
+  function subscribe(event, fn) {
+    if (!event || typeof fn !== 'function') return () => {};
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(fn);
+    return () => { listeners.get(event)?.delete(fn); };
+  }
   window.ForgeHost = {
     getAppInfo: () => call('getAppInfo'),
     getCapabilities: () => call('getCapabilities'),
     /** Subscribe to host lifecycle / inbound events: ready, resume, pause, destroy, notify, share */
-    on: (event, fn) => {
-      if (!event || typeof fn !== 'function') return () => {};
-      if (!listeners.has(event)) listeners.set(event, new Set());
-      listeners.get(event).add(fn);
-      return () => { listeners.get(event)?.delete(fn); };
-    },
+    on: subscribe,
     off: (event, fn) => { listeners.get(event)?.delete(fn); },
     permissions: {
       get: () => call('permissions.get'),
@@ -9911,7 +9912,7 @@ termux-reload-settings</div>
         delete o.id;
         const wantEvents = !!(onToken || onDelta || onToolCall);
         const off = wantEvents
-          ? on('ai.stream.delta', (d) => {
+          ? subscribe('ai.stream.delta', (d) => {
               if (!d || d.callId !== callId) return;
               try {
                 if (d.delta != null && (onToken || onDelta)) (onToken || onDelta)(d.delta, d);
@@ -9951,7 +9952,7 @@ termux-reload-settings</div>
         o.__wantStream = !!(onToken);
         const wantEvents = !!(onToken || onToolCall || onRound || onChat || onToolResult);
         const off = wantEvents
-          ? on('ai.agent.event', (d) => {
+          ? subscribe('ai.agent.event', (d) => {
               if (!d || d.callId !== callId) return;
               try {
                 if (d.type === 'toolCallRequest' && onToolCall) {
