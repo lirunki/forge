@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Still Water</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0a1f2e; font-family: system-ui, -apple-system, sans-serif; }
+  .container { height: 100vh; display: flex; flex-direction: column; }
+  .header { padding: 14px 18px 10px; text-align: center; background: rgba(15,42,58,0.85); color: #c5e0f0; border-bottom: 1px solid rgba(165,216,255,0.1); }
+  .title { font-size: 21px; font-weight: 300; letter-spacing: 2.5px; margin: 0; }
+  .subtitle { font-size: 10px; opacity: 0.6; margin-top: 3px; letter-spacing: 0.5px; }
+  #canvas { flex: 1; width: 100%; display: block; touch-action: none; background: #0c2533; }
+  .controls { display: flex; gap: 6px; padding: 10px 8px; background: rgba(15,42,58,0.92); }
+  button { flex: 1; padding: 12px 8px; font-size: 12px; font-weight: 500; border: none; border-radius: 9999px; background: rgba(165,216,255,0.08); color: #a5d8ff; transition: all 0.1s ease; }
+  button:active { background: rgba(165,216,255,0.2); transform: scale(0.985); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">Still Water</div>
+    <div class="subtitle">Drag to ripple • Hold to drop pebble</div>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div class="controls">
+    <button id="breathe-btn">Breathe</button>
+    <button id="color-btn">Sort Color</button>
+    <button id="size-btn">Sort Size</button>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d', { alpha: true });
+let w = 320, h = 500;
+let time = 0;
+let jellyfish = [];
+let kelp = [];
+let stones = [];
+let shells = [];
+let ripples = [];
+let pebbles = [];
+let bubbles = [];
+let longPressTimer = null;
+let draggedShell = null;
+let breatheInterval = null;
+let isDragging = false;
+
+function resize() {
+  w = canvas.clientWidth || window.innerWidth;
+  h = canvas.clientHeight || Math.max(420, window.innerHeight - 140);
+  canvas.width = w;
+  canvas.height = h;
+  if (stones.length === 0) initElements();
+}
+
+function initElements() {
+  kelp = [];
+  for (let i = 0; i < 6; i++) {
+    kelp.push({ x: 28 + (w - 56) * (i / 5), phase: Math.random() * Math.PI * 2, length: 85 + Math.random() * 45 });
+  }
+  jellyfish = [];
+  for (let i = 0; i < 4; i++) {
+    jellyfish.push({
+      x: 55 + Math.random() * (w - 110),
+      y: 75 + Math.random() * (h * 0.48),
+      size: 26 + Math.random() * 19,
+      phase: Math.random() * Math.PI * 2,
+      vx: (Math.random() - 0.5) * 0.38,
+      vy: (Math.random() - 0.5) * 0.18
+    });
+  }
+  stones = [];
+  const stonePos = [0.14, 0.29, 0.48, 0.68, 0.84];
+  stonePos.forEach(p => {
+    stones.push({ x: w * p, y: h - 48, r: 13 + Math.random() * 9 });
+  });
+  shells = [];
+  const shellColors = ['#d4d9d0', '#b8c8b8', '#c5b8a8', '#a8c0b8'];
+  const cats = ['sand', 'teal', 'pearl', 'stone'];
+  for (let i = 0; i < 8; i++) {
+    shells.push({
+      x: 38 + Math.random() * (w - 76),
+      y: 115 + Math.random() * (h * 0.52),
+      size: 7 + Math.random() * 11,
+      color: shellColors[i % shellColors.length],
+      cat: cats[i % cats.length],
+      targetX: null,
+      targetY: null
+    });
+  }
+  bubbles = [];
+  for (let i = 0; i < 10; i++) {
+    bubbles.push({ x: Math.random() * w, y: Math.random() * h, r: 1.6 + Math.random() * 2.4, speed: 0.38 + Math.random() * 0.55 });
+  }
+}
+
+function addRipple(x, y, str = 1) {
+  if (ripples.length > 18) ripples.shift();
+  ripples.push({ x, y, r: 4, alpha: 0.65 * str, maxR: 85 * str + 25 });
+}
+
+function dropPebble(x, y) {
+  const bottom = h - 50;
+  pebbles.push({ x, y, targetY: bottom, size: 7 + Math.random() * 5, vx: (Math.random() - 0.5) * 1.1, falling: true });
+  addRipple(x, y, 1.1);
+}
+
+function sortShells(mode) {
+  if (mode === 'color') {
+    shells.sort((a, b) => a.cat.localeCompare(b.cat));
+  } else {
+    shells.sort((a, b) => a.size - b.size);
+  }
+  const margin = 32;
+  const step = (w - margin * 2) / Math.max(1, shells.length - 1);
+  const baseY = h * 0.78;
+  shells.forEach((s, i) => {
+    s.targetX = margin + step * i;
+    s.targetY = baseY + (i % 2 ? 5 : -5);
+  });
+}
+
+function update() {
+  time += 0.016;
+  jellyfish.forEach(j => {
+    j.x += j.vx;
+    j.y += j.vy + Math.sin(time * 0.55 + j.phase) * 0.14;
+    j.phase += 0.014;
+    if (j.x < 22) { j.x = 22; j.vx = Math.abs(j.vx); }
+    if (j.x > w - 22) { j.x = w - 22; j.vx = -Math.abs(j.vx); }
+    if (j.y < 38) { j.y = 38; j.vy = Math.abs(j.vy); }
+    if (j.y > h * 0.62) { j.y = h * 0.62; j.vy = -Math.abs(j.vy); }
+  });
+  shells.forEach(s => {
+    if (s.targetX !== null) {
+      s.x += (s.targetX - s.x) * 0.075;
+      s.y += (s.targetY - s.y) * 0.075;
+    } else {
+      s.y += Math.sin(time * 0.28 + s.x * 0.008) * 0.09;
+    }
+    s.x = Math.max(22, Math.min(w - 22, s.x));
+    s.y = Math.max(48, Math.min(h - 65, s.y));
+  });
+  for (let i = pebbles.length - 1; i >= 0; i--) {
+    const p = pebbles[i];
+    if (p.falling) {
+      p.y += 3.6;
+      p.x += p.vx;
+      if (p.y >= p.targetY) {
+        p.y = p.targetY;
+        p.falling = false;
+        const gs = 32;
+        p.x = Math.round(p.x / gs) * gs;
+        p.x = Math.max(22, Math.min(w - 22, p.x));
+        stones.push({ x: p.x, y: p.y, r: p.size });
+        addRipple(p.x, p.y, 1.55);
+        pebbles.splice(i, 1);
+      }
+    }
+  }
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i];
+    r.r += 2.35;
+    r.alpha -= 0.011;
+    if (r.alpha < 0.02 || r.r > r.maxR) ripples.splice(i, 1);
+  }
+  bubbles.forEach(b => {
+    b.y -= b.speed;
+    if (b.y < 4) {
+      b.y = h - 4;
+      b.x = Math.random() * w;
+    }
+  });
+}
+
+function draw() {
+  ctx.fillStyle = '#0c2533';
+  ctx.fillRect(0, 0, w, h);
+  const grad = ctx.createLinearGradient(0, h * 0.58, 0, h);
+  grad.addColorStop(0, 'rgba(15,42,58,0)');
+  grad.addColorStop(1, 'rgba(8,25,35,0.55)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, h * 0.52, w, h * 0.48);
+  ctx.fillStyle = 'rgba(135, 185, 205, 0.06)';
+  ctx.fillRect(0, 0, w, h * 0.32);
+  ctx.strokeStyle = '#1f4a3f';
+  ctx.lineWidth = 5;
+  kelp.forEach(k => {
+    ctx.beginPath();
+    let cy = h - 14;
+    ctx.moveTo(k.x, cy);
+    for (let s = 1; s < 7; s++) {
+      const prog = s / 6;
+      const sway = Math.sin(time * 1.05 + k.phase + s * 1.15) * (7.5 * prog + 2.5);
+      ctx.lineTo(k.x + sway, cy - k.length * prog);
+    }
+    ctx.stroke();
+  });
+  stones.forEach(st => {
+    ctx.fillStyle = '#2f4a5a';
+    ctx.beginPath();
+    ctx.ellipse(st.x, st.y, st.r, st.r * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(200,220,230,0.13)';
+    ctx.beginPath();
+    ctx.ellipse(st.x - 2.5, st.y - 3.5, st.r * 0.48, st.r * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.fillStyle = 'rgba(210, 235, 250, 0.32)';
+  bubbles.forEach(b => {
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  shells.forEach(s => {
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.fillStyle = s.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s.size, s.size * 0.52, -0.28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(55,65,55,0.22)';
+    ctx.lineWidth = 0.9;
+    for (let r = -2; r <= 2; r++) {
+      ctx.beginPath();
+      ctx.moveTo(-s.size * 0.72, r * 2.3);
+      ctx.lineTo(s.size * 0.72, r * 2.3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+  jellyfish.forEach(j => {
+    const pulse = Math.sin(j.phase * 1.45) * 1.7 + j.size;
+    ctx.fillStyle = 'rgba(175, 205, 225, 0.52)';
+    ctx.beginPath();
+    ctx.ellipse(j.x, j.y, pulse * 0.92, pulse * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(200, 225, 240, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(j.x, j.y - 2, pulse * 0.58, pulse * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(140, 180, 200, 0.42)';
+    ctx.lineWidth = 1.15;
+    for (let t = 0; t < 4; t++) {
+      const offset = (t - 1.5) * (pulse * 0.32);
+      ctx.beginPath();
+      ctx.moveTo(j.x + offset, j.y + pulse * 0.42);
+      const sway = Math.sin(time * 1.75 + j.phase + t * 1.9) * 4.5;
+      ctx.quadraticCurveTo(j.x + offset + sway * 0.55, j.y + pulse * 0.62, j.x + offset + sway, j.y + pulse * 0.42 + 21);
+      ctx.stroke();
+    }
+  });
+  ctx.lineWidth = 2;
+  ripples.forEach(r => {
+    ctx.globalAlpha = Math.max(0.04, r.alpha);
+    ctx.strokeStyle = '#b8d8e8';
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+    ctx.stroke();
+    if (r.r > 14) {
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.r * 0.62, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  });
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(85, 125, 145, 0.22)';
+  ctx.lineWidth = 11;
+  ctx.strokeRect(3, 3, w - 6, h - 6);
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: cx - rect.left, y: cy - rect.top };
+}
+
+function handleTouchStart(pos) {
+  draggedShell = null;
+  for (let i = shells.length - 1; i >= 0; i--) {
+    const s = shells[i];
+    if (Math.hypot(s.x - pos.x, s.y - pos.y) < s.size + 17) {
+      draggedShell = s;
+      isDragging = true;
+      return;
+    }
+  }
+  addRipple(pos.x, pos.y, 0.65);
+  clearTimeout(longPressTimer);
+  longPressTimer = setTimeout(() => {
+    dropPebble(pos.x, pos.y);
+  }, 620);
+}
+
+function handleTouchMove(pos) {
+  if (isDragging && draggedShell) {
+    draggedShell.x = pos.x;
+    draggedShell.y = pos.y;
+    draggedShell.targetX = null;
+    draggedShell.targetY = null;
+    if (Math.random() < 0.38) addRipple(pos.x, pos.y, 0.22);
+  } else {
+    addRipple(pos.x, pos.y, 0.42);
+  }
+}
+
+function handleTouchEnd() {
+  clearTimeout(longPressTimer);
+  isDragging = false;
+  draggedShell = null;
+}
+
+function startBreathe(ev) {
+  if (ev) ev.preventDefault();
+  const cx = w / 2;
+  const cy = h * 0.54;
+  addRipple(cx, cy, 2.1);
+  clearInterval(breatheInterval);
+  breatheInterval = setInterval(() => {
+    if (w > 0) addRipple(cx + (Math.random() - 0.5) * 38, cy + (Math.random() - 0.5) * 28, 1.05);
+  }, 620);
+}
+
+function stopBreathe(ev) {
+  if (ev) ev.preventDefault();
+  clearInterval(breatheInterval);
+  breatheInterval = null;
+}
+
+function setupInteractions() {
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); handleTouchStart(getPos(e)); }, { passive: false });
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); handleTouchMove(getPos(e)); }, { passive: false });
+  canvas.addEventListener('touchend', e => { e.preventDefault(); handleTouchEnd(); }, { passive: false });
+  canvas.addEventListener('mousedown', e => { handleTouchStart(getPos(e)); });
+  canvas.addEventListener('mousemove', e => { if (e.buttons === 1) handleTouchMove(getPos(e)); });
+  canvas.addEventListener('mouseup', () => handleTouchEnd());
+  const breatheBtn = document.getElementById('breathe-btn');
+  const colorBtn = document.getElementById('color-btn');
+  const sizeBtn = document.getElementById('size-btn');
+  breatheBtn.addEventListener('touchstart', startBreathe, { passive: false });
+  breatheBtn.addEventListener('touchend', stopBreathe, { passive: false });
+  breatheBtn.addEventListener('mousedown', startBreathe);
+  breatheBtn.addEventListener('mouseup', stopBreathe);
+  breatheBtn.addEventListener('mouseleave', stopBreathe);
+  colorBtn.addEventListener('click', () => sortShells('color'));
+  sizeBtn.addEventListener('click', () => sortShells('size'));
+}
+
+function init() {
+  resize();
+  window.addEventListener('resize', resize);
+  setupInteractions();
+  setTimeout(() => {
+    if (w > 0) {
+      addRipple(w * 0.28, h * 0.38, 0.85);
+      addRipple(w * 0.72, h * 0.47, 0.65);
+    }
+  }, 380);
+  loop();
+}
+window.onload = init;
+</script>
+</body>
+</html>

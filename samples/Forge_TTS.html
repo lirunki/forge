@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge TTS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; }
+  .card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+  .tap { min-height: 48px; }
+</style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<div class="max-w-md mx-auto min-h-screen p-4">
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6 pt-2">
+    <div>
+      <h1 class="text-3xl font-semibold tracking-tight">Forge TTS</h1>
+      <p class="text-zinc-400 text-sm">LLM voices + Android fallback</p>
+    </div>
+    <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center">
+      <span class="text-xl">🔊</span>
+    </div>
+  </div>
+
+  <!-- Provider -->
+  <div class="mb-4">
+    <label class="block text-xs font-medium text-zinc-400 mb-1.5 px-1">LLM PROVIDER</label>
+    <select id="provider" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-base tap focus:outline-none focus:border-emerald-500"></select>
+  </div>
+
+  <!-- Voice -->
+  <div class="mb-4">
+    <label class="block text-xs font-medium text-zinc-400 mb-1.5 px-1">VOICE</label>
+    <select id="voice" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-base tap focus:outline-none focus:border-emerald-500"></select>
+  </div>
+
+  <!-- Language -->
+  <div class="mb-4">
+    <label class="block text-xs font-medium text-zinc-400 mb-1.5 px-1">LANGUAGE</label>
+    <select id="lang" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-base tap focus:outline-none focus:border-emerald-500">
+      <option value="en-US">English (US)</option>
+      <option value="en-GB">English (UK)</option>
+      <option value="es-ES">Spanish</option>
+      <option value="fr-FR">French</option>
+      <option value="de-DE">German</option>
+      <option value="it-IT">Italian</option>
+      <option value="ja-JP">Japanese</option>
+    </select>
+  </div>
+
+  <!-- Text -->
+  <div class="mb-4">
+    <label class="block text-xs font-medium text-zinc-400 mb-1.5 px-1">TEXT TO SPEAK</label>
+    <textarea id="text" rows="4" class="w-full bg-zinc-900 border border-zinc-800 rounded-3xl px-4 py-4 text-base resize-y min-h-[120px] tap focus:outline-none focus:border-emerald-500" placeholder="Enter text here...">Hello! This is a test of the Forge text to speech system.</textarea>
+  </div>
+
+  <!-- Actions -->
+  <div class="flex gap-3">
+    <button onclick="speak()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold py-4 rounded-3xl tap text-lg flex items-center justify-center gap-2">
+      <span>▶️</span> <span>Speak</span>
+    </button>
+    <button onclick="stopSpeaking()" class="px-6 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 rounded-3xl tap flex items-center justify-center">
+      ⏹
+    </button>
+  </div>
+
+  <div id="status" class="mt-4 text-center text-xs text-zinc-500 h-5"></div>
+</div>
+
+<script>
+const statusEl = document.getElementById('status');
+const providerSel = document.getElementById('provider');
+const voiceSel = document.getElementById('voice');
+const langSel = document.getElementById('lang');
+const textEl = document.getElementById('text');
+
+async function init() {
+  try {
+    // Load providers
+    const menu = await ForgeHost.ai.listProviders();
+    providerSel.innerHTML = '';
+    menu.providers.filter(p => p.available).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.label} (${p.model})`;
+      if (p.isSelected || p.isDefault) opt.selected = true;
+      providerSel.appendChild(opt);
+    });
+
+    // Load voices
+    await loadVoices();
+
+    // Set provider change listener
+    providerSel.onchange = async () => {
+      await ForgeHost.ai.setProvider(providerSel.value);
+      await loadVoices();
+    };
+
+    statusEl.textContent = 'Ready';
+  } catch (e) {
+    statusEl.textContent = 'Error loading providers';
+    console.error(e);
+  }
+}
+
+async function loadVoices() {
+  try {
+    const vs = await ForgeHost.ai.listVoices();
+    voiceSel.innerHTML = '';
+    const voices = vs.voices || vs.options || [];
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.value || v.id;
+      opt.textContent = v.label || v.name;
+      voiceSel.appendChild(opt);
+    });
+  } catch (e) {
+    console.error('Voices error', e);
+  }
+}
+
+async function speak() {
+  const text = textEl.value.trim();
+  if (!text) {
+    statusEl.textContent = 'Please enter some text';
+    return;
+  }
+
+  statusEl.textContent = 'Speaking...';
+  try {
+    await ForgeHost.ai.tts({
+      text: text,
+      voice: voiceSel.value,
+      language: langSel.value,
+      mode: 'auto'
+    });
+    statusEl.textContent = 'Done';
+  } catch (e) {
+    statusEl.textContent = 'TTS failed: ' + e.message;
+  }
+}
+
+function stopSpeaking() {
+  // Best effort stop for native TTS
+  if (ForgeHost.tts && ForgeHost.tts.stop) {
+    ForgeHost.tts.stop();
+  }
+  statusEl.textContent = 'Stopped';
+}
+
+// Boot
+window.onload = init;
+</script>
+</body>
+</html>

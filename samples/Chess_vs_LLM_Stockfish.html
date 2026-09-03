@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess vs LLM</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 12px; background: #111; color: #eee; }
+  .container { max-width: 420px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 1.4rem; margin: 8px 0 4px; }
+  #board {
+    display: grid;
+    width: 320px;
+    height: 320px;
+    margin: 12px auto;
+    border: 3px solid #444;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    transition: background 0.1s;
+    box-sizing: border-box;
+  }
+  .cell.light { background: #f0d9b5; }
+  .cell.dark { background: #b58863; }
+  .cell.selected { background: #ffeb3b !important; }
+  .cell.valid::after {
+    content: '';
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    background: rgba(0, 140, 0, 0.55);
+    border-radius: 50%;
+    z-index: 1;
+  }
+  .piece { line-height: 1; }
+  .piece.white { color: #f8f8f8; text-shadow: 0 1px 2px #000, 1px 1px 1px #000; }
+  .piece.black { color: #222; }
+  .controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
+  button {
+    padding: 10px 16px;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+    min-width: 78px;
+  }
+  button:active { transform: scale(0.96); }
+  button.secondary { background: #374151; }
+  .settings {
+    background: #1f2937;
+    border-radius: 10px;
+    padding: 12px;
+    margin: 12px 0;
+  }
+  .settings label { display: block; margin: 6px 0; font-size: 0.9rem; }
+  select, input { padding: 6px 10px; border-radius: 6px; border: 1px solid #4b5563; background: #111; color: #eee; font-size: 0.95rem; }
+  #status {
+    text-align: center;
+    padding: 8px;
+    background: #1f2937;
+    border-radius: 8px;
+    margin: 8px 0;
+    font-weight: 500;
+    min-height: 28px;
+  }
+  .thinking { color: #60a5fa; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>♟️ Chess vs LLM</h1>
+  <div id="board"></div>
+  <div id="status">Your turn (White)</div>
+  
+  <div class="controls">
+    <button onclick="newGame()">New Game</button>
+    <button onclick="undoMove()" class="secondary">Undo</button>
+    <button onclick="getHint()">Hint</button>
+  </div>
+
+  <div class="settings">
+    <label>Opponent
+      <select id="opponent" onchange="updateOpponentLabel()">
+        <option value="llm">LLM</option>
+        <option value="stockfish">Stockfish (local)</option>
+      </select>
+    </label>
+    <label>Difficulty
+      <select id="difficulty">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+    </label>
+    <label>Provider
+      <select id="provider" onchange="changeProvider()">
+        <option value="">Auto</option>
+        <option value="xai">xAI</option>
+        <option value="groq">Groq</option>
+        <option value="openai">OpenAI</option>
+      </select>
+    </label>
+  </div>
+</div>
+
+<script>
+const PIECES = {
+  'wK': '♔', 'wQ': '♕', 'wR': '♖', 'wB': '♗', 'wN': '♘', 'wP': '♙',
+  'bK': '♚', 'bQ': '♛', 'bR': '♜', 'bB': '♝', 'bN': '♞', 'bP': '♟'
+};
+
+let board = [];
+let turn = 'w';
+let history = [];
+let castling = { wK: true, wQ: true, bK: true, bQ: true };
+let enPassant = null;
+let selected = null;
+let validMoves = [];
+let isThinking = false;
+
+function cloneBoard(b) {
+  return b.map(row => row.slice());
+}
+
+function getColor(p) { return p ? p[0] : null; }
+function getPieceType(p) { return p ? p[1] : null; }
+
+function initBoard() {
+  let b = Array.from({ length: 8 }, () => Array(8).fill(null));
+  b[0] = ['bR', 'bN', 'bB', 'bQ', 'bK', 'bB', 'bN', 'bR'];
+  b[1] = Array(8).fill('bP');
+  b[6] = Array(8).fill('wP');
+  b[7] = ['wR', 'wN', 'wB', 'wQ', 'wK', 'wB', 'wN', 'wR'];
+  return b;
+}
+
+function toFEN() {
+  let fen = '';
+  for (let r = 0; r < 8; r++) {
+    let empty = 0;
+    for (let c = 0; c < 8; c++) {
+      let p = board[r][c];
+      if (!p) empty++;
+      else {
+        if (empty) { fen += empty; empty = 0; }
+        let ch = p[1].toLowerCase();
+        if (p[0] === 'w') ch = ch.toUpperCase();
+        fen += ch;
+      }
+    }
+    if (empty) fen += empty;
+    if (r < 7) fen += '/';
+  }
+  fen += ' ' + turn + ' ';
+  let cast = '';
+  if (castling.wK) cast += 'K';
+  if (castling.wQ) cast += 'Q';
+  if (castling.bK) cast += 'k';
+  if (castling.bQ) cast += 'q';
+  fen += (cast || '-') + ' ';
+  if (enPassant) {
+    let file = String.fromCharCode(97 + enPassant.c);
+    let rank = 8 - enPassant.r;
+    fen += file + rank;
+  } else fen += '-';
+  fen += ' 0 1';
+  return fen;
+}
+
+function isInCheck(color, b = board) {
+  let kingR = -1, kingC = -1;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (b[r][c] === color + 'K') { kingR = r; kingC = c; break; }
+    }
+  }
+  if (kingR === -1) return false;
+  return isSquareAttacked(kingR, kingC, color === 'w' ? 'b' : 'w', b);
+}
+
+function isSquareAttacked(r, c, byColor, b = board) {
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      let p = b[i][j];
+      if (!p || getColor(p) !== byColor) continue;
+      if (canAttack(i, j, r, c, getPieceType(p), b)) return true;
+    }
+  }
+  return false;
+}
+
+function canAttack(fr, fc, tr, tc, type, b) {
+  let dr = tr - fr;
+  let dc = tc - fc;
+  let color = getColor(b[fr][fc]);
+  if (type === 'P') {
+    let dir = color === 'w' ? -1 : 1;
+    return Math.abs(dc) === 1 && dr === dir;
+  }
+  if (type === 'N') {
+    return (Math.abs(dr) === 2 && Math.abs(dc) === 1) || (Math.abs(dr) === 1 && Math.abs(dc) === 2);
+  }
+  if (type === 'K') {
+    return Math.abs(dr) <= 1 && Math.abs(dc) <= 1;
+  }
+  let isDiag = Math.abs(dr) === Math.abs(dc);
+  let isStraight = dr === 0 || dc === 0;
+  if (type === 'B' && !isDiag) return false;
+  if (type === 'R' && !isStraight) return false;
+  if (type === 'Q' && !(isDiag || isStraight)) return false;
+  let stepR = dr === 0 ? 0 : dr / Math.abs(dr);
+  let stepC = dc === 0 ? 0 : dc / Math.abs(dc);
+  let cr = fr + stepR, cc = fc + stepC;
+  while (cr !== tr || cc !== tc) {
+    if (b[cr][cc]) return false;
+    cr += stepR; cc += stepC;
+  }
+  return true;
+}
+
+function getPieceMoves(fr, fc) {
+  let piece = board[fr][fc];
+  if (!piece) return [];
+  let color = getColor(piece);
+  let type = getPieceType(piece);
+  let moves = [];
+  if (type === 'P') {
+    let dir = color === 'w' ? -1 : 1;
+    let nr = fr + dir;
+    if (nr >= 0 && nr < 8 && !board[nr][fc]) {
+      moves.push({ r: nr, c: fc });
+      if ((color === 'w' && fr === 6) || (color === 'b' && fr === 1)) {
+        let nr2 = fr + 2 * dir;
+        if (nr2 >= 0 && nr2 < 8 && !board[nr2][fc]) moves.push({ r: nr2, c: fc });
+      }
+    }
+    for (let d of [-1, 1]) {
+      let nc = fc + d;
+      let nr2 = fr + dir;
+      if (nc >= 0 && nc < 8 && nr2 >= 0 && nr2 < 8) {
+        if (board[nr2][nc] && getColor(board[nr2][nc]) !== color) {
+          moves.push({ r: nr2, c: nc });
+        }
+        if (enPassant && enPassant.r === nr2 && enPassant.c === nc) {
+          moves.push({ r: nr2, c: nc });
+        }
+      }
+    }
+  } else if (type === 'N') {
+    const deltas = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+    for (let [dr, dc] of deltas) {
+      let nr = fr + dr, nc = fc + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && (!board[nr][nc] || getColor(board[nr][nc]) !== color)) {
+        moves.push({ r: nr, c: nc });
+      }
+    }
+  } else if (type === 'K') {
+    const deltas = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    for (let [dr, dc] of deltas) {
+      let nr = fr + dr, nc = fc + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && (!board[nr][nc] || getColor(board[nr][nc]) !== color)) {
+        moves.push({ r: nr, c: nc });
+      }
+    }
+    if ((color === 'w' && fr === 7 && fc === 4) || (color === 'b' && fr === 0 && fc === 4)) {
+      if ((color === 'w' ? castling.wK : castling.bK) && !board[fr][5] && !board[fr][6]) {
+        if (!isInCheck(color) && !isSquareAttacked(fr, 5, color === 'w' ? 'b' : 'w') && !isSquareAttacked(fr, 6, color === 'w' ? 'b' : 'w')) {
+          moves.push({ r: fr, c: 6 });
+        }
+      }
+      if ((color === 'w' ? castling.wQ : castling.bQ) && !board[fr][3] && !board[fr][2] && !board[fr][1]) {
+        if (!isInCheck(color) && !isSquareAttacked(fr, 3, color === 'w' ? 'b' : 'w') && !isSquareAttacked(fr, 2, color === 'w' ? 'b' : 'w')) {
+          moves.push({ r: fr, c: 2 });
+        }
+      }
+    }
+  } else {
+    let slideDirs = [];
+    if (type === 'B' || type === 'Q') slideDirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
+    if (type === 'R' || type === 'Q') slideDirs.push([-1,0],[1,0],[0,-1],[0,1]);
+    for (let [dr, dc] of slideDirs) {
+      let nr = fr + dr, nc = fc + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        if (!board[nr][nc]) {
+          moves.push({ r: nr, c: nc });
+        } else {
+          if (getColor(board[nr][nc]) !== color) moves.push({ r: nr, c: nc });
+          break;
+        }
+        nr += dr; nc += dc;
+      }
+    }
+  }
+  return moves;
+}
+
+function isLegal(fr, fc, tr, tc) {
+  let piece = board[fr][fc];
+  if (!piece) return false;
+  let color = getColor(piece);
+  let possibles = getPieceMoves(fr, fc);
+  if (!possibles.some(m => m.r === tr && m.c === tc)) return false;
+  let savedBoard = cloneBoard(board);
+  let savedEp = enPassant ? { ...enPassant } : null;
+  let savedCast = { ...castling };
+  let p = board[fr][fc];
+  let typ = getPieceType(p);
+  if (typ === 'P' && fc !== tc && !board[tr][tc]) board[fr][tc] = null;
+  board[tr][tc] = p;
+  board[fr][fc] = null;
+  if (typ === 'P' && (tr === 0 || tr === 7)) board[tr][tc] = color + 'Q';
+  if (typ === 'K' && Math.abs(tc - fc) === 2) {
+    let rookFrom = tc > fc ? 7 : 0;
+    let rookTo = tc > fc ? tc - 1 : tc + 1;
+    board[tr][rookTo] = board[tr][rookFrom];
+    board[tr][rookFrom] = null;
+  }
+  let legal = !isInCheck(color);
+  board = savedBoard;
+  enPassant = savedEp;
+  castling = savedCast;
+  return legal;
+}
+
+function getAllLegalMoves(color) {
+  let moves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (board[r][c] && getColor(board[r][c]) === color) {
+        let poss = getPieceMoves(r, c);
+        for (let m of poss) {
+          if (isLegal(r, c, m.r, m.c)) {
+            moves.push({ from: { r, c }, to: { r: m.r, c: m.c } });
+          }
+        }
+      }
+    }
+  }
+  return moves;
+}
+
+function applyMove(fr, fc, tr, tc) {
+  let piece = board[fr][fc];
+  let color = getColor(piece);
+  let type = getPieceType(piece);
+  if (type === 'P' && fc !== tc && !board[tr][tc]) {
+    board[fr][tc] = null;
+  }
+  board[tr][tc] = piece;
+  board[fr][fc] = null;
+  if (type === 'P' && (tr === 0 || tr === 7)) {
+    board[tr][tc] = color + 'Q';
+  }
+  if (type === 'K' && Math.abs(tc - fc) === 2) {
+    let rookFromC = tc > fc ? 7 : 0;
+    let rookToC = tc > fc ? tc - 1 : tc + 1;
+    board[tr][rookToC] = board[tr][rookFromC];
+    board[tr][rookFromC] = null;
+  }
+  if (type === 'K') {
+    if (color === 'w') { castling.wK = false; castling.wQ = false; }
+    else { castling.bK = false; castling.bQ = false; }
+  }
+  if (type === 'R') {
+    if (color === 'w') {
+      if (fc === 0) castling.wQ = false;
+      if (fc === 7) castling.wK = false;
+    } else {
+      if (fc === 0) castling.bQ = false;
+      if (fc === 7) castling.bK = false;
+    }
+  }
+  enPassant = null;
+  if (type === 'P' && Math.abs(tr - fr) === 2) {
+    enPassant = { r: (fr + tr) / 2, c: fc };
+  }
+}
+
+function getStateSnapshot() {
+  return {
+    board: cloneBoard(board),
+    turn: turn,
+    castling: { ...castling },
+    enPassant: enPassant ? { ...enPassant } : null
+  };
+}
+
+function restoreState(snap) {
+  board = cloneBoard(snap.board);
+  turn = snap.turn;
+  castling = { ...snap.castling };
+  enPassant = snap.enPassant ? { ...snap.enPassant } : null;
+}
+
+function makeMove(fr, fc, tr, tc) {
+  history.push(getStateSnapshot());
+  applyMove(fr, fc, tr, tc);
+  turn = turn === 'w' ? 'b' : 'w';
+}
+
+function renderBoard() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  const maxSize = Math.min(window.innerWidth * 0.92, 360);
+  const cellSize = Math.floor(maxSize / 8);
+  const boardSize = cellSize * 8;
+  boardEl.style.width = boardSize + 'px';
+  boardEl.style.height = boardSize + 'px';
+  boardEl.style.gridTemplateColumns = `repeat(8, ${cellSize}px)`;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const cell = document.createElement('div');
+      cell.className = `cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+      cell.style.width = cellSize + 'px';
+      cell.style.height = cellSize + 'px';
+      const piece = board[r][c];
+      if (piece) {
+        const p = document.createElement('span');
+        p.className = `piece ${getColor(piece) === 'w' ? 'white' : 'black'}`;
+        p.style.fontSize = Math.floor(cellSize * 0.78) + 'px';
+        p.textContent = PIECES[piece];
+        cell.appendChild(p);
+      }
+      if (selected && selected.r === r && selected.c === c) cell.classList.add('selected');
+      if (validMoves.some(v => v.r === r && v.c === c)) cell.classList.add('valid');
+      cell.onclick = () => handleCellClick(r, c);
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+function updateStatus() {
+  const status = document.getElementById('status');
+  if (isThinking) {
+    status.textContent = 'LLM thinking...';
+    status.classList.add('thinking');
+    return;
+  }
+  status.classList.remove('thinking');
+  let msg = turn === 'w' ? 'Your turn (White)' : "Opponent's turn";
+  if (isInCheck(turn)) msg += ' (Check)';
+  status.textContent = msg;
+}
+
+function checkGameOver() {
+  const moves = getAllLegalMoves(turn);
+  if (moves.length === 0) {
+    const status = document.getElementById('status');
+    status.textContent = isInCheck(turn) ? (turn === 'w' ? 'White checkmated!' : 'Black checkmated!') : 'Stalemate!';
+    return true;
+  }
+  return false;
+}
+
+function handleCellClick(r, c) {
+  if (isThinking || turn !== 'w') return;
+  const piece = board[r][c];
+  if (selected) {
+    const isValid = validMoves.some(v => v.r === r && v.c === c);
+    if (isValid) {
+      makeMove(selected.r, selected.c, r, c);
+      selected = null;
+      validMoves = [];
+      renderBoard();
+      updateStatus();
+      if (!checkGameOver()) {
+        setTimeout(makeOpponentMove, 280);
+      }
+    } else if (piece && getColor(piece) === 'w') {
+      selected = { r, c };
+      validMoves = getPieceMoves(r, c).filter(m => isLegal(r, c, m.r, m.c));
+      renderBoard();
+    } else {
+      selected = null;
+      validMoves = [];
+      renderBoard();
+    }
+  } else if (piece && getColor(piece) === 'w') {
+    selected = { r, c };
+    validMoves = getPieceMoves(r, c).filter(m => isLegal(r, c, m.r, m.c));
+    renderBoard();
+  }
+}
+
+async function makeLLMMove() {
+  if (turn !== 'b' || isThinking) return;
+  isThinking = true;
+  updateStatus();
+  const opp = document.getElementById('opponent').value;
+  if (opp === 'stockfish') {
+    isThinking = false;
+    makeLocalMove();
+    return;
+  }
+  try {
+    const fen = toFEN();
+    const diff = document.getElementById('difficulty').value;
+    let prompt = `Current FEN: ${fen}. You play black. Reply with exactly one legal UCI move (4 chars like e7e5). No text.`;
+    if (diff === 'easy') prompt = `You are a weak beginner playing black. FEN: ${fen}. Reply with one legal but not best UCI move (e.g. e7e5).`;
+    if (diff === 'hard') prompt = `You are a strong grandmaster playing black. FEN: ${fen}. Reply with the best legal UCI move.`;
+    const { content } = await ForgeHost.ai.chat({ messages: [{ role: 'user', content: prompt }] });
+    let moveStr = (content || '').trim().replace(/[^a-h1-8]/g, '').slice(0, 4);
+    if (moveStr.length === 4) {
+      const fc = moveStr[0].charCodeAt(0) - 97;
+      const fr = 8 - parseInt(moveStr[1]);
+      const tc = moveStr[2].charCodeAt(0) - 97;
+      const tr = 8 - parseInt(moveStr[3]);
+      if (isLegal(fr, fc, tr, tc)) {
+        makeMove(fr, fc, tr, tc);
+        renderBoard();
+        updateStatus();
+        checkGameOver();
+        isThinking = false;
+        return;
+      }
+    }
+    makeLocalMove();
+  } catch (e) {
+    makeLocalMove();
+  }
+  isThinking = false;
+  updateStatus();
+}
+
+function makeLocalMove() {
+  const moves = getAllLegalMoves(turn);
+  if (moves.length === 0) return;
+  let chosen = moves[Math.floor(Math.random() * moves.length)];
+  const captures = moves.filter(m => board[m.to.r][m.to.c]);
+  if (captures.length > 0) chosen = captures[Math.floor(Math.random() * captures.length)];
+  makeMove(chosen.from.r, chosen.from.c, chosen.to.r, chosen.to.c);
+  renderBoard();
+  updateStatus();
+  checkGameOver();
+}
+
+function makeOpponentMove() {
+  const opp = document.getElementById('opponent').value;
+  if (opp === 'stockfish') {
+    makeLocalMove();
+  } else {
+    makeLLMMove();
+  }
+}
+
+async function getHint() {
+  if (turn !== 'w' || isThinking) return;
+  isThinking = true;
+  updateStatus();
+  try {
+    const fen = toFEN();
+    const prompt = `FEN: ${fen}. Suggest one strong legal move for White in UCI (4 chars only).`;
+    const { content } = await ForgeHost.ai.chat({ messages: [{ role: 'user', content: prompt }] });
+    let moveStr = (content || '').trim().replace(/[^a-h1-8]/g, '').slice(0, 4);
+    if (moveStr.length === 4) {
+      const fc = moveStr[0].charCodeAt(0) - 97;
+      const fr = 8 - parseInt(moveStr[1]);
+      const tc = moveStr[2].charCodeAt(0) - 97;
+      const tr = 8 - parseInt(moveStr[3]);
+      if (isLegal(fr, fc, tr, tc)) {
+        selected = { r: fr, c: fc };
+        validMoves = [{ r: tr, c: tc }];
+        renderBoard();
+        setTimeout(() => {
+          if (selected && selected.r === fr) {
+            selected = null;
+            validMoves = [];
+            renderBoard();
+          }
+        }, 2200);
+        document.getElementById('status').textContent = 'Hint: ' + moveStr;
+      }
+    }
+  } catch (e) {
+    const moves = getAllLegalMoves('w');
+    if (moves.length) {
+      const m = moves[0];
+      selected = m.from;
+      validMoves = [m.to];
+      renderBoard();
+      setTimeout(() => { selected = null; validMoves = []; renderBoard(); }, 1800);
+    }
+  }
+  isThinking = false;
+  updateStatus();
+}
+
+function undoMove() {
+  if (history.length === 0 || isThinking) return;
+  const snap = history.pop();
+  restoreState(snap);
+  selected = null;
+  validMoves = [];
+  renderBoard();
+  updateStatus();
+}
+
+function newGame() {
+  board = initBoard();
+  turn = 'w';
+  history = [];
+  castling = { wK: true, wQ: true, bK: true, bQ: true };
+  enPassant = null;
+  selected = null;
+  validMoves = [];
+  isThinking = false;
+  renderBoard();
+  updateStatus();
+}
+
+async function changeProvider() {
+  const prov = document.getElementById('provider').value;
+  if (!prov) return;
+  try {
+    await ForgeHost.ai.setProvider(prov);
+    ForgeHost.toast('Provider: ' + prov);
+  } catch (e) {}
+}
+
+function updateOpponentLabel() {}
+
+async function initApp() {
+  board = initBoard();
+  renderBoard();
+  updateStatus();
+  try {
+    await ForgeHost.ai.listProviders();
+  } catch (e) {}
+  if (ForgeHost.on) {
+    ForgeHost.on('ready', () => {});
+  }
+  window.addEventListener('resize', () => {
+    if (board && board.length) renderBoard();
+  });
+}
+
+window.onload = initApp;
+</script>
+</body>
+</html>

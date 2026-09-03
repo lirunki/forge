@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniPaint+AI</title>
+<style>
+  body {margin:0;font-family:system-ui,-apple-system,sans-serif;background:#111;color:#fff;}
+  .container {max-width:100%;padding:8px;}
+  .header {display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .title {font-size:22px;font-weight:700;}
+  .toolbar, .colors, .actions {display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+  .tool-btn {padding:12px 16px;background:#222;border:2px solid #444;border-radius:12px;font-size:18px;color:#fff;cursor:pointer;min-width:52px;min-height:52px;}
+  .tool-btn.active {background:#3b82f6;border-color:#60a5fa;}
+  .color-swatch {width:44px;height:44px;border-radius:9999px;border:3px solid #333;cursor:pointer;}
+  .color-swatch.active {border-color:#fff;box-shadow:0 0 0 3px #3b82f6;}
+  .size-row {display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  input[type=range] {flex:1;height:8px;}
+  canvas {width:100%;max-width:100%;height:420px;background:#fff;border-radius:16px;touch-action:none;box-shadow:0 10px 30px rgba(0,0,0,0.4);}
+  button {padding:14px 20px;font-size:16px;border-radius:12px;border:none;background:#222;color:#fff;cursor:pointer;}
+  /* Modal */
+  .modal-overlay {position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:1000;}
+  .modal {background:#222;padding:20px;border-radius:12px;max-width:90%;width:300px;}
+  .modal h2 {margin-top:0;color:#fff;}
+  .modal button {margin-top:8px;width:100%;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">MiniPaint+AI</div>
+    <div>
+      <button id="settingsBtn" style="background:#4b5563;margin-right:8px;">⚙️</button>
+      <button onclick="clearCanvas()" style="background:#ef4444;color:white;padding:10px 18px;border-radius:9999px;border:none;font-weight:600;">Clear</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="tool-btn active" data-tool="brush" onclick="setTool('brush')">✏️</button>
+    <button class="tool-btn" data-tool="eraser" onclick="setTool('eraser')">🧽</button>
+    <button class="tool-btn" data-tool="rect" onclick="setTool('rect')">▭</button>
+    <button class="tool-btn" data-tool="circle" onclick="setTool('circle')">○</button>
+    <button class="tool-btn" data-tool="line" onclick="setTool('line')">╱</button>
+  </div>
+
+  <div class="colors">
+    <div class="color-swatch" style="background:#000000" onclick="setColor('#000000')"></div>
+    <div class="color-swatch active" style="background:#ef4444" onclick="setColor('#ef4444')"></div>
+    <div class="color-swatch" style="background:#3b82f6" onclick="setColor('#3b82f6')"></div>
+    <div class="color-swatch" style="background:#22c55e" onclick="setColor('#22c55e')"></div>
+    <div class="color-swatch" style="background:#eab308" onclick="setColor('#eab308')"></div>
+    <div class="color-swatch" style="background:#a855f7" onclick="setColor('#a855f7')"></div>
+    <input type="color" id="customColor" value="#000000" style="width:44px;height:44px;border:none;border-radius:9999px;padding:0" onchange="setColor(this.value)">
+  </div>
+
+  <div class="size-row">
+    <span style="font-size:13px;opacity:0.7">Size</span>
+    <input type="range" id="sizeSlider" min="2" max="40" value="8" oninput="setSize(this.value)">
+    <span id="sizeLabel" style="min-width:28px;text-align:right">8</span>
+  </div>
+
+  <canvas id="canvas" width="800" height="600"></canvas>
+
+  <div class="actions">
+    <button onclick="undo()">Undo</button>
+    <button onclick="shareDrawing()">Share</button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>AI Provider</h2>
+    <div id="providerList">Loading…</div>
+    <button onclick="closeSettings()">Close</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+let currentTool = 'brush';
+let currentColor = '#ef4444';
+let brushSize = 8;
+let isDrawing = false;
+let startX = 0, startY = 0;
+let history = [];
+let lastImageData = null;
+
+// Initial canvas fill
+ctx.fillStyle = '#ffffff';
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+ctx.strokeStyle = currentColor;
+ctx.lineWidth = brushSize;
+ctx.lineCap = 'round';
+ctx.lineJoin = 'round';
+saveState();
+
+function saveState() {
+  history.push(canvas.toDataURL('image/png'));
+  if (history.length > 12) history.shift();
+}
+
+function undo() {
+  if (history.length > 1) {
+    history.pop();
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = history[history.length - 1];
+  }
+}
+
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-tool="${tool}"]`).classList.add('active');
+}
+
+function setColor(color) {
+  currentColor = color;
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+  const swatches = document.querySelectorAll('.color-swatch');
+  for (let s of swatches) {
+    if (s.style.background === color || s.style.backgroundColor === color) {
+      s.classList.add('active');
+      break;
+    }
+  }
+  ctx.strokeStyle = color;
+}
+
+function setSize(val) {
+  brushSize = parseInt(val);
+  document.getElementById('sizeLabel').innerText = val;
+  ctx.lineWidth = brushSize;
+}
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: (clientX - rect.left) * (canvas.width / rect.width),
+    y: (clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+
+function startDraw(e) {
+  e.preventDefault();
+  const pos = getPos(e);
+  isDrawing = true;
+  startX = pos.x;
+  startY = pos.y;
+  // Save snapshot for shape preview
+  lastImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  if (currentTool === 'brush' || currentTool === 'eraser') {
+    ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : currentColor;
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  }
+}
+
+function draw(e) {
+  if (!isDrawing) return;
+  e.preventDefault();
+  const pos = getPos(e);
+  if (currentTool === 'brush' || currentTool === 'eraser') {
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  } else {
+    // preview shape
+    ctx.putImageData(lastImageData, 0, 0);
+    ctx.strokeStyle = currentColor;
+    ctx.lineWidth = brushSize;
+    drawShape(startX, startY, pos.x, pos.y, true);
+  }
+}
+
+function endDraw(e) {
+  if (!isDrawing) return;
+  isDrawing = false;
+  const pos = getPos(e || { clientX: startX, clientY: startY });
+  if (['rect', 'circle', 'line'].includes(currentTool)) {
+    ctx.putImageData(lastImageData, 0, 0);
+    ctx.strokeStyle = currentColor;
+    ctx.lineWidth = brushSize;
+    drawShape(startX, startY, pos.x, pos.y, false);
+    saveState();
+  } else {
+    saveState();
+  }
+}
+
+function drawShape(x1, y1, x2, y2, preview) {
+  ctx.beginPath();
+  if (currentTool === 'rect') {
+    ctx.rect(x1, y1, x2 - x1, y2 - y1);
+  } else if (currentTool === 'circle') {
+    const r = Math.hypot(x2 - x1, y2 - y1);
+    ctx.arc(x1, y1, r, 0, Math.PI * 2);
+  } else if (currentTool === 'line') {
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+  }
+  ctx.stroke();
+}
+
+// Event listeners
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', endDraw);
+canvas.addEventListener('mouseleave', endDraw);
+canvas.addEventListener('touchstart', startDraw, { passive: false });
+canvas.addEventListener('touchmove', draw, { passive: false });
+canvas.addEventListener('touchend', endDraw);
+
+function clearCanvas() {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  saveState();
+}
+
+async function shareDrawing() {
+  try {
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result;
+      if (window.ForgeHost && window.ForgeHost.share) {
+        try {
+          await window.ForgeHost.share({
+            title: 'My drawing',
+            file: { name: 'drawing.jpg', mime: 'image/jpeg', dataUrl }
+          });
+        } catch (e) {
+          console.error('Forge share failed', e);
+        }
+      } else {
+        // Fallback download
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'drawing.jpg';
+        a.click();
+      }
+    };
+    reader.readAsDataURL(blob);
+  } catch (e) {
+    console.error('Share error', e);
+  }
+}
+
+/* Settings (AI Provider) */
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsModal = document.getElementById('settingsModal');
+settingsBtn.addEventListener('click', openSettings);
+function closeSettings() { settingsModal.style.display = 'none'; }
+async function openSettings() {
+  settingsModal.style.display = 'flex';
+  const listDiv = document.getElementById('providerList');
+  listDiv.textContent = 'Loading…';
+  if (!window.ForgeHost || !window.ForgeHost.ai) {
+    listDiv.textContent = 'AI not available on this device.';
+    return;
+  }
+  try {
+    const menu = await window.ForgeHost.ai.listProviders();
+    listDiv.innerHTML = '';
+    const available = menu.providers.filter(p => p.available);
+    if (available.length === 0) {
+      listDiv.textContent = 'No AI providers configured.';
+      return;
+    }
+    available.forEach(p => {
+      const btn = document.createElement('button');
+      btn.textContent = p.label + (p.isSelected ? ' (selected)' : '');
+      btn.style.background = p.isSelected ? '#3b82f6' : '#222';
+      btn.onclick = async () => {
+        try {
+          await window.ForgeHost.ai.setProvider(p.id);
+          alert('Provider set to ' + p.label);
+          openSettings(); // refresh list
+        } catch (e) {
+          console.error(e);
+          alert('Failed to set provider');
+        }
+      };
+      listDiv.appendChild(btn);
+    });
+  } catch (e) {
+    console.error(e);
+    listDiv.textContent = 'Error loading providers.';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Laser Membrane</title>
+<style>
+:root {
+  --bg: #0b0c10;
+  --panel: #141820;
+  --card: #1a2030;
+  --border: #2a3348;
+  --text: #e8ecf4;
+  --muted: #8b95a8;
+  --accent: #3dffa8;
+  --laser: #ff2a4a;
+  --laser-glow: #ff6b81;
+  --warn: #ffb020;
+  --radius: 16px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  overflow: hidden;
+}
+#app {
+  display: flex; flex-direction: column; height: 100%;
+  max-width: 560px; margin: 0 auto; position: relative;
+}
+#screenWrap {
+  flex: 1; position: relative; min-height: 0;
+  background: radial-gradient(ellipse at 50% 45%, #f7f7f2 0%, #e8e6dc 55%, #d4d0c4 100%);
+  overflow: hidden;
+}
+#screenWrap::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 40%, rgba(0,0,0,0.06) 100%),
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(0,0,0,0.03) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(0,0,0,0.03) 40px);
+}
+#hud {
+  position: absolute; top: 10px; left: 10px; right: 10px; z-index: 5;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+  pointer-events: none;
+}
+.badge {
+  pointer-events: auto;
+  background: rgba(12,14,20,0.72); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.12); color: #fff;
+  border-radius: 999px; padding: 8px 12px; font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+}
+.badge .dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--muted);
+  box-shadow: 0 0 0 0 rgba(61,255,168,0.5);
+}
+.badge.live .dot {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: pulse 1.2s ease infinite;
+}
+@keyframes pulse {
+  0%,100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.7; }
+}
+#canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 1;
+  touch-action: none;
+}
+#cross {
+  position: absolute; left: 50%; top: 50%; width: 18px; height: 18px;
+  margin: -9px 0 0 -9px; z-index: 2; pointer-events: none; opacity: 0.25;
+}
+#cross::before, #cross::after {
+  content: ''; position: absolute; background: #222;
+}
+#cross::before { left: 8px; top: 0; width: 2px; height: 18px; }
+#cross::after { left: 0; top: 8px; width: 18px; height: 2px; }
+#hint {
+  position: absolute; bottom: 14px; left: 12px; right: 12px; z-index: 4;
+  text-align: center; font-size: 12px; color: rgba(0,0,0,0.45); pointer-events: none;
+  font-weight: 500;
+}
+#dock {
+  background: var(--panel); border-top: 1px solid var(--border);
+  padding: 10px 12px calc(12px + var(--safe-b));
+  max-height: 52vh; overflow: auto; -webkit-overflow-scrolling: touch;
+}
+.row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.row.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mode-btn, .icon-btn, .primary, .ghost {
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  border-radius: 12px; font-weight: 600; font-size: 13px;
+  min-height: 44px; padding: 10px 12px; cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.mode-btn:active, .icon-btn:active, .primary:active, .ghost:active { transform: scale(0.97); }
+.mode-btn.active {
+  border-color: var(--accent); background: rgba(61,255,168,0.12); color: var(--accent);
+}
+.primary {
+  flex: 1; background: linear-gradient(135deg, #1f6f4a, #159a62); border-color: #2ecc7a; color: #fff;
+}
+.primary.stop { background: linear-gradient(135deg, #6f1f2e, #c0392b); border-color: #e74c3c; }
+.ghost { background: transparent; }
+.icon-btn { min-width: 44px; padding: 10px; }
+.sliders { display: grid; gap: 8px; }
+.field {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+}
+.field label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12px; color: var(--muted); margin-bottom: 6px; gap: 8px;
+}
+.field label strong { color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+input[type=range] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; margin: 0;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px; background: #2a3348;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); margin-top: -8px; border: 2px solid #0b0c10;
+  box-shadow: 0 0 12px rgba(61,255,168,0.45);
+}
+.freq-row { display: flex; gap: 8px; align-items: center; }
+.freq-row input[type=number] {
+  width: 88px; min-height: 40px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 15px; font-weight: 700;
+  text-align: center; padding: 6px;
+}
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+  border-radius: 999px; padding: 8px 12px; font-size: 12px; font-weight: 600; min-height: 36px;
+}
+.chip.active { color: var(--accent); border-color: var(--accent); }
+.meta {
+  font-size: 11px; color: var(--muted); line-height: 1.35; margin-top: 4px;
+}
+.meta em { color: var(--warn); font-style: normal; font-weight: 600; }
+details.adv {
+  border: 1px solid var(--border); border-radius: 12px; background: var(--card); margin-top: 4px;
+}
+details.adv > summary {
+  list-style: none; cursor: pointer; padding: 12px; font-weight: 700; font-size: 13px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+details.adv > summary::-webkit-details-marker { display: none; }
+details.adv > summary::after { content: '▾'; color: var(--muted); }
+details.adv[open] > summary::after { content: '▴'; }
+.adv-body { padding: 0 12px 12px; display: grid; gap: 8px; }
+#toast {
+  position: absolute; left: 50%; bottom: 58%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.82); color: #fff; padding: 10px 14px; border-radius: 12px;
+  font-size: 13px; z-index: 20; opacity: 0; pointer-events: none; transition: opacity .25s;
+  max-width: 86%; text-align: center;
+}
+#toast.show { opacity: 1; }
+.file-name {
+  font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="screenWrap">
+    <div id="hud">
+      <div class="badge" id="statusBadge"><span class="dot"></span><span id="statusText">Idle</span></div>
+      <div class="badge" id="readout">0.0 Hz</div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="cross"></div>
+    <div id="hint">White screen · laser reflection from membrane mirror</div>
+    <div id="toast"></div>
+  </div>
+  <div id="dock">
+    <div class="row modes">
+      <button class="mode-btn active" data-mode="tone" type="button">Tone</button>
+      <button class="mode-btn" data-mode="mic" type="button">Mic</button>
+      <button class="mode-btn" data-mode="file" type="button">Audio file</button>
+    </div>
+    <div class="row" id="toneControls">
+      <div class="freq-row" style="flex:1">
+        <input id="freqNum" type="number" min="20" max="2000" step="1" value="220" data-forge-persist>
+        <span style="color:var(--muted);font-size:12px;font-weight:700">Hz</span>
+      </div>
+      <button class="chip" data-preset="110" type="button">A2</button>
+      <button class="chip active" data-preset="220" type="button">A3</button>
+      <button class="chip" data-preset="440" type="button">A4</button>
+      <button class="chip" data-preset="528" type="button">528</button>
+    </div>
+    <div class="row" id="fileControls" style="display:none">
+      <button class="ghost" id="pickFile" type="button" style="flex:1">Choose audio file</button>
+      <div class="file-name" id="fileName">No file</div>
+    </div>
+    <div class="row">
+      <button class="primary" id="playBtn" type="button">▶ Start laser</button>
+      <button class="icon-btn" id="clearBtn" type="button" title="Clear trail">⌫</button>
+    </div>
+    <div class="sliders">
+      <div class="field">
+        <label><span>Tone frequency</span><strong id="freqVal">220 Hz</strong></label>
+        <input id="freq" type="range" min="20" max="2000" step="1" value="220" data-forge-persist>
+      </div>
+      <div class="field">
+        <label><span>Trail fade</span><strong id="fadeVal">400 ms</strong></label>
+        <input id="fade" type="range" min="0" max="2000" step="10" value="400" data-forge-persist>
+      </div>
+      <div class="field">
+        <label><span>Drive level</span><strong id="gainVal">70%</strong></label>
+        <input id="gain" type="range" min="0" max="100" step="1" value="70" data-forge-persist>
+      </div>
+    </div>
+    <details class="adv" id="adv">
+      <summary>Membrane & geometry</summary>
+      <div class="adv-body">
+        <div class="field">
+          <label><span>Membrane diameter</span><strong id="diamVal">30 cm</strong></label>
+          <input id="diam" type="range" min="5" max="100" step="1" value="30" data-forge-persist>
+        </div>
+        <div class="field">
+          <label><span>Membrane tension</span><strong id="tensVal">40 N/m</strong></label>
+          <input id="tens" type="range" min="5" max="200" step="1" value="40" data-forge-persist>
+        </div>
+        <div class="field">
+          <label><span>Laser → mirror distance</span><strong id="laserDistVal">1.20 m</strong></label>
+          <input id="laserDist" type="range" min="0.2" max="5" step="0.05" value="1.2" data-forge-persist>
+        </div>
+        <div class="field">
+          <label><span>Speaker → drum distance</span><strong id="spkDistVal">0.50 m</strong></label>
+          <input id="spkDist" type="range" min="0.1" max="5" step="0.05" value="0.5" data-forge-persist>
+        </div>
+        <div class="field">
+          <label><span>Lateral incidence</span><strong id="latVal">85°</strong></label>
+          <input id="lateral" type="range" min="0" max="90" step="1" value="85" data-forge-persist>
+        </div>
+        <p class="meta" id="physicsMeta">f₀ ≈ — · optical lever · lateral rocking mode</p>
+      </div>
+    </details>
+  </div>
+</div>
+<script>
+(function () {
+  const Forge = window.ForgeHost || window.forge || null;
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('canvas');
+  const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+  const statusBadge = $('statusBadge');
+  const statusText = $('statusText');
+  const readout = $('readout');
+  const playBtn = $('playBtn');
+  const toastEl = $('toast');
+
+  // High-rate sim: fixed substeps (~240 Hz) independent of display refresh
+  const SIM_HZ = 240;
+  const SIM_DT = 1 / SIM_HZ;
+  const MAX_SUBSTEPS = 12;
+  const MAX_TRAIL = 12000;
+
+  const params = {
+    mode: 'tone',
+    freq: 220,
+    fadeMs: 400,
+    gain: 0.7,
+    diamCm: 30,
+    tension: 40,
+    laserM: 1.2,
+    spkM: 0.5,
+    lateralDeg: 85,
+    running: false
+  };
+
+  let W = 0, H = 0, dpr = 1;
+  let trail = [];
+  let raf = 0;
+  let audioCtx = null;
+  let osc = null, oscGain = null;
+  let analyser = null;
+  let fileSource = null, fileBuffer = null, fileName = '';
+  let micStream = null, micSource = null;
+  let usingForgePcm = false;
+  let forgePcmLevel = 0, forgePcmFreq = 0;
+  let phaseX = 0, phaseY = 0;
+  let lastT = performance.now();
+  let simAcc = 0;
+  let smoothFx = 0, smoothFy = 0, smoothAmp = 0;
+  let detectedFreq = 0;
+  let toastTimer = 0;
+  let cachedAudio = { freq: 220, ampX: 0.5, ampY: 0.35, phaseLag: 0.6 };
+  let audioSampleAge = 0;
+  let lastReadoutF = 0;
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+  }
+
+  async function hostToast(msg) {
+    try { if (Forge && Forge.toast) await Forge.toast(msg); } catch (_) {}
+    toast(msg);
+  }
+
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    W = Math.max(1, Math.floor(rect.width));
+    H = Math.max(1, Math.floor(rect.height));
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  }
+
+  function membraneMassSurface() {
+    return 0.28;
+  }
+
+  function naturalFreq() {
+    const a = Math.max(0.01, (params.diamCm / 100) / 2);
+    const sigma = membraneMassSurface();
+    const T = Math.max(1, params.tension);
+    const f0 = (2.4048 / (2 * Math.PI * a)) * Math.sqrt(T / sigma);
+    return f0 * 0.85;
+  }
+
+  function modeFreq(nx, ny) {
+    const f0 = naturalFreq();
+    const scale = Math.sqrt(nx * nx + ny * ny) || 1;
+    return f0 * scale * (nx === 1 && ny === 0 ? 1.0 : nx === 0 && ny === 1 ? 1.08 : 1.35);
+  }
+
+  function resonanceGain(f, fRes) {
+    const Q = 9 + params.tension / 40;
+    const df = (f - fRes) / Math.max(1, fRes);
+    return 1 / Math.sqrt(1 + Math.pow(2 * Q * df, 2));
+  }
+
+  function opticalLeverScale() {
+    return 2 * params.laserM * 2;
+  }
+
+  function driveAmplitude(f) {
+    const lat = Math.sin((params.lateralDeg * Math.PI) / 180);
+    const spk = 1 / Math.pow(Math.max(0.1, params.spkM), 1.15);
+    const size = Math.pow(params.diamCm / 30, 1.1);
+    const tensionStiff = 1 / Math.sqrt(Math.max(5, params.tension) / 40);
+    const f11 = modeFreq(1, 0);
+    const f01 = modeFreq(0, 1);
+    const f21 = modeFreq(1, 1);
+    const R =
+      0.75 * resonanceGain(f, f11) +
+      0.55 * resonanceGain(f, f01) +
+      0.35 * resonanceGain(f, f21) +
+      0.12;
+    return params.gain * lat * spk * size * tensionStiff * R;
+  }
+
+  function updatePhysicsLabels() {
+    const f0 = naturalFreq();
+    $('physicsMeta').innerHTML =
+      'f₀ ≈ <em>' + f0.toFixed(1) + ' Hz</em> · rocking f₁ₓ ≈ ' +
+      modeFreq(1, 0).toFixed(1) + ' Hz · lever ' + opticalLeverScale().toFixed(2) + ' m/rad · sim ' + SIM_HZ + ' Hz';
+  }
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!analyser) {
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 4096;
+      analyser.smoothingTimeConstant = 0.72;
+    }
+    return audioCtx;
+  }
+
+  function stopTone() {
+    try { if (osc) { osc.stop(); osc.disconnect(); } } catch (_) {}
+    osc = null;
+    try { if (oscGain) oscGain.disconnect(); } catch (_) {}
+    oscGain = null;
+  }
+
+  function stopFile() {
+    try { if (fileSource) { fileSource.stop(); fileSource.disconnect(); } } catch (_) {}
+    fileSource = null;
+  }
+
+  async function stopMic() {
+    try { if (micSource) micSource.disconnect(); } catch (_) {}
+    micSource = null;
+    if (micStream) {
+      try { micStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
+      micStream = null;
+    }
+    if (usingForgePcm && Forge && Forge.mic && Forge.mic.stopStream) {
+      try { await Forge.mic.stopStream(); } catch (_) {}
+    }
+    usingForgePcm = false;
+    forgePcmLevel = 0;
+  }
+
+  async function stopAllAudio() {
+    stopTone();
+    stopFile();
+    await stopMic();
+  }
+
+  function startTone() {
+    ensureAudio();
+    stopTone();
+    oscGain = audioCtx.createGain();
+    oscGain.gain.value = 0.0001;
+    osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = params.freq;
+    osc.connect(oscGain);
+    oscGain.connect(analyser);
+    oscGain.connect(audioCtx.destination);
+    osc.start();
+    const now = audioCtx.currentTime;
+    oscGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, params.gain * 0.22), now + 0.05);
+  }
+
+  function updateTone() {
+    if (osc) osc.frequency.setTargetAtTime(params.freq, audioCtx.currentTime, 0.01);
+    if (oscGain) oscGain.gain.setTargetAtTime(Math.max(0.0001, params.gain * 0.22), audioCtx.currentTime, 0.05);
+  }
+
+  async function startMic() {
+    ensureAudio();
+    await stopMic();
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        if (Forge && Forge.permissions && Forge.permissions.request) {
+          try {
+            const p = await Forge.permissions.request('mic');
+            if (p && p.ok === false) {
+              // continue — browser prompt may still work
+            }
+          } catch (_) {}
+        }
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        });
+        micSource = audioCtx.createMediaStreamSource(micStream);
+        micSource.connect(analyser);
+        usingForgePcm = false;
+        return;
+      } catch (e) {
+        // fall through to Forge PCM
+      }
+    }
+
+    if (Forge && Forge.mic && Forge.mic.startStream) {
+      try {
+        if (Forge.permissions && Forge.permissions.request) {
+          const p = await Forge.permissions.request('mic');
+          if (p && Array.isArray(p.denied) && p.denied.indexOf('mic') >= 0) {
+            await hostToast('Microphone permission denied');
+            showMicSettings();
+            throw new Error('mic denied');
+          }
+        }
+        usingForgePcm = true;
+        forgePcmLevel = 0;
+        if (Forge.on) {
+          Forge.on('mic.pcm', onForgePcm);
+        }
+        await Forge.mic.startStream({ sampleRate: 16000, aec: false });
+        return;
+      } catch (e) {
+        usingForgePcm = false;
+        throw e;
+      }
+    }
+    throw new Error('Microphone unavailable');
+  }
+
+  function onForgePcm(evt) {
+    try {
+      let samples = null;
+      if (!evt) return;
+      if (evt.samples) samples = evt.samples;
+      else if (evt.pcm) samples = evt.pcm;
+      else if (evt.data) samples = evt.data;
+      else if (evt instanceof Float32Array || evt instanceof Int16Array) samples = evt;
+      if (!samples || !samples.length) {
+        if (typeof evt.level === 'number') forgePcmLevel = evt.level;
+        return;
+      }
+      let sum = 0;
+      let zc = 0;
+      let prev = 0;
+      const n = samples.length;
+      for (let i = 0; i < n; i++) {
+        let v = samples[i];
+        if (samples instanceof Int16Array) v = v / 32768;
+        sum += v * v;
+        if (i > 0 && ((prev >= 0 && v < 0) || (prev < 0 && v >= 0))) zc++;
+        prev = v;
+      }
+      forgePcmLevel = Math.min(1, Math.sqrt(sum / n) * 4);
+      const sr = (evt.sampleRate) || 16000;
+      forgePcmFreq = Math.max(20, Math.min(2000, (zc * sr) / (2 * n)));
+    } catch (_) {}
+  }
+
+  function showMicSettings() {
+    const bar = document.createElement('div');
+    bar.style.cssText = 'margin:8px 0;display:flex;gap:8px;align-items:center';
+    bar.innerHTML = '<span class="meta" style="flex:1">Mic blocked. Enable in system settings.</span>';
+    const b = document.createElement('button');
+    b.className = 'ghost';
+    b.textContent = 'Open settings';
+    b.type = 'button';
+    b.onclick = async () => {
+      try { if (Forge && Forge.device && Forge.device.openSettings) await Forge.device.openSettings(); } catch (_) {}
+    };
+    bar.appendChild(b);
+    const dock = $('dock');
+    if (!document.getElementById('micHelp')) {
+      bar.id = 'micHelp';
+      dock.insertBefore(bar, dock.firstChild.nextSibling);
+    }
+  }
+
+  async function pickAudioFile() {
+    try {
+      if (!Forge || !Forge.files || !Forge.files.pick) {
+        await hostToast('File picker unavailable');
+        return;
+      }
+      const f = await Forge.files.pick({ accept: 'audio/*', multiple: false });
+      if (!f) return;
+      fileName = f.name || 'audio';
+      $('fileName').textContent = fileName;
+      ensureAudio();
+      let ab = null;
+      if (f.base64) {
+        const bin = atob(f.base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        ab = bytes.buffer;
+      } else if (f.dataUrl) {
+        const res = await fetch(f.dataUrl);
+        ab = await res.arrayBuffer();
+      }
+      if (!ab) throw new Error('empty file');
+      fileBuffer = await audioCtx.decodeAudioData(ab.slice(0));
+      await hostToast('Loaded ' + fileName);
+      if (params.running && params.mode === 'file') {
+        await startFilePlayback();
+      }
+    } catch (e) {
+      await hostToast('Could not load audio');
+    }
+  }
+
+  async function startFilePlayback() {
+    ensureAudio();
+    stopFile();
+    if (!fileBuffer) {
+      await pickAudioFile();
+      if (!fileBuffer) throw new Error('no file');
+    }
+    fileSource = audioCtx.createBufferSource();
+    fileSource.buffer = fileBuffer;
+    fileSource.loop = true;
+    const g = audioCtx.createGain();
+    g.gain.value = params.gain * 0.9;
+    fileSource.connect(g);
+    g.connect(analyser);
+    g.connect(audioCtx.destination);
+    fileSource._gainNode = g;
+    fileSource.start(0);
+  }
+
+  function analyseAudio() {
+    if (usingForgePcm) {
+      detectedFreq = forgePcmFreq || params.freq;
+      return {
+        freq: detectedFreq,
+        ampX: forgePcmLevel,
+        ampY: forgePcmLevel * 0.65,
+        phaseLag: 0.7
+      };
+    }
+    if (!analyser) {
+      return { freq: params.freq, ampX: params.gain * 0.5, ampY: params.gain * 0.35, phaseLag: 0.6 };
+    }
+    const n = analyser.fftSize;
+    const td = new Float32Array(n);
+    analyser.getFloatTimeDomainData(td);
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += td[i] * td[i];
+    const rms = Math.sqrt(sum / n);
+
+    const sr = audioCtx.sampleRate;
+    const minF = 40, maxF = 1200;
+    const minL = Math.floor(sr / maxF);
+    const maxL = Math.min(n - 1, Math.floor(sr / minF));
+    let bestL = 0, bestC = -1;
+    for (let lag = minL; lag <= maxL; lag++) {
+      let c = 0;
+      const lim = n - lag;
+      for (let i = 0; i < lim; i += 2) c += td[i] * td[i + lag];
+      if (c > bestC) { bestC = c; bestL = lag; }
+    }
+    let f = bestL > 0 ? sr / bestL : params.freq;
+    if (!(f > 20 && f < 2000) || rms < 0.002) f = params.mode === 'tone' ? params.freq : detectedFreq || params.freq;
+    detectedFreq = f;
+
+    const fd = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(fd);
+    let eLow = 0, eHigh = 0;
+    const half = (fd.length * 0.35) | 0;
+    for (let i = 1; i < fd.length; i++) {
+      if (i < half) eLow += fd[i];
+      else eHigh += fd[i];
+    }
+    const tot = eLow + eHigh + 1;
+    const bright = eHigh / tot;
+    const amp = Math.min(1.5, rms * 14);
+    return {
+      freq: f,
+      ampX: amp,
+      ampY: amp * (0.35 + bright * 0.9),
+      phaseLag: 0.45 + bright * 1.2
+    };
+  }
+
+  function refreshAudioCache() {
+    cachedAudio = analyseAudio();
+    audioSampleAge = 0;
+  }
+
+  function simStep(dt, nowMs) {
+    const a = cachedAudio;
+    let f = params.mode === 'tone' ? params.freq : a.freq;
+    if (!isFinite(f) || f < 1) f = params.freq;
+
+    const base = driveAmplitude(f);
+    let drive = base;
+    if (params.mode !== 'tone') {
+      drive = base * (0.35 + 0.9 * Math.min(1.4, (a.ampX + a.ampY) * 0.5));
+    }
+
+    const fX = modeFreq(1, 0);
+    const fY = modeFreq(0, 1);
+    const rX = resonanceGain(f, fX);
+    const rY = resonanceGain(f, fY);
+    const lat = Math.sin((params.lateralDeg * Math.PI) / 180);
+    const face = Math.cos((params.lateralDeg * Math.PI) / 180);
+
+    const maxTilt = 0.012;
+    const Ax = maxTilt * drive * (0.55 * lat + 0.2) * (0.4 + rX);
+    const Ay = maxTilt * drive * (0.25 * lat + 0.55 * face + 0.15) * (0.35 + rY);
+    const A2 = maxTilt * drive * 0.12 * resonanceGain(f, modeFreq(1, 1));
+
+    // Faster envelope tracking at high sim rate
+    const alpha = 1 - Math.exp(-dt * 28);
+    smoothFx += (Ax - smoothFx) * alpha;
+    smoothFy += (Ay - smoothFy) * alpha;
+    smoothAmp += (drive - smoothAmp) * alpha;
+
+    const w = 2 * Math.PI * f;
+    phaseX += w * dt;
+    const pathLag = (params.spkM / 343) * w + a.phaseLag + (params.tension / 200);
+    phaseY = phaseX + pathLag;
+
+    const tiltX =
+      smoothFx * Math.sin(phaseX) +
+      A2 * Math.sin(2 * phaseX + 0.3);
+    const tiltY =
+      smoothFy * Math.sin(phaseY) +
+      A2 * 0.7 * Math.sin(2 * phaseY + 1.1);
+
+    const lever = opticalLeverScale();
+    const xM = lever * tiltX;
+    const yM = lever * tiltY;
+
+    const span = Math.max(0.02, 0.018 * params.laserM * (1 + drive));
+    const cx = W / 2;
+    const cy = H / 2;
+    const scale = Math.min(W, H) * 0.42 / span;
+    const px = cx + xM * scale;
+    const py = cy + yM * scale;
+
+    trail.push(px, py, nowMs);
+
+    detectedFreq = f;
+    lastReadoutF = f;
+    return { px, py, f, drive };
+  }
+
+  function pruneTrail(now) {
+    const fade = params.fadeMs;
+    const cutoff = now - Math.max(fade, 16) - 80;
+    // trail is flat [x,y,t, x,y,t, ...]
+    let start = 0;
+    const len = trail.length;
+    while (start + 2 < len && trail[start + 2] < cutoff) start += 3;
+    if (start > 0) trail.splice(0, start);
+    const maxPts = MAX_TRAIL * 3;
+    if (trail.length > maxPts) trail.splice(0, trail.length - maxPts);
+  }
+
+  function draw(now) {
+    ctx.clearRect(0, 0, W, H);
+
+    // subtle screen grain (lighter cost)
+    ctx.fillStyle = 'rgba(255,255,255,0.018)';
+    for (let i = 0; i < 28; i++) {
+      const x = (i * 97 + now * 0.01) % W;
+      const y = (i * 53) % H;
+      ctx.fillRect(x, y, 1, 1);
+    }
+
+    const fade = Math.max(0, params.fadeMs);
+    const n = trail.length / 3;
+
+    if (n > 1 && fade > 0) {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      // denser polyline: batch short segments with smooth alpha
+      let i0 = 1;
+      // skip fully faded head quickly
+      while (i0 < n) {
+        const t1 = trail[i0 * 3 + 2];
+        if (now - t1 <= fade) break;
+        i0++;
+      }
+      if (i0 < 1) i0 = 1;
+
+      // Draw as continuous path chunks for smoother projection
+      const chunk = 48;
+      for (let i = i0; i < n; i++) {
+        const p1x = trail[i * 3];
+        const p1y = trail[i * 3 + 1];
+        const p1t = trail[i * 3 + 2];
+        const age = now - p1t;
+        if (age > fade) continue;
+        const u = 1 - age / fade;
+        const a = Math.pow(u, 1.15);
+        const w = 1.0 + 3.2 * u;
+        const p0x = trail[(i - 1) * 3];
+        const p0y = trail[(i - 1) * 3 + 1];
+
+        // sub-segment interpolation for extra spatial resolution on long jumps
+        const dx = p1x - p0x;
+        const dy = p1y - p0y;
+        const dist = Math.hypot(dx, dy);
+        const subs = dist > 2.5 ? Math.min(6, Math.ceil(dist / 2)) : 1;
+
+        if (subs === 1) {
+          ctx.beginPath();
+          ctx.moveTo(p0x, p0y);
+          ctx.lineTo(p1x, p1y);
+          ctx.strokeStyle = 'rgba(255,' + ((40 + 80 * u) | 0) + ',' + ((60 + 40 * u) | 0) + ',' + (0.12 + 0.8 * a) + ')';
+          ctx.lineWidth = w;
+          ctx.stroke();
+        } else {
+          for (let s = 0; s < subs; s++) {
+            const t0 = s / subs;
+            const t1s = (s + 1) / subs;
+            const uSeg = u * (0.85 + 0.15 * t1s);
+            const aSeg = Math.pow(uSeg, 1.15);
+            ctx.beginPath();
+            ctx.moveTo(p0x + dx * t0, p0y + dy * t0);
+            ctx.lineTo(p0x + dx * t1s, p0y + dy * t1s);
+            ctx.strokeStyle = 'rgba(255,' + ((40 + 80 * uSeg) | 0) + ',' + ((60 + 40 * uSeg) | 0) + ',' + (0.12 + 0.8 * aSeg) + ')';
+            ctx.lineWidth = 1.0 + 3.2 * uSeg;
+            ctx.stroke();
+          }
+        }
+
+        // occasional yield to avoid super-long frames on huge trails
+        if ((i - i0) > 0 && ((i - i0) % 2000) === 0) { /* keep going */ }
+      }
+    } else if (n > 1 && fade === 0) {
+      const i = n - 1;
+      const p1x = trail[i * 3], p1y = trail[i * 3 + 1];
+      const j = Math.max(0, n - 2);
+      const p0x = trail[j * 3], p0y = trail[j * 3 + 1];
+      ctx.beginPath();
+      ctx.moveTo(p0x, p0y);
+      ctx.lineTo(p1x, p1y);
+      ctx.strokeStyle = 'rgba(255,50,80,0.85)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    if (n > 0) {
+      const i = n - 1;
+      const px = trail[i * 3];
+      const py = trail[i * 3 + 1];
+      const g = ctx.createRadialGradient(px, py, 0, px, py, 28);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.15, 'rgba(255,80,110,0.9)');
+      g.addColorStop(0.4, 'rgba(255,40,70,0.35)');
+      g.addColorStop(1, 'rgba(255,0,40,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(px, py, 28, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = '#ff2a4a';
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    if (!params.running && n === 0) {
+      const cx = W / 2, cy = H / 2;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22);
+      g.addColorStop(0, 'rgba(255,255,255,0.85)');
+      g.addColorStop(0.2, 'rgba(255,60,90,0.7)');
+      g.addColorStop(1, 'rgba(255,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function loop(t) {
+    raf = requestAnimationFrame(loop);
+    const frameDt = Math.min(0.05, Math.max(0.0005, (t - lastT) / 1000));
+    lastT = t;
+
+    if (params.running) {
+      // Refresh audio analysis ~120 Hz (cheaper than every substep)
+      audioSampleAge += frameDt;
+      if (audioSampleAge >= 1 / 120) refreshAudioCache();
+
+      simAcc += frameDt;
+      // Cap catch-up so a hitch doesn't explode work
+      if (simAcc > MAX_SUBSTEPS * SIM_DT) simAcc = MAX_SUBSTEPS * SIM_DT;
+
+      let steps = 0;
+      let lastS = null;
+      while (simAcc >= SIM_DT && steps < MAX_SUBSTEPS) {
+        // Stamp trail times evenly across the frame for smooth fade
+        const stepNow = t - (simAcc - SIM_DT) * 1000;
+        lastS = simStep(SIM_DT, stepNow);
+        simAcc -= SIM_DT;
+        steps++;
+      }
+      pruneTrail(t);
+
+      if (lastS) {
+        readout.textContent = lastS.f.toFixed(1) + ' Hz';
+        statusText.textContent = params.mode === 'tone' ? 'Tone' : params.mode === 'mic' ? 'Mic' : 'File';
+      } else {
+        readout.textContent = lastReadoutF.toFixed(1) + ' Hz';
+      }
+    } else {
+      simAcc = 0;
+      readout.textContent = params.freq.toFixed(1) + ' Hz';
+    }
+    draw(performance.now());
+  }
+
+  async function setRunning(on) {
+    if (on) {
+      try {
+        ensureAudio();
+        await stopAllAudio();
+        if (params.mode === 'tone') startTone();
+        else if (params.mode === 'mic') await startMic();
+        else await startFilePlayback();
+        params.running = true;
+        playBtn.textContent = '■ Stop';
+        playBtn.classList.add('stop');
+        statusBadge.classList.add('live');
+        statusText.textContent = 'Live';
+        phaseX = 0; phaseY = 0;
+        trail = [];
+        simAcc = 0;
+        lastT = performance.now();
+        refreshAudioCache();
+      } catch (e) {
+        params.running = false;
+        playBtn.textContent = '▶ Start laser';
+        playBtn.classList.remove('stop');
+        statusBadge.classList.remove('live');
+        statusText.textContent = 'Error';
+        await hostToast(e.message || 'Could not start');
+      }
+    } else {
+      params.running = false;
+      await stopAllAudio();
+      playBtn.textContent = '▶ Start laser';
+      playBtn.classList.remove('stop');
+      statusBadge.classList.remove('live');
+      statusText.textContent = 'Idle';
+      simAcc = 0;
+    }
+  }
+
+  function setMode(mode) {
+    params.mode = mode;
+    document.querySelectorAll('.mode-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === mode);
+    });
+    $('toneControls').style.display = mode === 'tone' ? 'flex' : 'none';
+    $('fileControls').style.display = mode === 'file' ? 'flex' : 'none';
+    $('freq').parentElement.style.opacity = mode === 'tone' ? '1' : '0.45';
+    if (params.running) setRunning(true);
+  }
+
+  function bindSlider(id, key, fmt, onChange) {
+    const el = $(id);
+    const val = $(id + 'Val') || null;
+    const apply = () => {
+      let v = parseFloat(el.value);
+      if (key === 'freq') params.freq = v;
+      else if (key === 'fadeMs') params.fadeMs = v;
+      else if (key === 'gain') params.gain = v / 100;
+      else if (key === 'diamCm') params.diamCm = v;
+      else if (key === 'tension') params.tension = v;
+      else if (key === 'laserM') params.laserM = v;
+      else if (key === 'spkM') params.spkM = v;
+      else if (key === 'lateralDeg') params.lateralDeg = v;
+      if (val) val.textContent = fmt(v);
+      if (key === 'freq') {
+        $('freqNum').value = Math.round(v);
+        $('freqVal').textContent = Math.round(v) + ' Hz';
+        document.querySelectorAll('.chip[data-preset]').forEach((c) => {
+          c.classList.toggle('active', Math.abs(parseFloat(c.dataset.preset) - v) < 0.5);
+        });
+        if (params.running && params.mode === 'tone') updateTone();
+      }
+      if (key === 'gain' && params.running) {
+        if (params.mode === 'tone') updateTone();
+        if (fileSource && fileSource._gainNode) fileSource._gainNode.gain.value = params.gain * 0.9;
+      }
+      updatePhysicsLabels();
+      if (onChange) onChange();
+    };
+    el.addEventListener('input', apply);
+    apply();
+  }
+
+  bindSlider('freq', 'freq', (v) => Math.round(v) + ' Hz');
+  bindSlider('fade', 'fadeMs', (v) => Math.round(v) + ' ms');
+  bindSlider('gain', 'gain', (v) => Math.round(v) + '%');
+  bindSlider('diam', 'diamCm', (v) => Math.round(v) + ' cm');
+  bindSlider('tens', 'tension', (v) => Math.round(v) + ' N/m');
+  bindSlider('laserDist', 'laserM', (v) => v.toFixed(2) + ' m');
+  bindSlider('spkDist', 'spkM', (v) => v.toFixed(2) + ' m');
+  bindSlider('lateral', 'lateralDeg', (v) => Math.round(v) + '°');
+
+  $('freqNum').addEventListener('change', () => {
+    let v = parseFloat($('freqNum').value);
+    if (!isFinite(v)) v = 220;
+    v = Math.max(20, Math.min(2000, v));
+    $('freq').value = v;
+    $('freq').dispatchEvent(new Event('input'));
+  });
+
+  document.querySelectorAll('.chip[data-preset]').forEach((c) => {
+    c.addEventListener('click', () => {
+      $('freq').value = c.dataset.preset;
+      $('freq').dispatchEvent(new Event('input'));
+    });
+  });
+
+  document.querySelectorAll('.mode-btn').forEach((b) => {
+    b.addEventListener('click', () => setMode(b.dataset.mode));
+  });
+
+  playBtn.addEventListener('click', () => setRunning(!params.running));
+  $('clearBtn').addEventListener('click', () => { trail = []; });
+  $('pickFile').addEventListener('click', () => pickAudioFile());
+
+  window.addEventListener('resize', resize);
+  resize();
+  updatePhysicsLabels();
+  lastT = performance.now();
+  raf = requestAnimationFrame(loop);
+
+  async function persist() {
+    if (!Forge || !Forge.state) return;
+    try {
+      await Forge.state.set('laser_membrane_v1', {
+        freq: params.freq,
+        fadeMs: params.fadeMs,
+        gain: params.gain,
+        diamCm: params.diamCm,
+        tension: params.tension,
+        laserM: params.laserM,
+        spkM: params.spkM,
+        lateralDeg: params.lateralDeg,
+        mode: params.mode
+      });
+    } catch (_) {}
+  }
+
+  async function restore() {
+    if (!Forge || !Forge.state) return;
+    try {
+      const s = await Forge.state.get('laser_membrane_v1');
+      if (!s) return;
+      if (s.freq) { $('freq').value = s.freq; }
+      if (s.fadeMs != null) $('fade').value = s.fadeMs;
+      if (s.gain != null) $('gain').value = Math.round(s.gain * 100);
+      if (s.diamCm) $('diam').value = s.diamCm;
+      if (s.tension) $('tens').value = s.tension;
+      if (s.laserM) $('laserDist').value = s.laserM;
+      if (s.spkM) $('spkDist').value = s.spkM;
+      if (s.lateralDeg != null) $('lateral').value = s.lateralDeg;
+      ['freq','fade','gain','diam','tens','laserDist','spkDist','lateral'].forEach((id) => {
+        $(id).dispatchEvent(new Event('input'));
+      });
+      if (s.mode) setMode(s.mode);
+    } catch (_) {}
+  }
+
+  window.__forgePersist = () => ({
+    freq: params.freq,
+    fadeMs: params.fadeMs,
+    gain: params.gain,
+    diamCm: params.diamCm,
+    tension: params.tension,
+    laserM: params.laserM,
+    spkM: params.spkM,
+    lateralDeg: params.lateralDeg,
+    mode: params.mode
+  });
+  window.__forgeRestore = (d) => {
+    if (!d) return;
+    try {
+      if (d.freq) $('freq').value = d.freq;
+      if (d.fadeMs != null) $('fade').value = d.fadeMs;
+      if (d.gain != null) $('gain').value = Math.round(d.gain * 100);
+      if (d.diamCm) $('diam').value = d.diamCm;
+      if (d.tension) $('tens').value = d.tension;
+      if (d.laserM) $('laserDist').value = d.laserM;
+      if (d.spkM) $('spkDist').value = d.spkM;
+      if (d.lateralDeg != null) $('lateral').value = d.lateralDeg;
+      ['freq','fade','gain','diam','tens','laserDist','spkDist','lateral'].forEach((id) => {
+        $(id).dispatchEvent(new Event('input'));
+      });
+      if (d.mode) setMode(d.mode);
+    } catch (_) {}
+  };
+
+  if (Forge && Forge.on) {
+    Forge.on('ready', () => { restore(); });
+    Forge.on('pause', () => { persist(); });
+    Forge.on('resume', () => { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); });
+  } else {
+    restore();
+  }
+
+  ['freq','fade','gain','diam','tens','laserDist','spkDist','lateral'].forEach((id) => {
+    $(id).addEventListener('change', persist);
+  });
+})();
+</script>
+</body>
+</html>

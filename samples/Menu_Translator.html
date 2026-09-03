@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menu Translator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; }
+  .menu-item { transition: all 0.2s; }
+  .photo-thumb { aspect-ratio: 4/3; object-fit: cover; }
+  .modal { animation: fadeIn 0.2s ease; }
+</style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<div class="max-w-md mx-auto min-h-screen flex flex-col">
+  <!-- Header -->
+  <div class="px-6 pt-8 pb-4 bg-zinc-900">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center">
+        <span class="text-2xl">🍽️</span>
+      </div>
+      <div>
+        <h1 class="text-3xl font-semibold tracking-tight">Menu Translator</h1>
+        <p class="text-zinc-400 text-sm">AI-powered menu translations</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="p-6 space-y-6 flex-1">
+    <!-- Languages -->
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-medium text-zinc-400 mb-1.5">FROM LANGUAGE</label>
+        <select id="fromLang" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500">
+          <option value="French">French</option>
+          <option value="Italian">Italian</option>
+          <option value="Spanish">Spanish</option>
+          <option value="German">German</option>
+          <option value="Japanese">Japanese</option>
+          <option value="Chinese">Chinese</option>
+          <option value="Korean">Korean</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-zinc-400 mb-1.5">TO LANGUAGE</label>
+        <select id="toLang" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500">
+          <option value="English">English</option>
+          <option value="French">French</option>
+          <option value="Spanish">Spanish</option>
+          <option value="German">German</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- AI Provider -->
+    <div>
+      <label class="block text-xs font-medium text-zinc-400 mb-1.5">AI PROVIDER</label>
+      <select id="provider" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500"></select>
+    </div>
+
+    <!-- Photos -->
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <label class="text-xs font-medium text-zinc-400">MENU PHOTOS</label>
+      </div>
+      <div class="flex gap-3 mb-3">
+        <button onclick="takePhoto()" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-2xl text-sm font-medium flex items-center justify-center gap-2">
+          <span>📷</span> <span>Take Photo</span>
+        </button>
+        <button onclick="pickFromGallery()" class="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl text-sm font-medium flex items-center justify-center gap-2">
+          <span>🖼️</span> <span>From Gallery</span>
+        </button>
+      </div>
+      <div id="photoGrid" class="grid grid-cols-2 gap-3"></div>
+      <div id="photoEmpty" class="text-center py-8 text-zinc-500 text-sm border border-dashed border-zinc-800 rounded-3xl">No photos yet. Take a photo or pick from gallery.</div>
+    </div>
+
+    <!-- Translate + Clear row -->
+    <div class="flex gap-3">
+      <button onclick="translateMenu()" class="flex-1 py-4 bg-white text-zinc-950 font-semibold rounded-3xl text-lg active:scale-[0.985] transition-transform">
+        Translate Menu
+      </button>
+      <button onclick="clearAll()" class="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-3xl text-sm">
+        Clear All
+      </button>
+    </div>
+
+    <!-- Output -->
+    <div id="outputSection" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-xs font-medium text-zinc-400">TRANSLATED MENU</div>
+        <div class="flex gap-2">
+          <button onclick="copyOutput()" class="text-xs px-3 py-1 bg-zinc-800 rounded-xl">Copy</button>
+          <button onclick="shareOutput()" class="text-xs px-3 py-1 bg-zinc-800 rounded-xl">Share</button>
+          <button onclick="showVoiceModal()" class="text-xs px-3 py-1 bg-zinc-800 rounded-xl">Voice</button>
+        </div>
+      </div>
+      <div id="output" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 text-sm leading-relaxed"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50" onclick="hideModal()">
+  <div onclick="event.stopImmediatePropagation()" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 w-[90%] max-w-sm">
+    <div id="modalContent" class="space-y-4"></div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="speakOriginal()" class="flex-1 py-3 bg-emerald-600 rounded-2xl text-sm font-medium">🔊 Sound it</button>
+      <button onclick="hideModal()" class="flex-1 py-3 bg-zinc-800 rounded-2xl text-sm font-medium">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Voice Modal -->
+<div id="voiceModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50" onclick="hideVoiceModal()">
+  <div onclick="event.stopImmediatePropagation()" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 w-[90%] max-w-sm">
+    <div class="text-lg font-semibold mb-4">Select Voice</div>
+    <select id="voiceSelect" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 text-sm"></select>
+    <div class="flex gap-3 mt-6">
+      <button onclick="saveVoice()" class="flex-1 py-3 bg-emerald-600 rounded-2xl text-sm font-medium">Save</button>
+      <button onclick="hideVoiceModal()" class="flex-1 py-3 bg-zinc-800 rounded-2xl text-sm font-medium">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let photos = []
+let providers = []
+let voices = []
+let selectedVoice = 'eve'
+let currentOriginal = ''
+let currentRomaji = ''
+let textMenu = ''
+let _objectUrls = []
+
+function cleanB64(b) {
+  return String(b || '').replace(/\s+/g, '').replace(/^data:[^;]+;base64,/i, '')
+}
+
+function b64ToBlobUrl(b64, mime) {
+  mime = mime || 'image/jpeg'
+  const bin = atob(cleanB64(b64))
+  const bytes = new Uint8Array(bin.length)
+  var n = 0
+  while (n < bin.length) { bytes[n] = bin.charCodeAt(n); n++ }
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }))
+  _objectUrls.push(url)
+  return url
+}
+
+function revokeObjectUrls() {
+  for (const u of _objectUrls) {
+    try { URL.revokeObjectURL(u) } catch (_) {}
+  }
+  _objectUrls = []
+}
+
+/** Defensive normalize — host may already have done this. Never trust blob-only payloads. */
+function normalizeMedia(raw, fallbackName) {
+  if (!raw || typeof raw !== 'object') return null
+  if (raw.cancelled) return null
+  let item = raw
+  if (Array.isArray(raw)) item = raw[0]
+  if (raw.files && Array.isArray(raw.files)) item = raw.files[0]
+  if (!item || item.cancelled) return null
+
+  try {
+    if (window.ForgeHost && ForgeHost.camera && typeof ForgeHost.camera.normalize === 'function') {
+      item = ForgeHost.camera.normalize(item) || item
+    }
+  } catch (_) {}
+
+  let mime = String(item.mime || item.type || item.contentType || '').toLowerCase()
+  let base64 = cleanB64(item.base64 || '')
+  let dataUrl = item.rawDataUrl || item.dataUrl || item.dataURL || ''
+  if (dataUrl && /^blob:/i.test(dataUrl)) dataUrl = ''
+  if (!base64 && dataUrl && /base64,/i.test(dataUrl)) {
+    base64 = cleanB64(dataUrl.split(/base64,/i).pop() || '')
+  }
+  if ((!mime || mime === 'application/octet-stream') && (item.width || item.height || item.format === 'jpeg' || (base64 && base64.indexOf('/9j/') === 0))) {
+    mime = 'image/jpeg'
+  }
+  if (!mime && dataUrl && /^data:/i.test(dataUrl)) {
+    mime = (dataUrl.slice(5).split(';')[0] || 'image/jpeg').toLowerCase()
+  }
+  if (!mime) mime = 'image/jpeg'
+  if (!dataUrl && base64) dataUrl = 'data:' + mime + ';base64,' + base64
+  if (!base64 && !dataUrl && !item.uri && !item.path) return null
+
+  let previewUrl = item.previewUrl || item.blobUrl || item.displayUrl || ''
+  if (previewUrl && /^blob:/i.test(previewUrl)) {
+    // keep host blob if present
+  } else if (base64 && mime.indexOf('image/') === 0) {
+    try { previewUrl = b64ToBlobUrl(base64, mime) } catch (_) { previewUrl = '' }
+  }
+  if (!previewUrl) previewUrl = dataUrl || ''
+
+  return {
+    name: item.name || fallbackName || 'menu.jpg',
+    type: 'image',
+    mime,
+    base64: base64 || null,
+    dataUrl: dataUrl || null,
+    rawDataUrl: dataUrl || null,
+    previewUrl: previewUrl || null,
+    blobUrl: item.blobUrl || null,
+    displayUrl: item.displayUrl || null,
+    width: item.width,
+    height: item.height,
+    bytes: item.bytes || item.size || (base64 ? Math.floor(base64.length * 0.75) : null),
+  }
+}
+
+/** AI / upload part — real data: or base64 only, NEVER blob: */
+function toAiImagePart(shot, index) {
+  const mime = (shot && shot.mime) || 'image/jpeg'
+  let b64 = cleanB64(shot && shot.base64)
+  let du = (shot && (shot.rawDataUrl || shot.dataUrl)) || ''
+  if (du && /^blob:/i.test(du)) du = ''
+  if (!b64 && du && /base64,/i.test(du)) b64 = cleanB64(du.split(/base64,/i).pop() || '')
+  if (!du && b64) du = 'data:' + mime + ';base64,' + b64
+  if (!du && !b64) return null
+  return {
+    type: 'image',
+    mime,
+    name: (shot && shot.name) || ('menu-' + (index + 1) + '.jpg'),
+    dataUrl: du || null,
+    base64: b64 || null,
+  }
+}
+
+function setImgWithFallback(img, shot) {
+  if (!img || !shot) return false
+  try {
+    if (window.ForgeHost && ForgeHost.camera && typeof ForgeHost.camera.setImg === 'function') {
+      if (ForgeHost.camera.setImg(img, shot)) return true
+    }
+  } catch (_) {}
+
+  const tryList = []
+  if (shot.previewUrl) tryList.push(shot.previewUrl)
+  if (shot.blobUrl) tryList.push(shot.blobUrl)
+  if (shot.displayUrl) tryList.push(shot.displayUrl)
+  if (shot.dataUrl && /^data:/i.test(shot.dataUrl)) tryList.push(shot.dataUrl)
+  if (shot.rawDataUrl && /^data:/i.test(shot.rawDataUrl)) tryList.push(shot.rawDataUrl)
+  if (shot.base64) {
+    try { tryList.push(b64ToBlobUrl(shot.base64, shot.mime || 'image/jpeg')) } catch (_) {}
+    try { tryList.push('data:' + (shot.mime || 'image/jpeg') + ';base64,' + cleanB64(shot.base64)) } catch (_) {}
+  }
+  if (!tryList.length) return false
+
+  var ti = 0
+  img.onerror = function () {
+    ti++
+    if (ti < tryList.length) img.src = tryList[ti]
+  }
+  img.src = tryList[0]
+  return true
+}
+
+async function init() {
+  try {
+    const menu = await ForgeHost.ai.listProviders()
+    providers = (menu.providers || []).filter(p => p.available)
+    const sel = document.getElementById('provider')
+    sel.innerHTML = ''
+    providers.forEach(p => {
+      const opt = document.createElement('option')
+      opt.value = p.id
+      opt.textContent = `${p.label} (${p.model})`
+      sel.appendChild(opt)
+    })
+    if (providers.length === 0) {
+      sel.innerHTML = '<option value="">No AI providers configured</option>'
+    }
+
+    const v = await ForgeHost.ai.listVoices()
+    voices = v.options || []
+    if (voices.length) selectedVoice = voices[0].value
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function addShot(shot, sourceLabel) {
+  const media = normalizeMedia(shot, sourceLabel === 'camera' ? 'camera.jpg' : 'gallery.jpg')
+  if (!media || (!media.base64 && !media.dataUrl)) {
+    ForgeHost.toast('No image data from ' + (sourceLabel || 'camera'))
+    return
+  }
+  photos.push(media)
+  renderPhotos()
+  const kb = media.bytes ? Math.round(media.bytes / 1024) + ' KB' : ''
+  try { ForgeHost.toast('Added photo' + (kb ? ' (' + kb + ')' : '')) } catch (_) {}
+}
+
+async function takePhoto() {
+  try {
+    try { await ForgeHost.permissions.requestPack('media') } catch (_) {}
+    try { await ForgeHost.permissions.request('camera') } catch (_) {}
+    const shot = await ForgeHost.camera.takePhoto({ quality: 85, maxWidth: 1280, facing: 'back' })
+    if (!shot) {
+      ForgeHost.toast('Camera returned nothing')
+      return
+    }
+    await addShot(shot, 'camera')
+  } catch (e) {
+    ForgeHost.toast('Camera error: ' + (e && e.message ? e.message : e))
+  }
+}
+
+async function pickFromGallery() {
+  try {
+    try { await ForgeHost.permissions.requestPack('media') } catch (_) {}
+    const shot = await ForgeHost.camera.pickPhoto({ quality: 85, maxWidth: 1280 })
+    if (!shot) {
+      ForgeHost.toast('No photo selected')
+      return
+    }
+    await addShot(shot, 'gallery')
+  } catch (e) {
+    ForgeHost.toast('Gallery error: ' + (e && e.message ? e.message : e))
+  }
+}
+
+function renderPhotos() {
+  const grid = document.getElementById('photoGrid')
+  const empty = document.getElementById('photoEmpty')
+  grid.innerHTML = ''
+
+  if (photos.length === 0) {
+    empty.style.display = 'block'
+    return
+  }
+  empty.style.display = 'none'
+
+  photos.forEach((photo, i) => {
+    const div = document.createElement('div')
+    div.className = 'relative'
+
+    const img = document.createElement('img')
+    img.alt = 'Menu photo ' + (i + 1)
+    img.className = 'photo-thumb w-full rounded-2xl border border-zinc-800 bg-zinc-900'
+    div.appendChild(img)
+
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'absolute top-2 right-2 bg-black/80 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm'
+    btn.setAttribute('aria-label', 'Remove photo')
+    btn.textContent = '\u00d7'
+    btn.onclick = function (ev) {
+      if (ev) { ev.preventDefault(); ev.stopPropagation() }
+      removePhoto(i)
+    }
+    div.appendChild(btn)
+
+    grid.appendChild(div)
+    if (!setImgWithFallback(img, photo)) {
+      img.removeAttribute('src')
+      img.alt = 'Failed to display'
+    }
+  })
+}
+
+function removePhoto(i) {
+  photos.splice(i, 1)
+  renderPhotos()
+}
+
+async function translateMenu() {
+  if (photos.length === 0) {
+    ForgeHost.toast('Add at least one menu photo')
+    return
+  }
+
+  const from = document.getElementById('fromLang').value
+  const to = document.getElementById('toLang').value
+  const providerId = document.getElementById('provider').value
+  const needsRomaji = from === 'Japanese' || from === 'Chinese' || from === 'Korean'
+
+  const attachments = photos
+    .map((p, i) => toAiImagePart(p, i))
+    .filter(a => a && (a.dataUrl || a.base64))
+
+  if (!attachments.length) {
+    ForgeHost.toast('Photos have no image bytes for AI')
+    return
+  }
+
+  const outputSection = document.getElementById('outputSection')
+  const output = document.getElementById('output')
+  outputSection.classList.remove('hidden')
+  outputSection.style.display = 'block'
+  output.innerHTML = '<div class="flex items-center gap-2 text-emerald-400"><div class="animate-spin w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full"></div> Translating with AI...</div>'
+
+  try {
+    const prompt = `Translate this restaurant menu from ${from} to ${to}. Return ONLY a clean, self-contained HTML snippet using Tailwind CSS classes (the page already loads Tailwind).
+
+Structure:
+- Outer wrapper: <div class="space-y-3">
+- Each menu item: <div class="menu-item p-4 bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer" data-original="EXACT ORIGINAL DISH TEXT"${needsRomaji ? ' data-romaji="ROMANIZATION IF USEFUL"' : ''}>
+- Inside each item show ONLY the ${to} translation: dish name, short description if present, price unchanged
+- Do NOT show original script visibly — originals go only in data-original / data-romaji
+- Keep prices exactly as printed. Be concise. Mobile-friendly.`
+
+    const result = await ForgeHost.ai.chat({
+      prompt,
+      attachments,
+      providerId: providerId || undefined,
+    })
+
+    const html = (result && (result.content || result.text)) || ''
+    output.innerHTML = html || '<span class="text-zinc-500">No translation returned</span>'
+
+    textMenu = ''
+    output.querySelectorAll('.menu-item').forEach(el => {
+      const orig = el.getAttribute('data-original') || ''
+      const rom = el.getAttribute('data-romaji') || ''
+      if (orig) {
+        textMenu += el.innerText.trim() + ' (' + orig + (rom ? ' / ' + rom : '') + ')\n'
+        el.onclick = () => showModal(orig, rom)
+      }
+    })
+  } catch (e) {
+    output.innerHTML = '<span class="text-red-400">Error: ' + (e && e.message ? e.message : e) + '</span>'
+  }
+}
+
+function showModal(original, romaji) {
+  currentOriginal = original
+  currentRomaji = romaji
+  const modal = document.getElementById('modal')
+  const content = document.getElementById('modalContent')
+  content.innerHTML = `
+    <div>
+      <div class="text-xs text-zinc-400 mb-1">ORIGINAL</div>
+      <div class="text-lg">${original}</div>
+    </div>
+    ${romaji ? `<div>
+      <div class="text-xs text-zinc-400 mb-1">ROMAJI</div>
+      <div class="text-lg">${romaji}</div>
+    </div>` : ''}
+  `
+  modal.classList.remove('hidden')
+  modal.classList.add('flex')
+}
+
+function hideModal() {
+  const modal = document.getElementById('modal')
+  modal.classList.remove('flex')
+  modal.classList.add('hidden')
+}
+
+function showVoiceModal() {
+  const vm = document.getElementById('voiceModal')
+  const sel = document.getElementById('voiceSelect')
+  sel.innerHTML = ''
+  voices.forEach(v => {
+    const opt = document.createElement('option')
+    opt.value = v.value
+    opt.textContent = v.label
+    if (v.value === selectedVoice) opt.selected = true
+    sel.appendChild(opt)
+  })
+  vm.classList.remove('hidden')
+  vm.classList.add('flex')
+}
+
+function hideVoiceModal() {
+  const vm = document.getElementById('voiceModal')
+  vm.classList.remove('flex')
+  vm.classList.add('hidden')
+}
+
+function saveVoice() {
+  selectedVoice = document.getElementById('voiceSelect').value
+  hideVoiceModal()
+  ForgeHost.toast('Voice saved')
+}
+
+async function speakOriginal() {
+  if (!currentOriginal) return
+  try {
+    const clean = currentOriginal.replace(/\s*\$?\d+[.,]?\d*\s*$/i, '').trim()
+    await ForgeHost.ai.tts({ text: clean, voice: selectedVoice, mode: 'auto' })
+  } catch(e) {
+    ForgeHost.toast('TTS error')
+  }
+}
+
+function copyOutput() {
+  if (!textMenu) {
+    ForgeHost.toast('No translation yet')
+    return
+  }
+  ForgeHost.clipboard.write(textMenu)
+  ForgeHost.toast('Copied to clipboard')
+}
+
+async function shareOutput() {
+  if (!textMenu) {
+    ForgeHost.toast('No translation yet')
+    return
+  }
+
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  const width = 800
+  const padding = 60
+  const lineHeight = 42
+  
+  const lines = textMenu.trim().split('\n')
+  
+  const height = Math.max(600, padding * 2 + lines.length * lineHeight + 120)
+  canvas.width = width
+  canvas.height = height
+  
+  ctx.fillStyle = '#18181b'
+  ctx.fillRect(0, 0, width, height)
+  
+  ctx.fillStyle = '#10b981'
+  ctx.font = 'bold 42px system-ui'
+  ctx.fillText('Translated Menu', padding, padding + 50)
+  
+  ctx.fillStyle = '#e4e4e7'
+  ctx.font = '26px system-ui'
+  let y = padding + 130
+  for (let line of lines) {
+    ctx.fillText(line, padding, y)
+    y += lineHeight
+  }
+  
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+  await ForgeHost.share.file({ name: 'translated-menu.jpg', mime: 'image/jpeg', dataUrl })
+}
+
+function clearAll() {
+  photos = []
+  revokeObjectUrls()
+  renderPhotos()
+  const outputSection = document.getElementById('outputSection')
+  outputSection.style.display = 'none'
+  outputSection.classList.add('hidden')
+  document.getElementById('output').innerHTML = ''
+  textMenu = ''
+}
+
+// Boot
+init()
+</script>
+</body>
+</html>

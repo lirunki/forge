@@ -1,0 +1,2329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Forge AI Chat v8.1</title>
+<style>* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+ font-family: system-ui, -apple-system, sans-serif;
+ background: #0f172a;
+ color: #e2e8f0;
+ height: 100vh;
+ display: flex;
+ flex-direction: column;
+}
+.header {
+ background: #1e2937;
+ padding: 12px 16px;
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ border-bottom: 1px solid #334155;
+}
+.header h2 { font-size: 18px; font-weight: 600; }
+.header-actions { display: flex; gap: 8px; }
+.btn {
+ background: #3b82f6;
+ color: white;
+ border: none;
+ padding: 8px 16px;
+ border-radius: 8px;
+ font-size: 14px;
+ cursor: pointer;
+ font-weight: 500;
+}
+.btn-secondary { background: #475569; }
+.btn-small { padding: 6px 12px; font-size: 13px; }
+.chat-container {
+ flex: 1;
+ overflow-y: auto;
+ padding: 16px;
+ display: flex;
+ flex-direction: column;
+ gap: 12px;
+ font-size: var(--chat-font-size, 16px);
+}
+.message {
+ max-width: 100%;
+ padding: 12px 16px;
+ border-radius: 18px;
+ line-height: 1.5;
+ word-wrap: break-word;
+}
+.user {
+ background: #3b82f6;
+ align-self: flex-end;
+ border-bottom-right-radius: 4px;
+ max-width: 85%;
+}
+.ai {
+ background: #334155;
+ align-self: flex-start;
+ border-bottom-left-radius: 4px;
+ width: 100%;
+}
+.ai .provider-tag {
+ font-size: 11px;
+ color: #94a3b8;
+ margin-bottom: 4px;
+}
+.ai .stream-body { white-space: pre-wrap; word-break: break-word; }
+.ai.streaming .stream-cursor {
+ display: inline-block;
+ width: 8px;
+ height: 1em;
+ background: #60a5fa;
+ margin-left: 2px;
+ vertical-align: text-bottom;
+ animation: blink 0.9s step-end infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.message img, .msg-atts img, .gen-images img {
+ max-width: 100%;
+ border-radius: 8px;
+ margin-top: 8px;
+ display: block;
+}
+.msg-atts, .gen-images {
+ display: flex;
+ flex-direction: column;
+ gap: 6px;
+ margin-top: 6px;
+}
+.gen-images {
+ margin: 10px 0;
+ padding: 8px;
+ background: #0f172a;
+ border-radius: 12px;
+ border: 1px solid #475569;
+}
+.gen-images .gen-label {
+ font-size: 11px;
+ color: #94a3b8;
+ margin-bottom: 4px;
+}
+.html-block {
+ margin: 10px 0;
+ border: 1px solid #475569;
+ border-radius: 12px;
+ overflow: hidden;
+ background: #0f172a;
+}
+.html-block-bar {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ gap: 8px;
+ padding: 6px 10px;
+ background: #1e2937;
+ border-bottom: 1px solid #334155;
+ font-size: 11px;
+ color: #94a3b8;
+}
+.html-block-bar .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.html-block-bar button {
+ background: #334155;
+ color: #e2e8f0;
+ border: none;
+ border-radius: 6px;
+ padding: 4px 8px;
+ font-size: 11px;
+ cursor: pointer;
+}
+.html-frame-wrap {
+ width: 100%;
+ overflow: auto;
+ background: #fff;
+ max-height: 70vh;
+}
+.html-frame-wrap iframe {
+ display: block;
+ border: 0;
+ width: 100%;
+ min-height: 120px;
+ background: #fff;
+ transform-origin: 0 0;
+}
+.html-source {
+ display: none;
+ margin: 0;
+ padding: 10px;
+ max-height: 240px;
+ overflow: auto;
+ background: #0b1220;
+ color: #cbd5e1;
+ font-size: 11px;
+ white-space: pre-wrap;
+ word-break: break-word;
+ font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.html-source.show { display: block; }
+.inline-code {
+ font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+ background: rgba(15,23,42,0.45);
+ border-radius: 4px;
+ padding: 1px 4px;
+ font-size: 0.92em;
+}
+.pre-code {
+ display: block;
+ margin: 8px 0;
+ padding: 10px;
+ border-radius: 10px;
+ background: #0b1220;
+ color: #cbd5e1;
+ font-size: 12px;
+ white-space: pre-wrap;
+ word-break: break-word;
+ overflow: auto;
+ font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.input-bar {
+ position: relative;
+ background: #1e2937;
+ padding: 12px;
+ display: flex;
+ gap: 8px;
+ align-items: flex-end;
+ border-top: 1px solid #334155;
+}
+.input-wrapper {
+ flex: 1;
+ background: #334155;
+ border-radius: 24px;
+ display: flex;
+ align-items: flex-end;
+ padding: 4px 12px;
+}
+#messageInput {
+ flex: 1;
+ padding: 10px 0;
+ border: none;
+ background: transparent;
+ color: white;
+ font-size: 16px;
+ resize: none;
+ max-height: 120px;
+ min-height: 24px;
+ outline: none;
+}
+.attach-btn, .send-btn {
+ width: 40px;
+ height: 40px;
+ border-radius: 50%;
+ border: none;
+ cursor: pointer;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ font-size: 18px;
+ flex-shrink: 0;
+}
+.attach-btn { background: #475569; color: white; }
+.send-btn { background: #3b82f6; color: white; }
+.send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.file-preview {
+ display: flex;
+ gap: 8px;
+ flex-wrap: wrap;
+ padding: 8px 16px;
+ background: #1e2937;
+ min-height: 42px;
+ border-top: 1px solid #334155;
+}
+.file-thumb {
+ width: 64px;
+ height: 64px;
+ border-radius: 10px;
+ background: #475569;
+ position: relative;
+ overflow: hidden;
+ flex-shrink: 0;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+}
+.file-thumb img {
+ width: 100%;
+ height: 100%;
+ object-fit: cover;
+ display: block;
+}
+.file-thumb .mime-box {
+ font-size: 11px;
+ font-weight: 700;
+ color: #e2e8f0;
+ padding: 4px;
+ text-align: center;
+}
+.file-thumb .remove {
+ position: absolute;
+ top: 2px;
+ right: 2px;
+ width: 18px;
+ height: 18px;
+ background: #ef4444;
+ color: white;
+ border: none;
+ border-radius: 50%;
+ font-size: 12px;
+ cursor: pointer;
+ line-height: 18px;
+ padding: 0;
+}
+.modal {
+ display: none;
+ position: fixed;
+ top: 0; left: 0;
+ width: 100%; height: 100%;
+ background: rgba(15,23,42,0.95);
+ z-index: 100;
+ overflow-y: auto;
+}
+.modal-content {
+ background: #1e2937;
+ margin: 40px 16px;
+ padding: 24px;
+ border-radius: 16px;
+ max-height: calc(100vh - 80px);
+ overflow-y: auto;
+}
+.modal-content h3 { margin-bottom: 16px; font-size: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label {
+ display: block;
+ margin-bottom: 6px;
+ font-size: 14px;
+ color: #94a3b8;
+}
+.form-group input, .form-group select {
+ width: 100%;
+ padding: 12px;
+ border-radius: 8px;
+ border: 1px solid #475569;
+ background: #334155;
+ color: white;
+ font-size: 15px;
+}
+.modal-buttons { display: flex; gap: 8px; margin-top: 20px; }
+.modal-buttons button {
+ flex: 1;
+ padding: 12px;
+ border-radius: 8px;
+ border: none;
+ font-size: 15px;
+ cursor: pointer;
+ font-weight: 500;
+}
+.save-btn { background: #3b82f6; color: white; }
+.cancel-btn { background: #475569; color: white; }
+.status-bar {
+ background: #1e2937;
+ padding: 8px 16px;
+ font-size: 12px;
+ color: #94a3b8;
+ text-align: center;
+ border-bottom: 1px solid #334155;
+}
+.attach-menu {
+ position: absolute;
+ bottom: 52px;
+ right: 60px;
+ background: #1e2937;
+ border-radius: 12px;
+ box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+ display: none;
+ flex-direction: column;
+ z-index: 50;
+ min-width: 160px;
+ border: 1px solid #334155;
+}
+.attach-menu button {
+ padding: 12px 16px;
+ border: none;
+ background: transparent;
+ color: white;
+ text-align: left;
+ font-size: 15px;
+ cursor: pointer;
+}
+.attach-menu button:active { background: #3b82f6; }
+.checkbox-row {
+ display: flex;
+ align-items: center;
+ gap: 10px;
+ margin-bottom: 12px;
+}
+.checkbox-row input[type=checkbox] {
+ width: 20px;
+ height: 20px;
+ accent-color: #3b82f6;
+}
+.checkbox-row label { margin-bottom: 0; cursor: pointer; }
+.section-divider {
+ border-top: 1px solid #334155;
+ margin: 16px 0;
+ padding-top: 16px;
+}
+.section-divider h4 {
+ font-size: 15px;
+ margin-bottom: 12px;
+ color: #e2e8f0;
+}
+.tool-chips {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 6px;
+ margin-top: 8px;
+}
+.tool-chip {
+ display: inline-flex;
+ align-items: center;
+ gap: 4px;
+ padding: 6px 12px;
+ border-radius: 20px;
+ background: #334155;
+ border: 1px solid #475569;
+ font-size: 12px;
+ cursor: pointer;
+ user-select: none;
+}
+.tool-chip.active {
+ background: #3b82f6;
+ border-color: #3b82f6;
+ color: white;
+}
+.tool-chip .risk-badge {
+ font-size: 9px;
+ padding: 1px 4px;
+ border-radius: 4px;
+ background: rgba(255,255,255,0.15);
+ text-transform: uppercase;
+}
+.confirm-overlay {
+ display: none;
+ position: fixed;
+ inset: 0;
+ background: rgba(15,23,42,0.85);
+ z-index: 200;
+ align-items: center;
+ justify-content: center;
+ padding: 24px;
+}
+.confirm-overlay.show { display: flex; }
+.confirm-box {
+ background: #1e2937;
+ border-radius: 16px;
+ padding: 20px;
+ width: 100%;
+ max-width: 340px;
+ border: 1px solid #334155;
+}
+.confirm-box p {
+ margin-bottom: 16px;
+ line-height: 1.5;
+ font-size: 15px;
+}
+.confirm-box .modal-buttons { margin-top: 0; }
+.hint {
+ font-size: 12px;
+ color: #94a3b8;
+ line-height: 1.4;
+ margin-top: 6px;
+}
+</style>
+</head>
+<body>
+<div class="header">
+ <h2>🤖 MultiForge AI</h2>
+ <div class="header-actions">
+ <button class="btn btn-secondary btn-small" id="btnNewChat" type="button">➕</button>
+ <button class="btn btn-secondary btn-small" id="btnSettings" type="button">⚙️</button>
+ </div>
+</div>
+<div id="statusBar" class="status-bar">v8.1 • Starting…</div>
+<div id="chat" class="chat-container"></div>
+<div id="filePreview" class="file-preview" style="display:none;"></div>
+<div class="input-bar">
+ <div class="input-wrapper">
+ <textarea id="messageInput" placeholder="Type a message..." rows="1"></textarea>
+ </div>
+ <button class="attach-btn" id="attachBtn" type="button" title="Attach">📎</button>
+ <button class="send-btn" id="sendBtn" type="button" title="Send">➤</button>
+ <div id="attachMenu" class="attach-menu">
+ <button type="button" id="btnTakePhoto">📷 Take Photo</button>
+ <button type="button" id="btnPickPhoto">🖼️ Camera Roll</button>
+ <button type="button" id="btnPickFile">📄 Pick File</button>
+ <button type="button" id="btnAttachCancel">Cancel</button>
+ </div>
+</div>
+
+<div id="settingsModal" class="modal">
+ <div class="modal-content">
+ <h3>⚙️ Settings</h3>
+ <div class="form-group">
+ <label>Chat Font Size</label>
+ <input type="range" id="chatFontSize" min="12" max="28" step="1" value="16">
+ <span id="fontSizeValue">16px</span>
+ <p class="hint">Adjust the text size of chat messages.</p>
+ </div>
+ <div class="form-group">
+ <label>HTML Render Scale</label>
+ <input type="range" id="htmlScale" min="0.5" max="2" step="0.1" value="1">
+ <span id="scaleValue">100%</span>
+ </div>
+ <div class="form-group">
+ <label>AI Provider</label>
+ <select id="aiProvider"></select>
+ <p class="hint">Chat and image generation both use this provider.</p>
+ </div>
+ <div class="form-group">
+ <label>Image model</label>
+ <select id="imageModel">
+ <option value="grok-imagine-image-2.0" selected>grok-imagine-image-2.0</option>
+ <option value="auto">Auto (try defaults)</option>
+ <option value="grok-2-image">grok-2-image</option>
+ <option value="grok-2-image-1212">grok-2-image-1212</option>
+ <option value="grok-2-image-latest">grok-2-image-latest</option>
+ </select>
+ <p class="hint">Image model id for the selected provider. Default is grok-imagine-image-2.0 on xAI. Do not use chat-only models (e.g. grok-4) here.</p>
+ </div>
+ <div class="form-group">
+ <label>Streaming</label>
+ <select id="streamMode">
+ <option value="auto" selected>Auto (stream + fallback)</option>
+ <option value="stream">Stream only</option>
+ <option value="sync">Standard chat (no stream)</option>
+ </select>
+ </div>
+ <div class="section-divider">
+ <h4>Tools</h4>
+ <div class="checkbox-row">
+ <input type="checkbox" id="toolsEnabled" checked>
+ <label for="toolsEnabled">Enable tools</label>
+ </div>
+ <div class="form-group">
+ <label>Max risk level</label>
+ <select id="maxRisk">
+ <option value="safe">safe</option>
+ <option value="sensitive">sensitive</option>
+ <option value="confirm" selected>confirm</option>
+ <option value="danger">danger</option>
+ </select>
+ </div>
+ <div class="checkbox-row">
+ <input type="checkbox" id="confirmSideEffects" checked>
+ <label for="confirmSideEffects">Confirm side effects</label>
+ </div>
+ <div class="form-group">
+ <label>Enabled tools</label>
+ <div id="toolChips" class="tool-chips"></div>
+ </div>
+ </div>
+ <div class="modal-buttons">
+ <button class="cancel-btn" type="button" id="btnCloseSettings">Cancel</button>
+ <button class="save-btn" type="button" id="btnSaveSettings">Save</button>
+ </div>
+ </div>
+</div>
+
+<div id="confirmOverlay" class="confirm-overlay">
+ <div class="confirm-box">
+ <p id="confirmText">Allow this action?</p>
+ <div class="modal-buttons">
+ <button class="cancel-btn" type="button" id="confirmNo">Deny</button>
+ <button class="save-btn" type="button" id="confirmYes">Allow</button>
+ </div>
+ </div>
+</div>
+
+<script >
+(function () {
+ 'use strict';
+
+ var APP_VERSION = 'v8.1';
+
+ function host() {
+ try {
+ if (window.ForgeHost) return window.ForgeHost;
+ if (window.forge) return window.forge;
+ } catch (e) {}
+ return null;
+ }
+
+ async function toast(msg, long) {
+ try {
+ var h = host();
+ if (h && h.toast) await h.toast(String(msg), !!long);
+ } catch (e) {}
+ }
+
+ var settings = {
+ htmlScale: 1.0,
+ aiProvider: 'xai',
+ streamMode: 'auto',
+ imageModel: 'grok-imagine-image-2.0',
+ chatFontSize: 16
+ };
+ var toolSettings = { enabled: true, riskMax: 'confirm', confirmSideEffects: true, enabledTools: null };
+ var attachedFiles = [];
+ var conversationHistory = [];
+ var isLoading = false;
+ var aiProviders = [];
+ var _objectUrls = [];
+ var APP_TOOLS = [];
+ var toolCatalog = [];
+ var toolsHint = '';
+ var DEFAULT_TOOL_NAMES = ['web_search','web_fetch','get_time','device_info','clipboard_read','clipboard_write','toast','open_url','notify','get_location','open_maps','sms_list','sms_compose','phone_dial','list_contacts','find_contact','list_apps','list_activities','launch_app','radio_status','radio_set','radio_open_settings','tts_speak','get_capabilities','image_generate'];
+ var IMAGE_MODEL_CANDIDATES = ['grok-imagine-image-2.0', 'grok-2-image', 'grok-2-image-1212', 'grok-2-image-latest'];
+ var _htmlBlockSeq = 0;
+ var _confirmResolver = null;
+ var _inlineCache = {};
+ var _lastBubble = null;
+
+ function applyChatFontSize() {
+ var size = parseFloat(settings.chatFontSize);
+ if (!isFinite(size) || size <= 0) size = 16;
+ document.documentElement.style.setProperty('--chat-font-size', size + 'px');
+ }
+
+ function uiConfirm(message) {
+ return new Promise(function (resolve) {
+ var overlay = document.getElementById('confirmOverlay');
+ var text = document.getElementById('confirmText');
+ text.textContent = message || 'Allow this action?';
+ overlay.classList.add('show');
+ _confirmResolver = function (ok) {
+ overlay.classList.remove('show');
+ _confirmResolver = null;
+ resolve(!!ok);
+ };
+ });
+ }
+
+ document.getElementById('confirmYes').onclick = function () {
+ if (_confirmResolver) _confirmResolver(true);
+ };
+ document.getElementById('confirmNo').onclick = function () {
+ if (_confirmResolver) _confirmResolver(false);
+ };
+
+ async function refreshHostTools() {
+ APP_TOOLS = [];
+ toolsHint = '';
+ var h = host();
+ if (!h || !h.tools || typeof h.tools.list !== 'function') return;
+ try {
+ var names = toolSettings.enabledTools && toolSettings.enabledTools.length ? toolSettings.enabledTools : DEFAULT_TOOL_NAMES;
+ var listed = await h.tools.list({ riskMax: toolSettings.riskMax, names: names });
+ APP_TOOLS = (listed && listed.tools) || [];
+ toolCatalog = (listed && listed.catalog) || [];
+ if (typeof h.tools.hint === 'function') {
+ var hintResp = await h.tools.hint({ riskMax: toolSettings.riskMax, names: names });
+ toolsHint = (hintResp && hintResp.hint) || '';
+ }
+ } catch (e) {
+ APP_TOOLS = [];
+ toolsHint = '';
+ }
+ }
+
+ function isChatOnlyModelName(name) {
+ var s = String(name || '').toLowerCase();
+ if (!s) return false;
+ if (s.indexOf('image') >= 0) return false;
+ if (/grok-4/.test(s)) return true;
+ if (/grok-3/.test(s)) return true;
+ if (/gpt|claude|gemini|llama|chat/.test(s) && s.indexOf('image') < 0) return true;
+ return false;
+ }
+
+ function pickImageModelsToTry(requested) {
+ var pref = requested || settings.imageModel || 'grok-imagine-image-2.0';
+ if (pref && pref !== 'auto' && !isChatOnlyModelName(pref)) {
+ return [pref].concat(IMAGE_MODEL_CANDIDATES.filter(function (m) { return m !== pref; }));
+ }
+ return IMAGE_MODEL_CANDIDATES.slice();
+ }
+
+ /** Resolve the mini-app chat provider id so image gen uses the same one. Default: xai */
+ async function resolveChatProviderId() {
+ if (settings.aiProvider && settings.aiProvider !== 'default') {
+ return settings.aiProvider;
+ }
+ try {
+ var h = host();
+ if (h && h.ai && typeof h.ai.getProvider === 'function') {
+ var current = await h.ai.getProvider();
+ if (current && typeof current === 'object' && current.id) return current.id;
+ if (typeof current === 'string' && current) return current;
+ }
+ } catch (e) {}
+ return 'xai';
+ }
+
+ function extractImagesFromToolResult(result) {
+ var out = [];
+ if (!result) return out;
+ function push(img) {
+ if (!img) return;
+ if (typeof img === 'string') {
+ out.push({ url: img });
+ return;
+ }
+ if (typeof img === 'object') {
+ var url = img.url || img.dataUrl || img.dataURL || img.src || null;
+ var b64 = img.base64 || null;
+ if (!url && b64) {
+ var mime = img.mime || img.contentType || 'image/jpeg';
+ url = 'data:' + mime + ';base64,' + b64;
+ }
+ if (url) out.push({
+ url: url,
+ revised_prompt: img.revised_prompt || img.revisedPrompt || null,
+ mime: img.mime || null
+ });
+ }
+ }
+ if (Array.isArray(result.images)) result.images.forEach(push);
+ if (Array.isArray(result.data)) result.data.forEach(push);
+ if (result.image) push(result.image);
+ if (result.url && (result.ok || looksLikeImageUrl(result.url) || String(result.url).indexOf('data:image') === 0)) {
+ push(result);
+ }
+ return out;
+ }
+
+ async function inlineOneImageUrl(url) {
+ if (!url) return null;
+ var u = String(url);
+ if (u.indexOf('data:') === 0) return u;
+ if (_inlineCache[u]) return _inlineCache[u];
+ if (!/^https?:\/\//i.test(u)) return u;
+ var dataUrl = await fetchAsDataUrl(u);
+ return dataUrl || u;
+ }
+
+ async function enrichImageToolResult(result) {
+ var images = extractImagesFromToolResult(result);
+ if (!images.length) return { result: result, images: [] };
+ var inlined = [];
+ for (var i = 0; i < images.length; i++) {
+ var img = images[i];
+ var dataUrl = await inlineOneImageUrl(img.url);
+ inlined.push({
+ url: dataUrl || img.url,
+ originalUrl: img.url,
+ revised_prompt: img.revised_prompt || null,
+ mime: img.mime || null
+ });
+ }
+ var cloned;
+ try {
+ cloned = JSON.parse(JSON.stringify(result));
+ } catch (e) {
+ cloned = result && typeof result === 'object' ? Object.assign({}, result) : { value: result };
+ }
+ cloned.images = inlined.map(function (im) {
+ return {
+ url: im.url,
+ revised_prompt: im.revised_prompt,
+ inlined: String(im.url || '').indexOf('data:') === 0
+ };
+ });
+ cloned.ok = cloned.ok !== false && inlined.length > 0;
+ cloned.count = inlined.length;
+ cloned._client = {
+ display: 'Images were fetched and base64-inlined for on-device display.',
+ imageCount: inlined.length,
+ images: inlined.map(function (im, idx) {
+ var u = im.url || '';
+ var isData = u.indexOf('data:') === 0;
+ return {
+ index: idx,
+ inlined: isData,
+ url: (isData && u.length > 4000) ? ('[base64 data URL inlined by client, length=' + u.length + ']') : u,
+ dataUrlForClient: isData ? u : null,
+ originalUrl: im.originalUrl && im.originalUrl !== u ? im.originalUrl : null,
+ revised_prompt: im.revised_prompt
+ };
+ })
+ };
+ return { result: cloned, images: inlined };
+ }
+
+ function appendGeneratedImages(bubble, images, label) {
+ if (!bubble || !bubble.body || !images || !images.length) return;
+ var wrap = document.createElement('div');
+ wrap.className = 'gen-images';
+ var lab = document.createElement('div');
+ lab.className = 'gen-label';
+ lab.textContent = label || ('Generated image' + (images.length > 1 ? 's' : ''));
+ wrap.appendChild(lab);
+ images.forEach(function (im) {
+ var url = im.url || im.dataUrl;
+ if (!url) return;
+ var img = document.createElement('img');
+ img.alt = im.revised_prompt || 'generated';
+ img.src = url;
+ wrap.appendChild(img);
+ });
+ bubble.body.appendChild(wrap);
+ try {
+ var chat = document.getElementById('chat');
+ chat.scrollTop = chat.scrollHeight;
+ } catch (e) {}
+ if (!bubble._genImages) bubble._genImages = [];
+ images.forEach(function (im) { bubble._genImages.push(im); });
+ }
+
+ async function runImageGenerate(args) {
+ var h = host();
+ if (!h || !h.tools || typeof h.tools.run !== 'function') {
+ return { ok: false, error: 'Tools API unavailable' };
+ }
+ args = args || {};
+ var prompt = args.prompt || args.text || '';
+ if (!prompt) return { ok: false, error: 'Missing prompt for image_generate' };
+
+ // Always use the same provider selected for chat in this mini-app (default xai)
+ var providerId = await resolveChatProviderId();
+ if (!providerId) providerId = 'xai';
+
+ // Ensure host AI provider matches chat selection before image tool runs
+ if (providerId) {
+ try {
+ if (h.ai && typeof h.ai.setProvider === 'function') {
+ await h.ai.setProvider(providerId);
+ }
+ } catch (e) {}
+ }
+
+ var reqModel = args.model;
+ if (isChatOnlyModelName(reqModel)) {
+ reqModel = null;
+ }
+ if (settings.imageModel && settings.imageModel !== 'auto' && !reqModel) {
+ reqModel = settings.imageModel;
+ }
+ if (!reqModel) reqModel = 'grok-imagine-image-2.0';
+
+ var models = pickImageModelsToTry(reqModel);
+ var errors = [];
+ var last = null;
+
+ for (var i = 0; i < models.length; i++) {
+ var model = models[i];
+ var payload = {
+ prompt: prompt,
+ n: args.n || 1
+ };
+ if (model) payload.model = model;
+ if (args.images) payload.images = args.images;
+ if (args.image) payload.images = [args.image];
+ // Pass the chat provider so image generation never switches providers
+ if (providerId) {
+ payload.provider = providerId;
+ payload.providerId = providerId;
+ }
+
+ setStatus(APP_VERSION + ' • image_generate' + (providerId ? ' [' + providerId + ']' : '') + (model ? ' (' + model + ')' : '') + '…');
+ try {
+ var r = await h.tools.run('image_generate', payload);
+ last = r;
+ var imgs = extractImagesFromToolResult(r);
+ var errMsg = '';
+ if (r && typeof r === 'object') {
+ errMsg = String(r.error || r.message || (r.result && r.result.error) || '');
+ }
+ var failed =
+ !imgs.length ||
+ (r && r.ok === false) ||
+ /model not found|not available|no access|invalid model|does not exist|404/i.test(errMsg);
+
+ if (!failed && imgs.length) {
+ var enriched = await enrichImageToolResult(r);
+ enriched.result._displayImages = enriched.images;
+ if (providerId) enriched.result.providerId = providerId;
+ return enriched.result;
+ }
+ errors.push((model || 'default') + ': ' + (errMsg || 'no images'));
+ } catch (e) {
+ errors.push((model || 'default') + ': ' + ((e && e.message) || String(e)));
+ }
+ }
+
+ return {
+ ok: false,
+ error: 'Image generation failed on the selected chat provider' + (providerId ? ' (' + providerId + ')' : '') + '. The provider must support image generation (e.g. xAI with an image model).',
+ attempts: errors,
+ providerId: providerId || null,
+ hint: 'Image gen defaults to xai + grok-imagine-image-2.0. Change AI Provider / Image model in Settings if needed.',
+ last: last
+ };
+ }
+
+ async function executeTool(name, args) {
+ var h = host();
+ try {
+ if (toolSettings.confirmSideEffects) {
+ var cat = null;
+ for (var i = 0; i < toolCatalog.length; i++) {
+ if (toolCatalog[i].name === name) { cat = toolCatalog[i]; break; }
+ }
+ var risk = (cat && cat.risk) || 'safe';
+ if (risk === 'confirm' || risk === 'danger') {
+ var ok = await uiConfirm('Tool "' + name + '" wants to perform an action. Allow?');
+ if (!ok) return { error: 'User denied tool execution' };
+ }
+ }
+ if (!h || !h.tools || typeof h.tools.run !== 'function') {
+ return { error: 'Tools API unavailable' };
+ }
+
+ if (name === 'image_generate') {
+ return await runImageGenerate(args || {});
+ }
+
+ var result = await h.tools.run(name, args || {});
+
+ var maybeImgs = extractImagesFromToolResult(result);
+ if (maybeImgs.length) {
+ var en = await enrichImageToolResult(result);
+ en.result._displayImages = en.images;
+ return en.result;
+ }
+ return result;
+ } catch (e) {
+ return { error: (e && e.message) || String(e) };
+ }
+ }
+
+ async function saveChat() {
+ try {
+ var h = host();
+ if (h && h.storage) await h.storage.set('chat_history', JSON.stringify(conversationHistory));
+ } catch (e) {}
+ }
+
+ async function loadChat() {
+ try {
+ var h = host();
+ if (!h || !h.storage) return;
+ var saved = await h.storage.get('chat_history');
+ if (saved) {
+ conversationHistory = JSON.parse(saved);
+ renderChatHistory();
+ }
+ } catch (e) {}
+ }
+
+ function escapeHtml(s) {
+ return String(s == null ? '' : s)
+ .replace(/&/g, '&amp;')
+ .replace(/</g, '&lt;')
+ .replace(/>/g, '&gt;')
+ .replace(/"/g, '&quot;')
+ .replace(/'/g, '&#39;');
+ }
+
+ function escapeHtmlWithBreaks(s) {
+ return escapeHtml(s).replace(/\n/g, '<br>');
+ }
+
+ function getHtmlScale() {
+ var s = parseFloat(settings.htmlScale);
+ if (!isFinite(s) || s <= 0) s = 1;
+ return Math.max(0.5, Math.min(2, s));
+ }
+
+ function splitContentSegments(text) {
+ var src = String(text == null ? '' : text);
+ var segments = [];
+ var re = /```(?:html|htm)\b[^\n]*\n([\s\S]*?)```/gi;
+ var last = 0;
+ var m;
+ while ((m = re.exec(src)) !== null) {
+ if (m.index > last) {
+ segments.push({ type: 'text', value: src.slice(last, m.index) });
+ }
+ segments.push({ type: 'html', value: m[1] });
+ last = m.index + m[0].length;
+ }
+ if (last < src.length) segments.push({ type: 'text', value: src.slice(last) });
+ if (!segments.length) segments.push({ type: 'text', value: src });
+ return segments;
+ }
+
+ function formatTextSegment(text) {
+ var src = String(text == null ? '' : text);
+ if (!src) return '';
+ var re = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+ var out = '';
+ var last = 0;
+ var m;
+ while ((m = re.exec(src)) !== null) {
+ out += escapeHtmlWithBreaks(src.slice(last, m.index));
+ out += '<pre class="pre-code">' + escapeHtml(m[2]) + '</pre>';
+ last = m.index + m[0].length;
+ }
+ out += escapeHtmlWithBreaks(src.slice(last));
+ out = out.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, function (_, alt, url) {
+ return '<img alt="' + escapeHtml(alt || '') + '" src="' + escapeHtml(url) + '" data-md-img="1" style="max-width:100%;border-radius:8px;margin-top:8px;display:block;" />';
+ });
+ out = out.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
+ return out;
+ }
+
+ function wrapHtmlDocument(snippet) {
+ var raw = String(snippet == null ? '' : snippet).trim();
+ if (!raw) {
+ raw = '<div style="font-family:system-ui;padding:12px;color:#64748b">Empty HTML block</div>';
+ }
+ if (/<!DOCTYPE/i.test(raw) || /<html[\s>]/i.test(raw)) return raw;
+ return '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+ + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+ + '<style>html,body{margin:0;padding:0;}body{font-family:system-ui,-apple-system,sans-serif;padding:8px;}img{max-width:100%;height:auto;}</style>'
+ + '</head><body>' + raw + '</body></html>';
+ }
+
+ function looksLikeImageUrl(url) {
+ var u = String(url || '');
+ if (!/^https?:\/\//i.test(u)) return false;
+ if (/\.(jpe?g|png|gif|webp|bmp|svg|avif|heic|heif)(\?|#|$)/i.test(u)) return true;
+ if (/(?:[?&](?:format|fm|type)=(?:jpe?g|png|gif|webp|bmp|svg))/i.test(u)) return true;
+ if (/\/(?:image|images|img|imgs|photo|photos|media|thumbnail|thumb|cdn|static)\//i.test(u)) return true;
+ if (/imgen|generated|blob\.core|openai\.com\/.*images|x\.ai|api\.x\.ai/i.test(u)) return true;
+ return false;
+ }
+
+ function extractRemoteAssetUrls(html) {
+ var src = String(html || '');
+ var found = [];
+ function push(u, force) {
+ if (!u || !/^https?:\/\//i.test(u)) return;
+ if (found.indexOf(u) >= 0) return;
+ if (force || looksLikeImageUrl(u)) found.push(u);
+ }
+ var reAttr = /\b(src|href)\s*=\s*(["'])(https?:\/\/[^"']+)\2/gi;
+ var m;
+ while ((m = reAttr.exec(src)) !== null) {
+ var attr = String(m[1] || '').toLowerCase();
+ var url = m[3];
+ if (attr === 'src') push(url, true);
+ else push(url, false);
+ }
+ var reCss = /url\(\s*(["']?)(https?:\/\/[^"')]+)\1\s*\)/gi;
+ while ((m = reCss.exec(src)) !== null) {
+ push(m[2], looksLikeImageUrl(m[2]));
+ }
+ return found;
+ }
+
+ async function fetchAsDataUrl(url) {
+ if (_inlineCache[url]) return _inlineCache[url];
+ var h = host();
+ if (!h || !h.http || typeof h.http.getDataUrl !== 'function') return null;
+ try {
+ var res = await h.http.getDataUrl(url, { maxBytes: 8 * 1024 * 1024 });
+ var dataUrl = null;
+ if (typeof res === 'string' && res.indexOf('data:') === 0) dataUrl = res;
+ else if (res && typeof res === 'object') {
+ dataUrl = res.dataUrl || res.dataURL || res.url || null;
+ if (!dataUrl && res.base64) {
+ var mime = res.mime || res.contentType || 'image/jpeg';
+ dataUrl = 'data:' + mime + ';base64,' + res.base64;
+ }
+ }
+ if (dataUrl && String(dataUrl).indexOf('data:') === 0) {
+ _inlineCache[url] = dataUrl;
+ return dataUrl;
+ }
+ } catch (e) {}
+ return null;
+ }
+
+ function replaceUrlInHtml(html, remoteUrl, dataUrl) {
+ if (!remoteUrl || !dataUrl) return html;
+ var out = String(html);
+ if (out.indexOf(remoteUrl) >= 0) {
+ out = out.split(remoteUrl).join(dataUrl);
+ }
+ return out;
+ }
+
+ async function inlineImagesInHtml(snippet) {
+ var raw = String(snippet == null ? '' : snippet);
+ if (!raw) return raw;
+ var h = host();
+ if (!h || !h.http) return raw;
+
+ var working = raw;
+ if (typeof h.http.inlineHtml === 'function') {
+ try {
+ var doc = wrapHtmlDocument(raw);
+ var inlined = await h.http.inlineHtml(doc, { maxAssets: 25 });
+ var htmlOut = null;
+ if (typeof inlined === 'string') htmlOut = inlined;
+ else if (inlined && typeof inlined === 'object') htmlOut = inlined.html || inlined.result || null;
+ if (htmlOut) {
+ if (!/<!DOCTYPE/i.test(raw) && !/<html[\s>]/i.test(raw)) {
+ var bodyMatch = String(htmlOut).match(/<body[^>]*>([\s\S]*)<\/body>/i);
+ working = bodyMatch ? bodyMatch[1] : htmlOut;
+ } else {
+ working = htmlOut;
+ }
+ }
+ } catch (e) {}
+ }
+
+ var urls = extractRemoteAssetUrls(working);
+ if (!urls.length) return working;
+
+ var max = Math.min(urls.length, 20);
+ for (var i = 0; i < max; i++) {
+ var url = urls[i];
+ if (working.indexOf(url) < 0) continue;
+ try {
+ var dataUrl = await fetchAsDataUrl(url);
+ if (dataUrl) working = replaceUrlInHtml(working, url, dataUrl);
+ } catch (e) {}
+ }
+ return working;
+ }
+
+ async function inlineMarkdownImagesInElement(root) {
+ if (!root) return;
+ var imgs = root.querySelectorAll('img[data-md-img], img');
+ for (var i = 0; i < imgs.length; i++) {
+ var el = imgs[i];
+ var src = el.getAttribute('src') || '';
+ if (!src || src.indexOf('data:') === 0 || src.indexOf('blob:') === 0) continue;
+ if (!/^https?:\/\//i.test(src)) continue;
+ try {
+ var dataUrl = await fetchAsDataUrl(src);
+ if (dataUrl) el.setAttribute('src', dataUrl);
+ } catch (e) {}
+ }
+ }
+
+ function buildHtmlBlock(htmlSource, opts) {
+ opts = opts || {};
+ var id = 'htmlblk_' + (++_htmlBlockSeq);
+ var scale = getHtmlScale();
+ var block = document.createElement('div');
+ block.className = 'html-block';
+ block.dataset.blockId = id;
+ block._htmlSource = htmlSource || '';
+ block._displaySource = htmlSource || '';
+ block._scale = scale;
+ block._partial = !!opts.streamingPartial;
+ block._inlineToken = 0;
+
+ var bar = document.createElement('div');
+ bar.className = 'html-block-bar';
+ bar.innerHTML = '<span class="label">' + (opts.streamingPartial ? 'HTML preview (streaming…)' : 'Rendered HTML')
+ + ' · ' + Math.round(scale * 100) + '%</span>'
+ + '<span class="actions">'
+ + '<button type="button" data-act="toggle">Source</button>'
+ + '<button type="button" data-act="copy">Copy</button>'
+ + '<button type="button" data-act="open">Open</button>'
+ + '<button type="button" data-act="reload">Inline imgs</button>'
+ + '</span>';
+
+ var wrap = document.createElement('div');
+ wrap.className = 'html-frame-wrap';
+
+ var iframe = document.createElement('iframe');
+ iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-same-origin');
+ iframe.setAttribute('referrerpolicy', 'no-referrer');
+ iframe.title = 'Rendered HTML';
+
+ var source = document.createElement('pre');
+ source.className = 'html-source';
+ source.textContent = htmlSource || '';
+
+ wrap.appendChild(iframe);
+ block.appendChild(bar);
+ block.appendChild(wrap);
+ block.appendChild(source);
+
+ function setLabel(text) {
+ var label = bar.querySelector('.label');
+ if (label) label.textContent = text;
+ }
+
+ function fitIframe() {
+ var sc = block._scale || getHtmlScale();
+ try {
+ var idoc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+ var hgt = 160;
+ if (idoc && idoc.body) {
+ hgt = Math.max(idoc.body.scrollHeight || 0, idoc.documentElement ? idoc.documentElement.scrollHeight : 0, 80);
+ }
+ hgt = Math.min(hgt, 1200);
+ iframe.style.width = (100 / sc) + '%';
+ iframe.style.transform = 'scale(' + sc + ')';
+ iframe.style.height = hgt + 'px';
+ wrap.style.height = Math.min(hgt * sc, window.innerHeight * 0.7) + 'px';
+ } catch (e) {
+ iframe.style.width = '100%';
+ iframe.style.transform = 'none';
+ iframe.style.height = Math.round(220 * sc) + 'px';
+ wrap.style.height = '';
+ }
+ }
+
+ function writeToIframe(htmlStr) {
+ var doc = wrapHtmlDocument(htmlStr || '');
+ try {
+ iframe.srcdoc = doc;
+ } catch (e) {
+ try {
+ iframe.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(doc);
+ } catch (e2) {}
+ }
+ }
+
+ iframe.addEventListener('load', function () {
+ fitIframe();
+ setTimeout(fitIframe, 60);
+ setTimeout(fitIframe, 250);
+ setTimeout(fitIframe, 800);
+ });
+
+ async function applySrcdoc(src, partial) {
+ block._htmlSource = src || '';
+ block._partial = !!partial;
+ source.textContent = block._htmlSource;
+ var token = ++block._inlineToken;
+
+ if (partial) {
+ block._displaySource = block._htmlSource;
+ setLabel('HTML preview (streaming…) · ' + Math.round((block._scale || getHtmlScale()) * 100) + '%');
+ writeToIframe(block._displaySource);
+ return;
+ }
+
+ setLabel('Inlining images… · ' + Math.round((block._scale || getHtmlScale()) * 100) + '%');
+ writeToIframe(block._htmlSource);
+
+ try {
+ var inlined = await inlineImagesInHtml(block._htmlSource);
+ if (token !== block._inlineToken) return;
+ block._displaySource = inlined || block._htmlSource;
+ source.textContent = block._htmlSource;
+ writeToIframe(block._displaySource);
+ setLabel('Rendered HTML · ' + Math.round((block._scale || getHtmlScale()) * 100) + '%');
+ } catch (e) {
+ if (token !== block._inlineToken) return;
+ block._displaySource = block._htmlSource;
+ writeToIframe(block._displaySource);
+ setLabel('Rendered HTML · ' + Math.round((block._scale || getHtmlScale()) * 100) + '%');
+ }
+ }
+
+ bar.addEventListener('click', function (ev) {
+ var btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+ if (!btn) return;
+ var act = btn.getAttribute('data-act');
+ if (act === 'toggle') {
+ source.classList.toggle('show');
+ btn.textContent = source.classList.contains('show') ? 'Hide' : 'Source';
+ } else if (act === 'copy') {
+ (async function () {
+ try {
+ var text = block._htmlSource || '';
+ var h = host();
+ if (h && h.clipboard && h.clipboard.write) await h.clipboard.write(text);
+ else if (navigator.clipboard) await navigator.clipboard.writeText(text);
+ toast('HTML copied');
+ } catch (e) { toast('Copy failed'); }
+ })();
+ } else if (act === 'open') {
+ (async function () {
+ try {
+ var htmlStr = block._displaySource || block._htmlSource || '';
+ htmlStr = await inlineImagesInHtml(block._htmlSource || htmlStr);
+ var doc = wrapHtmlDocument(htmlStr);
+ var dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(doc);
+ var h = host();
+ if (h && h.openUrl) await h.openUrl(dataUrl);
+ else window.open(dataUrl, '_blank');
+ } catch (e) { toast('Open failed'); }
+ })();
+ } else if (act === 'reload') {
+ (async function () {
+ try {
+ var urls = extractRemoteAssetUrls(block._htmlSource || '');
+ for (var i = 0; i < urls.length; i++) delete _inlineCache[urls[i]];
+ await applySrcdoc(block._htmlSource || '', false);
+ toast('Images refreshed');
+ } catch (e) { toast('Inline failed'); }
+ })();
+ }
+ });
+
+ block.updateHtml = function (src, partial) {
+ applySrcdoc(src || '', !!partial);
+ };
+
+ block.rescale = function () {
+ block._scale = getHtmlScale();
+ var partial = !!block._partial;
+ setLabel((partial ? 'HTML preview (streaming…)' : 'Rendered HTML')
+ + ' · ' + Math.round(block._scale * 100) + '%');
+ fitIframe();
+ };
+
+ block.finalize = function () {
+ block._partial = false;
+ applySrcdoc(block._htmlSource || '', false);
+ };
+
+ applySrcdoc(htmlSource || '', !!opts.streamingPartial);
+
+ return block;
+ }
+
+ function renderRichContent(container, text, options) {
+ options = options || {};
+ container.innerHTML = '';
+ container.style.whiteSpace = 'normal';
+ var segments = splitContentSegments(text);
+ var hasHtml = false;
+ segments.forEach(function (seg) {
+ if (seg.type === 'html') {
+ hasHtml = true;
+ var blk = buildHtmlBlock(seg.value, { streamingPartial: !!options.streamingPartial });
+ container.appendChild(blk);
+ } else if (seg.value) {
+ var div = document.createElement('div');
+ div.style.whiteSpace = 'pre-wrap';
+ div.style.wordBreak = 'break-word';
+ div.innerHTML = formatTextSegment(seg.value);
+ container.appendChild(div);
+ }
+ });
+
+ if (options.streamingPartial) {
+ var partial = matchOpenHtmlFence(text);
+ if (partial !== null) {
+ container.innerHTML = '';
+ var closedVirtual = text + '\n```';
+ var segs2 = splitContentSegments(closedVirtual);
+ segs2.forEach(function (seg, idx) {
+ if (seg.type === 'html') {
+ hasHtml = true;
+ var isLast = idx === segs2.length - 1;
+ var blk = buildHtmlBlock(seg.value, { streamingPartial: isLast });
+ container.appendChild(blk);
+ } else if (seg.value) {
+ var d = document.createElement('div');
+ d.style.whiteSpace = 'pre-wrap';
+ d.style.wordBreak = 'break-word';
+ d.innerHTML = formatTextSegment(seg.value);
+ container.appendChild(d);
+ }
+ });
+ }
+ } else {
+ inlineMarkdownImagesInElement(container);
+ }
+ return hasHtml;
+ }
+
+ function matchOpenHtmlFence(text) {
+ var src = String(text == null ? '' : text);
+ var re = /```(?:html|htm)\b[^\n]*\n/gi;
+ var lastOpen = -1;
+ var openLen = 0;
+ var m;
+ while ((m = re.exec(src)) !== null) {
+ lastOpen = m.index;
+ openLen = m[0].length;
+ }
+ if (lastOpen < 0) return null;
+ var after = src.slice(lastOpen + openLen);
+ if (/```/.test(after)) return null;
+ return after;
+ }
+
+ function rescaleAllHtmlBlocks() {
+ var blocks = document.querySelectorAll('.html-block');
+ for (var i = 0; i < blocks.length; i++) {
+ if (typeof blocks[i].rescale === 'function') blocks[i].rescale();
+ }
+ }
+
+ function renderChatHistory() {
+ var chat = document.getElementById('chat');
+ chat.innerHTML = '';
+ conversationHistory.forEach(function (msg) {
+ if (msg.role === 'system' || msg.role === 'tool') return;
+ if (msg.role === 'assistant' && msg.tool_calls && !msg.content) return;
+ var div = document.createElement('div');
+ div.className = 'message ' + (msg.role === 'user' ? 'user' : 'ai');
+ if (msg.role === 'assistant') {
+ var tag = document.createElement('div');
+ tag.className = 'provider-tag';
+ tag.textContent = 'Forge AI';
+ var body = document.createElement('div');
+ body.className = 'stream-body';
+ div.appendChild(tag);
+ div.appendChild(body);
+ renderRichContent(body, msg.content || '', { streamingPartial: false });
+ if (msg._displayImages && msg._displayImages.length) {
+ var wrap = document.createElement('div');
+ wrap.className = 'gen-images';
+ wrap.innerHTML = '<div class="gen-label">Generated image' + (msg._displayImages.length > 1 ? 's' : '') + '</div>';
+ msg._displayImages.forEach(function (im) {
+ var url = im.url || im.dataUrl;
+ if (!url) return;
+ var img = document.createElement('img');
+ img.alt = im.revised_prompt || 'generated';
+ img.src = url;
+ wrap.appendChild(img);
+ });
+ body.appendChild(wrap);
+ }
+ } else {
+ div.textContent = msg.content || '';
+ }
+ chat.appendChild(div);
+ });
+ chat.scrollTop = chat.scrollHeight;
+ }
+
+ async function loadAIProviders() {
+ var select = document.getElementById('aiProvider');
+ if (!select) return;
+ select.innerHTML = '';
+ try {
+ var h = host();
+ var menu = h && h.ai && h.ai.listProviders ? await h.ai.listProviders() : null;
+ aiProviders = (menu && menu.providers) || [];
+ var current = h && h.ai && h.ai.getProvider ? await h.ai.getProvider() : null;
+ var currentId = (current && typeof current === 'object') ? current.id : current;
+ var want = settings.aiProvider && settings.aiProvider !== 'default' ? settings.aiProvider : (currentId || 'xai');
+ if (!aiProviders.length) {
+ var opt0 = document.createElement('option');
+ opt0.value = 'xai';
+ opt0.textContent = 'xAI';
+ opt0.selected = true;
+ select.appendChild(opt0);
+ return;
+ }
+ var matched = false;
+ aiProviders.forEach(function (p) {
+ var opt = document.createElement('option');
+ opt.value = p.id;
+ opt.textContent = p.label + (p.available ? '' : ' (unavailable)');
+ if (p.id === want || (!matched && p.isSelected && want === p.id)) {
+ opt.selected = true;
+ matched = true;
+ }
+ select.appendChild(opt);
+ });
+ if (!matched) {
+ for (var i = 0; i < select.options.length; i++) {
+ if (select.options[i].value === 'xai' || select.options[i].value === want) {
+ select.selectedIndex = i;
+ matched = true;
+ break;
+ }
+ }
+ }
+ if (!matched && select.options.length) select.selectedIndex = 0;
+ } catch (e) {
+ var opt = document.createElement('option');
+ opt.value = 'xai';
+ opt.textContent = 'xAI';
+ opt.selected = true;
+ select.appendChild(opt);
+ }
+ }
+
+ async function loadSettings() {
+ try {
+ var h = host();
+ if (h && h.storage) {
+ var saved = await h.storage.get('aichat_settings');
+ if (saved) settings = Object.assign(settings, JSON.parse(saved));
+ // Ensure image defaults if older saves lacked them
+ if (!settings.aiProvider || settings.aiProvider === 'default') settings.aiProvider = 'xai';
+ if (!settings.imageModel) settings.imageModel = 'grok-imagine-image-2.0';
+ if (!settings.chatFontSize) settings.chatFontSize = 16;
+ var savedTools = await h.storage.get('forgechat_tool_settings');
+ if (savedTools) toolSettings = Object.assign(toolSettings, JSON.parse(savedTools));
+ }
+ } catch (e) {}
+ applyChatFontSize();
+ var fontInput = document.getElementById('chatFontSize');
+ if (fontInput) {
+ fontInput.value = settings.chatFontSize || 16;
+ document.getElementById('fontSizeValue').textContent = (settings.chatFontSize || 16) + 'px';
+ fontInput.oninput = function () {
+ document.getElementById('fontSizeValue').textContent = fontInput.value + 'px';
+ };
+ }
+ var scaleInput = document.getElementById('htmlScale');
+ if (scaleInput) {
+ scaleInput.value = settings.htmlScale || 1.0;
+ document.getElementById('scaleValue').textContent = Math.round((settings.htmlScale || 1) * 100) + '%';
+ scaleInput.oninput = function () {
+ document.getElementById('scaleValue').textContent = Math.round(scaleInput.value * 100) + '%';
+ };
+ }
+ var streamSel = document.getElementById('streamMode');
+ if (streamSel) streamSel.value = settings.streamMode || 'auto';
+ var imgModel = document.getElementById('imageModel');
+ if (imgModel) {
+ var wantModel = settings.imageModel || 'grok-imagine-image-2.0';
+ imgModel.value = wantModel;
+ if (imgModel.value !== wantModel) {
+ var extra = document.createElement('option');
+ extra.value = wantModel;
+ extra.textContent = wantModel;
+ extra.selected = true;
+ imgModel.insertBefore(extra, imgModel.firstChild);
+ }
+ }
+ document.getElementById('toolsEnabled').checked = !!toolSettings.enabled;
+ document.getElementById('maxRisk').value = toolSettings.riskMax || 'confirm';
+ document.getElementById('confirmSideEffects').checked = !!toolSettings.confirmSideEffects;
+ await loadAIProviders();
+ await renderToolChips();
+ }
+
+ async function renderToolChips() {
+ var container = document.getElementById('toolChips');
+ if (!container) return;
+ container.innerHTML = '';
+ try {
+ var h = host();
+ if (!h || !h.tools || typeof h.tools.list !== 'function') {
+ container.innerHTML = '<span style="color:#94a3b8;font-size:12px;">Tools unavailable</span>';
+ return;
+ }
+ var listed = await h.tools.list({ riskMax: 'danger', names: DEFAULT_TOOL_NAMES });
+ toolCatalog = (listed && listed.catalog) || [];
+ var enabledSet = toolSettings.enabledTools && toolSettings.enabledTools.length
+ ? new Set(toolSettings.enabledTools)
+ : new Set(DEFAULT_TOOL_NAMES);
+ (toolCatalog || []).forEach(function (cat) {
+ var chip = document.createElement('span');
+ chip.className = 'tool-chip' + (enabledSet.has(cat.name) ? ' active' : '');
+ chip.innerHTML = escapeHtml(cat.name) + ' <span class="risk-badge">' + escapeHtml(cat.risk || '') + '</span>';
+ chip.onclick = function () {
+ if (enabledSet.has(cat.name)) enabledSet.delete(cat.name);
+ else enabledSet.add(cat.name);
+ chip.classList.toggle('active');
+ toolSettings.enabledTools = Array.from(enabledSet);
+ };
+ container.appendChild(chip);
+ });
+ } catch (e) {
+ container.innerHTML = '<span style="color:#94a3b8;font-size:12px;">Tools unavailable</span>';
+ }
+ }
+
+ async function saveSettings() {
+ var fontInput = document.getElementById('chatFontSize');
+ if (fontInput) settings.chatFontSize = parseInt(fontInput.value, 10) || 16;
+ var scaleInput = document.getElementById('htmlScale');
+ if (scaleInput) settings.htmlScale = parseFloat(scaleInput.value);
+ var streamSel = document.getElementById('streamMode');
+ if (streamSel) settings.streamMode = streamSel.value || 'auto';
+ var imgModel = document.getElementById('imageModel');
+ if (imgModel) settings.imageModel = imgModel.value || 'grok-imagine-image-2.0';
+ var providerSelect = document.getElementById('aiProvider');
+ if (providerSelect) {
+ settings.aiProvider = providerSelect.value || 'xai';
+ try {
+ var h = host();
+ if (h && h.ai && h.ai.setProvider) await h.ai.setProvider(providerSelect.value);
+ } catch (e) {}
+ }
+ toolSettings.enabled = document.getElementById('toolsEnabled').checked;
+ toolSettings.riskMax = document.getElementById('maxRisk').value;
+ toolSettings.confirmSideEffects = document.getElementById('confirmSideEffects').checked;
+ try {
+ var h2 = host();
+ if (h2 && h2.storage) {
+ await h2.storage.set('aichat_settings', JSON.stringify(settings));
+ await h2.storage.set('forgechat_tool_settings', JSON.stringify(toolSettings));
+ }
+ } catch (e) {}
+ applyChatFontSize();
+ await refreshHostTools();
+ rescaleAllHtmlBlocks();
+ closeSettings();
+ setStatus(APP_VERSION + ' • Ready');
+ toast('Settings saved');
+ }
+
+ function showSettings() {
+ document.getElementById('settingsModal').style.display = 'block';
+ loadSettings();
+ }
+ function closeSettings() {
+ document.getElementById('settingsModal').style.display = 'none';
+ }
+
+ function autoResize(el) {
+ el.style.height = 'auto';
+ el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+ }
+
+ function setStatus(msg) {
+ var bar = document.getElementById('statusBar');
+ if (bar) bar.textContent = msg;
+ }
+
+ function welcomeHtml() {
+ var wrap = document.createElement('div');
+ wrap.className = 'message ai';
+ wrap.innerHTML = '<div class="provider-tag">MultiForge AI ' + APP_VERSION + '</div>'
+ + '<div class="stream-body">Hello!</div>';
+ return wrap;
+ }
+
+ function newChat() {
+ conversationHistory = [];
+ attachedFiles = [];
+ revokeObjectUrls();
+ document.getElementById('filePreview').style.display = 'none';
+ document.getElementById('filePreview').innerHTML = '';
+ var chat = document.getElementById('chat');
+ chat.innerHTML = '';
+ chat.appendChild(welcomeHtml());
+ saveChat();
+ toast('New chat started');
+ }
+
+ function showAttachMenu(ev) {
+ if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+ var menu = document.getElementById('attachMenu');
+ var open = menu.style.display === 'flex';
+ menu.style.display = open ? 'none' : 'flex';
+ }
+ function hideAttachMenu() {
+ var menu = document.getElementById('attachMenu');
+ if (menu) menu.style.display = 'none';
+ }
+ function revokeObjectUrls() {
+ while (_objectUrls.length) {
+ try { URL.revokeObjectURL(_objectUrls.pop()); } catch (e) {}
+ }
+ }
+ function b64ToBlobUrl(b64, mime) {
+ mime = mime || 'image/jpeg';
+ var bin = atob(String(b64).replace(/\s/g, ''));
+ var bytes = new Uint8Array(bin.length);
+ for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+ var url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+ _objectUrls.push(url);
+ return url;
+ }
+ function normalizeMedia(raw, fallbackName) {
+ if (!raw || typeof raw !== 'object') return null;
+ if (raw.cancelled) return null;
+ var item = raw;
+ if (Array.isArray(raw)) item = raw[0];
+ if (raw.files && Array.isArray(raw.files)) item = raw.files[0];
+ if (!item || item.cancelled) return null;
+ var mime = String(item.mime || item.type || item.contentType || '').toLowerCase();
+ var dataUrl = item.dataUrl || item.dataURL || '';
+ var base64 = item.base64 || '';
+ var name = item.name || fallbackName || 'file';
+ var format = String(item.format || '').toLowerCase();
+ if (!base64 && dataUrl && dataUrl.indexOf('base64,') >= 0) {
+ base64 = dataUrl.split('base64,').pop() || '';
+ }
+ if (!dataUrl && base64) {
+ var m = mime && mime !== 'application/octet-stream' ? mime : guessImageMime(format, name, dataUrl);
+ dataUrl = 'data:' + m + ';base64,' + base64;
+ if (!mime || mime === 'application/octet-stream') mime = m;
+ }
+ if (dataUrl && /^data:image\//i.test(dataUrl) && (!mime || mime === 'application/octet-stream')) {
+ mime = (dataUrl.slice(5).split(';')[0] || 'image/jpeg').toLowerCase();
+ }
+ if ((!mime || mime === 'application/octet-stream') && /^(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(format)) {
+ mime = format === 'jpg' ? 'image/jpeg' : ('image/' + (format === 'jpeg' ? 'jpeg' : format));
+ if (!item.name) name = 'camera.' + (format === 'jpeg' ? 'jpg' : format);
+ }
+ if ((!mime || mime === 'application/octet-stream') && (item.width || item.height) && (base64 || dataUrl)) {
+ mime = 'image/jpeg';
+ if (!item.name) name = fallbackName || 'camera.jpg';
+ }
+ if (!mime) mime = 'application/octet-stream';
+ if (!base64 && !dataUrl && !item.uri && !item.path) return null;
+ var previewUrl = dataUrl || '';
+ if (!previewUrl && base64 && mime.indexOf('image/') === 0) {
+ try { previewUrl = b64ToBlobUrl(base64, mime); } catch (e) { previewUrl = ''; }
+ }
+ return {
+ name: name, type: mime, mime: mime,
+ size: item.size || item.bytes || (base64 ? Math.floor(base64.length * 0.75) : 0),
+ base64: base64 || null,
+ dataUrl: dataUrl || null,
+ previewUrl: previewUrl || dataUrl || null,
+ uri: item.uri || null,
+ width: item.width, height: item.height
+ };
+ }
+ function guessImageMime(format, name, dataUrl) {
+ if (dataUrl && /^data:image\//i.test(dataUrl)) return dataUrl.slice(5).split(';')[0] || 'image/jpeg';
+ var f = String(format || '').toLowerCase();
+ if (f === 'jpg' || f === 'jpeg') return 'image/jpeg';
+ if (f === 'png' || f === 'gif' || f === 'webp' || f === 'bmp') return 'image/' + f;
+ var n = String(name || '').toLowerCase();
+ if (/\.png$/i.test(n)) return 'image/png';
+ if (/\.webp$/i.test(n)) return 'image/webp';
+ if (/\.gif$/i.test(n)) return 'image/gif';
+ if (/\.(jpe?g)$/i.test(n)) return 'image/jpeg';
+ return 'image/jpeg';
+ }
+ function isImageAttachment(f) {
+ if (!f) return false;
+ var mime = String(f.mime || f.type || '').toLowerCase();
+ if (mime.indexOf('image/') === 0) return true;
+ var name = String(f.name || '').toLowerCase();
+ if (/\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)$/i.test(name)) return true;
+ if (f.dataUrl && /^data:image\//i.test(f.dataUrl)) return true;
+ if (f.previewUrl && /^blob:/i.test(f.previewUrl) && (f.width || f.height)) return true;
+ var format = String(f.format || '').toLowerCase();
+ if (/^(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(format)) return true;
+ if ((f.width || f.height) && (f.base64 || f.dataUrl)) return true;
+ return false;
+ }
+ function pushAttachment(file) {
+ var norm = normalizeMedia(file, 'attach.bin');
+ if (!norm) {
+ setStatus(APP_VERSION + ' • Attachment empty');
+ return;
+ }
+ attachedFiles.push(norm);
+ setStatus(APP_VERSION + ' • Attached ' + norm.name);
+ }
+ function getMimeAcronym(mime) {
+ if (!mime) return 'FILE';
+ if (mime.indexOf('image/') === 0) return 'IMG';
+ if (mime.indexOf('pdf') >= 0) return 'PDF';
+ return (mime.split('/')[1] || 'FILE').toUpperCase().slice(0, 4);
+ }
+ function renderFilePreviews() {
+ var container = document.getElementById('filePreview');
+ container.innerHTML = '';
+ container.style.display = attachedFiles.length ? 'flex' : 'none';
+ attachedFiles.forEach(function (f, i) {
+ var thumb = document.createElement('div');
+ thumb.className = 'file-thumb';
+ var src = f.previewUrl || f.dataUrl || '';
+ if (isImageAttachment(f) && src) {
+ thumb.innerHTML = '<img alt=""><button class="remove" type="button">×</button>';
+ thumb.querySelector('img').src = src;
+ thumb.querySelector('.remove').onclick = (function (idx) {
+ return function () { removeAttachment(idx); };
+ })(i);
+ } else {
+ thumb.innerHTML = '<div class="mime-box">' + getMimeAcronym(f.mime) + '</div><button class="remove" type="button">×</button>';
+ thumb.querySelector('.remove').onclick = (function (idx) {
+ return function () { removeAttachment(idx); };
+ })(i);
+ }
+ container.appendChild(thumb);
+ });
+ }
+ function removeAttachment(i) {
+ attachedFiles.splice(i, 1);
+ renderFilePreviews();
+ }
+
+ async function takePhoto(ev) {
+ if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+ hideAttachMenu();
+ var h = host();
+ try {
+ setStatus(APP_VERSION + ' • Opening camera…');
+ try { if (h && h.permissions) await h.permissions.request('camera'); } catch (_) {}
+ if (!h || !h.camera || !h.camera.takePhoto) throw new Error('Camera API unavailable');
+ var shot = await h.camera.takePhoto({ quality: 85, facing: 'back' });
+ if (!shot) { setStatus(APP_VERSION + ' • Camera returned nothing'); return; }
+ if (!shot.dataUrl && !shot.base64) {
+ setStatus(APP_VERSION + ' • No image data from camera');
+ toast('No image data from camera');
+ return;
+ }
+ var media = h.camera.normalize ? h.camera.normalize(shot) : shot;
+ pushAttachment(Object.assign({}, media || shot, {
+ name: (media || shot).name || 'camera.jpg',
+ mime: (media || shot).mime || 'image/jpeg'
+ }));
+ renderFilePreviews();
+ } catch (e) {
+ setStatus(APP_VERSION + ' • Camera error');
+ toast('Failed to take photo');
+ }
+ }
+
+ async function attachPhoto(ev) {
+ if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+ hideAttachMenu();
+ var h = host();
+ try {
+ setStatus(APP_VERSION + ' • Opening gallery…');
+ if (!h || !h.camera || !h.camera.pickPhoto) throw new Error('Gallery API unavailable');
+ var photo = await h.camera.pickPhoto({ quality: 85 });
+ if (!photo) { setStatus(APP_VERSION + ' • No photo selected'); return; }
+ if (!photo.dataUrl && !photo.base64) {
+ setStatus(APP_VERSION + ' • Gallery returned no data');
+ return;
+ }
+ var media = h.camera.normalize ? h.camera.normalize(photo) : photo;
+ pushAttachment(Object.assign({}, media || photo, {
+ name: (media || photo).name || 'photo.jpg',
+ mime: (media || photo).mime || 'image/jpeg'
+ }));
+ renderFilePreviews();
+ } catch (e) {
+ setStatus(APP_VERSION + ' • Gallery error');
+ toast('Failed to pick photo');
+ }
+ }
+
+ async function attachFile(ev) {
+ if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+ hideAttachMenu();
+ var h = host();
+ try {
+ setStatus(APP_VERSION + ' • Pick a file…');
+ if (!h || !h.files || !h.files.pick) throw new Error('Files API unavailable');
+ var f = await h.files.pick({ accept: '*/*' });
+ if (!f) { setStatus(APP_VERSION + ' • No file selected'); return; }
+ pushAttachment(f);
+ renderFilePreviews();
+ } catch (e) {
+ setStatus(APP_VERSION + ' • File error');
+ }
+ }
+
+ function buildOutgoingAttachments(files) {
+ return files.map(function (f) {
+ if (isImageAttachment(f) && (f.dataUrl || f.base64)) {
+ var dataUrl = f.dataUrl || (f.base64 ? ('data:' + (f.mime || 'image/jpeg') + ';base64,' + f.base64) : null);
+ return {
+ type: 'image',
+ dataUrl: dataUrl && String(dataUrl).indexOf('blob:') !== 0 ? dataUrl : null,
+ base64: f.base64 || null,
+ mime: f.mime || f.type || 'image/jpeg',
+ name: f.name || 'image.jpg'
+ };
+ }
+ return {
+ type: 'file',
+ name: f.name || 'file',
+ mime: f.mime || f.type || 'application/octet-stream',
+ base64: f.base64,
+ dataUrl: f.dataUrl
+ };
+ }).filter(function (a) { return a.dataUrl || a.base64; });
+ }
+
+ function appendUserBubble(text, files) {
+ var chat = document.getElementById('chat');
+ var userMsg = document.createElement('div');
+ userMsg.className = 'message user';
+ var label = text || (files.length ? '[' + files.length + ' attachment(s)]' : '');
+ userMsg.appendChild(document.createTextNode(label));
+ if (files.length) {
+ var wrap = document.createElement('div');
+ wrap.className = 'msg-atts';
+ files.forEach(function (f) {
+ var src = f.previewUrl || f.dataUrl;
+ if (isImageAttachment(f) && src) {
+ var img = document.createElement('img');
+ img.alt = f.name || 'photo';
+ img.src = src;
+ wrap.appendChild(img);
+ }
+ });
+ if (wrap.childNodes.length) userMsg.appendChild(wrap);
+ }
+ chat.appendChild(userMsg);
+ chat.scrollTop = chat.scrollHeight;
+ }
+
+ function createStreamingBubble() {
+ var chat = document.getElementById('chat');
+ var aiMsg = document.createElement('div');
+ aiMsg.className = 'message ai streaming';
+ aiMsg.innerHTML = '<div class="provider-tag">Forge AI · streaming</div><div class="stream-body"></div><span class="stream-cursor"></span>';
+ chat.appendChild(aiMsg);
+ chat.scrollTop = chat.scrollHeight;
+ var body = aiMsg.querySelector('.stream-body');
+ var tag = aiMsg.querySelector('.provider-tag');
+ var lastRenderAt = 0;
+ var pendingText = '';
+ var renderTimer = null;
+
+ function doRender(text, partial) {
+ renderRichContent(body, text || '', { streamingPartial: !!partial });
+ if (bubbleRef._genImages && bubbleRef._genImages.length) {
+ var wrap = document.createElement('div');
+ wrap.className = 'gen-images';
+ wrap.innerHTML = '<div class="gen-label">Generated image' + (bubbleRef._genImages.length > 1 ? 's' : '') + '</div>';
+ bubbleRef._genImages.forEach(function (im) {
+ var url = im.url || im.dataUrl;
+ if (!url) return;
+ var img = document.createElement('img');
+ img.alt = im.revised_prompt || 'generated';
+ img.src = url;
+ wrap.appendChild(img);
+ });
+ body.appendChild(wrap);
+ }
+ chat.scrollTop = chat.scrollHeight;
+ }
+
+ var bubbleRef = {
+ el: aiMsg,
+ body: body,
+ tag: tag,
+ _genImages: [],
+ setText: function (t) {
+ pendingText = t || '';
+ var now = Date.now();
+ if (now - lastRenderAt < 120) {
+ if (!renderTimer) {
+ renderTimer = setTimeout(function () {
+ renderTimer = null;
+ lastRenderAt = Date.now();
+ doRender(pendingText, true);
+ }, 130);
+ }
+ return;
+ }
+ lastRenderAt = now;
+ doRender(pendingText, true);
+ },
+ finish: function (finalText, modeLabel) {
+ if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
+ doRender(finalText || '', false);
+ var blocks = body.querySelectorAll('.html-block');
+ for (var i = 0; i < blocks.length; i++) {
+ if (typeof blocks[i].finalize === 'function') blocks[i].finalize();
+ }
+ aiMsg.classList.remove('streaming');
+ var cur = aiMsg.querySelector('.stream-cursor');
+ if (cur) cur.remove();
+ if (tag) tag.textContent = modeLabel || 'Forge AI';
+ },
+ setError: function (msg) {
+ if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
+ aiMsg.style.background = '#7f1d1d';
+ aiMsg.classList.remove('streaming');
+ var cur = aiMsg.querySelector('.stream-cursor');
+ if (cur) cur.remove();
+ if (tag) tag.textContent = 'Error';
+ body.innerHTML = escapeHtmlWithBreaks(msg || 'Failed');
+ },
+ prepareNextRound: function () {
+ if (tag) tag.textContent = 'Forge AI · streaming';
+ aiMsg.classList.add('streaming');
+ if (!aiMsg.querySelector('.stream-cursor')) {
+ var cur = document.createElement('span');
+ cur.className = 'stream-cursor';
+ aiMsg.appendChild(cur);
+ }
+ this.setText('');
+ }
+ };
+ _lastBubble = bubbleRef;
+ return bubbleRef;
+ }
+
+ function buildSystemPrompt() {
+ var base = 'You are a helpful assistant with access to Android apps and vision. Describe attached images when present. Stream concise, clear answers.';
+ base += ' When you produce a small UI, component, diagram-as-HTML, card, or visual demo, put the markup in a fenced block starting with ```html and ending with ``` so the client can render it in an iframe.';
+ base += ' IMAGE RULE for HTML blocks: You MAY use normal public https image URLs in <img src="https://...">, CSS url(https://...), or hrefs that point at image files. Prefer direct image links. The client automatically downloads each image, encodes it as base64, and rewrites those URLs to data: URLs before rendering.';
+ base += ' IMAGE GENERATION: Use the image_generate tool when the user asks to draw/generate/create an image. IMPORTANT: Do NOT pass chat model names (grok-4, grok-4.5, gpt-*, etc.) as the image model — omit the model parameter or use grok-imagine-image-2.0. Image generation defaults to provider xai and model grok-imagine-image-2.0, and otherwise uses the same AI provider the user selected for chat. After the tool returns, the client base64-inlines image URLs and shows them in the UI. You can also embed returned https image URLs inside ```html blocks or markdown ![](url); the client will inline those too.';
+ if (toolSettings.enabled && toolsHint) {
+ base += '\n\n' + toolsHint;
+ base += '\n\nRisk rules: Never sms_send or phone_call unless the user clearly asked AND danger tools are enabled. Be discreet with SMS/contacts/location contents. Use web_search then web_fetch for research questions. Use get_location for "where am I". Use sms_list for reading messages.';
+ } else {
+ base += ' Use tools list_apps, list_activities, launch_app when the user asks about apps.';
+ }
+ return base;
+ }
+
+ function extractToken(chunk) {
+ if (chunk == null) return '';
+ if (typeof chunk === 'string') return chunk;
+ if (typeof chunk === 'object') {
+ if (typeof chunk.token === 'string') return chunk.token;
+ if (typeof chunk.text === 'string') return chunk.text;
+ if (typeof chunk.content === 'string') return chunk.content;
+ if (typeof chunk.delta === 'string') return chunk.delta;
+ if (chunk.delta && typeof chunk.delta.content === 'string') return chunk.delta.content;
+ if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && typeof chunk.choices[0].delta.content === 'string') {
+ return chunk.choices[0].delta.content;
+ }
+ }
+ return '';
+ }
+
+ function buildPayload(messages, attachments, useTools) {
+ var payload = { messages: messages };
+ if (settings.aiProvider && settings.aiProvider !== 'default') {
+ payload.providerId = settings.aiProvider;
+ } else {
+ payload.providerId = 'xai';
+ }
+ if (useTools) {
+ payload.tools = APP_TOOLS;
+ payload.tool_choice = 'auto';
+ }
+ if (attachments && attachments.length) payload.attachments = attachments;
+ return payload;
+ }
+
+ async function callChatSync(payload) {
+ var h = host();
+ if (!h || !h.ai || typeof h.ai.chat !== 'function') {
+ throw new Error('AI chat API unavailable');
+ }
+ var r = await h.ai.chat(payload);
+ var content = '';
+ var toolCalls = [];
+ if (r && typeof r === 'object') {
+ content = r.content || '';
+ if (Array.isArray(r.tool_calls)) toolCalls = r.tool_calls;
+ } else if (typeof r === 'string') {
+ content = r;
+ }
+ return { content: content || '', tool_calls: toolCalls || [] };
+ }
+
+ async function callChatStream(payload, bubble) {
+ var h = host();
+ if (!h || !h.ai || typeof h.ai.chatStream !== 'function') {
+ throw new Error('chatStream unavailable');
+ }
+
+ var assembled = '';
+ var toolCalls = [];
+
+ function handleChunk(chunk) {
+ try {
+ var t = extractToken(chunk);
+ if (t) {
+ assembled += t;
+ bubble.setText(assembled);
+ }
+ if (chunk && typeof chunk === 'object') {
+ if (Array.isArray(chunk.tool_calls) && chunk.tool_calls.length) {
+ toolCalls = chunk.tool_calls;
+ }
+ if (typeof chunk.content === 'string' && chunk.content.length > assembled.length) {
+ assembled = chunk.content;
+ bubble.setText(assembled);
+ }
+ }
+ } catch (e) {}
+ }
+
+ var streamOpts = {};
+ for (var k in payload) {
+ if (Object.prototype.hasOwnProperty.call(payload, k)) streamOpts[k] = payload[k];
+ }
+ streamOpts.onToken = handleChunk;
+
+ var result = await h.ai.chatStream(streamOpts);
+
+ var finalContent = assembled;
+ if (result && typeof result === 'object') {
+ if (typeof result.content === 'string' && result.content) finalContent = result.content;
+ if (Array.isArray(result.tool_calls) && result.tool_calls.length) toolCalls = result.tool_calls;
+ } else if (typeof result === 'string' && result) {
+ finalContent = result;
+ }
+
+ if (finalContent && finalContent !== assembled) bubble.setText(finalContent);
+ return { content: finalContent || '', tool_calls: toolCalls || [] };
+ }
+
+ async function runModelOnce(payload, bubble) {
+ var mode = settings.streamMode || 'auto';
+
+ if (mode === 'sync') {
+ setStatus(APP_VERSION + ' • Chat…');
+ var syncResult = await callChatSync(payload);
+ bubble.setText(syncResult.content || '');
+ return { content: syncResult.content || '', tool_calls: syncResult.tool_calls || [], label: 'Forge AI' };
+ }
+
+ if (mode === 'stream') {
+ setStatus(APP_VERSION + ' • Streaming…');
+ var s = await callChatStream(payload, bubble);
+ return { content: s.content || '', tool_calls: s.tool_calls || [], label: 'Forge AI · live' };
+ }
+
+ try {
+ setStatus(APP_VERSION + ' • Streaming…');
+ var live = await callChatStream(payload, bubble);
+ return { content: live.content || '', tool_calls: live.tool_calls || [], label: 'Forge AI · live' };
+ } catch (streamErr) {
+ var sm = (streamErr && streamErr.message) || String(streamErr);
+ setStatus(APP_VERSION + ' • Stream failed, using chat…');
+ try {
+ var fb = await callChatSync(payload);
+ bubble.setText(fb.content || '');
+ return {
+ content: fb.content || '',
+ tool_calls: fb.tool_calls || [],
+ label: 'Forge AI',
+ note: sm
+ };
+ } catch (syncErr) {
+ var both = 'Stream: ' + sm + ' | Chat: ' + ((syncErr && syncErr.message) || String(syncErr));
+ throw new Error(both);
+ }
+ }
+ }
+
+ function toolResultForModel(toolResult) {
+ try {
+ var copy = JSON.parse(JSON.stringify(toolResult));
+ if (copy && copy._displayImages) delete copy._displayImages;
+ if (copy && copy._client && Array.isArray(copy._client.images)) {
+ copy._client.images = copy._client.images.map(function (im) {
+ return {
+ index: im.index,
+ inlined: im.inlined,
+ url: im.url,
+ originalUrl: im.originalUrl,
+ revised_prompt: im.revised_prompt
+ };
+ });
+ }
+ if (copy && Array.isArray(copy.images)) {
+ copy.images = copy.images.map(function (im) {
+ var u = im && im.url ? String(im.url) : '';
+ if (u.indexOf('data:') === 0 && u.length > 4000) {
+ return {
+ url: '[client-inlined data URL, length=' + u.length + ' — already shown in UI]',
+ revised_prompt: im.revised_prompt || null,
+ inlined: true
+ };
+ }
+ return im;
+ });
+ }
+ var s = JSON.stringify(copy);
+ if (s.length > 120000) {
+ return JSON.stringify({
+ ok: copy.ok,
+ count: copy.count || (copy.images && copy.images.length) || 0,
+ note: 'Images generated and displayed in the client UI (base64-inlined). Payload truncated for the model.',
+ images: (copy.images || []).map(function (im, idx) {
+ return { index: idx, revised_prompt: im.revised_prompt || null, inlined: true };
+ }),
+ error: copy.error || undefined,
+ attempts: copy.attempts || undefined,
+ hint: copy.hint || undefined
+ });
+ }
+ return s;
+ } catch (e) {
+ return JSON.stringify({ ok: false, error: 'Failed to serialize tool result' });
+ }
+ }
+
+ async function sendMessage() {
+ if (isLoading) return;
+ var input = document.getElementById('messageInput');
+ var text = input.value.trim();
+ if (!text && attachedFiles.length === 0) return;
+
+ var filesSnapshot = attachedFiles.slice();
+ var attachments = buildOutgoingAttachments(filesSnapshot);
+
+ appendUserBubble(text, filesSnapshot);
+
+ if (conversationHistory.length === 0) {
+ conversationHistory.push({ role: 'system', content: buildSystemPrompt() });
+ } else if (conversationHistory[0] && conversationHistory[0].role === 'system') {
+ conversationHistory[0].content = buildSystemPrompt();
+ }
+ conversationHistory.push({
+ role: 'user',
+ content: text || (attachments.length ? '[Attachment(s)]' : '')
+ });
+
+ input.value = '';
+ input.style.height = 'auto';
+ attachedFiles = [];
+ renderFilePreviews();
+
+ isLoading = true;
+ document.getElementById('sendBtn').disabled = true;
+
+ var bubble = createStreamingBubble();
+ var collectedDisplayImages = [];
+
+ try {
+ var currentMessages = conversationHistory.slice();
+ var finalResponse = null;
+ var pendingAtts = attachments.slice();
+ var useTools = toolSettings.enabled && APP_TOOLS.length > 0;
+ var modeLabel = 'Forge AI';
+
+ for (var round = 0; round < 5; round++) {
+ var payload = buildPayload(
+ currentMessages,
+ round === 0 ? pendingAtts : null,
+ useTools
+ );
+
+ if (round > 0) bubble.prepareNextRound();
+
+ var result = await runModelOnce(payload, bubble);
+ var content = result.content || '';
+ var toolCalls = result.tool_calls || [];
+ modeLabel = result.label || modeLabel;
+
+ if (toolCalls.length) {
+ currentMessages.push({
+ role: 'assistant',
+ tool_calls: toolCalls,
+ content: content || null
+ });
+ bubble.setText(content ? (content + '\n\n⚙ Running tools…') : '⚙ Running tools…');
+ for (var ti = 0; ti < toolCalls.length; ti++) {
+ var tc = toolCalls[ti];
+ var args = {};
+ try {
+ args = JSON.parse((tc.function && tc.function.arguments) || tc.arguments || '{}');
+ } catch (_) {}
+ var name = (tc.function && tc.function.name) || tc.name;
+ setStatus(APP_VERSION + ' • Running ' + name + '…');
+ var toolResult = await executeTool(name, args);
+
+ if (toolResult && toolResult._displayImages && toolResult._displayImages.length) {
+ appendGeneratedImages(bubble, toolResult._displayImages, name === 'image_generate' ? 'Generated image' : 'Image');
+ toolResult._displayImages.forEach(function (im) { collectedDisplayImages.push(im); });
+ }
+
+ currentMessages.push({
+ role: 'tool',
+ tool_call_id: tc.id,
+ name: name,
+ content: toolResultForModel(toolResult)
+ });
+ }
+ continue;
+ }
+
+ finalResponse = content;
+ break;
+ }
+
+ bubble.finish(finalResponse || '(empty)', modeLabel);
+ var assistantMsg = {
+ role: 'assistant',
+ content: finalResponse || ''
+ };
+ if (collectedDisplayImages.length) {
+ assistantMsg._displayImages = collectedDisplayImages.map(function (im) {
+ return { url: im.url, revised_prompt: im.revised_prompt || null };
+ });
+ }
+ conversationHistory.push(assistantMsg);
+ await saveChat();
+ setStatus(APP_VERSION + ' • Ready');
+ } catch (error) {
+ var em = (error && error.message) || String(error);
+ bubble.setError(em);
+ setStatus(APP_VERSION + ' • Error');
+ } finally {
+ isLoading = false;
+ document.getElementById('sendBtn').disabled = false;
+ }
+ }
+
+ document.getElementById('btnNewChat').onclick = function () { newChat(); };
+ document.getElementById('btnSettings').onclick = function () { showSettings(); };
+ document.getElementById('btnCloseSettings').onclick = function () { closeSettings(); };
+ document.getElementById('btnSaveSettings').onclick = function () { saveSettings(); };
+ document.getElementById('attachBtn').onclick = function (e) { showAttachMenu(e); };
+ document.getElementById('sendBtn').onclick = function () { sendMessage(); };
+ document.getElementById('btnTakePhoto').onclick = function (e) { takePhoto(e); };
+ document.getElementById('btnPickPhoto').onclick = function (e) { attachPhoto(e); };
+ document.getElementById('btnPickFile').onclick = function (e) { attachFile(e); };
+ document.getElementById('btnAttachCancel').onclick = function () { hideAttachMenu(); };
+
+ document.addEventListener('click', function (e) {
+ var menu = document.getElementById('attachMenu');
+ var btn = document.getElementById('attachBtn');
+ if (!menu || menu.style.display !== 'flex') return;
+ if (menu.contains(e.target) || btn.contains(e.target)) return;
+ hideAttachMenu();
+ });
+
+ var messageInput = document.getElementById('messageInput');
+ messageInput.addEventListener('input', function () { autoResize(messageInput); });
+ messageInput.addEventListener('keydown', function (e) {
+ if (e.key === 'Enter' && !e.shiftKey) {
+ e.preventDefault();
+ sendMessage();
+ }
+ });
+
+ async function boot() {
+ setStatus(APP_VERSION + ' • Loading…');
+ try {
+ var h = host();
+ if (h && h.storage) {
+ var savedTools = await h.storage.get('forgechat_tool_settings');
+ if (savedTools) toolSettings = Object.assign(toolSettings, JSON.parse(savedTools));
+ var saved = await h.storage.get('aichat_settings');
+ if (saved) settings = Object.assign(settings, JSON.parse(saved));
+ if (!settings.aiProvider || settings.aiProvider === 'default') settings.aiProvider = 'xai';
+ if (!settings.imageModel) settings.imageModel = 'grok-imagine-image-2.0';
+ if (!settings.chatFontSize) settings.chatFontSize = 16;
+ }
+ } catch (e) {}
+ applyChatFontSize();
+ try {
+ // Prefer xai as default provider on first boot
+ var h2 = host();
+ if (h2 && h2.ai && typeof h2.ai.setProvider === 'function') {
+ try { await h2.ai.setProvider(settings.aiProvider || 'xai'); } catch (_) {}
+ }
+ await loadSettings();
+ await loadChat();
+ await refreshHostTools();
+ } catch (e) {
+ setStatus(APP_VERSION + ' • Boot warning');
+ }
+ if (!conversationHistory.length) {
+ var chat = document.getElementById('chat');
+ chat.innerHTML = '';
+ chat.appendChild(welcomeHtml());
+ }
+ setStatus(APP_VERSION + ' • Ready');
+ }
+
+ if (document.readyState === 'loading') {
+ document.addEventListener('DOMContentLoaded', function () { boot(); });
+ } else {
+ boot();
+ }
+})();
+
+</script>
+</body>
+</html>

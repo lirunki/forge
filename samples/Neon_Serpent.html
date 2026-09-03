@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neon Serpent</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:system-ui,-apple-system,Segoe UI,sans-serif;
+  color:#e8f0ff;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  touch-action:none;user-select:none;
+  background:radial-gradient(ellipse at 50% 0%,#12163a 0%,#05060f 55%,#020308 100%);
+}
+#hud{
+  width:100%;max-width:480px;display:flex;justify-content:space-between;
+  padding:10px 18px 6px;font-weight:700;letter-spacing:1px;
+}
+.hudItem{display:flex;flex-direction:column;align-items:center;min-width:64px}
+.hudLabel{font-size:10px;text-transform:uppercase;color:#7a86c2;letter-spacing:2px}
+.hudVal{font-size:22px;text-shadow:0 0 12px currentColor}
+#scoreVal{color:#4ade80}
+#bestVal{color:#fbbf24}
+#lenVal{color:#38bdf8}
+#wrap{position:relative;width:min(94vw,480px,78vh)}
+canvas{
+  width:100%;display:block;border-radius:18px;
+  background:#070a18;
+  box-shadow:0 0 0 1px rgba(90,120,255,.25),0 0 40px rgba(60,80,220,.25),inset 0 0 60px rgba(0,0,20,.6);
+}
+#overlay{
+  position:absolute;inset:0;border-radius:18px;
+  background:rgba(4,6,18,.84);backdrop-filter:blur(6px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:24px;transition:opacity .28s;
+}
+#overlay.hidden{opacity:0;pointer-events:none}
+#ovTitle{
+  font-size:34px;font-weight:900;letter-spacing:3px;
+  background:linear-gradient(90deg,#4ade80,#38bdf8,#a78bfa,#f472b6);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 14px rgba(80,140,255,.5));
+  margin-bottom:8px;
+}
+#ovSub{color:#9aa8d8;font-size:14px;line-height:1.6;margin-bottom:22px}
+.btn{
+  padding:14px 42px;border:none;border-radius:999px;font-size:17px;font-weight:800;
+  letter-spacing:2px;color:#04121a;cursor:pointer;
+  background:linear-gradient(135deg,#4ade80,#22d3ee);
+  box-shadow:0 0 24px rgba(74,222,128,.45);
+  transition:transform .15s;
+}
+.btn:active{transform:scale(.94)}
+#controls{
+  width:100%;max-width:480px;display:flex;justify-content:space-between;
+  align-items:center;padding:8px 18px 14px;gap:12px;
+}
+#dpad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,52px);gap:6px}
+.dbtn{
+  border:1px solid rgba(100,130,255,.3);border-radius:14px;
+  background:rgba(30,40,90,.5);color:#9db4ff;font-size:22px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.dbtn:active{background:rgba(70,100,220,.6);color:#fff}
+#pauseBtn,#soundBtn{
+  width:64px;height:64px;border-radius:50%;border:1px solid rgba(100,130,255,.3);
+  background:rgba(30,40,90,.5);color:#9db4ff;font-size:22px;display:flex;
+  align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+}
+#soundBtn{font-size:20px}
+#hint{font-size:11px;color:#5a669e;letter-spacing:1px;padding-bottom:8px}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="hudItem"><span class="hudLabel">Score</span><span class="hudVal" id="scoreVal">0</span></div>
+  <div class="hudItem"><span class="hudLabel">Length</span><span class="hudVal" id="lenVal">3</span></div>
+  <div class="hudItem"><span class="hudLabel">Best</span><span class="hudVal" id="bestVal">0</span></div>
+</div>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="overlay">
+    <div id="ovTitle">NEON SERPENT</div>
+    <div id="ovSub">Swipe or use the pad to steer.<br>Eat the glowing orbs. Don't bite yourself!</div>
+    <button class="btn" id="startBtn" type="button">PLAY</button>
+  </div>
+</div>
+<div id="controls">
+  <div id="dpad">
+    <div></div><div class="dbtn" data-dir="up">▲</div><div></div>
+    <div class="dbtn" data-dir="left">◀</div><div class="dbtn" data-dir="down">▼</div><div class="dbtn" data-dir="right">▶</div>
+  </div>
+  <button id="pauseBtn" type="button" aria-label="Pause">❚❚</button>
+  <button id="soundBtn" type="button" aria-label="Sound">🔊</button>
+</div>
+<div id="hint">Swipe anywhere on the board · music + SFX toggle</div>
+<script>
+(function () {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const GRID = 19;
+  const DIRS = {
+    up: { x: 0, y: -1 },
+    down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 },
+    right: { x: 1, y: 0 }
+  };
+
+  let CELL = 16;
+  let snake, dir, nextDir, food;
+  let score = 0, best = 0, len = 3;
+  let alive = false, paused = false, dying = false;
+  let tickMs = 140, acc = 0, last = 0, rafId = 0;
+  let particles = [], pops = [], shake = 0, hueShift = 0;
+  let soundOn = true;
+  let deathTimer = 0;
+
+  function resize() {
+    const wrap = document.getElementById('wrap');
+    const w = Math.max(1, wrap.clientWidth || 300);
+    CELL = Math.max(8, Math.floor(w / GRID));
+    cv.width = CELL * GRID;
+    cv.height = CELL * GRID;
+    cv.style.height = cv.width + 'px';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---- audio engine ----
+  let AC = null;
+  let masterGain = null;
+  let sfxGain = null;
+  let musicGain = null;
+  let musicNodes = null;
+  let musicPlaying = false;
+  let musicStepTimer = 0;
+  let musicStep = 0;
+  let musicPausedSoft = false;
+
+  // C-minor neon groove (relative freqs)
+  const ROOT = 110;
+  const SCALE = [0, 3, 5, 7, 10, 12, 15, 17]; // semitones
+  const BASS_PAT = [0, 0, 7, 0, 3, 3, 10, 7];
+  const LEAD_PAT = [12, 15, 17, 15, 19, 17, 15, 12, 10, 12, 15, 12, 17, 15, 12, 10];
+  const ARP_PAT  = [12, 19, 24, 19, 15, 22, 27, 22];
+  const HAT_PAT  = [1, 0, 1, 0, 1, 0, 1, 1];
+
+  function ac() {
+    try {
+      if (!AC) {
+        AC = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = AC.createGain();
+        masterGain.gain.value = 0.9;
+        masterGain.connect(AC.destination);
+        sfxGain = AC.createGain();
+        sfxGain.gain.value = 1;
+        sfxGain.connect(masterGain);
+        musicGain = AC.createGain();
+        musicGain.gain.value = 0;
+        musicGain.connect(masterGain);
+      }
+      if (AC.state === 'suspended') AC.resume();
+    } catch (e) {}
+    return AC;
+  }
+
+  function tone(freq, dur, type, vol, slide) {
+    if (!soundOn) return;
+    const a = ac();
+    if (!a || !sfxGain) return;
+    try {
+      const o = a.createOscillator();
+      const g = a.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(Math.max(40, freq), a.currentTime);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, slide), a.currentTime + dur);
+      g.gain.setValueAtTime(vol || 0.15, a.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+      o.connect(g); g.connect(sfxGain);
+      o.start(); o.stop(a.currentTime + dur + 0.02);
+    } catch (e) {}
+  }
+
+  function sEat() {
+    tone(520, 0.12, 'triangle', 0.18, 880);
+    setTimeout(function () { tone(880, 0.1, 'triangle', 0.14, 1320); }, 60);
+  }
+  function sTurn() { tone(300, 0.035, 'square', 0.035); }
+  function sDie() {
+    tone(300, 0.5, 'sawtooth', 0.16, 60);
+    setTimeout(function () { tone(150, 0.55, 'square', 0.1, 40); }, 120);
+  }
+  function sStart() {
+    tone(330, 0.09, 'triangle', 0.14);
+    setTimeout(function () { tone(440, 0.09, 'triangle', 0.14); }, 90);
+    setTimeout(function () { tone(660, 0.14, 'triangle', 0.14); }, 180);
+  }
+
+  function midiToHz(semi) {
+    return ROOT * Math.pow(2, semi / 12);
+  }
+
+  function playNote(freq, dur, type, vol, dest, slide) {
+    const a = AC;
+    if (!a || !dest) return;
+    try {
+      const o = a.createOscillator();
+      const g = a.createGain();
+      const f = a.createBiquadFilter();
+      o.type = type || 'square';
+      o.frequency.setValueAtTime(Math.max(30, freq), a.currentTime);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, slide), a.currentTime + dur * 0.9);
+      f.type = 'lowpass';
+      f.frequency.value = type === 'sawtooth' ? 1200 : 2400;
+      g.gain.setValueAtTime(0.0001, a.currentTime);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol || 0.08), a.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+      o.connect(f); f.connect(g); g.connect(dest);
+      o.start(); o.stop(a.currentTime + dur + 0.03);
+    } catch (e) {}
+  }
+
+  function playHat(vol) {
+    const a = AC;
+    if (!a || !musicGain) return;
+    try {
+      const n = a.createBufferSource();
+      const len = Math.max(1, (a.sampleRate * 0.04) | 0);
+      const buf = a.createBuffer(1, len, a.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      n.buffer = buf;
+      const f = a.createBiquadFilter();
+      f.type = 'highpass';
+      f.frequency.value = 6000;
+      const g = a.createGain();
+      g.gain.setValueAtTime(vol || 0.04, a.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + 0.04);
+      n.connect(f); f.connect(g); g.connect(musicGain);
+      n.start(); n.stop(a.currentTime + 0.05);
+    } catch (e) {}
+  }
+
+  function playKick() {
+    playNote(90, 0.18, 'sine', 0.14, musicGain, 40);
+  }
+
+  function ensureMusicGraph() {
+    const a = ac();
+    if (!a || musicNodes) return;
+    try {
+      // subtle pad drone under the groove
+      const pad = a.createOscillator();
+      const pad2 = a.createOscillator();
+      const pg = a.createGain();
+      const pf = a.createBiquadFilter();
+      pad.type = 'sawtooth';
+      pad2.type = 'triangle';
+      pad.frequency.value = midiToHz(0);
+      pad2.frequency.value = midiToHz(7);
+      pf.type = 'lowpass';
+      pf.frequency.value = 420;
+      pg.gain.value = 0.03;
+      pad.connect(pf); pad2.connect(pf); pf.connect(pg); pg.connect(musicGain);
+      pad.start(); pad2.start();
+      musicNodes = { pad: pad, pad2: pad2, pg: pg, pf: pf };
+    } catch (e) {
+      musicNodes = {};
+    }
+  }
+
+  function musicTick() {
+    if (!musicPlaying || !AC || !musicGain || !soundOn) return;
+    const step = musicStep % 16;
+    const barStep = musicStep % 8;
+
+    // kick on 0,4
+    if (step % 4 === 0) playKick();
+    // hats
+    if (HAT_PAT[barStep]) playHat(step % 2 === 0 ? 0.045 : 0.028);
+
+    // bass
+    if (step % 2 === 0) {
+      const b = BASS_PAT[barStep];
+      playNote(midiToHz(b), 0.22, 'square', 0.07, musicGain);
+    }
+
+    // lead every step lightly
+    const leadSemi = LEAD_PAT[step];
+    if (step % 2 === 0) {
+      playNote(midiToHz(leadSemi), 0.16, 'triangle', 0.055, musicGain);
+    } else if (step % 4 === 3) {
+      playNote(midiToHz(leadSemi), 0.12, 'square', 0.03, musicGain);
+    }
+
+    // arp sparkle
+    if (step % 2 === 1) {
+      const ar = ARP_PAT[barStep];
+      playNote(midiToHz(ar), 0.1, 'sine', 0.04, musicGain);
+    }
+
+    // evolve pad filter a bit
+    if (musicNodes && musicNodes.pf && AC) {
+      try {
+        const t = AC.currentTime;
+        const base = 360 + Math.sin(musicStep / 10) * 120 + (score > 0 ? Math.min(score, 80) : 0);
+        musicNodes.pf.frequency.setTargetAtTime(base, t, 0.08);
+      } catch (e) {}
+    }
+
+    musicStep++;
+  }
+
+  function setMusicLevel(level, ramp) {
+    if (!musicGain || !AC) return;
+    try {
+      const t = AC.currentTime;
+      musicGain.gain.cancelScheduledValues(t);
+      musicGain.gain.setValueAtTime(musicGain.gain.value, t);
+      musicGain.gain.linearRampToValueAtTime(Math.max(0, level), t + (ramp || 0.25));
+    } catch (e) {
+      try { musicGain.gain.value = level; } catch (e2) {}
+    }
+  }
+
+  function startMusic() {
+    if (!soundOn) return;
+    const a = ac();
+    if (!a) return;
+    ensureMusicGraph();
+    musicPlaying = true;
+    musicPausedSoft = false;
+    if (!musicStep) musicStep = 0;
+    setMusicLevel(0.55, 0.4);
+  }
+
+  function softPauseMusic() {
+    if (!musicPlaying) return;
+    musicPausedSoft = true;
+    setMusicLevel(0.12, 0.3);
+  }
+
+  function resumeMusic() {
+    if (!soundOn) return;
+    if (!musicPlaying) { startMusic(); return; }
+    musicPausedSoft = false;
+    setMusicLevel(0.55, 0.3);
+  }
+
+  function stopMusic(fade) {
+    musicPlaying = false;
+    musicPausedSoft = false;
+    setMusicLevel(0, fade == null ? 0.5 : fade);
+  }
+
+  function toggleSound() {
+    soundOn = !soundOn;
+    document.getElementById('soundBtn').textContent = soundOn ? '🔊' : '🔇';
+    if (soundOn) {
+      ac();
+      tone(660, 0.08, 'triangle', 0.1);
+      if (alive && !dying) {
+        if (paused) { startMusic(); softPauseMusic(); }
+        else startMusic();
+      }
+    } else {
+      stopMusic(0.15);
+    }
+  }
+
+  // ---- persistence ----
+  async function loadBest() {
+    try {
+      if (window.ForgeHost) {
+        const v = await ForgeHost.state.get('best');
+        if (v != null && v !== '') best = +v || 0;
+      } else {
+        best = +localStorage.getItem('ns_best') || 0;
+      }
+    } catch (e) {}
+    document.getElementById('bestVal').textContent = String(best);
+  }
+  async function saveBest() {
+    try {
+      if (window.ForgeHost) await ForgeHost.state.set('best', best);
+      else localStorage.setItem('ns_best', String(best));
+    } catch (e) {}
+  }
+  loadBest();
+
+  function updateHud() {
+    len = snake ? snake.length : 3;
+    document.getElementById('scoreVal').textContent = String(score);
+    document.getElementById('lenVal').textContent = String(len);
+    document.getElementById('bestVal').textContent = String(best);
+  }
+
+  function cellFree(x, y, ignoreTail) {
+    if (!snake) return true;
+    const lastIdx = snake.length - 1;
+    for (let i = 0; i < snake.length; i++) {
+      if (ignoreTail && i === lastIdx) continue;
+      if (snake[i].x === x && snake[i].y === y) return false;
+    }
+    return true;
+  }
+
+  function spawnFood() {
+    const free = [];
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        if (cellFree(x, y, false)) free.push({ x: x, y: y });
+      }
+    }
+    if (!free.length) {
+      food = null;
+      return;
+    }
+    food = free[(Math.random() * free.length) | 0];
+    food.hue = (Math.random() * 360) | 0;
+  }
+
+  function resetClock(ts) {
+    last = ts || performance.now();
+    acc = 0;
+    musicStepTimer = 0;
+  }
+
+  function start() {
+    if (deathTimer) {
+      clearTimeout(deathTimer);
+      deathTimer = 0;
+    }
+    snake = [{ x: 9, y: 9 }, { x: 8, y: 9 }, { x: 7, y: 9 }];
+    dir = { x: 1, y: 0 };
+    nextDir = { x: 1, y: 0 };
+    score = 0;
+    tickMs = 140;
+    particles = [];
+    pops = [];
+    shake = 0;
+    dying = false;
+    alive = true;
+    paused = false;
+    spawnFood();
+    resetClock();
+    document.getElementById('overlay').classList.add('hidden');
+    document.getElementById('pauseBtn').textContent = '❚❚';
+    updateHud();
+    sStart();
+    startMusic();
+  }
+
+  function sameDir(a, b) { return a && b && a.x === b.x && a.y === b.y; }
+  function isOpposite(a, b) { return a && b && a.x === -b.x && a.y === -b.y; }
+
+  function setDir(d) {
+    if (!alive || paused || dying || !d) return;
+    if (isOpposite(d, dir)) return;
+    if (sameDir(d, nextDir)) return;
+    nextDir = { x: d.x, y: d.y };
+    sTurn();
+  }
+
+  function burst(x, y, color, n) {
+    const count = n || 18;
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 1 + Math.random() * 3.5;
+      particles.push({
+        x: x, y: y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 1,
+        color: color,
+        size: 2 + Math.random() * 3
+      });
+    }
+  }
+
+  function showGameOver() {
+    const ov = document.getElementById('overlay');
+    document.getElementById('ovTitle').textContent = 'GAME OVER';
+    document.getElementById('ovSub').innerHTML =
+      'Score <b style="color:#4ade80">' + score + '</b> · Length <b style="color:#38bdf8">' +
+      (snake ? snake.length : 0) + '</b><br>Best: <b style="color:#fbbf24">' + best + '</b>';
+    document.getElementById('startBtn').textContent = 'PLAY AGAIN';
+    ov.classList.remove('hidden');
+  }
+
+  function die() {
+    if (!alive || dying) return;
+    alive = false;
+    dying = true;
+    sDie();
+    stopMusic(0.7);
+    shake = 14;
+    if (snake) {
+      for (let i = 0; i < snake.length; i += 2) {
+        const s = snake[i];
+        burst((s.x + 0.5) * CELL, (s.y + 0.5) * CELL, 'hsl(' + (140 + i * 4) + ',90%,60%)', 6);
+      }
+    }
+    if (score > best) {
+      best = score;
+      saveBest();
+      updateHud();
+    }
+    deathTimer = setTimeout(function () {
+      deathTimer = 0;
+      dying = false;
+      showGameOver();
+    }, 700);
+  }
+
+  function tick() {
+    if (nextDir && !isOpposite(nextDir, dir)) {
+      dir = { x: nextDir.x, y: nextDir.y };
+    }
+    nextDir = { x: dir.x, y: dir.y };
+
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID) {
+      die();
+      return;
+    }
+
+    const eating = food && head.x === food.x && head.y === food.y;
+    if (!cellFree(head.x, head.y, !eating)) {
+      die();
+      return;
+    }
+
+    snake.unshift(head);
+
+    if (eating) {
+      score += 10;
+      burst((food.x + 0.5) * CELL, (food.y + 0.5) * CELL, 'hsl(' + food.hue + ',95%,65%)', 26);
+      pops.push({ x: (food.x + 0.5) * CELL, y: (food.y + 0.5) * CELL, life: 1, text: '+10' });
+      shake = Math.min(shake + 5, 12);
+      sEat();
+      spawnFood();
+      if (snake.length % 5 === 0 && tickMs > 72) tickMs -= 6;
+      if (!food) {
+        score += 100;
+        die();
+        return;
+      }
+    } else {
+      snake.pop();
+    }
+    updateHud();
+  }
+
+  function drawGrid() {
+    ctx.strokeStyle = 'rgba(70,90,180,0.10)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < GRID; i++) {
+      const p = i * CELL;
+      ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, cv.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(cv.width, p); ctx.stroke();
+    }
+  }
+
+  function drawFood(t) {
+    if (!food) return;
+    const cx = (food.x + 0.5) * CELL;
+    const cy = (food.y + 0.5) * CELL;
+    const r = CELL * 0.32 + Math.sin(t / 200) * CELL * 0.05;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.2);
+    g.addColorStop(0, 'hsla(' + food.hue + ',100%,75%,.9)');
+    g.addColorStop(0.4, 'hsla(' + food.hue + ',95%,55%,.35)');
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'hsl(' + food.hue + ',95%,68%)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.28, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawSnake() {
+    if (!snake || !snake.length) return;
+    const n = snake.length;
+    for (let i = n - 1; i >= 0; i--) {
+      const s = snake[i];
+      const cx = (s.x + 0.5) * CELL;
+      const cy = (s.y + 0.5) * CELL;
+      const frac = i / Math.max(n - 1, 1);
+      const hue = (140 + frac * 120 + hueShift) % 360;
+      const r = CELL * 0.42 * (1 - frac * 0.22);
+
+      const gg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2);
+      gg.addColorStop(0, 'hsla(' + hue + ',95%,60%,' + (i === 0 ? 0.5 : 0.25) + ')');
+      gg.addColorStop(1, 'transparent');
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(cx, cy, r * 2, 0, Math.PI * 2); ctx.fill();
+
+      const bg = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      bg.addColorStop(0, 'hsl(' + hue + ',85%,' + (62 - frac * 25) + '%)');
+      bg.addColorStop(1, 'hsl(' + ((hue + 40) % 360) + ',85%,' + (45 - frac * 20) + '%)');
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(cx - r, cy - r, r * 2, r * 2, r * 0.55);
+      else ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (i === 0) {
+        const ex = dir.x, ey = dir.y, px = -ey, py = ex;
+        ctx.fillStyle = '#fff';
+        for (let sgn = -1; sgn <= 1; sgn += 2) {
+          ctx.beginPath();
+          ctx.arc(cx + ex * r * 0.35 + px * sgn * r * 0.42, cy + ey * r * 0.35 + py * sgn * r * 0.42, r * 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#0a1030';
+        for (let sgn = -1; sgn <= 1; sgn += 2) {
+          ctx.beginPath();
+          ctx.arc(cx + ex * r * 0.45 + px * sgn * r * 0.42, cy + ey * r * 0.45 + py * sgn * r * 0.42, r * 0.1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  function drawFx(dt) {
+    const nextP = [];
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life -= dt / 600;
+      if (p.life > 0) {
+        nextP.push(p);
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    particles = nextP;
+    ctx.globalAlpha = 1;
+
+    const nextO = [];
+    for (let i = 0; i < pops.length; i++) {
+      const p = pops[i];
+      p.y -= 0.5; p.life -= dt / 900;
+      if (p.life > 0) {
+        nextO.push(p);
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + Math.round(CELL * 0.55) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#4ade80';
+        ctx.shadowBlur = 10;
+        ctx.fillText(p.text, p.x, p.y);
+        ctx.shadowBlur = 0;
+      }
+    }
+    pops = nextO;
+    ctx.globalAlpha = 1;
+  }
+
+  function loop(t) {
+    rafId = requestAnimationFrame(loop);
+    if (!last) last = t;
+    let dt = t - last;
+    if (dt < 0) dt = 0;
+    if (dt > 100) dt = 100;
+    last = t;
+
+    hueShift = (hueShift + dt * 0.02) % 360;
+
+    // music sequencer ~135 BPM eighth-notes ≈ 222ms
+    if (musicPlaying && soundOn && !musicPausedSoft) {
+      musicStepTimer += dt;
+      const stepMs = 210;
+      var mguard = 0;
+      while (musicStepTimer >= stepMs && mguard < 4) {
+        musicStepTimer -= stepMs;
+        musicTick();
+        mguard++;
+      }
+    }
+
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.save();
+    if (shake > 0) {
+      shake = Math.max(shake - dt * 0.03, 0);
+      ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    }
+    drawGrid();
+    drawFood(t);
+    drawSnake();
+    drawFx(dt);
+    ctx.restore();
+
+    if (alive && !paused && !dying) {
+      acc += dt;
+      if (acc > tickMs * 3) acc = tickMs * 3;
+      var guard = 0;
+      while (acc >= tickMs && alive && !paused && !dying && guard < 5) {
+        acc -= tickMs;
+        tick();
+        guard++;
+      }
+    }
+  }
+  rafId = requestAnimationFrame(loop);
+
+  function togglePause() {
+    if (!alive || dying) return;
+    paused = !paused;
+    const ov = document.getElementById('overlay');
+    if (paused) {
+      document.getElementById('ovTitle').textContent = 'PAUSED';
+      document.getElementById('ovSub').textContent = 'Take a breath.';
+      document.getElementById('startBtn').textContent = 'RESUME';
+      document.getElementById('pauseBtn').textContent = '▶';
+      ov.classList.remove('hidden');
+      softPauseMusic();
+    } else {
+      resetClock();
+      document.getElementById('pauseBtn').textContent = '❚❚';
+      ov.classList.add('hidden');
+      resumeMusic();
+    }
+  }
+
+  function resumeFromOverlay() {
+    if (paused) {
+      paused = false;
+      resetClock();
+      document.getElementById('pauseBtn').textContent = '❚❚';
+      document.getElementById('overlay').classList.add('hidden');
+      resumeMusic();
+      return;
+    }
+    start();
+  }
+
+  // ---- input ----
+  document.querySelectorAll('.dbtn').forEach(function (b) {
+    b.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      ac();
+      setDir(DIRS[b.getAttribute('data-dir')]);
+    });
+  });
+
+  var tsx = 0, tsy = 0, swiping = false;
+  function onTouchStart(e) {
+    ac();
+    var t = e.changedTouches ? e.changedTouches[0] : e;
+    tsx = t.clientX; tsy = t.clientY; swiping = true;
+  }
+  function onTouchEnd(e) {
+    if (!swiping) return;
+    swiping = false;
+    var t = e.changedTouches ? e.changedTouches[0] : e;
+    var dx = t.clientX - tsx, dy = t.clientY - tsy;
+    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? DIRS.right : DIRS.left);
+    else setDir(dy > 0 ? DIRS.down : DIRS.up);
+  }
+  cv.addEventListener('touchstart', onTouchStart, { passive: true });
+  cv.addEventListener('touchend', onTouchEnd, { passive: true });
+  cv.addEventListener('mousedown', onTouchStart);
+  window.addEventListener('mouseup', onTouchEnd);
+
+  document.addEventListener('keydown', function (e) {
+    var map = {
+      ArrowUp: DIRS.up, ArrowDown: DIRS.down, ArrowLeft: DIRS.left, ArrowRight: DIRS.right,
+      w: DIRS.up, s: DIRS.down, a: DIRS.left, d: DIRS.right,
+      W: DIRS.up, S: DIRS.down, A: DIRS.left, D: DIRS.right
+    };
+    if (map[e.key]) { e.preventDefault(); ac(); setDir(map[e.key]); }
+    if (e.key === ' ' || e.key === 'Escape') { e.preventDefault(); ac(); togglePause(); }
+    if ((e.key === 'Enter' || e.key === 'p' || e.key === 'P') && !alive && !dying) {
+      e.preventDefault(); ac(); start();
+    }
+    if (e.key === 'm' || e.key === 'M') { e.preventDefault(); toggleSound(); }
+  });
+
+  document.getElementById('pauseBtn').addEventListener('click', function () { ac(); togglePause(); });
+  document.getElementById('startBtn').addEventListener('click', function () { ac(); resumeFromOverlay(); });
+  document.getElementById('soundBtn').addEventListener('click', function () { toggleSound(); });
+
+  function onAppPause() {
+    if (alive && !paused && !dying) togglePause();
+    else {
+      resetClock();
+      softPauseMusic();
+    }
+  }
+  function onAppResume() {
+    resetClock();
+    try { if (AC && AC.state === 'suspended') AC.resume(); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) onAppPause();
+    else onAppResume();
+  });
+  window.addEventListener('pagehide', onAppPause);
+  window.addEventListener('pageshow', onAppResume);
+
+  try {
+    if (window.ForgeHost && typeof ForgeHost.on === 'function') {
+      ForgeHost.on('pause', onAppPause);
+      ForgeHost.on('resume', onAppResume);
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

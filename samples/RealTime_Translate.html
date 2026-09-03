@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RealTime Translate</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; background: #0f172a; color: #e2e8f0; }
+  .container { max-width: 480px; margin: 0 auto; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .lang-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .lang-box { flex: 1; background: #1e2937; border-radius: 16px; padding: 16px; }
+  .lang-label { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
+  select { width: 100%; padding: 12px; border-radius: 12px; border: none; background: #334155; color: #e2e8f0; font-size: 16px; }
+  .flip-btn { width: 48px; height: 48px; border-radius: 9999px; background: #3b82f6; border: none; color: white; font-size: 22px; display: flex; align-items: center; justify-content: center; }
+  .provider { margin-bottom: 20px; }
+  .start-btn { width: 100%; padding: 18px; font-size: 20px; font-weight: 600; border-radius: 9999px; border: none; margin: 20px 0; }
+  .start-btn.listening { background: #ef4444; color: white; }
+  .start-btn:not(.listening) { background: #22c55e; color: white; }
+  .transcript { background: #1e2937; border-radius: 16px; padding: 16px; margin-top: 16px; min-height: 120px; }
+  .label { font-size: 13px; color: #64748b; margin-bottom: 4px; display:flex; align-items:center; gap:8px; }
+  .text { font-size: 17px; line-height: 1.4; }
+  .status { text-align: center; font-size: 14px; color: #64748b; margin-top: 8px; }
+  .tiny-btn { font-size:14px; padding:4px 8px; border-radius:9999px; border:none; background:#475569; color:#e2e8f0; }
+  .pronounce { margin-top:8px; font-size:15px; color:#94a3b8; }
+  .editable { background:#334155; padding:8px; border-radius:8px; min-height:40px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1 style="margin:0;font-size:24px">RealTime Translate</h1>
+  </div>
+
+  <div class="lang-row">
+    <div class="lang-box">
+      <div class="lang-label">Language A (listen)</div>
+      <select id="langA">
+        <option value="en-US">English</option>
+        <option value="es-ES">Spanish</option>
+        <option value="fr-FR">French</option>
+        <option value="de-DE">German</option>
+        <option value="zh-CN">Chinese</option>
+        <option value="ja-JP">Japanese</option>
+      </select>
+    </div>
+    <button class="flip-btn" onclick="flipLanguages()">⇄</button>
+    <div class="lang-box">
+      <div class="lang-label">Language B (translate)</div>
+      <select id="langB">
+        <option value="es-ES">Spanish</option>
+        <option value="en-US">English</option>
+        <option value="fr-FR">French</option>
+        <option value="de-DE">German</option>
+        <option value="zh-CN">Chinese</option>
+        <option value="ja-JP">Japanese</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="provider">
+    <div class="lang-label">AI Provider</div>
+    <select id="provider" style="width:100%;padding:12px;border-radius:12px;background:#334155;color:#e2e8f0;border:none"></select>
+  </div>
+
+  <button id="startBtn" class="start-btn" onclick="toggleListening()">Start Listening</button>
+
+  <div class="transcript">
+    <div class="label">Original (A)
+      <button class="tiny-btn" onclick="translateManual()">Translate</button>
+    </div>
+    <div id="original" class="text editable" contenteditable="true">—</div>
+    <div style="height:12px"></div>
+    <div class="label">
+      Translation (B)
+      <button class="tiny-btn" onclick="speakTranslation()">🔊</button>
+      <button id="pronBtn" class="tiny-btn" onclick="showPronunciation()" style="display:none">音</button>
+    </div>
+    <div id="translation" class="text">—</div>
+    <div id="pronounce" class="pronounce" style="display:none"></div>
+  </div>
+
+  <div id="status" class="status">Ready</div>
+</div>
+
+<script>
+let isListening = false;
+let currentProvider = 'default';
+let listenLoop = null;
+
+const langNames = {
+  'en-US': 'English', 'es-ES': 'Spanish', 'fr-FR': 'French',
+  'de-DE': 'German', 'zh-CN': 'Chinese', 'ja-JP': 'Japanese'
+};
+
+async function initProviders() {
+  try {
+    const menu = await ForgeHost.ai.listProviders();
+    const sel = document.getElementById('provider');
+    sel.innerHTML = '';
+    menu.providers.forEach(p => {
+      if (p.available) {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.label;
+        if (p.isDefault) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    });
+    sel.onchange = () => { currentProvider = sel.value; };
+    currentProvider = menu.defaultId || 'default';
+  } catch(e) {
+    document.getElementById('provider').innerHTML = '<option>default</option>';
+  }
+}
+
+function flipLanguages() {
+  const a = document.getElementById('langA');
+  const b = document.getElementById('langB');
+  const tmp = a.value;
+  a.value = b.value;
+  b.value = tmp;
+  updatePronBtn();
+}
+
+function updatePronBtn() {
+  const langB = document.getElementById('langB').value;
+  const btn = document.getElementById('pronBtn');
+  btn.style.display = (langB === 'zh-CN' || langB === 'ja-JP') ? 'inline' : 'none';
+}
+
+async function toggleListening() {
+  const btn = document.getElementById('startBtn');
+  const status = document.getElementById('status');
+
+  if (!isListening) {
+    await ForgeHost.permissions.request('mic');
+    isListening = true;
+    btn.textContent = 'Stop Listening';
+    btn.classList.add('listening');
+    status.textContent = 'Listening...';
+    document.getElementById('pronounce').style.display = 'none';
+    startListenLoop();
+  } else {
+    isListening = false;
+    btn.textContent = 'Start Listening';
+    btn.classList.remove('listening');
+    status.textContent = 'Stopped';
+    if (listenLoop) clearTimeout(listenLoop);
+  }
+}
+
+async function startListenLoop() {
+  const origEl = document.getElementById('original');
+  const transEl = document.getElementById('translation');
+  const status = document.getElementById('status');
+  const langA = document.getElementById('langA').value;
+  const langB = document.getElementById('langB').value;
+
+  while (isListening) {
+    try {
+      const result = await ForgeHost.mic.listen({ lang: langA });
+      if (result && result.transcript && isListening) {
+        origEl.textContent = result.transcript;
+        status.textContent = 'Translating...';
+
+        const prompt = `Translate the following text from ${langNames[langA]} to ${langNames[langB]}. Only return the translation, nothing else:\n\n${result.transcript}`;
+        const aiRes = await ForgeHost.ai.chat({
+          prompt,
+          providerId: currentProvider
+        });
+        if (aiRes && aiRes.content && isListening) {
+          transEl.textContent = aiRes.content.trim();
+          updatePronBtn();
+        }
+        status.textContent = 'Listening...';
+      }
+    } catch (e) {
+      status.textContent = 'Error: ' + e.message;
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    await new Promise(r => setTimeout(r, 300));
+  }
+}
+
+async function translateManual() {
+  const origEl = document.getElementById('original');
+  const transEl = document.getElementById('translation');
+  const status = document.getElementById('status');
+  const langA = document.getElementById('langA').value;
+  const langB = document.getElementById('langB').value;
+  const text = origEl.textContent.trim();
+  if (!text || text === '—') return;
+
+  status.textContent = 'Translating...';
+  try {
+    const prompt = `Translate the following text from ${langNames[langA]} to ${langNames[langB]}. Only return the translation, nothing else:\n\n${text}`;
+    const aiRes = await ForgeHost.ai.chat({ prompt, providerId: currentProvider });
+    if (aiRes && aiRes.content) {
+      transEl.textContent = aiRes.content.trim();
+      updatePronBtn();
+    }
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+  }
+  status.textContent = 'Ready';
+}
+
+async function speakTranslation() {
+  const text = document.getElementById('translation').textContent;
+  if (!text || text === '—') return;
+  try {
+    await ForgeHost.ai.tts({ text, providerId: currentProvider, mode: 'auto' });
+  } catch(e) {
+    document.getElementById('status').textContent = 'TTS error';
+  }
+}
+
+async function showPronunciation() {
+  const text = document.getElementById('translation').textContent;
+  const langB = document.getElementById('langB').value;
+  const pronEl = document.getElementById('pronounce');
+  if (!text || text === '—') return;
+
+  pronEl.style.display = 'block';
+  pronEl.textContent = 'Loading...';
+
+  const type = langB === 'zh-CN' ? 'pinyin' : 'romaji';
+  const prompt = `Provide only the ${type} pronunciation for this ${langNames[langB]} text. Nothing else:\n\n${text}`;
+
+  try {
+    const res = await ForgeHost.ai.chat({ prompt, providerId: currentProvider });
+    pronEl.textContent = res.content ? res.content.trim() : 'No pronunciation found';
+  } catch(e) {
+    pronEl.textContent = 'Error getting pronunciation';
+  }
+}
+
+window.onload = () => {
+  initProviders();
+  document.getElementById('langB').onchange = updatePronBtn;
+  document.getElementById('status').textContent = 'Select languages and tap Start';
+  updatePronBtn();
+};
+</script>
+</body>
+</html>

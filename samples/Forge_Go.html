@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge Go</title>
+<style>
+  body { margin:0; font-family: system-ui, -apple-system, sans-serif; background:#0f172a; color:#e2e8f0; }
+  .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .title { font-size:24px; font-weight:700; }
+  .status { font-size:18px; padding:8px 16px; background:#1e2937; border-radius:9999px; }
+  .board { 
+    width:100%; aspect-ratio:1/1; background:#854d0e; 
+    display:grid; grid-template-columns: repeat(9, 1fr); 
+    gap:0; border:8px solid #451a03; border-radius:8px; 
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3);
+    touch-action: manipulation;
+  }
+  .cell {
+    position:relative; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; border:1px solid #451a03;
+  }
+  .cell:hover { background:rgba(255,255,255,0.1); }
+  .stone {
+    width:82%; height:82%; border-radius:50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.3);
+  }
+  .black { background:#111827; border:2px solid #374151; }
+  .white { background:#f8fafc; border:2px solid #64748b; }
+  .controls { margin-top:16px; display:flex; gap:8px; }
+  button { flex:1; padding:14px; font-size:16px; font-weight:600; border:none; border-radius:12px; background:#334155; color:white; }
+  button:active { background:#475569; }
+  button:disabled { opacity:0.5; }
+  .info { margin-top:12px; font-size:14px; opacity:0.8; text-align:center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">Forge Go</div>
+    <div id="status" class="status">Your turn (Black)</div>
+  </div>
+  <div id="board" class="board"></div>
+  <div class="controls">
+    <button onclick="passTurn()">Pass</button>
+    <button onclick="resetGame()">Reset</button>
+  </div>
+  <div class="info">You play Black. LLM plays White and aims to win.</div>
+</div>
+<script>
+const SIZE = 9;
+let board = Array(SIZE).fill().map(() => Array(SIZE).fill(0));
+let currentPlayer = 1; // 1 = black (human), 2 = white (LLM)
+let lastMove = null;
+let gameOver = false;
+
+function createBoard() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.x = x;
+      cell.dataset.y = y;
+      cell.onclick = () => tryPlace(x, y);
+      boardEl.appendChild(cell);
+    }
+  }
+  renderBoard();
+}
+
+function renderBoard() {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach(cell => {
+    const x = parseInt(cell.dataset.x);
+    const y = parseInt(cell.dataset.y);
+    cell.innerHTML = '';
+    if (board[y][x] === 1) {
+      const stone = document.createElement('div');
+      stone.className = 'stone black';
+      cell.appendChild(stone);
+    } else if (board[y][x] === 2) {
+      const stone = document.createElement('div');
+      stone.className = 'stone white';
+      cell.appendChild(stone);
+    }
+  });
+  const statusEl = document.getElementById('status');
+  if (gameOver) {
+    statusEl.textContent = 'Game Over';
+  } else {
+    statusEl.textContent = currentPlayer === 1 ? "Your turn (Black)" : "LLM thinking...";
+  }
+}
+
+function getGroup(x, y, player, visited = new Set()) {
+  const key = `${x},${y}`;
+  if (visited.has(key) || board[y][x] !== player) return [];
+  visited.add(key);
+  let group = [{x, y}];
+  const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) {
+      group = group.concat(getGroup(nx, ny, player, visited));
+    }
+  }
+  return group;
+}
+
+function countLiberties(group) {
+  const liberties = new Set();
+  const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+  for (const {x, y} of group) {
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE && board[ny][nx] === 0) {
+        liberties.add(`${nx},${ny}`);
+      }
+    }
+  }
+  return liberties.size;
+}
+
+function captureStones(x, y, opponent) {
+  let captured = 0;
+  const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE && board[ny][nx] === opponent) {
+      const group = getGroup(nx, ny, opponent);
+      if (countLiberties(group) === 0) {
+        for (const p of group) {
+          board[p.y][p.x] = 0;
+          captured++;
+        }
+      }
+    }
+  }
+  return captured;
+}
+
+function isValidMove(x, y, player) {
+  if (board[y][x] !== 0) return false;
+  board[y][x] = player;
+  const group = getGroup(x, y, player);
+  const libs = countLiberties(group);
+  if (libs === 0) {
+    board[y][x] = 0;
+    return false;
+  }
+  board[y][x] = 0;
+  return true;
+}
+
+function tryPlace(x, y) {
+  if (gameOver || currentPlayer !== 1 || !isValidMove(x, y, 1)) return;
+  board[y][x] = 1;
+  captureStones(x, y, 2);
+  lastMove = {x, y};
+  currentPlayer = 2;
+  renderBoard();
+  setTimeout(makeAIMove, 300);
+}
+
+function passTurn() {
+  if (gameOver) return;
+  currentPlayer = currentPlayer === 1 ? 2 : 1;
+  renderBoard();
+  if (currentPlayer === 2) setTimeout(makeAIMove, 300);
+}
+
+function resetGame() {
+  board = Array(SIZE).fill().map(() => Array(SIZE).fill(0));
+  currentPlayer = 1;
+  lastMove = null;
+  gameOver = false;
+  createBoard();
+}
+
+function boardToString() {
+  let s = '';
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      s += board[y][x] === 0 ? '.' : board[y][x] === 1 ? 'B' : 'W';
+    }
+    s += '\n';
+  }
+  return s;
+}
+
+async function makeAIMove() {
+  if (gameOver || currentPlayer !== 2) return;
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = 'LLM thinking...';
+  try {
+    const prompt = `You are playing Go as White on a 9x9 board. Current board (B=black/human, W=white/you, .=empty):
+${boardToString()}
+Choose the best legal move to win. Reply ONLY with coordinates like "3,5" (x,y 0-8) or "pass". No other text.`;
+    const result = await ForgeHost.ai.chat({ prompt });
+    let move = result.content.trim().toLowerCase();
+    if (move === 'pass') {
+      currentPlayer = 1;
+      renderBoard();
+      return;
+    }
+    const coords = move.match(/(\d+),(\d+)/);
+    if (coords) {
+      const x = parseInt(coords[1]);
+      const y = parseInt(coords[2]);
+      if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && isValidMove(x, y, 2)) {
+        board[y][x] = 2;
+        captureStones(x, y, 1);
+        lastMove = {x, y};
+        currentPlayer = 1;
+        renderBoard();
+        return;
+      }
+    }
+    // fallback pass
+    currentPlayer = 1;
+    renderBoard();
+  } catch (e) {
+    currentPlayer = 1;
+    renderBoard();
+  }
+}
+
+createBoard();
+</script>
+</body>
+</html>

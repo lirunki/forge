@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Orrery — 3D Solar System</title>
+<style>
+:root{--accent:#8ab4ff;--glass:rgba(15,21,38,.72);--line:rgba(140,170,255,.16)}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:#04060f;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;color:#dfe7ff;user-select:none;-webkit-user-select:none}
+#space{position:fixed;inset:0;display:block;touch-action:none}
+.topbar{position:fixed;top:0;left:0;right:0;display:flex;align-items:flex-start;gap:8px;padding:10px 12px;z-index:10;pointer-events:none}
+.topbar>*{pointer-events:auto}
+.brand{display:flex;flex-direction:column;padding:9px 14px;background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.brand b{font-size:13px;letter-spacing:.3em;color:#fff}
+.brand span{font-size:8.5px;letter-spacing:.18em;color:#7f92c4;margin-top:3px}
+.ctrls{display:flex;gap:8px;margin-left:auto}
+.btn{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#a9b8e8;font-size:16px;cursor:pointer;transition:transform .15s,background .2s,color .2s}
+.btn:active{transform:scale(.9)}
+.btn.on{color:#0a1224;background:linear-gradient(135deg,#a8c0ff,#6f8fff);border-color:transparent;font-weight:800}
+.dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:10;display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--glass);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);width:min(92vw,430px);transition:opacity .3s,transform .3s}
+body.sheet-open .dock{opacity:0;pointer-events:none;transform:translate(-50%,24px)}
+.dock .lab{font-size:9px;letter-spacing:.22em;color:#7f92c4;white-space:nowrap}
+.dock .val{font-size:13px;font-weight:800;color:#fff;min-width:56px;text-align:right;font-variant-numeric:tabular-nums}
+.dock .val.paused{color:#ffb454}
+input[type=range]{flex:1;appearance:none;-webkit-appearance:none;height:4px;border-radius:4px;background:linear-gradient(90deg,#2c3a66,#5b74c9);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:5px solid #6f8fff;box-shadow:0 0 14px rgba(111,143,255,.8);cursor:pointer}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;transform:translateY(112%);transition:transform .45s cubic-bezier(.22,1,.36,1);background:linear-gradient(180deg,rgba(15,21,40,.94),rgba(7,10,22,.98));border-top:1px solid var(--line);border-radius:24px 24px 0 0;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);padding:10px 18px calc(18px + env(safe-area-inset-bottom));max-height:62vh;overflow-y:auto;box-shadow:0 -20px 60px rgba(0,0,0,.55)}
+.sheet.open{transform:translateY(0)}
+.grab{width:40px;height:4px;border-radius:4px;background:rgba(160,180,255,.25);margin:2px auto 12px}
+.ph{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.dot{width:38px;height:38px;border-radius:50%;flex:none;box-shadow:0 0 18px currentColor}
+.pt{flex:1;min-width:0}
+.pt h2{font-size:20px;letter-spacing:.06em;color:#fff}
+.pt p{font-size:11.5px;color:#8fa0cc;margin-top:2px;letter-spacing:.04em}
+.x{width:36px;height:36px;flex:none;border-radius:12px;background:rgba(140,170,255,.1);border:1px solid var(--line);color:#a9b8e8;font-size:14px;cursor:pointer}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.cell{background:rgba(120,150,255,.06);border:1px solid rgba(140,170,255,.1);border-radius:12px;padding:9px 11px}
+.cell span{display:block;font-size:8.5px;letter-spacing:.16em;color:#7f92c4;margin-bottom:3px}
+.cell b{font-size:13.5px;color:#e8eeff;font-weight:700}
+.fact{background:linear-gradient(135deg,rgba(255,180,84,.1),rgba(255,140,60,.05));border:1px solid rgba(255,180,84,.2);border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.55;color:#ffe3bd;margin-bottom:12px}
+.row .big{width:100%;padding:13px;border-radius:14px;border:none;background:linear-gradient(135deg,#a8c0ff,#6f8fff);color:#0a1224;font-size:13px;font-weight:800;letter-spacing:.08em;cursor:pointer}
+.row .big:active{transform:scale(.98)}
+.hint{position:fixed;top:74px;left:50%;transform:translateX(-50%);z-index:9;padding:9px 16px;background:var(--glass);border:1px solid var(--line);border-radius:999px;backdrop-filter:blur(12px);font-size:11px;letter-spacing:.05em;color:#a9b8e8;white-space:nowrap;animation:hintfade 8s forwards;pointer-events:none}
+@keyframes hintfade{0%,70%{opacity:1}100%{opacity:0;visibility:hidden}}
+</style>
+</head>
+<body>
+<canvas id="space"></canvas>
+<div class="topbar">
+  <div class="brand"><b>ORRERY</b><span>SOLAR SYSTEM · 3D</span></div>
+  <div class="ctrls">
+    <button class="btn" id="btnPause" title="Pause">&#10074;&#10074;</button>
+    <button class="btn on" id="btnLabels" title="Labels">Aa</button>
+    <button class="btn on" id="btnTrails" title="Trails">&#8776;</button>
+    <button class="btn" id="btnHome" title="Overview">&#8962;</button>
+  </div>
+</div>
+<div class="hint">Drag to orbit · Pinch to zoom · Tap a planet to explore</div>
+<div class="dock">
+  <span class="lab">SPEED</span>
+  <input type="range" id="speed" min="0" max="100" value="20" step="1">
+  <span class="val" id="speedVal">1.0×</span>
+</div>
+<div class="sheet" id="sheet">
+  <div class="grab"></div>
+  <div class="ph">
+    <span class="dot" id="shDot"></span>
+    <div class="pt"><h2 id="shName"></h2><p id="shTag"></p></div>
+    <button class="x" id="shClose">&#10005;</button>
+  </div>
+  <div class="grid" id="shGrid"></div>
+  <div class="fact" id="shFact"></div>
+  <div class="row"><button class="big" id="shOverview">&#8962; BACK TO OVERVIEW</button></div>
+</div>
+<script>
+(function(){
+'use strict';
+var cv=document.getElementById('space'),ctx=cv.getContext('2d');
+var TAU=Math.PI*2;
+var W=0,H=0,FOCAL=800,DPR=1;
+var simT=0,speed=1,paused=false,showLabels=true,showTrails=true;
+var focus=null,focusAnim=0,lastInteract=performance.now();
+var cam={th:-0.65,ph:0.62,dist:780,tx:0,ty:0,tz:0};
+var CAM={p:{x:0,y:0,z:0},f:{x:0,y:0,z:1},r:{x:1,y:0,z:0},u:{x:0,y:1,z:0}};
+
+function clamp(v,a,b){return v<a?a:v>b?b:v;}
+function sub3(a,b){return{x:a.x-b.x,y:a.y-b.y,z:a.z-b.z};}
+function dot3(a,b){return a.x*b.x+a.y*b.y+a.z*b.z;}
+function cross3(a,b){return{x:a.y*b.z-a.z*b.y,y:a.z*b.x-a.x*b.z,z:a.x*b.y-a.y*b.x};}
+function len3(a){return Math.sqrt(dot3(a,a));}
+function norm3(a){var l=len3(a)||1;return{x:a.x/l,y:a.y/l,z:a.z/l};}
+function dist3(a,b){return len3(sub3(a,b));}
+function hexA(h,a){var n=parseInt(h.slice(1),16);return 'rgba('+(n>>16&255)+','+(n>>8&255)+','+(n&255)+','+a+')';}
+
+var SUN={name:'Sun',tag:'The star that holds it all together',r:34,viewDist:260,c1:'#ffd98a',
+ stats:[['Diameter','1.39M km'],['Type','G2V yellow dwarf'],['Surface','5,505 °C'],['Core','15M °C'],['Age','4.6B years'],['Mass share','99.86%']],
+ fact:'About 1.3 million Earths could fit inside the Sun — it holds 99.86% of the entire solar system’s mass in a ball of glowing plasma.'};
+
+var PLANETS=[
+{name:'Mercury',tag:'Scorched speedster',r:3.4,R:78,per:0.24,incl:0.12,node:0.4,a0:1.1,c1:'#d8cfc4',c2:'#57504a',glow:'rgba(216,207,196,.35)',viewDist:60,
+ stats:[['Diameter','4,879 km'],['Distance','57.9M km'],['Year','88 days'],['Day','59 days'],['Moons','0'],['Temp','−173 to 427 °C']],
+ fact:'A single day on Mercury lasts longer than its year — it spins just three times for every two trips around the Sun.'},
+{name:'Venus',tag:'The runaway greenhouse',r:5.6,R:108,per:0.62,incl:0.06,node:1.3,a0:4.2,c1:'#f0d9a8',c2:'#8a6a3a',glow:'rgba(240,217,168,.4)',viewDist:75,
+ stats:[['Diameter','12,104 km'],['Distance','108.2M km'],['Year','225 days'],['Day','243 days'],['Moons','0'],['Temp','464 °C']],
+ fact:'Venus is the hottest planet — and it spins backwards, so its Sun rises in the west and sets in the east.'},
+{name:'Earth',tag:'The pale blue dot',r:6.0,R:140,per:1,incl:0.0,node:0,a0:0.4,clouds:true,c1:'#9cc7ff',c2:'#0d2f73',glow:'rgba(120,180,255,.5)',viewDist:80,
+ stats:[['Diameter','12,742 km'],['Distance','149.6M km'],['Year','365.25 days'],['Day','24 hours'],['Moons','1'],['Temp','−88 to 58 °C']],
+ fact:'Earth is the only known world with liquid surface water — and the only one known to host life.'},
+{name:'Mars',tag:'The rusty frontier',r:4.4,R:175,per:1.88,incl:0.033,node:2.4,a0:2.8,c1:'#f0a071',c2:'#6e2f1a',glow:'rgba(240,160,113,.35)',viewDist:65,
+ stats:[['Diameter','6,779 km'],['Distance','227.9M km'],['Year','687 days'],['Day','24.6 hours'],['Moons','2'],['Temp','−63 °C avg']],
+ fact:'Mars hosts Olympus Mons, a volcano nearly three times the height of Mount Everest — the tallest peak in the solar system.'},
+{name:'Jupiter',tag:'King of the planets',r:17,R:255,per:11.86,incl:0.023,node:0.9,a0:5.3,bands:true,c1:'#e8cfae',c2:'#7a5a3a',glow:'rgba(232,207,174,.35)',viewDist:150,
+ stats:[['Diameter','139,820 km'],['Distance','778.5M km'],['Year','11.9 years'],['Day','9.9 hours'],['Moons','95'],['Temp','−108 °C']],
+ fact:'Jupiter’s Great Red Spot is a storm wider than Earth that has been raging for at least 350 years.'},
+{name:'Saturn',tag:'Lord of the rings',r:14.5,R:335,per:29.45,incl:0.044,node:1.8,a0:3.6,bands:true,ring:true,c1:'#f2deb4',c2:'#8a6f46',glow:'rgba(242,222,180,.35)',viewDist:160,
+ stats:[['Diameter','116,460 km'],['Distance','1.43B km'],['Year','29.5 years'],['Day','10.7 hours'],['Moons','146'],['Temp','−139 °C']],
+ fact:'Saturn is less dense than water — in a big enough ocean, the ringed giant would float.'},
+{name:'Uranus',tag:'The sideways ice giant',r:9.5,R:405,per:84,incl:0.014,node:2.9,a0:0.9,c1:'#b6f0ef',c2:'#2e7a8a',glow:'rgba(182,240,239,.4)',viewDist:110,
+ stats:[['Diameter','50,724 km'],['Distance','2.87B km'],['Year','84 years'],['Day','17.2 hours'],['Moons','28'],['Temp','−197 °C']],
+ fact:'Uranus rolls around the Sun on its side, tilted 98 degrees — likely knocked over by an ancient collision.'},
+{name:'Neptune',tag:'Windswept blue giant',r:9.2,R:465,per:164.8,incl:0.031,node:0.6,a0:2.1,c1:'#7f9dff',c2:'#1f3fa8',glow:'rgba(127,157,255,.45)',viewDist:105,
+ stats:[['Diameter','49,244 km'],['Distance','4.5B km'],['Year','165 years'],['Day','16.1 hours'],['Moons','16'],['Temp','−201 °C']],
+ fact:'Neptune has the fastest winds in the solar system — supersonic gusts reaching 2,100 km/h.'}
+];
+PLANETS.forEach(function(p){p.trail=[];p.pos={x:0,y:0,z:0};p.sr=4;p.scr=null;});
+var MOON={name:'Moon',tag:'Earth’s constant companion',r:1.8,viewDist:45,pos:{x:0,y:0,z:0},
+ stats:[['Diameter','3,475 km'],['Distance','384,400 km'],['Orbit','27.3 days'],['Day','27.3 days'],['Gravity','0.17 g'],['Temp','−173 to 127 °C']],
+ fact:'The Moon drifts about 3.8 cm farther away from Earth every single year.'};
+
+var AST=[];
+for(var i=0;i<230;i++){var AR=200+Math.random()*36;AST.push({R:AR,a0:Math.random()*TAU,per:Math.pow(AR/135,1.5),y:(Math.random()-.5)*7,sz:Math.random()<.8?1:1.6,a:.22+Math.random()*.4,pos:{x:0,y:0,z:0}});}
+
+var STARS=[],NEB=[
+ {p:{x:-4200,y:1400,z:-3800},r:950,c:'rgba(96,64,190,.16)'},
+ {p:{x:3800,y:-1200,z:-3000},r:1150,c:'rgba(46,110,200,.13)'},
+ {p:{x:800,y:2600,z:-4600},r:850,c:'rgba(190,70,120,.10)'},
+ {p:{x:-2400,y:-2200,z:3200},r:1000,c:'rgba(70,160,170,.09)'}];
+function makeStars(){STARS=[];for(var i=0;i<400;i++){var u=Math.random()*2-1,th=Math.random()*TAU,r=Math.sqrt(1-u*u),R=6000;STARS.push({p:{x:r*Math.cos(th)*R,y:u*R,z:r*Math.sin(th)*R},sz:Math.random()<.85?1.2:2,a:.35+Math.random()*.6,tw:.5+Math.random()*2.5,ph:Math.random()*TAU,c:Math.random()<.75?'#cfd8ff':(Math.random()<.5?'#ffe3c0':'#bfd4ff')});}}
+
+function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=window.innerWidth;H=window.innerHeight;cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);FOCAL=H*1.15;}
+window.addEventListener('resize',resize);resize();makeStars();
+
+function updateCam(){
+ var cp={x:cam.tx+cam.dist*Math.cos(cam.ph)*Math.sin(cam.th),y:cam.ty+cam.dist*Math.sin(cam.ph),z:cam.tz+cam.dist*Math.cos(cam.ph)*Math.cos(cam.th)};
+ var f=norm3({x:cam.tx-cp.x,y:cam.ty-cp.y,z:cam.tz-cp.z});
+ var r=norm3(cross3(f,{x:0,y:1,z:0}));
+ var u=cross3(r,f);
+ CAM={p:cp,f:f,r:r,u:u};
+}
+function project(pt){var rel=sub3(pt,CAM.p);var z=dot3(rel,CAM.f);if(z<2)return null;var s=FOCAL/z;return{x:W/2+dot3(rel,CAM.r)*s,y:H/2-dot3(rel,CAM.u)*s,s:s,z:z};}
+function orbitPos(R,a,incl,node){var x=Math.cos(a)*R;var z=Math.sin(a)*R;var y=z*Math.sin(incl);z=z*Math.cos(incl);return{x:x*Math.cos(node)-z*Math.sin(node),y:y,z:x*Math.sin(node)+z*Math.cos(node)};}
+
+function drawSun(p,t){
+ var sr=Math.max(SUN.r*p.s,4);SUN.sr=sr;
+ var pulse=1+0.05*Math.sin(t*2.1);
+ ctx.globalCompositeOperation='lighter';
+ var gr=ctx.createRadialGradient(p.x,p.y,sr*.5,p.x,p.y,sr*3.4*pulse);
+ gr.addColorStop(0,'rgba(255,190,90,.55)');gr.addColorStop(.4,'rgba(255,140,50,.16)');gr.addColorStop(1,'rgba(255,120,40,0)');
+ ctx.fillStyle=gr;ctx.beginPath();ctx.arc(p.x,p.y,sr*3.4*pulse,0,TAU);ctx.fill();
+ ctx.globalCompositeOperation='source-over';
+ gr=ctx.createRadialGradient(p.x-sr*.15,p.y-sr*.15,sr*.05,p.x,p.y,sr);
+ gr.addColorStop(0,'#fffdf4');gr.addColorStop(.5,'#ffe9a8');gr.addColorStop(.85,'#ffb44e');gr.addColorStop(1,'#ff8b2e');
+ ctx.fillStyle=gr;ctx.beginPath();ctx.arc(p.x,p.y,sr,0,TAU);ctx.fill();
+ ctx.save();ctx.beginPath();ctx.arc(p.x,p.y,sr,0,TAU);ctx.clip();ctx.globalAlpha=.15;ctx.fillStyle='#e06a1f';
+ for(var i=0;i<5;i++){var a=t*.15+i*1.3;ctx.beginPath();ctx.arc(p.x+Math.cos(a)*sr*.5,p.y+Math.sin(a*1.7)*sr*.5,sr*.22,0,TAU);ctx.fill();}
+ ctx.restore();ctx.globalAlpha=1;
+}
+function drawRing(p,sr,front){
+ ctx.save();ctx.translate(p.x,p.y);ctx.rotate(-.5);ctx.scale(1,.34);
+ ctx.strokeStyle=front?'rgba(228,214,178,.9)':'rgba(228,214,178,.4)';
+ ctx.lineWidth=sr*.7;
+ ctx.beginPath();ctx.arc(0,0,sr*1.8,front?0:Math.PI,front?Math.PI:TAU);ctx.stroke();
+ ctx.restore();
+}
+function drawPlanet(pl,p,sp,t){
+ var sr=Math.max(pl.r*p.s,1.7);pl.sr=sr;
+ var gr=ctx.createRadialGradient(p.x,p.y,sr*.5,p.x,p.y,sr*2.6);
+ gr.addColorStop(0,pl.glow);gr.addColorStop(1,'rgba(0,0,0,0)');
+ ctx.fillStyle=gr;ctx.beginPath();ctx.arc(p.x,p.y,sr*2.6,0,TAU);ctx.fill();
+ if(pl.ring)drawRing(p,sr,false);
+ var lx=0,ly=0;
+ if(sp){var dx=sp.x-p.x,dy=sp.y-p.y;var L=Math.hypot(dx,dy)||1;lx=dx/L;ly=dy/L;}
+ gr=ctx.createRadialGradient(p.x+lx*sr*.55,p.y+ly*sr*.55,sr*.08,p.x,p.y,sr*1.02);
+ gr.addColorStop(0,pl.c1);gr.addColorStop(.5,pl.c1);gr.addColorStop(1,pl.c2);
+ ctx.fillStyle=gr;ctx.beginPath();ctx.arc(p.x,p.y,sr,0,TAU);ctx.fill();
+ if(pl.bands||pl.clouds){
+  ctx.save();ctx.beginPath();ctx.arc(p.x,p.y,sr,0,TAU);ctx.clip();
+  if(pl.bands){ctx.globalAlpha=.2;ctx.fillStyle=pl.c2;
+   for(var i=-2;i<=2;i++){if(i===0)continue;ctx.beginPath();ctx.ellipse(p.x,p.y+i*sr*.34,sr,sr*.14,0,0,TAU);ctx.fill();}}
+  if(pl.clouds){ctx.globalAlpha=.22;ctx.fillStyle='#ffffff';
+   for(var j=0;j<3;j++){var a=t*.1+j*2.1;ctx.beginPath();ctx.ellipse(p.x+Math.cos(a)*sr*.4,p.y+Math.sin(a*1.3)*sr*.5,sr*.55,sr*.16,a*.3,0,TAU);ctx.fill();}}
+  ctx.restore();ctx.globalAlpha=1;
+ }
+ if(pl.ring)drawRing(p,sr,true);
+ if(pl===focus){var pu=1+.07*Math.sin(t*4);
+  ctx.strokeStyle=hexA(pl.c1,.75);ctx.lineWidth=1.3;ctx.setLineDash([4,5]);
+  ctx.beginPath();ctx.arc(p.x,p.y,sr*2.1*pu,0,TAU);ctx.stroke();ctx.setLineDash([]);}
+}
+function drawMoon(p){
+ var sr=Math.max(MOON.r*p.s,1.4);var lx=0,ly=0;
+ var sp=project({x:0,y:0,z:0});
+ if(sp){var dx=sp.x-p.x,dy=sp.y-p.y;var L=Math.hypot(dx,dy)||1;lx=dx/L;ly=dy/L;}
+ var gr=ctx.createRadialGradient(p.x+lx*sr*.5,p.y+ly*sr*.5,sr*.1,p.x,p.y,sr*1.05);
+ gr.addColorStop(0,'#e8e8e8');gr.addColorStop(1,'#5a5a5a');
+ ctx.fillStyle=gr;ctx.beginPath();ctx.arc(p.x,p.y,sr,0,TAU);ctx.fill();
+}
+function label(p,txt,c,sr){
+ var a=clamp(1.25-p.z/1500,.3,1);
+ ctx.globalAlpha=a*.9;ctx.fillStyle=c;
+ ctx.fillText(txt.toUpperCase(),p.x,p.y-sr-12);
+ ctx.globalAlpha=a*.4;ctx.strokeStyle=c;ctx.lineWidth=1;
+ ctx.beginPath();ctx.moveTo(p.x,p.y-sr-3);ctx.lineTo(p.x,p.y-sr-8);ctx.stroke();
+ ctx.globalAlpha=1;
+}
+
+function render(t){
+ var g=ctx.createLinearGradient(0,0,0,H);
+ g.addColorStop(0,'#05070f');g.addColorStop(.5,'#070b18');g.addColorStop(1,'#04060d');
+ ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ updateCam();
+ ctx.globalCompositeOperation='lighter';
+ NEB.forEach(function(n){var p=project(n.p);if(!p)return;var rr=n.r*p.s;if(rr<20)return;
+  var gr=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,rr);
+  gr.addColorStop(0,n.c);gr.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=gr;ctx.fillRect(p.x-rr,p.y-rr,rr*2,rr*2);});
+ STARS.forEach(function(s){var p=project(s.p);if(!p)return;
+  var tw=.45+.55*Math.abs(Math.sin(t*s.tw+s.ph));
+  ctx.globalAlpha=tw*s.a;ctx.fillStyle=s.c;ctx.fillRect(p.x,p.y,s.sz,s.sz);});
+ ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
+ PLANETS.forEach(function(pl){
+  ctx.beginPath();var started=false;
+  for(var i=0;i<=110;i++){var a=i/110*TAU;var q=orbitPos(pl.R,a,pl.incl,pl.node);var p=project(q);
+   if(!p){started=false;continue;}
+   if(!started){ctx.moveTo(p.x,p.y);started=true;}else ctx.lineTo(p.x,p.y);}
+  ctx.strokeStyle=hexA(pl.c1,pl===focus?.35:.1);ctx.lineWidth=pl===focus?1.4:1;ctx.stroke();});
+ if(showTrails){
+  PLANETS.forEach(function(pl){var tr=pl.trail;
+   for(var i=2;i<tr.length;i+=2){var a=project(tr[i-2]),b=project(tr[i]);if(!a||!b)continue;
+    ctx.strokeStyle=hexA(pl.c1,(i/tr.length)*.45);ctx.lineWidth=1.1;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}});}
+ var sp=project({x:0,y:0,z:0});
+ var items=[];
+ if(sp)items.push({z:sp.z,f:function(){drawSun(sp,t);}});
+ PLANETS.forEach(function(pl){var p=project(pl.pos);pl.scr=p;if(!p)return;
+  items.push({z:p.z,f:function(){drawPlanet(pl,p,sp,t);}});});
+ var mp=project(MOON.pos);
+ if(mp)items.push({z:mp.z,f:function(){drawMoon(mp);}});
+ AST.forEach(function(a){var p=project(a.pos);if(!p)return;
+  items.push({z:p.z,f:function(){ctx.globalAlpha=a.a;ctx.fillStyle='#b8b4a6';ctx.fillRect(p.x,p.y,a.sz,a.sz);ctx.globalAlpha=1;}});});
+ items.sort(function(a,b){return b.z-a.z;});
+ items.forEach(function(it){it.f();});
+ if(showLabels){
+  ctx.font='700 10px -apple-system,Segoe UI,Roboto,sans-serif';ctx.textAlign='center';
+  try{ctx.letterSpacing='2px';}catch(e){}
+  if(sp)label(sp,'Sun','#ffd98a',SUN.sr||10);
+  PLANETS.forEach(function(pl){if(pl.scr)label(pl.scr,pl.name,pl.c1,pl.sr||4);});
+  if(mp&&mp.z<260)label(mp,'Moon','#cfcfcf',Math.max(MOON.r*mp.s,2));
+  try{ctx.letterSpacing='0px';}catch(e){}
+ }
+ var v=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.45,W/2,H/2,Math.max(W,H)*.75);
+ v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,5,.5)');
+ ctx.fillStyle=v;ctx.fillRect(0,0,W,H);
+}
+
+function update(dt){
+ if(!paused)simT+=dt*speed*0.05;
+ PLANETS.forEach(function(pl){
+  pl.pos=orbitPos(pl.R,pl.a0+simT/pl.per*TAU,pl.incl,pl.node);
+  if(!paused){var tr=pl.trail;var l=tr[tr.length-1];
+   if(!l||dist3(l,pl.pos)>2.2){tr.push({x:pl.pos.x,y:pl.pos.y,z:pl.pos.z});if(tr.length>170)tr.shift();}}});
+ var e=PLANETS[2],ma=simT/0.16*TAU;
+ MOON.pos={x:e.pos.x+Math.cos(ma)*15,y:e.pos.y+Math.sin(ma)*4.5,z:e.pos.z+Math.sin(ma)*15};
+ AST.forEach(function(a){var an=a.a0+simT/a.per*TAU;a.pos={x:Math.cos(an)*a.R,y:a.y,z:Math.sin(an)*a.R};});
+ var k=1-Math.exp(-dt*3.2);
+ var tgt=focus?focus.pos:{x:0,y:0,z:0};
+ cam.tx+=(tgt.x-cam.tx)*k;cam.ty+=(tgt.y-cam.ty)*k;cam.tz+=(tgt.z-cam.tz)*k;
+ if(focusAnim>0){focusAnim-=dt;var vd=focus?(focus.viewDist||100):780;cam.dist+=(vd-cam.dist)*(1-Math.exp(-dt*2.6));}
+ if(!focus&&performance.now()-lastInteract>9000)cam.th+=dt*.03;
+}
+
+var ptrs=new Map(),downX=0,downY=0,downT=0,moved=false,pinchD=0;
+function interact(){lastInteract=performance.now();var h=document.querySelector('.hint');if(h)h.style.display='none';}
+cv.addEventListener('pointerdown',function(e){cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});interact();
+ if(ptrs.size===1){downX=e.clientX;downY=e.clientY;downT=performance.now();moved=false;}
+ else if(ptrs.size===2){var a=[];ptrs.forEach(function(v){a.push(v);});pinchD=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);}});
+cv.addEventListener('pointermove',function(e){var pr=ptrs.get(e.pointerId);if(!pr)return;
+ var dx=e.clientX-pr.x,dy=e.clientY-pr.y;pr.x=e.clientX;pr.y=e.clientY;interact();
+ if(ptrs.size===1){
+  if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>10)moved=true;
+  cam.th-=dx*0.0055;cam.ph=clamp(cam.ph+dy*0.0055,0.12,1.45);
+ }else if(ptrs.size===2){
+  var a=[];ptrs.forEach(function(v){a.push(v);});
+  var d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+  if(pinchD>0){cam.dist=clamp(cam.dist*pinchD/d,60,2800);focusAnim=0;}
+  pinchD=d;}});
+function endPtr(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinchD=0;
+ if(ptrs.size===0&&!moved&&performance.now()-downT<400)tap(e.clientX,e.clientY);}
+cv.addEventListener('pointerup',endPtr);
+cv.addEventListener('pointercancel',function(e){ptrs.delete(e.pointerId);});
+cv.addEventListener('wheel',function(e){e.preventDefault();cam.dist=clamp(cam.dist*(1+e.deltaY*0.0012),60,2800);focusAnim=0;interact();},{passive:false});
+
+function tap(x,y){
+ updateCam();
+ var cands=[{b:SUN,pos:{x:0,y:0,z:0},r:SUN.r},{b:MOON,pos:MOON.pos,r:MOON.r}];
+ PLANETS.forEach(function(pl){cands.push({b:pl,pos:pl.pos,r:pl.r});});
+ var best=null,bz=1e9;
+ cands.forEach(function(c){var p=project(c.pos);if(!p)return;
+  var sr=Math.max(c.r*p.s,1.5);var rad=Math.max(sr+12,24);
+  if(Math.hypot(p.x-x,p.y-y)<rad&&p.z<bz){bz=p.z;best=c.b;}});
+ if(best)focusOn(best);
+}
+
+var sheet=document.getElementById('sheet'),shDot=document.getElementById('shDot'),shName=document.getElementById('shName'),shTag=document.getElementById('shTag'),shGrid=document.getElementById('shGrid'),shFact=document.getElementById('shFact');
+var sl=document.getElementById('speed'),val=document.getElementById('speedVal');
+var btnPause=document.getElementById('btnPause'),btnLabels=document.getElementById('btnLabels'),btnTrails=document.getElementById('btnTrails'),btnHome=document.getElementById('btnHome');
+
+function openSheet(b){
+ shDot.style.background=b.c1||'#ffd98a';shDot.style.color=b.c1||'#ffd98a';
+ shName.textContent=b.name;shTag.textContent=b.tag||'';
+ shGrid.innerHTML=b.stats.map(function(s){return '<div class="cell"><span>'+s[0]+'</span><b>'+s[1]+'</b></div>';}).join('');
+ shFact.textContent=b.fact;
+ sheet.classList.add('open');document.body.classList.add('sheet-open');
+}
+function closeSheet(){sheet.classList.remove('open');document.body.classList.remove('sheet-open');}
+function focusOn(b){focus=b;focusAnim=1.4;lastInteract=performance.now();openSheet(b);}
+function goOverview(){focus=null;focusAnim=1.4;lastInteract=performance.now();closeSheet();}
+
+document.getElementById('shClose').addEventListener('click',closeSheet);
+document.getElementById('shOverview').addEventListener('click',goOverview);
+btnHome.addEventListener('click',goOverview);
+btnPause.addEventListener('click',function(){paused=!paused;btnPause.classList.toggle('on',paused);btnPause.innerHTML=paused?'&#9654;':'&#10074;&#10074;';syncVal();savePrefs();});
+btnLabels.addEventListener('click',function(){showLabels=!showLabels;btnLabels.classList.toggle('on',showLabels);savePrefs();});
+btnTrails.addEventListener('click',function(){showTrails=!showTrails;btnTrails.classList.toggle('on',showTrails);savePrefs();});
+function applySpeed(){var v=+sl.value;speed=(v/20)*(v/20);syncVal();}
+function syncVal(){if(paused){val.textContent='PAUSED';val.classList.add('paused');}
+ else{val.classList.remove('paused');val.textContent=speed<0.02?'0×':(speed<10?speed.toFixed(1):Math.round(speed))+'×';}}
+sl.addEventListener('input',function(){applySpeed();savePrefs();});
+applySpeed();
+
+var saveT=null;
+function savePrefs(){clearTimeout(saveT);saveT=setTimeout(function(){try{if(window.ForgeHost&&ForgeHost.state)ForgeHost.state.set('orrery_prefs',{v:+sl.value,labels:showLabels,trails:showTrails,paused:paused});}catch(e){}},600);}
+function restore(){try{if(!window.ForgeHost||!ForgeHost.state)return Promise.resolve();
+ return ForgeHost.state.get('orrery_prefs').then(function(d){if(!d)return;
+  if(d.v!=null){sl.value=d.v;applySpeed();}
+  if(typeof d.labels==='boolean'){showLabels=d.labels;btnLabels.classList.toggle('on',showLabels);}
+  if(typeof d.trails==='boolean'){showTrails=d.trails;btnTrails.classList.toggle('on',showTrails);}
+ }).catch(function(){});}catch(e){return Promise.resolve();}}
+try{if(window.ForgeHost){ForgeHost.on('ready',restore);restore();}}catch(e){}
+
+var last=performance.now();
+document.addEventListener('visibilitychange',function(){last=performance.now();});
+function frame(now){
+ var dt=Math.min((now-last)/1000,0.05);last=now;
+ update(dt);
+ render(now/1000);
+ requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

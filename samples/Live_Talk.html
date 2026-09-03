@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Live Talk</title>
+<style>
+:root { --bg:#0f1117; --card:#1a1d26; --accent:#3b82f6; --text:#f1f5f9; --muted:#94a3b8; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+.app { max-width:480px; margin:0 auto; padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom); min-height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:12px 0; }
+.status { padding:4px 12px; border-radius:999px; font-size:13px; background:#1a1d26; }
+.status.listening { background:#22c55e22; color:#22c55e; }
+.level { width:60px; height:4px; background:#334155; border-radius:2px; overflow:hidden; }
+.level-bar { height:100%; background:#22c55e; width:0%; transition:width .1s; }
+.lang-row { display:flex; gap:8px; align-items:center; margin:16px 0; }
+.lang-select { flex:1; background:#1a1d26; border:1px solid #334155; color:#f1f5f9; padding:14px; border-radius:12px; font-size:16px; }
+.swap { width:48px; height:48px; background:#1a1d26; border:none; border-radius:999px; color:#f1f5f9; font-size:20px; }
+.mode-toggle { display:flex; background:#1a1d26; border-radius:999px; padding:4px; margin:16px 0; }
+.mode-btn { flex:1; padding:14px; text-align:center; border-radius:999px; font-weight:600; transition:all .2s; }
+.mode-btn.active { background:#3b82f6; color:white; }
+.card { background:#1a1d26; border-radius:16px; padding:16px; margin:12px 0; }
+.segment { display:flex; gap:8px; }
+.segment-btn { flex:1; padding:12px; border-radius:10px; background:#0f1117; border:1px solid #334155; color:#f1f5f9; font-size:15px; }
+.segment-btn.active { background:#3b82f6; border-color:#3b82f6; }
+.transcript { height:280px; overflow-y:auto; background:#0f1117; border-radius:12px; padding:12px; margin:12px 0; }
+.bubble { max-width:80%; padding:10px 14px; border-radius:16px; margin:6px 0; font-size:15px; }
+.bubble.you { background:#334155; align-self:flex-start; }
+.bubble.them { background:#3b82f6; align-self:flex-end; }
+.partial { opacity:0.6; }
+.bottom { position:fixed; bottom:0; left:0; right:0; max-width:480px; margin:0 auto; background:#0f1117; padding:16px; border-top:1px solid #334155; }
+.btn { width:100%; padding:18px; font-size:18px; font-weight:700; border-radius:16px; border:none; }
+.btn.start { background:#22c55e; color:white; }
+.btn.stop { background:#ef4444; color:white; }
+select, input { background:#1a1d26; color:#f1f5f9; border:1px solid #334155; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div><strong>Live Talk</strong></div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div id="status" class="status">Idle</div>
+      <div class="level"><div id="level-bar" class="level-bar"></div></div>
+    </div>
+  </div>
+
+  <div class="lang-row">
+    <select id="myLang" class="lang-select"></select>
+    <button class="swap" onclick="swapLangs()">⇄</button>
+    <select id="theirLang" class="lang-select"></select>
+  </div>
+
+  <div class="mode-toggle">
+    <div id="mode-me" class="mode-btn active" onclick="setTalkMode('me')">I talk</div>
+    <div id="mode-them" class="mode-btn" onclick="setTalkMode('them')">They talk</div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:8px;">Me receive</div>
+    <div class="segment">
+      <button class="segment-btn active" data-mode="text" onclick="setMyMode('text')">Text</button>
+      <button class="segment-btn" data-mode="audio" onclick="setMyMode('audio')">Audio</button>
+      <button class="segment-btn" data-mode="both" onclick="setMyMode('both')">Both</button>
+    </div>
+    <div style="margin-top:12px; font-weight:600;">Them receive</div>
+    <div class="segment">
+      <button class="segment-btn active" data-mode="speaker" onclick="setTheirMode('speaker')">Speaker</button>
+      <button class="segment-btn" data-mode="off" onclick="setTheirMode('off')">Off</button>
+    </div>
+    <div style="margin-top:12px; display:flex; align-items:center; gap:8px;">
+      <label><input type="checkbox" id="splitAudio" onchange="toggleSplit()"> Split audio</label>
+    </div>
+  </div>
+
+  <div class="card" style="font-size:13px;">
+    <details>
+      <summary style="cursor:pointer; font-weight:600;">Settings</summary>
+      <div style="margin-top:12px;">
+        <label>Provider</label>
+        <select id="provider" style="width:100%; padding:10px; margin:6px 0;"></select>
+        <label>My voice</label>
+        <select id="myVoice" style="width:100%; padding:10px; margin:6px 0;"></select>
+        <label>Their voice</label>
+        <select id="theirVoice" style="width:100%; padding:10px; margin:6px 0;"></select>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button onclick="testVoice('my')" style="flex:1; padding:10px;">Test my voice</button>
+          <button onclick="testVoice('their')" style="flex:1; padding:10px;">Test their voice</button>
+        </div>
+      </details>
+    </div>
+
+  <div class="transcript" id="transcript"></div>
+
+  <div style="height:120px;"></div>
+
+  <div class="bottom">
+    <button id="mainBtn" class="btn start" onclick="toggleSession()">START</button>
+    <button onclick="clearTranscripts()" style="margin-top:8px; width:100%; padding:10px; background:#1a1d26; color:#f1f5f9; border:none; border-radius:12px;">Clear</button>
+  </div>
+</div>
+
+<script>
+const ForgeHost = window.ForgeHost || window.forge || {};
+let sessionActive = false;
+let currentMode = 'me';
+let myOutput = 'text';
+let theirOutput = 'speaker';
+let splitAudio = false;
+let transcripts = [];
+
+const langs = ['en-US','es-ES','fr-FR','de-DE','it-IT','pt-BR','he-IL','ar-SA','ru-RU','zh-CN','ja-JP','ko-KR','hi-IN','tr-TR','nl-NL','pl-PL'];
+
+function populateLangs() {
+  const my = document.getElementById('myLang');
+  const their = document.getElementById('theirLang');
+  langs.forEach(l => {
+    const o1 = new Option(l, l); my.add(o1);
+    const o2 = new Option(l, l); their.add(o2);
+  });
+  my.value = 'en-US'; their.value = 'es-ES';
+}
+
+function swapLangs() {
+  const my = document.getElementById('myLang');
+  const their = document.getElementById('theirLang');
+  [my.value, their.value] = [their.value, my.value];
+}
+
+function setTalkMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-me').classList.toggle('active', mode==='me');
+  document.getElementById('mode-them').classList.toggle('active', mode==='them');
+  if (sessionActive) reconfigureSession();
+}
+
+function setMyMode(mode) {
+  myOutput = mode;
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+}
+
+function setTheirMode(mode) {
+  theirOutput = mode;
+  document.querySelectorAll('[data-mode="speaker"], [data-mode="off"]').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+}
+
+function toggleSplit() {
+  splitAudio = document.getElementById('splitAudio').checked;
+}
+
+async function init() {
+  populateLangs();
+  try {
+    const caps = await ForgeHost.getCapabilities();
+    if (!caps.liveTranslate) {
+      document.getElementById('status').textContent = 'PTT fallback';
+    }
+    const ai = await ForgeHost.ai.isAvailable();
+    if (!ai.stt) {
+      showError('Open Forge AI settings and add OpenAI, Groq or xAI for STT');
+    }
+    const provs = await ForgeHost.ai.listProviders();
+    const sel = document.getElementById('provider');
+    provs.providers.filter(p => p.available).forEach(p => {
+      sel.add(new Option(`${p.label} (${p.model})`, p.id));
+    });
+    sel.onchange = async () => {
+      await ForgeHost.ai.setProvider(sel.value);
+      await loadVoices();
+    };
+    await loadVoices();
+  } catch(e) { console.error(e); }
+  loadSettings();
+}
+
+async function loadVoices() {
+  try {
+    const vs = await ForgeHost.ai.listVoices();
+    const myV = document.getElementById('myVoice');
+    const thV = document.getElementById('theirVoice');
+    myV.innerHTML = ''; thV.innerHTML = '';
+    vs.options.forEach(o => {
+      myV.add(new Option(o.label, o.value));
+      thV.add(new Option(o.label, o.value));
+    });
+  } catch(e){}
+}
+
+async function testVoice(who) {
+  const voice = document.getElementById(who==='my'?'myVoice':'theirVoice').value;
+  const lang = document.getElementById(who==='my'?'myLang':'theirLang').value;
+  await ForgeHost.ai.tts({ text: 'Hello from Live Talk', voice, language: lang, mode:'auto', play:true });
+}
+
+function updateStatus(s) {
+  const el = document.getElementById('status');
+  el.textContent = s;
+  el.className = 'status ' + (s==='Listening' || s==='Translating' ? 'listening' : '');
+}
+
+function addTranscript(side, text, isPartial=false) {
+  const container = document.getElementById('transcript');
+  const div = document.createElement('div');
+  div.className = `bubble ${side} ${isPartial?'partial':''}`;
+  div.textContent = text;
+  div.onclick = () => ForgeHost.clipboard.write(text);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  if (!isPartial) transcripts.push({side, text});
+}
+
+function clearTranscripts() {
+  document.getElementById('transcript').innerHTML = '';
+  transcripts = [];
+}
+
+async function startSession() {
+  await ForgeHost.permissions.request('mic');
+  await ForgeHost.keepAwake.start({ title:'Live Talk', text:'Translating…' });
+  const myLang = document.getElementById('myLang').value;
+  const theirLang = document.getElementById('theirLang').value;
+  const source = currentMode === 'me' ? myLang : theirLang;
+  const target = currentMode === 'me' ? theirLang : myLang;
+  const speak = currentMode === 'me' ? (theirOutput === 'speaker') : (myOutput !== 'text');
+  let route = 'auto';
+  if (splitAudio) route = currentMode === 'me' ? 'speaker' : 'earpiece';
+  if (splitAudio) await ForgeHost.audio.setRoute(route);
+  const prov = document.getElementById('provider').value;
+  try {
+    await ForgeHost.ai.liveTranslate.start({
+      sourceLang: source,
+      targetLang: target,
+      speak,
+      route,
+      chunkMs: 250,
+      windowMs: 1400,
+      providerId: prov
+    });
+    sessionActive = true;
+    updateStatus('Listening');
+    document.getElementById('mainBtn').textContent = 'STOP';
+    document.getElementById('mainBtn').className = 'btn stop';
+  } catch(e) {
+    updateStatus('Error');
+    showError(e.message);
+  }
+}
+
+async function stopSession() {
+  await ForgeHost.ai.liveTranslate.stop();
+  await ForgeHost.audio.clearRoute();
+  await ForgeHost.keepAwake.stop();
+  sessionActive = false;
+  updateStatus('Idle');
+  document.getElementById('mainBtn').textContent = 'START';
+  document.getElementById('mainBtn').className = 'btn start';
+}
+
+async function reconfigureSession() {
+  if (!sessionActive) return;
+  await stopSession();
+  await startSession();
+}
+
+async function toggleSession() {
+  if (sessionActive) {
+    await stopSession();
+  } else {
+    await startSession();
+  }
+}
+
+function showError(msg) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;bottom:80px;left:16px;right:16px;background:#ef4444;color:white;padding:12px;border-radius:12px;';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// Live events
+ForgeHost.on && ForgeHost.on('live.level', d => {
+  const bar = document.getElementById('level-bar');
+  bar.style.width = Math.min(100, d.rms * 300) + '%';
+});
+ForgeHost.on && ForgeHost.on('live.partialTarget', d => {
+  addTranscript(currentMode==='me'?'them':'you', d.text, true);
+});
+ForgeHost.on && ForgeHost.on('live.finalTarget', d => {
+  addTranscript(currentMode==='me'?'them':'you', d.text);
+});
+ForgeHost.on && ForgeHost.on('live.error', e => {
+  updateStatus('Error');
+  showError(e.message);
+});
+
+// Persist settings
+async function saveSettings() {
+  const data = {
+    myLang: document.getElementById('myLang').value,
+    theirLang: document.getElementById('theirLang').value,
+    myOutput, theirOutput, splitAudio,
+    provider: document.getElementById('provider').value,
+    myVoice: document.getElementById('myVoice').value,
+    theirVoice: document.getElementById('theirVoice').value
+  };
+  await ForgeHost.storage.set('settings', data);
+}
+async function loadSettings() {
+  try {
+    const s = await ForgeHost.storage.get('settings');
+    if (s) {
+      if (s.myLang) document.getElementById('myLang').value = s.myLang;
+      if (s.theirLang) document.getElementById('theirLang').value = s.theirLang;
+      if (s.myOutput) setMyMode(s.myOutput);
+      if (s.theirOutput) setTheirMode(s.theirOutput);
+      if (s.splitAudio !== undefined) {
+        splitAudio = s.splitAudio;
+        document.getElementById('splitAudio').checked = splitAudio;
+      }
+      if (s.provider) document.getElementById('provider').value = s.provider;
+      if (s.myVoice) document.getElementById('myVoice').value = s.myVoice;
+      if (s.theirVoice) document.getElementById('theirVoice').value = s.theirVoice;
+    }
+  } catch(e){}
+}
+
+// Auto-save on change
+['myLang','theirLang','provider','myVoice','theirVoice'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.onchange = saveSettings;
+});
+
+document.getElementById('splitAudio').onchange = () => { toggleSplit(); saveSettings(); };
+
+init();
+</script>
+</body>
+</html>

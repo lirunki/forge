@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoiceForge</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; margin:0; background:#0f172a; color:#e2e8f0; }
+  .header { display:flex; justify-content:space-between; align-items:center; padding:16px; background:#1e2937; }
+  .title { font-size:22px; font-weight:700; }
+  .settings-btn { background:#334155; border:none; color:#e2e8f0; width:44px; height:44px; border-radius:9999px; font-size:20px; cursor:pointer; }
+  .chat { height:calc(100vh - 180px); overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .bubble { max-width:80%; padding:14px 18px; border-radius:20px; line-height:1.4; }
+  .user { align-self:flex-end; background:#3b82f6; border-bottom-right-radius:4px; }
+  .assistant { align-self:flex-start; background:#334155; border-bottom-left-radius:4px; }
+  .footer { position:fixed; bottom:0; left:0; right:0; padding:20px; background:#1e2937; display:flex; justify-content:center; }
+  .mic-btn { width:72px; height:72px; border-radius:9999px; background:#ef4444; border:none; color:white; font-size:32px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(239,68,68,0.4); }
+  .mic-btn.active { background:#22c55e; box-shadow:0 4px 20px rgba(34,197,94,0.4); }
+  .modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(15,23,42,0.95); display:none; flex-direction:column; padding:20px; z-index:100; }
+  .modal.show { display:flex; }
+  select { width:100%; padding:12px; background:#334155; color:#e2e8f0; border:none; border-radius:12px; font-size:16px; margin:8px 0; }
+  .label { font-size:13px; color:#94a3b8; margin-top:12px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="title">VoiceForge</div>
+  <button class="settings-btn" onclick="showSettings()">⚙️</button>
+</div>
+
+<div id="chat" class="chat"></div>
+
+<div class="footer">
+  <button id="micBtn" class="mic-btn" onclick="toggleConversation()">🎤</button>
+</div>
+
+<div id="settings" class="modal">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <h2 style="margin:0">Settings</h2>
+    <button onclick="hideSettings()" style="background:none;border:none;color:#e2e8f0;font-size:24px">✕</button>
+  </div>
+  <div class="label">LLM Provider</div>
+  <select id="providerSelect" onchange="changeProvider()"></select>
+  <div class="label">Voice</div>
+  <select id="voiceSelect"></select>
+  <button onclick="hideSettings()" style="margin-top:30px;width:100%;padding:14px;background:#3b82f6;border:none;border-radius:12px;color:white;font-size:16px">Done</button>
+</div>
+
+<script>
+let conversationActive = false;
+let currentProvider = 'default';
+let currentVoice = 'eve';
+let voices = [];
+let isSpeaking = false;
+let ttsEngine = 'ai';
+
+const chatEl = document.getElementById('chat');
+const micBtn = document.getElementById('micBtn');
+
+const addMessage = (text, isUser) => {
+  const div = document.createElement('div');
+  div.className = `bubble ${isUser ? 'user' : 'assistant'}`;
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+};
+
+const showSettings = async () => {
+  const modal = document.getElementById('settings');
+  modal.classList.add('show');
+  await loadProviders();
+};
+
+const hideSettings = () => {
+  document.getElementById('settings').classList.remove('show');
+};
+
+const loadProviders = async () => {
+  try {
+    const menu = await ForgeHost.ai.listProviders();
+    const select = document.getElementById('providerSelect');
+    select.innerHTML = '';
+    menu.providers.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.label} (${p.model})`;
+      if (p.id === currentProvider) opt.selected = true;
+      select.appendChild(opt);
+    });
+    await loadVoices();
+  } catch(e) { console.error(e); }
+};
+
+const changeProvider = async () => {
+  const select = document.getElementById('providerSelect');
+  currentProvider = select.value;
+  await ForgeHost.ai.setProvider(currentProvider);
+  await loadVoices();
+};
+
+const loadVoices = async () => {
+  try {
+    const v = await ForgeHost.ai.listVoices();
+    voices = v.options || [];
+    const select = document.getElementById('voiceSelect');
+    select.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.value;
+      opt.textContent = v.label;
+      if (v.value === currentVoice) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.onchange = () => { currentVoice = select.value; };
+  } catch(e) {
+    voices = [];
+  }
+};
+
+const speak = async (text) => {
+  isSpeaking = true;
+  try {
+    await ForgeHost.ai.tts({ text, voice: currentVoice, mode: 'auto', play: true });
+  } catch(e) {
+    // fallback to android tts
+    ttsEngine = 'android';
+    await ForgeHost.tts.speak(text, { lang: 'en-US', rate: 1, pitch: 1, wait: true });
+  }
+  isSpeaking = false;
+};
+
+const stopSpeaking = async () => {
+  if (!isSpeaking) return;
+  try { await ForgeHost.ai.tts({ text: '', mode: 'auto', play: false }); } catch(e){}
+  try { await ForgeHost.tts.stop(); } catch(e){}
+  isSpeaking = false;
+};
+
+const processUserInput = async (transcript) => {
+  if (!transcript) return;
+  addMessage(transcript, true);
+  try {
+    const res = await ForgeHost.ai.chat({ prompt: transcript, providerId: currentProvider });
+    const reply = res.content || 'Sorry, I could not respond.';
+    addMessage(reply, false);
+    await speak(reply);
+    if (conversationActive) startListening();
+  } catch(e) {
+    addMessage('Error talking to LLM.', false);
+    if (conversationActive) startListening();
+  }
+};
+
+const startListening = async () => {
+  if (!conversationActive) return;
+  try {
+    const result = await ForgeHost.mic.listen({ lang: 'en-US' });
+    if (result && result.transcript) {
+      if (isSpeaking) await stopSpeaking();
+      await processUserInput(result.transcript);
+    } else if (conversationActive) {
+      startListening();
+    }
+  } catch(e) {
+    if (conversationActive) setTimeout(startListening, 800);
+  }
+};
+
+const toggleConversation = async () => {
+  conversationActive = !conversationActive;
+  micBtn.classList.toggle('active', conversationActive);
+  if (conversationActive) {
+    await ForgeHost.permissions.request('mic');
+    addMessage('Conversation started. Speak now.', false);
+    startListening();
+  } else {
+    await stopSpeaking();
+    addMessage('Conversation ended.', false);
+  }
+};
+
+// Boot
+(async () => {
+  const info = await ForgeHost.getAppInfo();
+  document.querySelector('.title').textContent = info.title || 'VoiceForge';
+  await ForgeHost.ai.setProvider('default');
+  currentProvider = 'default';
+})();
+</script>
+</body>
+</html>
