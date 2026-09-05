@@ -332,6 +332,12 @@
     }
     .btn.danger { background: var(--danger); }
     .btn.small { min-height: 38px; padding: 0.45rem 0.8rem; font-size: 0.86rem; }
+    .btn-resume {
+      margin-top: 0.5rem;
+      background: linear-gradient(135deg, var(--accent), #6d28d9);
+      border: 1px solid rgba(255,255,255,.15);
+      box-shadow: 0 1px 3px rgba(0,0,0,.25);
+    }
     .spinner {
       width: 16px; height: 16px;
       border: 2px solid rgba(255,255,255,.3);
@@ -1870,6 +1876,8 @@ termux-reload-settings</div>
  "chat.stopOk": "Stop",
  "chat.stopTitle": "Stop generation?",
  "chat.stopped": "Stopped.",
+ "chat.resumeBuild": "↻ Resume build",
+ "chat.resumeGone": "The previous build context is no longer available. Start again.",
  "chips.dark": "Dark mode",
  "chips.notify": "Notifications",
  "chips.perms": "Permission pack",
@@ -2377,6 +2385,8 @@ termux-reload-settings</div>
  "chat.send": "Crear",
  "chat.stop": "Detener",
  "chat.stopped": "Detenido.",
+ "chat.resumeBuild": "↻ Reanudar compilación",
+ "chat.resumeGone": "El contexto de compilación anterior ya no está disponible. Comienza de nuevo.",
  "chips.dark": "Modo oscuro",
  "chips.notify": "Notificaciones",
  "chips.perms": "Permisos",
@@ -2948,6 +2958,8 @@ termux-reload-settings</div>
  "chat.send": "Créer",
  "chat.stop": "Arrêter",
  "chat.stopped": "Arrêté.",
+ "chat.resumeBuild": "↻ Reprendre la compilation",
+ "chat.resumeGone": "Le contexte de compilation précédent n'est plus disponible. Recommencez.",
  "chips.dark": "Mode sombre",
  "chips.notify": "Notifications",
  "chips.perms": "Autorisations",
@@ -3519,6 +3531,8 @@ termux-reload-settings</div>
  "chat.send": "Criar",
  "chat.stop": "Parar",
  "chat.stopped": "Parado.",
+ "chat.resumeBuild": "↻ Retomar compilação",
+ "chat.resumeGone": "O contexto de compilação anterior não está mais disponível. Comece novamente.",
  "chips.dark": "Modo escuro",
  "chips.notify": "Notificações",
  "chips.perms": "Permissões",
@@ -4090,6 +4104,8 @@ termux-reload-settings</div>
  "chat.send": "作る",
  "chat.stop": "停止",
  "chat.stopped": "停止しました。",
+ "chat.resumeBuild": "↻ ビルドを再開",
+ "chat.resumeGone": "以前のビルド コンテキストはもう利用できません。もう一度開始してください。",
  "chips.dark": "ダークモード",
  "chips.notify": "通知",
  "chips.perms": "パーミッション",
@@ -4661,6 +4677,8 @@ termux-reload-settings</div>
  "chat.send": "만들기",
  "chat.stop": "중지",
  "chat.stopped": "중지됨.",
+ "chat.resumeBuild": "↻ 빌드 다시 시작",
+ "chat.resumeGone": "이전 빌드 컨텍스트를 더 이상 사용할 수 없습니다. 다시 시작하세요.",
  "chips.dark": "다크 모드",
  "chips.notify": "알림",
  "chips.perms": "권한 팩",
@@ -7972,6 +7990,25 @@ termux-reload-settings</div>
       if (!id) return;
       setDriveTombs(getDriveTombs().filter(t => t && t.id !== id));
     }
+    function hasDriveTombstone(appId) {
+      const id = String(appId || '').trim();
+      if (!id) return false;
+      return getDriveTombs().some(t => t && t.id === id);
+    }
+    function removeLibraryApp(appId) {
+      const id = String(appId || '').trim();
+      if (!id) return false;
+      const before = getLibrary();
+      const removed = before.some(a => a && a.id === id);
+      addDriveTombstone(id);
+      setLibrary(before.filter(a => !a || a.id !== id));
+      if (currentApp?.id === id) {
+        currentApp = null;
+        try { clearReforgePending(); } catch (_) {}
+        try { saveDraft(); } catch (_) {}
+      }
+      return removed;
+    }
     function getDriveDeviceId() {
       const meta = getDriveMeta();
       if (meta.deviceId) return meta.deviceId;
@@ -8815,8 +8852,11 @@ termux-reload-settings</div>
         if (seen.has(c.id)) continue; seen.add(c.id);
         configRows.push({ id: c.id, label: c.label || c.id, meta: t('shareBackup.custom') });
       }
-      // App rows
-      const apps = getLibrary().slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      // App rows: deleted/tombstoned apps are never offered for sharing.
+      const apps = getLibrary()
+        .filter(a => a && a.id && a.html && !hasDriveTombstone(a.id))
+        .slice()
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       const fmtBytes = (n) => { if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; return (n / 1048576).toFixed(1) + ' MB'; };
       const appRows = apps.map(a => ({ id: a.id, label: a.title || t('lib.untitled'), meta: fmtBytes(String(a.html || '').length) }));
 
@@ -8886,10 +8926,12 @@ termux-reload-settings</div>
           if (settingsBundle) files.push({ name: 'ForgeLibrary/settings.json', data: JSON.stringify(settingsBundle, null, 2) });
         }
         const apps = getLibrary();
+        const tombstoned = new Set(getDriveTombs().map(t => String(t?.id || '').trim()).filter(Boolean));
         const manifest = { format: DRIVE_FORMAT, updatedAt: Date.now(), deviceId: getDriveDeviceId(), apps: [], folders: [], tombstones: [] };
         for (const id of appIds) {
-          const app = apps.find(a => a.id === id);
-          if (!app || !app.html) continue;
+          if (tombstoned.has(String(id || '').trim())) continue;
+          const app = apps.find(a => a && a.id === id && a.html);
+          if (!app) continue;
           const sha = await hashApp(app);
           const meta = {
             format: DRIVE_APP_FORMAT, id: app.id, title: app.title || 'Untitled',
@@ -9146,7 +9188,7 @@ termux-reload-settings</div>
               iconEmoji: meta.iconEmoji || '⚡',
               iconColor: meta.iconColor || '',
               carCompatible: !!meta.carCompatible,
-              folderId: meta.folderId || entry.folderId || null,
+              folderId: meta.folderId || (_mergeBackupData.manifest?.apps || []).find(x => x && x.id === a.id)?.folderId || null,
               createdAt: meta.createdAt || Date.now(),
               updatedAt: meta.updatedAt || Date.now(),
             };
@@ -9514,6 +9556,7 @@ termux-reload-settings</div>
       if (Array.isArray(extras.attachments) && extras.attachments.length) {
         msg.attachments = extras.attachments;
       }
+      if (extras.resume) msg.resume = true;
       chat.push(msg);
       renderChat(true);
       saveDraft();
@@ -9555,6 +9598,14 @@ termux-reload-settings</div>
           note.style.marginTop = '0.35rem';
           note.textContent = '[' + m.attachmentsNote + ' in earlier draft]';
           div.appendChild(note);
+        }
+        if (m.resume && m.role === 'assistant' && hasBuilderResumeFor(currentApp?.id || '__new__')) {
+          const btn = document.createElement('button');
+          btn.className = 'btn small btn-resume';
+          btn.type = 'button';
+          btn.textContent = tf('chat.resumeBuild', '↻ Resume build');
+          btn.onclick = () => { try { resumeForgeBuild(); } catch (_) {} };
+          div.appendChild(btn);
         }
         el.messages.appendChild(div);
       }
@@ -19487,6 +19538,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       });
     }
     async function reforgeLibraryApp(app) {
+      clearBuilderResume();
       if (!app?.html) {
         setLibStatus(t('reforge.nothing'), 'err');
         return;
@@ -19655,6 +19707,39 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
      * cleared when + starts a new Forge environment. */
     let activeBuilderFs = null;
     let activeBuilderOwner = null;
+
+    // Resumable builder session (provider-error recovery).
+    // When runBuilderLoop suffers a provider/network error mid-loop, the
+    // accumulated LLM context (system, user, assistant.tool_calls, tool
+    // results, read_loop_md protocol) is stashed here so the user can Resume
+    // the build from the failed round instead of restarting from scratch.
+    // In-memory only — survives the error→resume flow in the same process;
+    // a process restart drops it (workspace files in activeBuilderFs are also
+    // in-memory). Cleared on success, new prompt, Stop/abandon, max-rounds,
+    // + New, and any fresh forge/reforge start.
+    let pendingBuilderResume = null;
+    function setBuilderResume(owner, messages, armed, researchEnabled, wantCar, round) {
+      try {
+        pendingBuilderResume = {
+          owner: String(owner || '__new__'),
+          messages: messages.slice(),
+          armed: !!armed,
+          researchEnabled: !!researchEnabled,
+          wantCar: !!wantCar,
+          round: Number(round) || 1,
+          savedAt: Date.now(),
+        };
+      } catch (_) {}
+    }
+    function clearBuilderResume() { pendingBuilderResume = null; }
+    function hasBuilderResumeFor(owner) {
+      const s = pendingBuilderResume;
+      if (!s) return false;
+      if (s.owner !== String(owner || '__new__')) return false;
+      // Armed workspace resumes need the scratch files still live in memory.
+      if (s.armed && !(activeBuilderFs && activeBuilderOwner === s.owner && activeBuilderFs.count() > 0)) return false;
+      return true;
+    }
 
     function builderNewFs() {
       const files = new Map();
@@ -20075,7 +20160,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
 
     /** Drive the agentic build. Returns { app } on success, { classicRaw } when the
      *  model never opts in (classic path reuses the round-1 content), or throws. */
-    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled = false }) {
+    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled = false, resumeFrom }) {
       const owner = currentApp?.id || '__new__';
       const fs = activeBuilderFs && activeBuilderOwner === owner ? activeBuilderFs : builderNewFs();
       activeBuilderFs = fs;
@@ -20085,10 +20170,19 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         if (!seeded.ok) throw new Error('Could not seed Reforge workspace: ' + seeded.error);
       }
       const state = { images: 0, imgSeq: 0, result: null };
-      const messages = msgs.slice();
-      let armed = false;
-      loopStatus('workspace mode offered (read_loop_md)', 'info', 'start');
-      for (let round = 1; round <= BUILDER_MAX_ROUNDS; round++) {
+      // Resume: continue a previously-failed loop with its accumulated LLM
+      // context (system, user, assistant.tool_calls, tool results, LOOP.md)
+      // and armed state. Seeding is skipped (workspaceSeed is null on resume
+      // and fs already holds the prior scratch files for the same owner).
+      const messages = resumeFrom ? resumeFrom.messages.slice() : msgs.slice();
+      let armed = resumeFrom ? !!resumeFrom.armed : false;
+      const startRound = resumeFrom ? (resumeFrom.round + 1) : 1;
+      loopStatus(resumeFrom ? ('workspace mode resumed (round ' + startRound + ')') : 'workspace mode offered (read_loop_md)', 'info', 'start');
+      for (let round = startRound; round <= BUILDER_MAX_ROUNDS; round++) {
+        // Stash a resumable snapshot BEFORE the LLM round. If the provider
+        // errors, the user can Resume from this context instead of restarting.
+        // Cleared on success / classic / max-rounds / new build / Stop.
+        setBuilderResume(owner, messages, armed, researchEnabled, wantCar, round);
         const tools = armed
           ? (researchEnabled ? BUILDER_TOOLS.concat(BUILDER_RESEARCH_TOOLS) : BUILDER_TOOLS)
           : [BUILDER_TOOL_READ_LOOP];
@@ -20098,6 +20192,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         if (!tcs.length) {
           if (!armed) {
             loopStatus('model chose single-shot (classic) mode', 'info', 'classic');
+            clearBuilderResume();
             return { classicRaw: content };
           }
           messages.push({ role: 'assistant', content });
@@ -20135,16 +20230,134 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify(out).slice(0, 60000) });
           if (state.result) {
             loopStatus('done · ' + round + ' rounds · ' + fs.count() + ' files · html ' + (state.result.html.length / 1024).toFixed(1) + 'k chars', 'ok', 'done');
+            clearBuilderResume();
             return { app: state.result };
           }
         }
       }
+      clearBuilderResume();
       throw new Error('Builder loop ended after ' + BUILDER_MAX_ROUNDS + ' rounds without finish. Try a simpler app, or turn off "Allow agentic builder loop" for this provider in AI settings.');
+    }
+
+    /** Resume an agentic forge build that failed mid-loop (provider/network
+     * error). Re-enters runBuilderLoop with the stashed LLM context + armed
+     * state, continuing from the next round. Workspace files (activeBuilderFs)
+     * must still be live for the same owner — hasBuilderResumeFor gates this.
+     * Mirrors onSend's forge tail (busy/abort/progress/watchdog/finalize) so a
+     * resumed build behaves exactly like a fresh one once it succeeds. */
+    async function resumeForgeBuild() {
+      const session = pendingBuilderResume;
+      if (!session || busy) return;
+      const owner = session.owner || (currentApp?.id || '__new__');
+      if (!hasBuilderResumeFor(owner)) {
+        clearBuilderResume();
+        try { addMessage('assistant', tf('chat.resumeGone', 'The previous build context is no longer available. Start again.')); } catch (_) {}
+        return;
+      }
+      const wantCar = !!session.wantCar;
+      setBusy(true);
+      abortController = new AbortController();
+      const myToken = ++genToken;
+      genAbandoned = false;
+      genMode = 'forge';
+      const forgeProgress = startForgeProgress();
+      activeForgeProgress = forgeProgress;
+      const watchdog = startGenWatchdog('Forge');
+      genFailedByTimeout = false;
+      try {
+        try { forgeProgress.status('Resuming build · round ' + (session.round + 1) + '…'); } catch (_) {}
+        genLog('info', 'forge resume · owner ' + owner + ' · round ' + (session.round + 1) + ' · armed ' + session.armed + ' · research ' + !!session.researchEnabled);
+        await bgStart('Forge', 'Resuming your app…');
+        const built = await runBuilderLoop({
+          msgs: session.messages,
+          resumeFrom: session,
+          signal: abortController.signal,
+          wantCar,
+          status: (s) => forgeProgress.status(s),
+          workspaceSeed: null,
+          researchEnabled: !!session.researchEnabled,
+        });
+        const stale = genAbandoned || myToken !== genToken;
+        if (stale) {
+          genLog('info', 'forge resume result discarded (' + (genAbandoned ? 'abandoned' : 'stale') + ')');
+          return;
+        }
+        if (built && built.app) {
+          const app = {
+            id: currentApp?.id || uid(),
+            title: String(built.app.title || 'Untitled app').slice(0, 80),
+            summary: String(built.app.summary || '').slice(0, 240),
+            html: String(built.app.html),
+            createdAt: currentApp?.createdAt || Date.now(),
+            updatedAt: Date.now(),
+            carCompatible: !!wantCar,
+          };
+          const message = String(built.app.message || t('chat.builtDefault', { name: app.title }));
+          clearBuilderResume();
+          currentApp = app;
+          addMessage('assistant', message + '\n\n' + t('chat.openAppTab', { name: app.title }));
+          loadPreview(app);
+          showTab('preview');
+          genLog('info', 'forge resume done · "' + app.title + '" · html ' + (app.html.length / 1024).toFixed(1) + 'k chars');
+          return;
+        }
+        // Model dropped to classic one-shot (only possible when resuming an
+        // unarmed round-1 failure). Payload is already complete — parse it.
+        if (built && built.classicRaw != null) {
+          const raw = built.classicRaw;
+          genLog('info', 'forge resume received ' + raw.length + ' chars · parsing (classic)');
+          const parsed = extractJson(raw);
+          if (!parsed.html) throw new Error('Payload missing html');
+          const app = {
+            id: currentApp?.id || uid(),
+            title: String(parsed.title || 'Untitled app').slice(0, 80),
+            summary: String(parsed.summary || '').slice(0, 240),
+            html: String(parsed.html),
+            createdAt: currentApp?.createdAt || Date.now(),
+            updatedAt: Date.now(),
+            carCompatible: !!wantCar,
+          };
+          const message = String(parsed.message || t('chat.builtDefault', { name: app.title }));
+          clearBuilderResume();
+          currentApp = app;
+          addMessage('assistant', message + '\n\n' + t('chat.openAppTab', { name: app.title }));
+          loadPreview(app);
+          showTab('preview');
+          genLog('info', 'forge resume done (classic) · "' + app.title + '" · html ' + (app.html.length / 1024).toFixed(1) + 'k chars');
+          return;
+        }
+        throw new Error('Resume produced no buildable result.');
+      } catch (err) {
+        const stale = genAbandoned || myToken !== genToken;
+        if (stale) {
+          genLog('info', 'forge resume ' + (genAbandoned ? 'abandoned' : 'stale') + ' task settled: ' + (err?.name || 'resolved'));
+        } else if (err?.name === 'AbortError') {
+          genLog('warn', 'forge resume aborted' + (genFailedByTimeout ? ' (time limit)' : ''));
+          addMessage('assistant', genFailedByTimeout ? t('chat.genTimeoutMsg') : t('chat.stopped'));
+        } else {
+          genLog('error', 'forge resume failed: ' + (err?.message || err));
+          const resumeOk = hasBuilderResumeFor(owner);
+          addMessage('assistant', forgeFailMessage(err), { resume: resumeOk });
+        }
+      } finally {
+        watchdog.stop();
+        forgeProgress.stop();
+        if (activeForgeProgress === forgeProgress) activeForgeProgress = null;
+        if (myToken === genToken) {
+          clearForgeProgress();
+          setBusy(false);
+          abortController = null;
+          genAbandoned = false;
+          genMode = null;
+          bgStop();
+        }
+      }
     }
 
     async function forgeApp(userText, attachments = [], onStatus) {
       const status = typeof onStatus === 'function' ? onStatus : () => {};
       savePrefs();
+      clearBuilderResume();
       // One system message only, and it must be first (provider requirement).
       let system = SYSTEM_PROMPT;
 
@@ -20333,7 +20546,8 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           addMessage('assistant', genFailedByTimeout ? t('chat.genTimeoutMsg') : t('chat.stopped'));
         } else {
           genLog('error', 'forge failed: ' + (err?.message || err));
-          addMessage('assistant', forgeFailMessage(err));
+          const resumeOk = hasBuilderResumeFor(currentApp?.id || '__new__');
+          addMessage('assistant', forgeFailMessage(err), { resume: resumeOk });
         }
       } finally {
         watchdog.stop();
@@ -21057,8 +21271,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
             else if (choice === 'delete') {
               const name = fresh.title || t('lib.thisApp');
               if (!confirm(t('lib.confirmDel', { name }))) return;
-              addDriveTombstone(fresh.id);
-              setLibrary(getLibrary().filter(x => x.id !== fresh.id));
+              removeLibraryApp(fresh.id);
               renderLibrary();
               try { setLibStatus(t('lib.deleted', { name }), 'ok'); } catch (_) {}
             }
@@ -21128,8 +21341,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // Always prefer a dedicated RunActivity task (own window / split-screen).
       if (Capacitor.isNativePlatform()) {
         try {
-          // Ensure latest HTML is in library so the runner can load it
+          // Ensure latest HTML is in library so the runner can load it.
+          // A deleted app must not be resurrected by a stale preview/shortcut object.
           const list = getLibrary();
+          if (hasDriveTombstone(app.id) && !list.some(x => x.id === app.id)) {
+            setLibStatus(t('pin.notFound'), 'err');
+            return;
+          }
           if (!list.some(x => x.id === app.id) && app.html) {
             list.push({ ...app, updatedAt: Date.now() });
             setLibrary(list);
@@ -21225,6 +21443,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         setPreviewStatus(t('save.nothing'), 'err');
         return;
       }
+      if (hasDriveTombstone(currentApp.id) && !getLibrary().some(x => x.id === currentApp.id)) {
+        setPreviewStatus(t('pin.notFound'), 'err');
+        return;
+      }
       const list = getLibrary().filter(x => x.id !== currentApp.id);
       currentApp.updatedAt = Date.now();
       list.push(currentApp);
@@ -21248,8 +21470,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         setPreviewStatus(t('pin.saveFirst'), 'err');
         return;
       }
-      // Ensure it's in the library so the shortcut can reopen it later
+      // Ensure it's in the library so the shortcut can reopen it later.
+      // Do not resurrect an app explicitly deleted from the library.
       const list = getLibrary();
+      if (hasDriveTombstone(app.id) && !list.some(x => x.id === app.id)) {
+        setPreviewStatus(t('pin.notFound'), 'err');
+        return;
+      }
       if (!list.some(x => x.id === app.id)) {
         list.push({ ...app, updatedAt: Date.now() });
         setLibrary(list);
@@ -22520,6 +22747,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
      *  discarded via the genAbandoned gate in onSend/reforge's try/catch). */
     function abandonCurrentGeneration() {
       genAbandoned = true;
+      clearBuilderResume();
       abortAllLlmQueries();
       // Release the generation's host-FGS lease immediately. The native
       // CapacitorHttp request may remain uncancellable, so waiting for the
@@ -22600,6 +22828,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       // + is a new Forge environment; never carry workspace files across it.
       activeBuilderFs = null;
       activeBuilderOwner = null;
+      clearBuilderResume();
       pendingAttachments = [];
       renderAttachStrip();
       el.previewFrame.removeAttribute('srcdoc');
