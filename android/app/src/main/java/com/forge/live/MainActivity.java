@@ -143,11 +143,14 @@ public class MainActivity extends BridgeActivity {
             };
             // Safety net: if the JS side never answers (page reloaded, bridge
             // glitch), fail the request instead of leaving AAForge to time out.
+            // Mic capture (mic.listen etc.) legitimately runs longer than the
+            // default window — give speech recognition up to 45s.
+            final long watchdogMs = method != null && method.startsWith("mic.") ? 45000L : 12000L;
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                 if (RPC_PENDING.remove(requestId) != null) {
                     ForgeRpcReceiver.answer(appContextStatic != null ? appContextStatic : context, callback, requestId, false, null, "Forge did not answer in time");
                 }
-            }, 12000L);
+            }, watchdogMs);
             if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) run.run();
             else new android.os.Handler(android.os.Looper.getMainLooper()).post(run);
             return true;
