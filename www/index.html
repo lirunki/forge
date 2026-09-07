@@ -1683,6 +1683,10 @@ termux-reload-settings</div>
             <button class="btn secondary small" id="btnRefreshTermux" type="button" data-i18n="common.refresh">Refresh</button>
           </div>
           <pre id="termuxTestOut" class="hidden" style="margin:0.65rem 0 0;padding:0.65rem 0.75rem;border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--muted);font-size:0.78rem;white-space:pre-wrap;word-break:break-word;max-height:12rem;overflow:auto;"></pre>
+          <div class="settings-block" style="margin-top:0.65rem;border-top:1px solid var(--border);padding-top:0.65rem;">
+            <button class="btn small" id="btnAaLink" type="button">AA-link</button>
+            <span class="field-hint" style="display:block;margin-top:0.35rem;">Pair Android Auto (AAForge): generates a secret (first tap), then opens the share sheet — choose AAForge to receive the key.</span>
+          </div>
         </div>
       </section>
     </main>
@@ -5818,6 +5822,7 @@ termux-reload-settings</div>
       btnForgetKey: document.getElementById('btnForgetKey'),
       btnTestAi: document.getElementById('btnTestAi'),
       btnDonate: document.getElementById('btnDonate'),
+      btnAaLink: document.getElementById('btnAaLink'),
       btnMiniConsole: document.getElementById('btnMiniConsole'),
       btnMiniConsoleClear: document.getElementById('btnMiniConsoleClear'),
       btnMiniConsoleCopy: document.getElementById('btnMiniConsoleCopy'),
@@ -10584,6 +10589,55 @@ termux-reload-settings</div>
       else if (/<body[\s>]/i.test(html)) html = html.replace(/<body([^>]*)>/i, '<head>' + bridge + consoleHook + '</head><body$1>');
       else html = bridge + html;
       return html;
+    }
+
+    const AA_LINK_STORAGE_KEY = 'forge_aa_link_v1';
+    let aaLinkCached = '';
+    function aaLinkPlugin() { try { return window.Capacitor?.Plugins?.AaLink || null; } catch (_) { return null; } }
+    function readAaLink() { return aaLinkCached; }
+    async function loadAaLink() {
+      try {
+        const p = aaLinkPlugin();
+        if (p?.get) { const r = await p.get(); aaLinkCached = String(r?.key || ''); }
+        else { aaLinkCached = localStorage.getItem(AA_LINK_STORAGE_KEY) || ''; }
+      } catch (_) { aaLinkCached = ''; }
+      updateAaLinkUi();
+    }
+    function randomAaLink() {
+      const bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      let s = ''; bytes.forEach(b => { s += String.fromCharCode(b); });
+      return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    }
+    function updateAaLinkUi() {
+      // Single-button flow: no persistent status row in the AI tab.
+    }
+    async function aaLinkTap() {
+      let key = readAaLink();
+      if (!key) {
+        try {
+          const p = aaLinkPlugin();
+          if (p?.generate) { const r = await p.generate(); key = String(r?.key || ''); }
+          else { key = randomAaLink(); try { localStorage.setItem(AA_LINK_STORAGE_KEY, key); } catch (_) {} }
+        } catch (e) { toast('Could not generate AA-link: ' + (e?.message || e)); return; }
+      }
+      aaLinkCached = key;
+      if (!key) { toast('Could not generate AA-link'); return; }
+      try {
+        const SharePlugin = (typeof Share !== 'undefined') ? Share : window.Capacitor?.Plugins?.Share;
+        if (SharePlugin?.share) {
+          await SharePlugin.share({ title: 'Forge AA-link', text: 'Forge AA-link: ' + key, dialogTitle: 'Send AA-link to AAForge' });
+          toast('AA-link shared — pick AAForge in the share sheet');
+        } else if (navigator.share) {
+          await navigator.share({ title: 'Forge AA-link', text: 'Forge AA-link: ' + key });
+          toast('AA-link shared — pick AAForge in the share sheet');
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(key);
+          toast('AA-link copied — paste it into AAForge');
+        } else {
+          prompt('Copy this AA-link into AAForge:', key);
+        }
+      } catch (_) { /* user cancelled share */ }
     }
 
     function escapeHtml(s) {
@@ -15658,6 +15712,32 @@ termux-reload-settings</div>
       }
     }
 
+    // Native Forge RPC entry point. It exposes the existing validated host-call
+    // dispatcher, never eval/executes request code, and returns structured data.
+    window.__forgeRpcInvoke = async function (request) {
+      try {
+        const r = request || {};
+        const service = String(r.service || '');
+        const method = String(r.method || '');
+        const params = (r.params && typeof r.params === 'object') ? r.params : {};
+        const appLabel = (currentApp && (currentApp.title || currentApp.id)) || 'AAForge RPC';
+        let paramSummary = '';
+        try { paramSummary = JSON.stringify(params); } catch (_) {}
+        if (paramSummary.length > 160) paramSummary = paramSummary.slice(0, 160) + '…';
+        pushMiniConsole('info', 'RPC → ' + service + '.' + method + (paramSummary ? ' ' + paramSummary : ''), appLabel);
+        if (!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(service) || !/^[A-Za-z][A-Za-z0-9_.-]{0,127}$/.test(method)) {
+          pushMiniConsole('error', 'RPC ✗ invalid name: ' + service + '.' + method, appLabel);
+          throw new Error('Invalid Forge RPC name');
+        }
+        const result = await handleHostCall(method, params);
+        pushMiniConsole('info', 'RPC ✓ ' + method + ' ok', appLabel);
+        return { ok: true, result: result == null ? { ok: true } : result };
+      } catch (e) {
+        try { pushMiniConsole('error', 'RPC ✗ ' + ((request && request.method) || '?') + ': ' + ((e && e.message) || e), (currentApp && (currentApp.title || currentApp.id)) || 'AAForge RPC'); } catch (_) {}
+        return { ok: false, error: (e && e.message) || String(e) };
+      }
+    };
+
     window.addEventListener('message', async (ev) => {
       const d = ev.data;
       if (!d || !d.__forge) return;
@@ -19537,6 +19617,137 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         try { wrap.querySelector('[data-act="ok"]').focus(); } catch (_) {}
       });
     }
+    const AAFORGE_MANIFEST_RE = /<!--[\s]*aaforge-car:[\s]*([\s\S]*?)[\s]*-->/gi;
+
+    function stripAaforgeManifest(html) {
+      const source = String(html || '');
+      let count = 0;
+      const baseline = source.replace(AAFORGE_MANIFEST_RE, () => { count++; return ''; });
+      if (count > 1) throw new Error('HTML contains more than one aaforge-car manifest');
+      return { baseline, count };
+    }
+
+    function canonicalAaJson(value) {
+      if (Array.isArray(value)) return value.map(canonicalAaJson);
+      if (value && typeof value === 'object') {
+        const out = {};
+        Object.keys(value).sort().forEach((key) => { out[key] = canonicalAaJson(value[key]); });
+        return out;
+      }
+      return value;
+    }
+
+    function validateAaManifest(value, app) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('AAReforge did not return a manifest object');
+      const version = Number(value.version || 0);
+      if (version !== 2) throw new Error('AAReforge manifest must use version 2');
+      const title = String(value.title || app?.title || '').trim();
+      if (!title) throw new Error('AAReforge manifest is missing a title');
+      const actions = Array.isArray(value.actions) ? value.actions : [];
+      const sections = Array.isArray(value.home?.sections) ? value.home.sections : (Array.isArray(value.sections) ? value.sections : []);
+      if (actions.length > 12) throw new Error('AAReforge generated too many actions');
+      if (sections.length > 8) throw new Error('AAReforge generated too many sections');
+      const seenIds = new Set();
+      for (const action of actions) {
+        if (!action || typeof action !== 'object' || !String(action.id || '').trim() || !String(action.title || action.label || '').trim() || !String(action.type || '').trim()) {
+          throw new Error('AAReforge generated an invalid action; every action needs id, title, and type');
+        }
+        const id = String(action.id).trim();
+        if (seenIds.has(id)) throw new Error('AAReforge generated duplicate action id: ' + id);
+        seenIds.add(id);
+        if (String(action.type).toLowerCase() === 'rpc') {
+          const rpc = action.rpc;
+          if (!rpc || !String(rpc.service || '').trim() || !String(rpc.method || '').trim()) {
+            throw new Error('AAReforge rpc action requires service and method');
+          }
+          if (/[<>]|javascript:|eval\s*\(/i.test(JSON.stringify(rpc))) {
+            throw new Error('AAReforge rpc contains executable content');
+          }
+        }
+      }
+      const normalized = { ...value, version: 2, title };
+      return canonicalAaJson(normalized);
+    }
+
+    function injectAaforgeManifest(html, manifest) {
+      const stripped = stripAaforgeManifest(html);
+      const json = JSON.stringify(manifest);
+      const comment = '<!-- aaforge-car: ' + json + ' -->';
+      const source = stripped.baseline;
+      const head = source.search(/<\/head\s*>/i);
+      const body = source.search(/<\/body\s*>/i);
+      let at = head >= 0 ? head : (body >= 0 ? body : source.length);
+      const result = source.slice(0, at) + comment + source.slice(at);
+      const verify = stripAaforgeManifest(result).baseline;
+      if (verify !== source) throw new Error('AAReforge preservation check failed');
+      return result;
+    }
+
+    function buildAaReforgePrompt(app, baselineHtml) {
+      return `Generate an Android Auto car-native manifest for this existing Forge mini-app.\n\n` +
+        `Return ONLY valid JSON. Do not return HTML, Markdown, JavaScript, CSS, explanations, or a replacement app.\n` +
+        `The manifest is injected as an aaforge-car HTML comment. Preserve the app's purpose and expose only safe, distraction-optimized actions.\n` +
+        `Required shape: {"version":2,"title":"...","summary":"...","carCompatible":true,"system":"...","home":{"sections":[]},"actions":[]}.\n` +
+        `Actions may use types: speak, ai, search, toggle, select, confirm, call, dial, sms, compose, launch, map, rpc.\n` +
+        `For rpc, return only a declarative request: {"type":"rpc","rpc":{"service":"forge","method":"registered.method","params":{"value":"$input"}},"input":{"type":"search","placeholder":"..."},"capabilities":["ai"],"result":{"mode":"speak"},"requiresConfirmation":false}.\n` +
+        `Param values may use $input (collected from the user), $selected (a tapped list row), or $state.<actionId> (a previously saved toggle/select value; state is shared with the app's Forge $state).\n` +
+        `result.mode is "speak" (default; the answer is spoken aloud) or "list" (return {"items":[{"title":"...","subtitle":"...","value":"...","id":"..."}]}; tapping a row re-runs the rpc with $selected set to its value).\n` +
+        `RPC methods must be registered ForgeBridge methods; never include JavaScript, eval, arbitrary code, or invented methods.\n` +
+        `PREFER NATIVE AAForge-LOCAL ACTION TYPES whenever possible: speak, ai, ask, toggle, select, confirm, call, dial, sms, compose, launch, map. These resolve instantly on the device and keep working even when Forge is not running. In particular, NEVER model dialing, texting, app launching, or maps as rpc — use the native call/dial, sms/compose, launch, and map types (AAForge shows its own confirmation and runs them directly).\n` +
+        `Use rpc ONLY for Forge-host capabilities that cannot be expressed natively, such as mic.listen voice sessions, apps.list dynamic search with list results, or actions that depend on live Forge state.\n` +
+        `Use short spoken prompts, no arbitrary code, no HTML, and no unsupported visual workflows. Avoid duplicate actions: use home.sections[].items as the canonical native action list; use root actions only as a compatibility fallback. Every item requires a stable id and title.\n\n` +
+        `App title: ${String(app?.title || 'Untitled')}\n` +
+        `App summary: ${String(app?.summary || '')}\n\n` +
+        `Existing app HTML (read-only source):\n${baselineHtml}`;
+    }
+
+    async function aaReforgeLibraryApp(app) {
+      clearBuilderResume();
+      if (!app?.html) { setLibStatus('Nothing to AAReforge', 'err'); return; }
+      if (busy) { setLibStatus(t('common.busy'), 'err'); return; }
+      if (!el.apiKey?.value?.trim() && !providerAllowsEmptyKey()) {
+        setLibStatus(t('reforge.noAi'), 'err');
+        try { openSetupWizard({ force: true, start: hasAnyApiKeyConfigured() ? 'pick' : 'welcome' }); } catch (_) {}
+        showTab('settings');
+        return;
+      }
+      const extracted = stripAaforgeManifest(app.html);
+      pendingReforgeOriginal = { ...app };
+      setReforgeDirty(false);
+      try { showTab('preview'); } catch (_) {}
+      loadPreview({ ...app });
+      setLibStatus(`Generating AA manifest for “${app.title || 'app'}”…`, '');
+      setPreviewStatus('Generating AAForge manifest…', '');
+      setBusy(true);
+      abortController = new AbortController();
+      const myToken = ++genToken;
+      genAbandoned = false;
+      genMode = 'reforge';
+      try {
+        const messages = [
+          { role: 'system', content: 'You generate only validated JSON manifests for AAForge. Never generate or modify HTML.' },
+          { role: 'user', content: buildAaReforgePrompt(app, extracted.baseline) },
+        ];
+        const raw = await chatCompletions(messages, abortController.signal, { jsonMode: true, maxTokens: Math.min(getGenMaxTokens(), 12000) });
+        const manifest = validateAaManifest(extractJson(raw), app);
+        const nextHtml = injectAaforgeManifest(extracted.baseline, manifest);
+        if (genAbandoned || myToken !== genToken) return;
+        const next = { ...app, html: nextHtml, carCompatible: true, updatedAt: Date.now(), reforgedAt: Date.now() };
+        currentApp = next;
+        loadPreview(next);
+        setReforgeDirty(true);
+        setPreviewStatus('AAReforge ready — Save to inject the manifest, or Discard.', 'ok');
+        setLibStatus('AAReforge ready — preview only', 'ok');
+      } catch (e) {
+        if (!genAbandoned && myToken === genToken) {
+          setLibStatus(e?.message || String(e), 'err');
+          setPreviewStatus('AAReforge failed; original HTML was not changed.', 'err');
+        }
+      } finally {
+        if (myToken === genToken) { setBusy(false); abortController = null; }
+      }
+    }
+
     async function reforgeLibraryApp(app) {
       clearBuilderResume();
       if (!app?.html) {
@@ -21258,6 +21469,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
                 { id: 'pin', label: t('lib.pin') },
                 { id: 'share', label: t('lib.share'), hint: aaReadyTitle(fresh) },
                 { id: 'reforge', label: t('lib.reforge') },
+                { id: 'aareforge', label: 'AAReforge — generate car manifest' },
                 { id: 'delete', label: t('lib.delete'), danger: true },
               ],
             });
@@ -21268,6 +21480,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
             else if (choice === 'pin') pinAppToLauncher(fresh);
             else if (choice === 'share') shareAppToAaforge(fresh);
             else if (choice === 'reforge') reforgeLibraryApp(fresh);
+            else if (choice === 'aareforge') aaReforgeLibraryApp(fresh);
             else if (choice === 'delete') {
               const name = fresh.title || t('lib.thisApp');
               if (!confirm(t('lib.confirmDel', { name }))) return;
@@ -22970,6 +23183,8 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       // purchase, no gating — donation link only (Play/F-Droid compliant).
       openExternalUrl('https://www.paypal.me/forgedevthanksyou');
     });
+    el.btnAaLink?.addEventListener('click', aaLinkTap);
+    loadAaLink();
     el.btnForgetKey?.addEventListener('click', () => {
       const id = currentProviderId();
       const key = el.apiKey.value.trim() || getProfiles()[id]?.key || '';

@@ -1,11 +1,15 @@
 package com.forge.live;
 
+import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.PluginHandle;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 
 /* loaded from: classes4.dex */
 public class MainActivity extends BridgeActivity {
@@ -16,7 +20,9 @@ public class MainActivity extends BridgeActivity {
     @Override // com.getcapacitor.BridgeActivity, androidx.fragment.app.FragmentActivity, androidx.activity.ComponentActivity, androidx.core.app.ComponentActivity, android.app.Activity
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(BackgroundForgePlugin.class);
+        registerPlugin(AaLinkPlugin.class);
         registerPlugin(PhoneBridgePlugin.class);
+        appContextStatic = getApplicationContext();
         registerPlugin(AppsBridgePlugin.class);
         registerPlugin(TtsBridgePlugin.class);
         registerPlugin(AudioRouteBridgePlugin.class);
@@ -87,6 +93,7 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         dispatchForgeIntent(intent);
+        handleRpcIntent(intent);
     }
 
     @Override // com.getcapacitor.BridgeActivity, androidx.activity.ComponentActivity, android.app.Activity
@@ -98,6 +105,102 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         dispatchForgeIntent(intent);
+        handleRpcIntent(intent);
+    }
+
+    private void handleRpcIntent(Intent intent) {
+        if (intent == null || !ForgeRpcReceiver.ACTION.equals(intent.getAction())) return;
+        PendingIntent callback;
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) callback = intent.getParcelableExtra("callback", PendingIntent.class);
+            else callback = (PendingIntent) intent.getParcelableExtra("callback");
+        } catch (Exception e) { return; }
+        if (callback == null) return;
+        String requestId = intent.getStringExtra("request_id");
+        if (!dispatchRpc(this, requestId, intent.getStringExtra("service"), intent.getStringExtra("method"), intent.getStringExtra("params_json"), callback)) {
+            ForgeRpcReceiver.answer(this, callback, requestId, false, null, "Forge WebView unavailable — open Forge once");
+        }
+    }
+
+    /**
+     * Sends a validated RPC into the ForgeHost dispatcher and delivers the
+     * structured result through the caller's PendingIntent. Safe to call from
+     * any component; returns false when no Forge WebView is available.
+     */
+    public static boolean dispatchRpc(Context context, String requestId, String service, String method, String paramsJson, PendingIntent callback) {
+        final android.webkit.WebView web = rpcWebView;
+        if (web == null || requestId == null) return false;
+        try {
+            RPC_PENDING.putIfAbsent(requestId, callback);
+            JSONObject request = new JSONObject();
+            request.put("service", service == null ? "" : service);
+            request.put("method", method == null ? "" : method);
+            request.put("params", paramsJson == null ? new JSONObject() : new JSONObject(paramsJson));
+            String script = "window.__forgeRpcInvoke(" + request + ").then(function(r){try{window.__forgeRpcBridge.onRpcResult('" + requestId + "', JSON.stringify(r));}catch(e){}}).catch(function(e){try{window.__forgeRpcBridge.onRpcResult('" + requestId + "', JSON.stringify({ok:false,error:String((e&&e.message)||e)}));}catch(_){}})";
+            Runnable run = () -> {
+                try { web.evaluateJavascript(script, null); }
+                catch (Exception e) { RPC_PENDING.remove(requestId); ForgeRpcReceiver.answer(appContextStatic != null ? appContextStatic : context, callback, requestId, false, null, "Forge evaluate failed: " + e.getMessage()); }
+            };
+            // Safety net: if the JS side never answers (page reloaded, bridge
+            // glitch), fail the request instead of leaving AAForge to time out.
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                if (RPC_PENDING.remove(requestId) != null) {
+                    ForgeRpcReceiver.answer(appContextStatic != null ? appContextStatic : context, callback, requestId, false, null, "Forge did not answer in time");
+                }
+            }, 12000L);
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) run.run();
+            else new android.os.Handler(android.os.Looper.getMainLooper()).post(run);
+            return true;
+        } catch (Exception e) {
+            RPC_PENDING.remove(requestId);
+            ForgeRpcReceiver.answer(appContextStatic != null ? appContextStatic : context, callback, requestId, false, null, e.getMessage());
+            return true;
+        }
+    }
+
+    /** Results delivered from JS. Only known pending request ids are accepted. */
+    public static final class RpcJsBridge {
+        @android.webkit.JavascriptInterface
+        public void onRpcResult(String requestId, String resultJson) {
+            if (requestId == null) return;
+            PendingIntent cb = RPC_PENDING.remove(requestId);
+            if (cb == null) return;
+            JSONObject parsed = null;
+            String error = null;
+            try {
+                Object decoded = new JSONTokener(resultJson == null ? "null" : resultJson).nextValue();
+                if (decoded instanceof JSONObject) parsed = (JSONObject) decoded;
+            } catch (Exception ignored) {}
+            boolean ok = parsed != null && parsed.optBoolean("ok", false);
+            String resultJsonOut = null;
+            if (ok) {
+                Object r = parsed.opt("result");
+                try { resultJsonOut = r == null ? "{\"ok\":true}" : (r instanceof org.json.JSONObject ? r.toString() : JSONObject.wrap(r).toString()); }
+                catch (Exception e2) { resultJsonOut = "{\"ok\":true}"; }
+            } else {
+                error = parsed != null ? parsed.optString("error", "Forge RPC failed") : "Invalid Forge RPC response";
+            }
+            android.util.Log.i("ForgeRpcReceiver", "RPC result: id=" + requestId + " ok=" + ok + (error != null ? " error=" + error : ""));
+            ForgeRpcReceiver.answer(appContextStatic, cb, requestId, ok, resultJsonOut, error);
+        }
+    }
+
+    private static volatile android.webkit.WebView rpcWebView;
+    private static volatile android.content.Context appContextStatic;
+    private static final java.util.concurrent.ConcurrentHashMap<String, PendingIntent> RPC_PENDING = new java.util.concurrent.ConcurrentHashMap<>();
+    private final RpcJsBridge rpcJsBridge = new RpcJsBridge();
+
+    private void attachRpcBridge() {
+        try {
+            android.webkit.WebView web = getBridge() != null ? getBridge().getWebView() : null;
+            if (web != null) {
+                web.removeJavascriptInterface("__forgeRpcBridge");
+                web.addJavascriptInterface(rpcJsBridge, "__forgeRpcBridge");
+                rpcWebView = web;
+            }
+        } catch (Exception e) {
+            android.util.Log.w("ForgeRpcReceiver", "bridge attach failed", e);
+        }
     }
 
     private boolean forwardOpenAppToRunner(Intent intent) {
@@ -208,6 +311,7 @@ public class MainActivity extends BridgeActivity {
         try {
             androidx.core.view.ViewCompat.requestApplyInsets(getWindow().getDecorView());
         } catch (Throwable ignored) {}
+        attachRpcBridge();
     }
 
     @Override // com.getcapacitor.BridgeActivity, androidx.fragment.app.FragmentActivity, android.app.Activity
