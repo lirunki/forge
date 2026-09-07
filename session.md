@@ -2702,3 +2702,72 @@ Smoke (device pending):
 [ ] Normal success/error → notification disappears after the short FGS grace
 [ ] Kill/restart Forge during/after a build → no owner-less "AI working" notification resurrects
 ```
+
+## Bring-your-own-language: custom languages via LLM (2026-09-07)
+
+**2.7.60 / versionCode 190** (from 2.7.59/189). Host-only, no native Java.
+
+### What the user asked for
+The language selector is a closed list (auto + en/es/fr/pt/ja/ko). Add a
+"custom" entry: the user gives a **name** (e.g. `Klingon`) and a **spec** of how
+it should sound (e.g. `how the Klingons speak`, `English from the ghetto`,
+`pirate English`), an LLM translates the English UI dictionary into that
+style, and the new language appears as a selectable option. Custom langs can
+also be deleted later.
+
+### Why it fit cleanly
+The i18n system was practically built for it: `FORGE_I18N = { lang_code:
+{ "key": "text" } }` + `FORGE_LANGS = [[code,name],...]`, and `t()` already
+falls back to `en` for missing keys — so a partial custom dict still works.
+A custom language is just a new row in those two arrays, merged from
+`localStorage` at boot before `forgeLangFromStorage()` resolves the active
+lang. Restart applies (same pattern as the built-in selector).
+
+### What landed
+| Piece | Detail |
+|---|---|
+| Storage | `forge_custom_langs_v1` = `[{id,name,spec,dict,createdAt}]`; `id` prefixed `custom_` so it can never shadow a built-in code |
+| Boot merge | `loadCustomLangs()` runs once right after `/*__I18N_END__*/`, before `forgeLangFromStorage()` — pushes each custom lang into `FORGE_LANGS` + `FORGE_I18N`. Idempotent. |
+| Selector | `wireLangSelect` appends a `＋ Add custom language…` option (value `__add__`); choosing it opens the add sheet (visible selection restored until restart). |
+| Manage button | Small `⋯` button beside the `<select>` (About Forge card) → opens the manage sheet. `data-i18n-title="lang.manage"`. |
+| Add sheet | Name input + spec textarea + hint + Generate/Cancel + live status line. DOM-built (textContent/placeholder assignment — no attribute-escaping risk from LLM-generated text). |
+| LLM call | `generateCustomLangDict(name, spec, {onStatus, signal})` sends the English `FORGE_I18N.en` dict + the spec to the **current** provider; branches like `forgeApp` (Gemini → `geminiStreamGenerateContent`, else `chatCompletionsStream`) so `jsonMode` + `maxTokens` are forwarded on both backends. Reuses `extractJson` (survives the 2.6.96–2.7.0 fence/thinking gauntlet). |
+| Parity validation | For each returned key, `{var}` token set must match the English source (`{name}` etc.) — mismatched keys are **dropped** so they fall back to en. Non-string values dropped. Keys absent from en are kept. Zero kept → clear error. |
+| FGS | `aiFgsAcquire` (the shared refcount) holds the dataSync service for the call so backgrounding doesn't kill network. Released in `finally`. Not wired to the chat-path `bgStart`/`bgStop` (single lease) or the global Stop (sheet has its own Cancel → `AbortController.abort()`). |
+| Progress | Streaming `onDelta` → "Receiving… Nk chars" status in the sheet; `genLog` to the AI-tab console (start/saved/failed). No generation watchdog (the sheet's Cancel is the abort path; `aiReadTimeoutMs()` ≥600s covers slow models). |
+| Manage sheet | Lists custom langs (name + key count) with 🗑 → `forgeConfirmDialog` confirm → removes from localStorage → re-renders. "Add custom language…" button opens the add sheet. Empty state: "No custom languages yet." |
+| Apply | Saved → "Saved — restart Forge to use {name}." → auto-close after 1.5s. `loadCustomLangs()` + `sel.__rebuild()` make the new lang appear in the select immediately; selecting it sets `forge_lang_v1` + shows the restart hint; `applyI18nDom` runs once at boot so the actual rendering applies on restart. |
+| i18n keys | 22 new `lang.*` en keys added (other langs fall back to en via `tf()` — no key-coverage gate, same pattern as 2.6.95/2.7.6 gen-settings keys). |
+
+### Safety / design notes
+- Custom ids are `custom_<sanitized>_<rand>` — can never collide with `en`/`es`/… .
+- The LLM never sees API keys (host-side call, same as Forge-it).
+- LLM-generated dict values are user-facing only; assigned via `textContent`/`placeholder` (DOM-safe), never injected as raw HTML attributes.
+- Deleting a custom lang that is currently selected → on restart `forgeLangFromStorage` won't find it → `detectForgeLang` → en. Clean.
+- Offensive/quirky specs ("getto", "klingon") are the user's choice; the provider may refuse, surfaced as a clear error.
+- Not translated by design (per the i18n comment block): SYSTEM_PROMPT, Forge-it/Reforge prompts, kitchen-sink lab, bridge — only the `FORGE_I18N` UI dict is translated, exactly as for built-in langs.
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (syntax, www≡assets, backtick sanity, 1 raw `</script>`, 28 tools, docs baselines 2.7.60/190).
+- Node unit test of the parity-validation + merge logic: drops bad-`{var}` keys, keeps en-missing keys, drops non-strings; merge idempotent (re-run doesn't duplicate).
+- Built + installed `~/downloads/Forge-debug-rebuilt.apk` (8.0 MB); cold-start OK, no crash, `ForgeInsets` fires, process alive.
+
+### Files
+`www/index.html` (+ assets sync), `android/app/build.gradle` (2.7.60/190),
+`docs/api.md` + `docs/tools.md` (baselines), `package.json` (2.7.60).
+
+Smoke (on device):
+```text
+[ ] Settings → About Forge → Language row has a ⋯ button beside the select
+[ ] Open the select → last option is "＋ Add custom language…"
+[ ] Pick it → Add custom language sheet (name + spec + Generate + Cancel)
+[ ] ⋯ → manage sheet → "No custom languages yet." + Add + Close
+[ ] Add: name "Pirate", spec "pirate English, arr" → Generate → status
+    "Translating into Pirate…" → "Receiving… Nk chars" → "Saved — restart Forge
+    to use Pirate." → sheet auto-closes; select now lists Pirate
+[ ] Restart Forge → select Pirate → UI renders in pirate style
+    (missing keys fall back to English)
+[ ] ⋯ → manage sheet → Pirate row → 🗑 → confirm → gone → restart → English
+[ ] No AI key configured → Generate → "Add an AI key in AI settings first."
+[ ] Free turn-key model (Gemini/Groq) generates a full dict in ~1-2 min
+```

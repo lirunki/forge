@@ -1443,7 +1443,10 @@ termux-reload-settings</div>
           </p>
           <div class="settings-block" style="margin-top:0.6rem;">
             <label for="langSelect" style="margin:0 0 0.35rem 0;" data-i18n="about.lang">Language</label>
-            <select id="langSelect"></select>
+            <div style="display:flex;gap:0.4rem;align-items:stretch;">
+              <select id="langSelect" style="flex:1;min-width:0;"></select>
+              <button class="btn secondary small" id="btnLangManage" type="button" title="Manage custom languages" data-i18n-title="lang.manage" style="padding:0 0.6rem;letter-spacing:0.3em;">⋯</button>
+            </div>
             <p class="field-hint hidden" id="langRestartHint" style="margin:0.45rem 0 0;" data-i18n="about.langRestart">Saved — restart Forge to apply.</p>
           </div>
           <div class="settings-block" style="margin-top:0.6rem;padding-top:0.55rem;border-top:1px solid var(--border);">
@@ -1991,6 +1994,28 @@ termux-reload-settings</div>
  "imp.pick": "Pick an .html mini-app…",
  "imp.readFail": "Could not read file: {msg}",
  "lang.auto": "Auto (device language)",
+ "lang.add": "Add custom language…",
+ "lang.manage": "Manage custom languages",
+ "lang.manageTitle": "Custom languages",
+ "lang.customTitle": "Add custom language",
+ "lang.customName": "Name",
+ "lang.customNamePh": "e.g. Klingon",
+ "lang.customSpec": "How does it sound?",
+ "lang.customSpecPh": "How the Klingons speak; English from the ghetto; pirate English…",
+ "lang.customHint": "Generates a translation dictionary with the current AI provider. Takes a minute or two; free turn-key models work. Restart Forge to use it.",
+ "lang.customNeedBoth": "Add both a name and a description of how it should sound.",
+ "lang.customGenerate": "Generate",
+ "lang.cancelGen": "Cancel",
+ "lang.translating": "Translating into {name}…",
+ "lang.receiving": "Receiving… {kb} chars",
+ "lang.customSaved": "Saved — restart Forge to use {name}.",
+ "lang.customEmpty": "No custom languages yet.",
+ "lang.deleteTitle": "Delete language?",
+ "lang.deleteBody": "Delete {name}? Its translations will be removed. Restart Forge to apply.",
+ "lang.noKey": "Add an AI key in AI settings first.",
+ "lang.genFail": "Generation failed: {msg}",
+ "lang.parseFail": "Model did not return a valid dictionary.",
+ "lang.cancelled": "Cancelled.",
  "lib.backup": "Backup",
  "lib.backupTitle": "Backup library to Google Drive / folder",
  "lib.changeIcon": "Change icon",
@@ -5127,6 +5152,43 @@ termux-reload-settings</div>
 }
  };
  /*__I18N_END__*/
+    // ——— Custom (user-generated) languages ———
+    // Custom langs live in localStorage and are merged into FORGE_LANGS /
+    // FORGE_I18N at boot, BEFORE forgeLangFromStorage() resolves the active
+    // language, so a saved custom lang is a valid selection. Missing keys in
+    // a custom dict fall back to English via t()/tf() (same as the built-in
+    // partial dicts). Restart applies (applyI18nDom runs once at boot).
+    const CUSTOM_LANGS_KEY = 'forge_custom_langs_v1';
+    function getCustomLangs() {
+      try {
+        const raw = localStorage.getItem(CUSTOM_LANGS_KEY);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr)) return [];
+        return arr.filter(x => x && typeof x === 'object' && typeof x.id === 'string' && typeof x.name === 'string');
+      } catch (_) { return []; }
+    }
+    function setCustomLangs(arr) {
+      try { localStorage.setItem(CUSTOM_LANGS_KEY, JSON.stringify(arr || [])); } catch (_) {}
+    }
+    function customLangIdFromName(name) {
+      const base = String(name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      return 'custom_' + (base || 'lang') + '_' + Math.random().toString(36).slice(2, 6);
+    }
+    function loadCustomLangs() {
+      const arr = getCustomLangs();
+      for (const c of arr) {
+        if (!c.id || !c.name) continue;
+        try {
+          if (!Object.prototype.hasOwnProperty.call(FORGE_I18N, c.id)) {
+            FORGE_I18N[c.id] = (c.dict && typeof c.dict === 'object' && !Array.isArray(c.dict)) ? c.dict : {};
+          }
+          if (!FORGE_LANGS.some(p => p[0] === c.id)) FORGE_LANGS.push([c.id, c.name]);
+        } catch (_) {}
+      }
+    }
+    loadCustomLangs();
+
     const LANG_GATE_KEY = 'forge_lang_v1';
     function forgeLangFromStorage() {
       try {
@@ -5179,19 +5241,246 @@ termux-reload-settings</div>
       sel.dataset.wired = '1';
       let cur = 'auto';
       try { cur = localStorage.getItem(LANG_GATE_KEY) || 'auto'; } catch (_) {}
-      sel.innerHTML = '';
-      [['auto', t('lang.auto')]].concat(FORGE_LANGS).forEach(([code, name]) => {
-        const o = document.createElement('option');
-        o.value = code;
-        o.textContent = code === 'auto' ? name : (name + ' · ' + code.toUpperCase());
-        sel.appendChild(o);
-      });
-      sel.value = cur;
+      function rebuild() {
+        sel.innerHTML = '';
+        [['auto', t('lang.auto')]].concat(FORGE_LANGS).forEach(([code, name]) => {
+          const o = document.createElement('option');
+          o.value = code;
+          o.textContent = code === 'auto' ? name : (name + ' · ' + code.toUpperCase());
+          sel.appendChild(o);
+        });
+        const add = document.createElement('option');
+        add.value = '__add__';
+        add.textContent = '＋ ' + tf('lang.add', 'Add custom language…');
+        sel.appendChild(add);
+        sel.value = cur;
+      }
+      rebuild();
       sel.addEventListener('change', () => {
+        if (sel.value === '__add__') {
+          // Restore the visible selection; the new lang applies on restart.
+          sel.value = cur;
+          try { openAddCustomLangSheet(); } catch (_) {}
+          return;
+        }
+        cur = sel.value;
         try { localStorage.setItem(LANG_GATE_KEY, sel.value); } catch (_) {}
         const h = document.getElementById('langRestartHint');
         if (h) h.classList.remove('hidden');
       });
+      sel.__rebuild = rebuild;
+    }
+
+    // ——— Custom language: generate + manage sheets ———
+    // openAddCustomLangSheet(): form (name + spec) → host AI call over the
+    // current provider → validated JSON dict → saved to localStorage. Restart
+    // applies (applyI18nDom runs once at boot; loadCustomLangs merges it).
+    // openManageCustomLangsSheet(): list + delete custom langs.
+    async function generateCustomLangDict(name, spec, opts) {
+      const o = opts || {};
+      const status = typeof o.onStatus === 'function' ? o.onStatus : () => {};
+      const signal = o.signal;
+      const enDict = (FORGE_I18N.en || {});
+      const sys = [
+        'You translate the user-interface strings of an Android app (called Forge) into a new language or style chosen by the user.',
+        'You will receive a JSON object mapping string IDs to their English source text.',
+        'Return a JSON object mapping the SAME IDs to the translated text. Return ONLY the JSON object — no prose, no code fences, no comments.',
+        '',
+        'Hard rules:',
+        '- Keep every {placeholder} EXACTLY as-is, e.g. {name}, {count}, {msg}. Do not translate or move the text inside braces.',
+        '- Some values contain HTML (keys ending in -html). Preserve all HTML tags and attributes exactly; only translate the human-readable text between tags.',
+        '- Keep technical tokens literal and unchanged: API key prefixes (AIza, gsk_, ir_live, sk-), model ids (gemini-2.5-flash, glm-5.2, grok-imagine-image), URLs, file extensions, emoji.',
+        '- If a string is purely technical (a model id, a URL, a code sample, a file name), leave it unchanged.',
+        '- Translate naturally and consistently in the requested style. Match the English length and tone where possible.',
+        '- You may omit keys you cannot translate; missing keys fall back to English.',
+      ].join('\n');
+      const user = 'Target language/style name: ' + String(name || '').trim() + '\n'
+        + 'Specification (how it should sound): ' + String(spec || '').trim() + '\n\n'
+        + 'English dictionary (JSON):\n' + JSON.stringify(enDict);
+      const msgs = [{ role: 'system', content: sys }, { role: 'user', content: user }];
+      status(tf('lang.translating', 'Translating into {name}…', { name }));
+      let recvChars = 0;
+      const onDelta = (d) => {
+        try {
+          recvChars += String(d || '').length;
+          const kb = recvChars >= 1024 ? (recvChars / 1024).toFixed(1) + 'k' : String(recvChars);
+          status(tf('lang.receiving', 'Receiving… {kb} chars', { kb }));
+        } catch (_) {}
+      };
+      let raw;
+      try {
+        // Branch like forgeApp so Gemini gets jsonMode+maxTokens forwarded
+        // (chatCompletionsStream's gemini branch drops those opts).
+        if (isGeminiHostProvider()) {
+          raw = await geminiStreamGenerateContent(msgs, signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
+        } else {
+          raw = await chatCompletionsStream(msgs, signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') throw e;
+        throw new Error(tf('lang.genFail', 'Generation failed: {msg}', { msg: (e && e.message) || String(e) }));
+      }
+      raw = typeof raw === 'string' ? raw : ((raw && raw.content) || '');
+      const parsed = extractJson(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(tf('lang.parseFail', 'Model did not return a valid dictionary.'));
+      }
+      // Validate {var} token parity per key; drop keys whose placeholders don't
+      // match the English source (so a broken translation falls back to en).
+      const out = {};
+      let kept = 0;
+      for (const k of Object.keys(parsed)) {
+        const v = parsed[k];
+        if (typeof v !== 'string') continue;
+        const enVal = enDict[k];
+        if (enVal != null) {
+          const enTokens = (String(enVal).match(/\{(\w+)\}/g) || []).sort();
+          const vTokens = (v.match(/\{(\w+)\}/g) || []).sort();
+          if (JSON.stringify(enTokens) !== JSON.stringify(vTokens)) continue;
+        }
+        out[k] = v;
+        kept++;
+      }
+      if (kept === 0) throw new Error(tf('lang.parseFail', 'Model did not return a valid dictionary.'));
+      return out;
+    }
+
+    function openAddCustomLangSheet() {
+      const wrap = document.createElement('div');
+      wrap.className = 'tour-overlay';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.innerHTML =
+        '<div class="tour-card" style="max-width:480px">' +
+          '<h2></h2>' +
+          '<label style="display:block;margin:0.6rem 0 0.2rem;"></label>' +
+          '<input id="cLangName" type="text" style="width:100%;" />' +
+          '<label style="display:block;margin:0.6rem 0 0.2rem;"></label>' +
+          '<textarea id="cLangSpec" rows="3" style="width:100%;resize:vertical;"></textarea>' +
+          '<p class="field-hint" id="cLangHint" style="margin:0.4rem 0;"></p>' +
+          '<p class="field-hint" id="cLangStatus" style="margin:0.4rem 0;min-height:1em;"></p>' +
+          '<div class="tour-actions" style="margin-top:0.5rem;">' +
+            '<button class="btn secondary small" type="button" data-act="cancel"></button>' +
+            '<button class="btn small" type="button" data-act="gen"></button>' +
+          '</div>' +
+        '</div>';
+      const labels = wrap.querySelectorAll('label');
+      wrap.querySelector('h2').textContent = tf('lang.customTitle', 'Add custom language');
+      labels[0].textContent = tf('lang.customName', 'Name');
+      labels[1].textContent = tf('lang.customSpec', 'How does it sound?');
+      const nameInput = wrap.querySelector('#cLangName');
+      nameInput.placeholder = tf('lang.customNamePh', 'e.g. Klingon');
+      const specInput = wrap.querySelector('#cLangSpec');
+      specInput.placeholder = tf('lang.customSpecPh', 'How the Klingons speak; English from the ghetto; pirate English…');
+      wrap.querySelector('#cLangHint').textContent = tf('lang.customHint', 'Generates a translation dictionary with the current AI provider. Takes a minute or two; free turn-key models work. Restart Forge to use it.');
+      const cancelBtn = wrap.querySelector('[data-act="cancel"]');
+      cancelBtn.textContent = tf('lang.cancelGen', 'Cancel');
+      const genBtn = wrap.querySelector('[data-act="gen"]');
+      genBtn.textContent = tf('lang.customGenerate', 'Generate');
+      const statusEl = wrap.querySelector('#cLangStatus');
+      const setStatus = (txt, kind) => {
+        statusEl.textContent = String(txt || '');
+        statusEl.style.color = kind === 'err' ? 'var(--danger)' : (kind === 'ok' ? 'var(--ok)' : 'var(--muted)');
+      };
+      const ac = new AbortController();
+      let fgsRelease = null;
+      const close = () => { try { ac.abort(); } catch (_) {} try { wrap.remove(); } catch (_) {} try { fgsRelease && fgsRelease(); } catch (_) {} };
+      cancelBtn.onclick = close;
+      wrap.addEventListener('click', (ev) => { if (ev.target === wrap) close(); });
+      document.body.appendChild(wrap);
+      try { nameInput.focus(); } catch (_) {}
+      genBtn.onclick = async () => {
+        const name = nameInput.value.trim();
+        const spec = specInput.value.trim();
+        if (!name || !spec) { setStatus(tf('lang.customNeedBoth', 'Add both a name and a description of how it should sound.'), 'err'); return; }
+        const rt = getAiRuntime();
+        if (!rt.key && !rt.allowEmptyKey) { setStatus(tf('lang.noKey', 'Add an AI key in AI settings first.'), 'err'); return; }
+        nameInput.disabled = true; specInput.disabled = true; genBtn.disabled = true;
+        cancelBtn.textContent = tf('lang.cancelGen', 'Cancel');
+        try {
+          fgsRelease = aiFgsAcquire(tf('lang.translating', 'Translating…'));
+          genLog('info', 'custom lang generate · ' + name + ' · ' + (rt.providerId || '?') + '/' + (rt.model || '?'));
+          const dict = await generateCustomLangDict(name, spec, { onStatus: setStatus, signal: ac.signal });
+          const id = customLangIdFromName(name);
+          const arr = getCustomLangs().filter(c => c.id !== id);
+          arr.push({ id, name, spec, dict, createdAt: Date.now() });
+          setCustomLangs(arr);
+          genLog('info', 'custom lang saved · ' + name + ' · ' + Object.keys(dict).length + ' keys');
+          setStatus(tf('lang.customSaved', 'Saved — restart Forge to use {name}.', { name }), 'ok');
+          // Merge into the live arrays + rebuild the select so the new lang
+          // is visible (applying still requires restart — applyI18nDom ran once).
+          try { loadCustomLangs(); const s = document.getElementById('langSelect'); if (s && s.__rebuild) s.__rebuild(); } catch (_) {}
+          setTimeout(close, 1500);
+        } catch (e) {
+          if (e && e.name === 'AbortError') { setStatus(tf('lang.cancelled', 'Cancelled.'), 'err'); }
+          else { genLog('err', 'custom lang failed: ' + ((e && e.message) || e)); setStatus(String((e && e.message) || e), 'err'); }
+          genBtn.disabled = false; nameInput.disabled = false; specInput.disabled = false;
+        }
+      };
+    }
+
+    function openManageCustomLangsSheet() {
+      const wrap = document.createElement('div');
+      wrap.className = 'tour-overlay';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.innerHTML =
+        '<div class="tour-card" style="max-width:420px">' +
+          '<h2></h2>' +
+          '<div id="cLangList" style="margin:0.6rem 0;max-height:50vh;overflow:auto;"></div>' +
+          '<div class="tour-actions" style="margin-top:0.5rem;">' +
+            '<button class="btn secondary small" type="button" data-act="add"></button>' +
+            '<button class="btn small" type="button" data-act="close"></button>' +
+          '</div>' +
+        '</div>';
+      wrap.querySelector('h2').textContent = tf('lang.manageTitle', 'Custom languages');
+      const list = wrap.querySelector('#cLangList');
+      const addBtn = wrap.querySelector('[data-act="add"]');
+      addBtn.textContent = tf('lang.add', 'Add custom language…');
+      const closeBtn = wrap.querySelector('[data-act="close"]');
+      closeBtn.textContent = tf('common.close', 'Close');
+      const render = () => {
+        list.innerHTML = '';
+        const arr = getCustomLangs();
+        if (!arr.length) {
+          const p = document.createElement('p');
+          p.className = 'field-hint';
+          p.textContent = tf('lang.customEmpty', 'No custom languages yet.');
+          list.appendChild(p);
+          return;
+        }
+        for (const c of arr) {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border);';
+          const span = document.createElement('span');
+          span.textContent = c.name + ' · ' + (c.dict ? Object.keys(c.dict).length : 0) + ' keys';
+          row.appendChild(span);
+          const del = document.createElement('button');
+          del.className = 'btn secondary small';
+          del.type = 'button';
+          del.textContent = '🗑';
+          del.onclick = async () => {
+            const ok = await forgeConfirmDialog({
+              title: tf('lang.deleteTitle', 'Delete language?'),
+              body: tf('lang.deleteBody', 'Delete {name}? Its translations will be removed. Restart Forge to apply.', { name: c.name }),
+              okLabel: tf('common.delete', 'Delete'),
+              okClass: 'btn small danger',
+            });
+            if (!ok) return;
+            const next = getCustomLangs().filter(x => x.id !== c.id);
+            setCustomLangs(next);
+            genLog('info', 'custom lang deleted · ' + c.name);
+            render();
+          };
+          row.appendChild(del);
+          list.appendChild(row);
+        }
+      };
+      render();
+      addBtn.onclick = () => { try { wrap.remove(); } catch (_) {} openAddCustomLangSheet(); };
+      closeBtn.onclick = () => { try { wrap.remove(); } catch (_) {} };
+      wrap.addEventListener('click', (ev) => { if (ev.target === wrap) { try { wrap.remove(); } catch (_) {} } });
+      document.body.appendChild(wrap);
     }
 
     /* === FORGE_BUILD_STAMP ===
@@ -5822,6 +6111,7 @@ termux-reload-settings</div>
       btnForgetKey: document.getElementById('btnForgetKey'),
       btnTestAi: document.getElementById('btnTestAi'),
       btnDonate: document.getElementById('btnDonate'),
+      btnLangManage: document.getElementById('btnLangManage'),
       btnAaLink: document.getElementById('btnAaLink'),
       btnMiniConsole: document.getElementById('btnMiniConsole'),
       btnMiniConsoleClear: document.getElementById('btnMiniConsoleClear'),
@@ -23183,6 +23473,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       // purchase, no gating — donation link only (Play/F-Droid compliant).
       openExternalUrl('https://www.paypal.me/forgedevthanksyou');
     });
+    el.btnLangManage?.addEventListener('click', () => { try { openManageCustomLangsSheet(); } catch (_) {} });
     el.btnAaLink?.addEventListener('click', aaLinkTap);
     loadAaLink();
     el.btnForgetKey?.addEventListener('click', () => {
