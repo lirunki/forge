@@ -20661,7 +20661,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
 
     /** Drive the agentic build. Returns { app } on success, { classicRaw } when the
      *  model never opts in (classic path reuses the round-1 content), or throws. */
-    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled = false, resumeFrom }) {
+    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled = false, resumeFrom, extraRounds = 0 }) {
       const owner = currentApp?.id || '__new__';
       const fs = activeBuilderFs && activeBuilderOwner === owner ? activeBuilderFs : builderNewFs();
       activeBuilderFs = fs;
@@ -20678,8 +20678,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       const messages = resumeFrom ? resumeFrom.messages.slice() : msgs.slice();
       let armed = resumeFrom ? !!resumeFrom.armed : false;
       const startRound = resumeFrom ? (resumeFrom.round + 1) : 1;
-      loopStatus(resumeFrom ? ('workspace mode resumed (round ' + startRound + ')') : 'workspace mode offered (read_loop_md)', 'info', 'start');
-      for (let round = startRound; round <= BUILDER_MAX_ROUNDS; round++) {
+      // Resume past the round cap: a resumed build gets a fresh window of
+      // extraRounds beyond where it left off (used when the prior loop
+      // exhausted BUILDER_MAX_ROUNDS). Each resume gets its own window so
+      // repeated resumes keep making progress instead of re-throwing at once.
+      const maxRound = resumeFrom ? (resumeFrom.round + Math.max(0, extraRounds | 0)) : BUILDER_MAX_ROUNDS;
+      loopStatus(resumeFrom ? ('workspace mode resumed (round ' + startRound + ' / +' + Math.max(0, extraRounds | 0) + ')') : 'workspace mode offered (read_loop_md)', 'info', 'start');
+      for (let round = startRound; round <= maxRound; round++) {
         // Stash a resumable snapshot BEFORE the LLM round. If the provider
         // errors, the user can Resume from this context instead of restarting.
         // Cleared on success / classic / max-rounds / new build / Stop.
@@ -20736,8 +20741,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           }
         }
       }
-      clearBuilderResume();
-      throw new Error('Builder loop ended after ' + BUILDER_MAX_ROUNDS + ' rounds without finish. Try a simpler app, or turn off "Allow agentic builder loop" for this provider in AI settings.');
+      // Do NOT clearBuilderResume here: keep the last round's snapshot so the
+      // user can Resume (with extraRounds) instead of restarting from scratch.
+      // The onSend catch sees hasBuilderResumeFor() === true and surfaces the
+      // Resume button on this error message.
+      setBuilderResume(owner, messages, armed, researchEnabled, wantCar, maxRound);
+      throw new Error('Builder loop ended after ' + maxRound + ' rounds without finish. Try a simpler app, or turn off "Allow agentic builder loop" for this provider in AI settings, or tap Resume to continue the build.');
     }
 
     /** Resume an agentic forge build that failed mid-loop (provider/network
@@ -20746,6 +20755,9 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
      * must still be live for the same owner — hasBuilderResumeFor gates this.
      * Mirrors onSend's forge tail (busy/abort/progress/watchdog/finalize) so a
      * resumed build behaves exactly like a fresh one once it succeeds. */
+    // Extra rounds granted when resuming a build that exhausted BUILDER_MAX_ROUNDS.
+    // Lets the model continue past the cap instead of re-throwing at round 25.
+    const BUILDER_RESUME_EXTRA_ROUNDS = 24;
     async function resumeForgeBuild() {
       const session = pendingBuilderResume;
       if (!session || busy) return;
@@ -20777,6 +20789,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           status: (s) => forgeProgress.status(s),
           workspaceSeed: null,
           researchEnabled: !!session.researchEnabled,
+          extraRounds: BUILDER_RESUME_EXTRA_ROUNDS,
         });
         const stale = genAbandoned || myToken !== genToken;
         if (stale) {

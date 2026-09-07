@@ -2771,3 +2771,72 @@ Smoke (on device):
 [ ] No AI key configured → Generate → "Add an AI key in AI settings first."
 [ ] Free turn-key model (Gemini/Groq) generates a full dict in ~1-2 min
 ```
+
+## Resume button for builder-loop round exhaustion (2026-09-07)
+
+**2.7.60 / versionCode 190** (host-only refinement, same versionCode as the
+custom-language land). Host-only, no native Java.
+
+### Problem
+When the agentic builder loop hit `BUILDER_MAX_ROUNDS` (24) without `finish`,
+`runBuilderLoop` called `clearBuilderResume()` and threw:
+"Builder loop ended after 24 rounds without finish. Try a simpler app, or
+turn off 'Allow agentic builder loop' for this provider in AI settings."
+
+The `onSend` catch checks `hasBuilderResumeFor()` to decide whether to surface
+the `↻ Resume build` button — but the snapshot had just been cleared, so the
+button never appeared. The only option was to start over.
+
+### Fix
+- **Don't clear the snapshot at exhaustion.** `runBuilderLoop` now calls
+  `setBuilderResume(owner, messages, armed, …, maxRound)` instead of
+  `clearBuilderResume()` before throwing. `onSend`'s catch sees
+  `hasBuilderResumeFor() === true` (the workspace is still live for the same
+  owner) and appends `{ resume: true }` to the assistant message → the
+  existing `renderChat` resume-button path shows `↻ Resume build`.
+- **Resume extends past the cap.** `runBuilderLoop` gained `extraRounds`
+  (default 0). The loop bound is now `maxRound = resumeFrom ?
+  (resumeFrom.round + extraRounds) : BUILDER_MAX_ROUNDS` — so a resumed
+  exhausted build (round 24) starts at 25 and runs to 48 (a fresh 24-round
+  window), not `25 > 24` → immediate re-throw. Each subsequent resume gets
+  its own window relative to where it left off (24→48→72→96…), so repeated
+  resumes keep making progress instead of stalling.
+- `resumeForgeBuild` passes `extraRounds: BUILDER_RESUME_EXTRA_ROUNDS` (24).
+- The error message now ends "…or tap Resume to continue the build."
+- The resume catch (line ~20852) already checks `hasBuilderResumeFor(owner)`
+  and surfaces Resume again, so a resumed build that exhausts again shows
+  another Resume button — repeatable.
+
+### Why this was a small patch
+The resume infrastructure (snapshot stash, `hasBuilderResumeFor`,
+`resumeForgeBuild`, the `renderChat` resume-button check, the `{ resume }`
+message flag) already existed for the provider/network-error resume path
+(2.7.56). The only missing piece was: don't wipe the snapshot at round-cap
+exhaustion, and let resume run past the cap. Two ~2-line changes.
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (syntax, www≡assets, backticks,
+  1 raw `</script>`, 28 tools, docs baselines 2.7.60/190).
+- Node unit test of the round math: fresh 24 iters; resume from 24 → 24
+  iters (25→48); resume from 48 → 24 iters (49→72); resume from 72 → 24
+  iters (73→96). Each resume gets a fresh window.
+- Built + installed; cold-start OK, no crash.
+
+### Files
+`www/index.html` (+ assets sync). No version bump (host-only refinement of
+behavior introduced at 2.7.60/190; the resume path itself dates to 2.7.56).
+
+Smoke (on device):
+```text
+[ ] Flag agenticLoop ON → forge a big/complex app that runs 24 rounds without
+    finish → chat shows the "Builder loop ended after 24 rounds…" error WITH a
+    ↻ Resume build button under it
+[ ] Tap Resume → console: "workspace mode resumed (round 25 / +24)" →
+    loop continues for up to 24 more rounds
+[ ] If it finishes in the resumed window → app loads as normal
+[ ] If it exhausts again at 48 → another "…ended after 48 rounds…" message
+    with another Resume button → tap → round 49 / +24
+[ ] Stop during a resumed build → "Stopped." (existing abort path)
+[ ] Provider/network error mid-loop still shows Resume (unchanged)
+[ ] Flag OFF → classic path unchanged (no resume button on any error)
+```
