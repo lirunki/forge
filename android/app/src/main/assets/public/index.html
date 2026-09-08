@@ -20899,6 +20899,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     ];
 
     let builderLoopMdCache = null;
+    let codeModeMdCache = null;
     const BUILDER_LOOP_MD_FALLBACK = [
       '# Forge workspace builder protocol',
       '',
@@ -20911,16 +20912,66 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       '- Call finish with {title, summary, message} when the app is complete. finish is the only way to deliver.',
       '- Limits: 200 files, 10MB/file, 64MB total, 6 images, 10s per run_js, 24 rounds.',
     ].join('\n');
+    // CODEMODE.md (code-mode run_program section) — appended to LOOP.md when
+    // code mode is enabled. Same fetch+fallback shape as LOOP.md.
+    const CODEMODE_MD_FALLBACK = [
+      '# Code mode: `run_program` (enabled)',
+      '',
+      '`run_program({ code, description? })` is available alongside the other',
+      'workspace tools. It runs a sandboxed JS script that batches workspace tools',
+      'deterministically (no LLM in the middle): forge.tools.run(name, args)',
+      'calls any other workspace tool (fs_write, gen_image, web_search, … — see',
+      'forge.tools.list()), forge.sleep(ms), forge.print(...), and',
+      'forge.finish(result) ends the script with a value fed back to you. Use it',
+      'to parallelize many tool calls in one turn (Promise.all), then continue',
+      'with more tools, another run_program, or finish. The script cannot call',
+      'run_program or the workspace finish — return a value via forge.finish',
+      '(result) instead. run_js stays for offline pure compute over workspace',
+      'files (api.*); use run_program when you need to call tools.',
+    ].join('\n');
+    async function getCodeModeMd() {
+      if (codeModeMdCache == null) {
+        let txt = null;
+        try {
+          const r = await fetch('CODEMODE.md', { cache: 'no-store' });
+          if (r && r.ok) txt = await r.text();
+        } catch (_) {}
+        if (!txt || txt.length < 200) txt = CODEMODE_MD_FALLBACK;
+        codeModeMdCache = txt;
+      }
+      return codeModeMdCache;
+    }
     async function getLoopMd() {
-      if (builderLoopMdCache != null) return builderLoopMdCache;
-      let txt = null;
-      try {
-        const r = await fetch('LOOP.md', { cache: 'no-store' });
-        if (r && r.ok) txt = await r.text();
-      } catch (_) {}
-      if (!txt || txt.length < 200) txt = BUILDER_LOOP_MD_FALLBACK;
-      builderLoopMdCache = txt;
-      return txt;
+      if (builderLoopMdCache == null) {
+        let txt = null;
+        try {
+          const r = await fetch('LOOP.md', { cache: 'no-store' });
+          if (r && r.ok) txt = await r.text();
+        } catch (_) {}
+        if (!txt || txt.length < 200) txt = BUILDER_LOOP_MD_FALLBACK;
+        builderLoopMdCache = txt;
+      }
+      // When code mode is enabled, append the CODEMODE.md run_program section
+      // (fetched from CODEMODE.md, same pattern as LOOP.md) + the actual
+      // configured limit values (computed fresh from getCodeModeLimits()).
+      if (isCodeModeEnabled()) {
+        const L = getCodeModeLimits();
+        const limitsBlock = [
+          '',
+          '## Your code-mode limits (right now)',
+          '',
+          '- Wall-clock per script: **' + L.wallClockSecs + 's**',
+          '- Max tool calls per script: **' + L.toolCallCount + '**',
+          '- Per-call timeout: **' + L.perCallTimeoutSecs + 's**',
+          '- Concurrency: **' + L.concurrency + '** in-flight',
+          '- Output size: **' + Math.round(L.outputBytes / (1024 * 1024)) + ' MB**',
+          '- Code size: **256 KB**',
+          '',
+          'Pack as much as possible into each script. Each run_program is one LLM turn.',
+        ].join('\n');
+        return builderLoopMdCache + '\n\n' + await getCodeModeMd() + limitsBlock;
+      }
+      return builderLoopMdCache;
     }
 
     async function builderExecTool(name, argsRaw, ctx) {
