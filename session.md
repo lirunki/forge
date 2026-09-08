@@ -57,7 +57,7 @@ it's all there.
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.7.65 / versionCode 195** (code mode = `run_program` loop tool + `CODEMODE.md`; prior 2.7.64/194 run_program simplification, 2.7.63/193 hybrid write_program rounds, 2.7.62/192 wall-clock 300s→600s fix, 2.7.61/191 code mode feature, 2.7.60/190 resume button, 2.7.56/184 custom languages, 2.7.40/170 FGS notification lifecycle, 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
+| Version | **2.7.66 / versionCode 196** (code-mode orchestration guidance — run_program for orchestration only, static files via fs_write; prior 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md`, 2.7.64/194 run_program simplification, 2.7.63/193 hybrid write_program rounds, 2.7.62/192 wall-clock 300s→600s fix, 2.7.61/191 code mode feature, 2.7.60/190 resume button, 2.7.56/184 custom languages, 2.7.40/170 FGS notification lifecycle, 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -65,7 +65,7 @@ it's all there.
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | **2026-09-08 — 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md`** (`79294e3`) · 2026-09-08 — 2.7.64/194 run_program simplification (`66e364c`) · 2026-09-08 — 2.7.63/193 hybrid write_program rounds (`162ba90`) · 2026-09-08 — 2.7.62/192 wall-clock 300s→600s fix (`399e349`) · 2026-09-07 — 2.7.61/191 code mode feature (`5cf692f`) · 2026-09-07 — 2.7.60/190 resume button (`a304e86`) · 2026-09-07 — 2.7.60/190 custom languages (`7182bf8`) · 2026-08-29 — 2.7.40/170 FGS notification lifecycle · 2.7.38/168 agentic Reforge + persistent workspace · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
+| **Last rebuild** | **2026-09-08 — 2.7.66/196 code-mode orchestration guidance (`2ac03a2`)** · 2026-09-08 — 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md` (`79294e3`) · 2026-09-08 — 2.7.64/194 run_program simplification (`66e364c`) · 2026-09-08 — 2.7.63/193 hybrid write_program rounds (`162ba90`) · 2026-09-08 — 2.7.62/192 wall-clock 300s→600s fix (`399e349`) · 2026-09-07 — 2.7.61/191 code mode feature (`5cf692f`) · 2026-09-07 — 2.7.60/190 resume button (`a304e86`) · 2026-09-07 — 2.7.60/190 custom languages (`7182bf8`) · 2026-08-29 — 2.7.40/170 FGS notification lifecycle · 2.7.38/168 agentic Reforge + persistent workspace · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
 | **Release artifacts** | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`) · GPL-3.0 · upload-key signed
 
 ### Locked product baseline
@@ -3006,3 +3006,55 @@ built + installed.
 `www/CODEMODE.md` (+ android sync), `www/index.html` (+ assets sync),
 `forge_check.sh`, `build_forge.sh`, version baselines (build.gradle, docs/api.md,
 docs/tools.md, package.json) → 2.7.65/195.
+
+## Code mode: orchestration guidance — run_program is not a wrapper for content (2026-09-08)
+
+**2.7.66 / versionCode 196** (from 2.7.65/195). Host-only docs/prompt refinement;
+no machinery changed.
+
+### Problem
+With code mode on, the LLM over-used `run_program` — it wrapped **everything**
+in scripts, including files whose content it already knew how to write (e.g. a
+`run_program` that both generates 10 images *and* writes `index.html` with the
+content inlined in the script body). It didn't realize `fs_write` exists as a
+direct path for static content and that `run_program` is only for
+orchestration.
+
+### What landed
+- **`www/CODEMODE.md`** (+ assets sync, 5102 B): new lead section
+  **"The one rule: use `run_program` to orchestrate, not to write content you
+  already have"** —
+  - static files you can write now → `fs_write` directly (never wrapped);
+  - a single tool call → direct tool call, not a script;
+  - reach for `run_program` when you'd otherwise emit the same tool call many
+    times or need to branch on a tool result.
+  Plus the worked **10-generated-images** example: `fs_write` `index.html`
+  referencing `images/gen_1..10.png` up front, then ONE `run_program` that
+  loops `gen_image` in parallel and `forge.finish()`es the produced paths
+  (only `fs_edit` if a path differs). API/constraint/limits/`run_program` vs
+  `run_js` sections kept.
+- **`CODEMODE_MD_FALLBACK`** (index.html) rewritten to the same condensed
+  rule + example so the fetch-failure path teaches the same behavior.
+- **The two `CODE MODE:` system-prompt offer lines** (forgeApp + reforge)
+  sharpened: "Use it ONLY to orchestrate tool calls you would otherwise
+  repeat: static files you can write now (index.html, CSS, JS modules,
+  already-computed data) go through fs_write directly, never wrapped in
+  run_program, and a single tool call is a direct tool call." + pointer to
+  CODEMODE.md.
+
+### Note
+`gen_image` numbers its outputs (`images/gen_N.png` where N = completion
+order), so a parallel batch of 10 produces `gen_1..gen_10` — the set is
+deterministic even if prompt→number mapping is not (interchangeable for
+grids; `fs_edit` swap only if it matters).
+
+Smoke:
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.66 (196) · 2ac03a2
+[ ] Code mode ON + agentic loop ON → "forge an app with 10 generated images" →
+    console shows fs_write index.html (direct) + ONE run_program batching the
+    gen_image calls (not a script that inlines index.html content)
+[ ] Simple app (tip calculator) → model uses fs_write directly, no run_program
+[ ] Data-heavy app (fetch 5 URLs, aggregate) → run_program used for the batch
+[ ] Reforge with code mode ON → same orchestration-vs-direct split
+[ ] Classic path (flags off) unchanged

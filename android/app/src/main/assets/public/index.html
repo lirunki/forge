@@ -19592,7 +19592,7 @@ Return complete html, not a diff.`;
       const userText = buildReforgeUserPrompt(app, { wantCar, tools: toolSettings });
       if (isAgenticLoopEnabled() || isCodeModeEnabled()) {
         system += '\n\nBUILD OPTION (agentic reforge): If the existing app is large, call read_loop_md and use the workspace tools. The workspace is seeded with the existing index.html. Preserve behavior, then call finish.';
-        if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool — write a JS script that batches workspace tools deterministically (no LLM in the middle) via forge.tools.run(name, args) and forge.finish(result); the result is fed back to you. Mix scripts, direct tool calls, and prose as needed.';
+        if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool — it runs a JS script that orchestrates many workspace tools in one turn (loops, parallel calls, branching on a tool result) via forge.tools.run(name, args) + forge.finish(result); the return value is fed back to you. Use it ONLY to orchestrate tool calls you would otherwise repeat: static files you can write now (index.html, CSS, JS modules, already-computed data) go through fs_write directly, never wrapped in run_program, and a single tool call is a direct tool call. See CODEMODE.md (loaded after read_loop_md) for the one rule and a worked 10-image example.';
         if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
       }
       const msgs = [
@@ -20917,17 +20917,38 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     const CODEMODE_MD_FALLBACK = [
       '# Code mode: `run_program` (enabled)',
       '',
-      '`run_program({ code, description? })` is available alongside the other',
-      'workspace tools. It runs a sandboxed JS script that batches workspace tools',
-      'deterministically (no LLM in the middle): forge.tools.run(name, args)',
-      'calls any other workspace tool (fs_write, gen_image, web_search, … — see',
-      'forge.tools.list()), forge.sleep(ms), forge.print(...), and',
-      'forge.finish(result) ends the script with a value fed back to you. Use it',
-      'to parallelize many tool calls in one turn (Promise.all), then continue',
-      'with more tools, another run_program, or finish. The script cannot call',
-      'run_program or the workspace finish — return a value via forge.finish',
-      '(result) instead. run_js stays for offline pure compute over workspace',
-      'files (api.*); use run_program when you need to call tools.',
+      '`run_program({ code, description? })` runs a sandboxed JS script that',
+      '**orchestrates** workspace tools deterministically (no LLM in the middle):',
+      'forge.tools.run(name, args) calls any other workspace tool (fs_write,',
+      'gen_image, web_search, … — see forge.tools.list()), forge.sleep(ms),',
+      'forge.print(...), and forge.finish(result) ends the script and feeds',
+      'result back to you as the run_program tool result.',
+      '',
+      '## The one rule: orchestrate, do not wrap content you already have',
+      '',
+      'run_program is for **batching / looping / branching on tool results** —',
+      'many tool calls in one turn, a loop over a dataset, or a value you can only',
+      'know after calling a tool. It is NOT a wrapper for producing files whose',
+      'content you already know how to write.',
+      '- Static files you can write now (index.html, CSS, a JS module, data you',
+      '  have already computed) -> fs_write directly. Never wrap a single',
+      '  known-content write in run_program.',
+      '- A single tool call (one gen_image, one web_fetch) -> call the tool',
+      '  directly; do not spin up a script for one call.',
+      '- Reach for run_program when you would otherwise emit the same tool call',
+      '  many times, or need to branch on a tool output before the next step.',
+      '',
+      'Worked example (app with 10 generated images): fs_write index.html',
+      'directly, referencing images/gen_1.png .. images/gen_10.png (gen_image',
+      'writes those numbered paths). Then ONE run_program loops',
+      'forge.tools.run(\'gen_image\', {prompt}) in parallel and forge.finish()',
+      'es with the produced paths. index.html was always a direct fs_write;',
+      'run_program earned its place only by batching the 10 generations.',
+      '',
+      'The script cannot call run_program (no nesting) or the workspace finish',
+      '— return a value via forge.finish(result) instead. run_js stays for',
+      'offline pure compute over workspace files (api.*); use run_program when',
+      'you need to call tools.',
     ].join('\n');
     async function getCodeModeMd() {
       if (codeModeMdCache == null) {
@@ -21319,7 +21340,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // Agentic builder pointer (per-provider flag): one short paragraph, one tool.
       if (isAgenticLoopEnabled() || isCodeModeEnabled()) {
         system += '\n\nBUILD OPTION (agentic): If this app is too large or complex to deliver as one JSON payload, call the tool read_loop_md now to load the workspace builder protocol (scratch files, JS runner, image generation, host-side assembly) and build it in rounds instead. Use it only when a single response would not be enough; otherwise ignore this option and return the JSON payload exactly as specified.';
-        if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool after read_loop_md — write a JS script that batches workspace tools deterministically (no LLM in the middle) via forge.tools.run(name, args) and forge.finish(result); the result is fed back to you. Mix scripts, direct tool calls, and prose as needed.';
+        if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool after read_loop_md — it runs a JS script that orchestrates many workspace tools in one turn (loops, parallel calls, branching on a tool result) via forge.tools.run(name, args) + forge.finish(result); the return value is fed back to you. Use it ONLY to orchestrate tool calls you would otherwise repeat: static files you can write now (index.html, CSS, JS modules, already-computed data) go through fs_write directly, never wrapped in run_program, and a single tool call is a direct tool call. See CODEMODE.md for the one rule and a worked 10-image example.';
         if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
       }
       const msgs = [{ role: 'system', content: system }];

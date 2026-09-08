@@ -1,19 +1,64 @@
 # Code mode: `run_program` (enabled)
 
 `run_program({ code, description? })` is available alongside the other workspace
-tools. It runs a sandboxed JS script that batches workspace tools deterministically
-— **no LLM in the middle**: `forge.tools.run(name, args)` calls any other workspace
-tool (`fs_write`, `gen_image`, `web_search`, … — see `forge.tools.list()`),
-`forge.sleep(ms)`, `forge.print(...)`, and `forge.finish(result)` ends the script
-with a value fed back to you as the `run_program` tool result.
+tools. It runs a sandboxed JS script that **orchestrates** workspace tools
+deterministically — **no LLM in the middle**. Inside the script,
+`forge.tools.run(name, args)` calls any other workspace tool (`fs_write`,
+`gen_image`, `web_search`, … — see `forge.tools.list()`), `forge.sleep(ms)`,
+`forge.print(...)`, and `forge.finish(result)` ends the script and feeds
+`result` back to you as the `run_program` tool result.
 
-## When to use it
+## The one rule: use `run_program` to orchestrate, not to write content you already have
 
-Use `run_program` to parallelize many tool calls in one turn (`Promise.all([...])`),
-then continue with more tools, another `run_program`, or `finish` — whichever
-fits. It's naturally hybrid: mix scripts, direct tool calls, and prose as needed.
-Good fits: fetch several URLs in parallel, generate/filter/select images, aggregate
-multiple tool calls, preprocess a dataset before the final app.
+`run_program` is for **batching / looping / branching on tool results** — many
+tool calls in one turn, a loop over a dataset, or a value you can only know
+after calling a tool. It is **not** a wrapper for producing files whose content
+you already know how to write.
+
+- **Static files you can write now → `fs_write` directly.** An `index.html`, a
+  CSS file, a JS module, a data file you've already computed — call `fs_write`.
+  Never wrap a single known-content write in `run_program`.
+- **A single tool call → call the tool directly.** One `gen_image` or one
+  `web_fetch` is a direct tool call; don't spin up a script for one call.
+- **Reach for `run_program` when** you'd otherwise emit the same tool call many
+  times, or need to branch on a tool's output before the next step.
+
+If you're about to write a `run_program` whose body is mostly `fs_write(...)`
+with the content inlined in the script, stop — those are direct `fs_write`
+calls. Put the orchestration (loops, parallel calls, result aggregation) in
+`run_program` and the content (the actual HTML/CSS/JS text) in `fs_write`.
+
+### Worked example: an app with 10 generated images
+
+Don't write one `run_program` that both generates the images *and* writes
+`index.html`. Split the concerns:
+
+1. **`fs_write` `index.html` directly**, referencing the image paths the app
+   will use. `gen_image` writes `images/gen_1.png`, `images/gen_2.png`, … in the
+   order its calls finish, so a batch of 10 produces `images/gen_1.png` …
+   `images/gen_10.png`. Reference them up front:
+   ```html
+   <img src="@asset('images/gen_1.png')" alt="1">
+   …
+   <img src="@asset('images/gen_10.png')" alt="10">
+   ```
+2. **Generate the images** — either as 10 direct `gen_image` calls, or, to do
+   them in one turn, **one** `run_program` that loops
+   `forge.tools.run('gen_image', …)` in parallel and `forge.finish()`es with the
+   list of paths it actually produced:
+   ```js
+   const prompts = [ /* …10 prompts… */ ];
+   const paths = await Promise.all(
+     prompts.map(p => forge.tools.run('gen_image', { prompt: p }).then(r => r.path))
+   );
+   forge.finish({ paths });
+   ```
+3. If a produced path differs from what `index.html` references, `fs_edit`
+   `index.html` to swap the placeholder for the real path. (With `gen_image`'s
+   numbered paths this is usually unnecessary.)
+
+The point: `index.html` was always a direct `fs_write`; `run_program` earned its
+place only by batching the 10 image generations into one turn.
 
 ## The `forge.*` API (the script's only surface)
 
