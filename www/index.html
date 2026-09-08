@@ -20809,7 +20809,6 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     async function runCodeMode({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled }) {
       const owner = currentApp?.id || '__new__';
       let armed = false;
-      let program = null, programDesc = '';
       const messages = msgs.slice();
       // Round 1: offer read_code_mode_md (+ read_loop_md if the loop flag is on).
       // The model picks one or neither; if neither, we return classicRaw.
@@ -20849,30 +20848,15 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         // Model called something unexpected; fall through to classic with its content.
         return { classicRaw: content1 };
       }
-      // Round 2: register write_program; the model writes the stage-1 program.
-      const res2 = await builderRound(messages, [BUILDER_TOOL_WRITE_PROGRAM], signal);
-      const tcs2 = Array.isArray(res2 && res2.tool_calls) ? res2.tool_calls : [];
-      const content2 = String((res2 && res2.content) || '');
-      if (!tcs2.length) throw new Error('Code mode: model did not call write_program after reading CODE_MODE.md.');
-      messages.push({ role: 'assistant', content: content2 || '', tool_calls: tcs2 });
-      for (const tc of tcs2) {
-        const name = String((tc.function && tc.function.name) || tc.name || '');
-        const tcId = String(tc.id || '');
-        if (name === 'write_program') {
-          let a; try { a = JSON.parse(tc.function && tc.function.arguments || '{}'); } catch (_) { a = {}; }
-          program = String(a.code || '');
-          programDesc = String(a.description || '');
-          loopStatus('write_program · ' + programDesc + ' · ' + (program.length / 1024).toFixed(1) + 'k chars', 'info', 'write');
-          messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: !!program, bytes: program.length }) });
-        } else {
-          messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, error: 'expected write_program' }) });
-        }
-      }
-      if (!program) throw new Error('Code mode: write_program returned no code.');
-      // Stage 1: run the program deterministically (no LLM in the middle).
+      // ——— Rounds 2..N: write_program loop (hybrid) ————
+      // The model writes a script; the host runs it deterministically; the
+      // forge.finish() context is fed back as the write_program tool result.
+      // The model can call write_program again (another script, another batch
+      // of tool calls) or stop (no tool calls) to trigger the final assembly.
+      // Guideline: minimize rounds (pack more into each script). Hard
+      // constraint: each script must call forge.finish(). Safety cap below.
+      const CODE_MODE_MAX_ROUNDS = 10;
       const limits = getCodeModeLimits();
-      genLog('info', 'code mode stage 1 · running program ' + program.length + ' bytes · limits wall=' + limits.wallClockSecs + 's calls=' + limits.toolCallCount + ' llm=' + limits.llmCallBudget);
-      if (status) status('Running program…');
       const toolRunner = async (name, args) => {
         if (name === '__list__') {
           try { const cat = toolsList({ riskMax: 'confirm' }); return { ok: true, result: { tools: (cat && cat.tools) || [] } }; }
@@ -20894,15 +20878,69 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           return { ok: true, result: r };
         } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
       };
-      const stage1 = await runCodeModeProgram(program, { signal, limits, toolRunner, llmRunner, onToolCall, onPrint });
-      if (!stage1.ok) throw new Error('Code mode stage 1 failed: ' + (stage1.error || 'unknown'));
-      genLog('info', 'code mode stage 1 done · context ' + JSON.stringify(stage1.context).length + ' chars');
-      // Stage 2: one final LLM call to assemble the app.
+      let accumulatedContext = {};
+      let accumulatedAssets = {};
+      let programRounds = 0;
+      for (let round = 0; round < CODE_MODE_MAX_ROUNDS; round++) {
+        const res = await builderRound(messages, [BUILDER_TOOL_WRITE_PROGRAM], signal);
+        const tcs = Array.isArray(res && res.tool_calls) ? res.tool_calls : [];
+        const content = String((res && res.content) || '');
+        if (!tcs.length) {
+          // Model returned no write_program — time to assemble.
+          loopStatus('code mode · ' + programRounds + ' script(s) ran · assembling', 'info', 'assemble');
+          break;
+        }
+        messages.push({ role: 'assistant', content: content || '', tool_calls: tcs });
+        let wroteProgram = false;
+        for (const tc of tcs) {
+          const name = String((tc.function && tc.function.name) || tc.name || '');
+          const tcId = String(tc.id || '');
+          if (name !== 'write_program') {
+            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, error: 'expected write_program (or no tool calls to finish)' }) });
+            continue;
+          }
+          wroteProgram = true;
+          programRounds++;
+          let a; try { a = JSON.parse(tc.function && tc.function.arguments || '{}'); } catch (_) { a = {}; }
+          const program = String(a.code || '');
+          const programDesc = String(a.description || '');
+          if (!program) {
+            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, error: 'write_program: code is required' }) });
+            continue;
+          }
+          loopStatus('write_program #' + programRounds + ' · ' + programDesc + ' · ' + (program.length / 1024).toFixed(1) + 'k chars', 'info', 'write');
+          if (status) status('Running program ' + programRounds + '…');
+          genLog('info', 'code mode script #' + programRounds + ' · ' + program.length + ' bytes · limits wall=' + limits.wallClockSecs + 's calls=' + limits.toolCallCount + ' llm=' + limits.llmCallBudget);
+          const stage1 = await runCodeModeProgram(program, { signal, limits, toolRunner, llmRunner, onToolCall, onPrint });
+          if (!stage1.ok) {
+            genLog('warn', 'code mode script #' + programRounds + ' failed: ' + stage1.error);
+            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, round: programRounds, error: String(stage1.error || 'unknown').slice(0, 8000) }) });
+          } else {
+            // Accumulate context + assets from this script.
+            try {
+              const ctx = stage1.context || {};
+              Object.assign(accumulatedContext, ctx);
+              if (stage1.assets && typeof stage1.assets === 'object') Object.assign(accumulatedAssets, stage1.assets);
+            } catch (_) {}
+            const ctxStr = JSON.stringify(stage1.context || {});
+            genLog('info', 'code mode script #' + programRounds + ' done · context ' + ctxStr.length + ' chars · accumulated ' + Object.keys(accumulatedContext).length + ' keys');
+            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: true, round: programRounds, context: stage1.context || {}, bytes: program.length }).slice(0, 60000) });
+          }
+        }
+        if (!wroteProgram) {
+          // Model called a non-write_program tool (or all write_program calls
+          // were empty) — treat as done, assemble from what we have.
+          loopStatus('code mode · model stopped · assembling from ' + programRounds + ' script(s)', 'info', 'assemble');
+          break;
+        }
+      }
+      // Stage 2: one final LLM call to assemble the app from accumulated context.
       if (status) status('Assembling app…');
-      const app = await assembleApp({ msgs, context: stage1.context, assets: stage1.assets, signal, wantCar, status });
+      genLog('info', 'code mode stage 2 · assembling from ' + programRounds + ' script(s) · ' + Object.keys(accumulatedContext).length + ' context keys · ' + Object.keys(accumulatedAssets).length + ' assets');
+      const app = await assembleApp({ msgs, context: accumulatedContext, assets: accumulatedAssets, signal, wantCar, status });
       const message = String(app._message || t('chat.builtDefault', { name: app.title }));
       delete app._message;
-      loopStatus('code mode done · html ' + (app.html.length / 1024).toFixed(1) + 'k chars', 'ok', 'done');
+      loopStatus('code mode done · ' + programRounds + ' script(s) · html ' + (app.html.length / 1024).toFixed(1) + 'k chars', 'ok', 'done');
       return { app, message };
     }
 
@@ -21037,7 +21075,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       type: 'function',
       function: {
         name: 'write_program',
-        description: 'Code mode: write the stage-1 JS orchestrator. The program uses forge.tools.run(name, args), forge.tools.list(), forge.sleep(ms), forge.print(...), forge.finish({context, assets?}) to orchestrate Forge tools deterministically (no LLM in the middle). The host runs it in a sandboxed Worker, then gives you one final call to assemble the app from the processed context. Call this after read_code_mode_md, then stop — the host will run the program and call you back for assembly.',
+        description: 'Code mode: write a JS script that orchestrates Forge tools deterministically (no LLM inside the script). The program uses forge.tools.run(name, args), forge.tools.list(), forge.sleep(ms), forge.print(...), forge.finish({context, assets?}). The host runs it in a sandboxed Worker; the forge.finish() context is fed back to you as the tool result. You may call write_program again (another script, another batch of tool calls) — context accumulates across rounds. When you stop calling write_program, the host makes one final LLM call to assemble the app from the accumulated context. Guideline: minimize rounds (pack as much as possible into each script). Hard constraint: each script must call forge.finish().',
         parameters: { type: 'object', properties: {
           code: { type: 'string', description: 'The JavaScript program. Plain async JS; top-level await allowed. Runs in a Worker (no DOM/fetch/XHR/WebSocket). Call forge.finish({context, assets?}) once with a compact context.' },
           description: { type: 'string', description: 'One-line description of what the program does (for the console log).' },
@@ -21121,21 +21159,42 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     const CODE_MODE_MD_FALLBACK = [
       '# Forge code-mode protocol',
       '',
-      'You are in code mode: write a short JS program that orchestrates Forge tools deterministically (no LLM in the middle), then one final call assembles the app.',
+      'You are in code mode: write short JS programs that orchestrate Forge tools deterministically (no LLM inside scripts), then one final call assembles the app.',
+      'Hybrid: call write_program N times — each script runs in a Worker, calls forge.finish({context, assets?}), and the context is fed back. When you stop calling write_program, one final LLM call assembles the app from the accumulated context.',
+      'Guideline: minimize rounds (pack as much as possible into each script). Hard constraint: each script must call forge.finish().',
       'API: forge.tools.run(name, args), forge.tools.list(), forge.sleep(ms), forge.print(...), forge.finish({context, assets?}), forge.llm (budget-gated; 0 by default = rejected).',
-      'Rules: call forge.finish once with a compact context; the program runs in a Worker (no DOM/fetch/XHR/WebSocket); keep context small; do not loop forever (wall-clock terminates).',
+      'Rules: runs in a Worker (no DOM/fetch/XHR/WebSocket); keep context compact (it accumulates); do not loop forever (wall-clock + max-rounds cap).',
       'Final call: return the full JSON app payload {title, summary, html, message?} — single self-contained HTML, only window.ForgeHost APIs.',
     ].join('\n');
     async function getCodeModeMd() {
-      if (codeModeMdCache != null) return codeModeMdCache;
-      let txt = null;
-      try {
-        const r = await fetch('CODE_MODE.md', { cache: 'no-store' });
-        if (r && r.ok) txt = await r.text();
-      } catch (_) {}
-      if (!txt || txt.length < 200) txt = CODE_MODE_MD_FALLBACK;
-      codeModeMdCache = txt;
-      return txt;
+      if (codeModeMdCache == null) {
+        let txt = null;
+        try {
+          const r = await fetch('CODE_MODE.md', { cache: 'no-store' });
+          if (r && r.ok) txt = await r.text();
+        } catch (_) {}
+        if (!txt || txt.length < 200) txt = CODE_MODE_MD_FALLBACK;
+        codeModeMdCache = txt;
+      }
+      // Append the actual configured limit values (computed fresh each call
+      // from getCodeModeLimits(), so the model sees the real numbers).
+      const L = getCodeModeLimits();
+      const limitsBlock = [
+        '',
+        '## Your configured limits (right now)',
+        '',
+        '- Wall-clock per script: **' + L.wallClockSecs + 's**',
+        '- Max tool calls per script: **' + L.toolCallCount + '**',
+        '- Max forge.llm calls per script: **' + L.llmCallBudget + '**' + (L.llmCallBudget === 0 ? ' (none — the call is rejected unless you raise the budget in AI settings)' : ''),
+        '- Per-call timeout: **' + L.perCallTimeoutSecs + 's**',
+        '- Concurrency: **' + L.concurrency + '** in-flight',
+        '- Output size: **' + Math.round(L.outputBytes / (1024 * 1024)) + ' MB**',
+        '- Max write_program rounds: **10**',
+        '- Code size: **256 KB**',
+        '',
+        'Pack as much as possible into each script to minimize rounds. Each round is an LLM turn.',
+      ].join('\n');
+      return codeModeMdCache + limitsBlock;
     }
 
     async function builderExecTool(name, argsRaw, ctx) {
