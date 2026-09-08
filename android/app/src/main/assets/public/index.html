@@ -1638,8 +1638,6 @@ termux-reload-settings</div>
                 <input id="cmWallClock" type="number" inputmode="numeric" min="5" max="600" step="5" value="60" />
                 <label style="font-size:0.8rem;color:var(--muted);" for="cmToolCalls">Max tool calls</label>
                 <input id="cmToolCalls" type="number" inputmode="numeric" min="1" max="200" step="1" value="40" />
-                <label style="font-size:0.8rem;color:var(--muted);" for="cmLlmBudget">Max LLM calls in stage 1 (0 = none)</label>
-                <input id="cmLlmBudget" type="number" inputmode="numeric" min="0" max="20" step="1" value="0" />
                 <label style="font-size:0.8rem;color:var(--muted);" for="cmOutputMb">Output size (MB)</label>
                 <input id="cmOutputMb" type="number" inputmode="numeric" min="1" max="64" step="1" value="8" />
                 <label style="font-size:0.8rem;color:var(--muted);" for="cmPerCall">Per-call timeout (s)</label>
@@ -6185,7 +6183,6 @@ termux-reload-settings</div>
       genCodeMode: document.getElementById('genCodeMode'),
       cmWallClock: document.getElementById('cmWallClock'),
       cmToolCalls: document.getElementById('cmToolCalls'),
-      cmLlmBudget: document.getElementById('cmLlmBudget'),
       cmOutputMb: document.getElementById('cmOutputMb'),
       cmPerCall: document.getElementById('cmPerCall'),
       cmConcurrency: document.getElementById('cmConcurrency'),
@@ -6374,10 +6371,9 @@ termux-reload-settings</div>
      *  unfoldable (visible only when code mode is opted in for the active
      *  provider). Defaults per docs/code-mode-plan.md. */
     const CODE_MODE_LIMIT_DEFAULTS = {
-      wallClockSecs: 60,       // stage-1 wall-clock (worker terminate)
-      toolCallCount: 40,      // max forge.tools.run calls in stage 1
-      llmCallBudget: 0,       // max forge.llm calls in stage 1 (0 = none; honest contract)
-      outputBytes: 8 * 1024 * 1024, // max finish({context,assets}) size
+      wallClockSecs: 60,       // per-script wall-clock (worker terminate)
+      toolCallCount: 40,      // max forge.tools.run calls per script
+      outputBytes: 8 * 1024 * 1024, // max forge.finish(result) size
       perCallTimeoutSecs: 30, // per forge.tools.run call
       concurrency: 8,         // max in-flight RPCs (Promise.all)
       // code-size cap reuses BUILDER_JS_MAX_CODE_BYTES (256KB) — not configurable.
@@ -8187,7 +8183,6 @@ termux-reload-settings</div>
           const L = getCodeModeLimits();
           if (el.cmWallClock) el.cmWallClock.value = String(L.wallClockSecs);
           if (el.cmToolCalls) el.cmToolCalls.value = String(L.toolCallCount);
-          if (el.cmLlmBudget) el.cmLlmBudget.value = String(L.llmCallBudget);
           if (el.cmOutputMb) el.cmOutputMb.value = String(Math.max(1, Math.round(L.outputBytes / (1024 * 1024))));
           if (el.cmPerCall) el.cmPerCall.value = String(L.perCallTimeoutSecs);
           if (el.cmConcurrency) el.cmConcurrency.value = String(L.concurrency);
@@ -8226,15 +8221,13 @@ termux-reload-settings</div>
           };
           const wall = num(el.cmWallClock, 5, 600);
           const calls = num(el.cmToolCalls, 1, 200);
-          const llm = num(el.cmLlmBudget, 0, 20);
           const mb = num(el.cmOutputMb, 1, 64);
           const per = num(el.cmPerCall, 5, 120);
           const conc = num(el.cmConcurrency, 1, 32);
-          if (wall != null || calls != null || llm != null || mb != null || per != null || conc != null) {
+          if (wall != null || calls != null || mb != null || per != null || conc != null) {
             saveCodeModeLimits({
               wallClockSecs: wall != null ? wall : CODE_MODE_LIMIT_DEFAULTS.wallClockSecs,
               toolCallCount: calls != null ? calls : CODE_MODE_LIMIT_DEFAULTS.toolCallCount,
-              llmCallBudget: llm != null ? llm : CODE_MODE_LIMIT_DEFAULTS.llmCallBudget,
               outputBytes: mb != null ? mb * 1024 * 1024 : CODE_MODE_LIMIT_DEFAULTS.outputBytes,
               perCallTimeoutSecs: per != null ? per : CODE_MODE_LIMIT_DEFAULTS.perCallTimeoutSecs,
               concurrency: conc != null ? conc : CODE_MODE_LIMIT_DEFAULTS.concurrency,
@@ -19597,12 +19590,10 @@ Return complete html, not a diff.`;
       }
 
       const userText = buildReforgeUserPrompt(app, { wantCar, tools: toolSettings });
-      if (isAgenticLoopEnabled()) {
+      if (isAgenticLoopEnabled() || isCodeModeEnabled()) {
         system += '\n\nBUILD OPTION (agentic reforge): If the existing app is large, call read_loop_md and use the workspace tools. The workspace is seeded with the existing index.html. Preserve behavior, then call finish.';
+        if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool — write a JS script that batches workspace tools deterministically (no LLM in the middle) via forge.tools.run(name, args) and forge.finish(result); the result is fed back to you. Mix scripts, direct tool calls, and prose as needed.';
         if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
-      }
-      if (isCodeModeEnabled()) {
-        system += '\n\nBUILD OPTION (code reforge): If the reforge needs many tool calls, parallel data operations, or heavy preprocessing before the final app, call read_code_mode_md to load the code-mode protocol. You write a short JS orchestrator that runs Forge tools deterministically (no LLM in the middle), then one final call assembles the app. The existing app HTML is available as context for the program.';
       }
       const msgs = [
         { role: 'system', content: system },
@@ -19617,34 +19608,11 @@ Return complete html, not a diff.`;
       } catch (_) {}
 
       let raw;
-      let loopResume = null;
-      if (isCodeModeEnabled()) {
-        const cm = await runCodeMode({
-          msgs, signal: abortController?.signal, wantCar, status: (s) => setPreviewStatus(s, ''),
-          workspaceSeed: app?.html || null,
-          researchEnabled: isBuilderResearchEnabled(),
-        });
-        if (cm?.app) {
-          const parsed = cm.app;
-          const next = {
-            id: app.id,
-            title: String(parsed.title || app.title || 'Untitled app').slice(0, 80),
-            summary: String(parsed.summary || app.summary || '').slice(0, 240),
-            html: String(parsed.html), iconEmoji: app.iconEmoji || '⚡', iconColor: app.iconColor || '',
-            carCompatible: !!wantCar, createdAt: app.createdAt || Date.now(), updatedAt: Date.now(), reforgedAt: Date.now(),
-          };
-          return { app: next, message: String(cm.message || `Reforged “${next.title}” with the code-mode builder.`) };
-        }
-        if (cm?.classicRaw != null) raw = cm.classicRaw;
-        if (cm?.loopResume) loopResume = cm.loopResume;
-      }
-      if (isAgenticLoopEnabled() && raw == null) {
+      if ((isAgenticLoopEnabled() || isCodeModeEnabled()) && raw == null) {
         const built = await runBuilderLoop({
           msgs, signal: abortController?.signal, wantCar, status: (s) => setPreviewStatus(s, ''),
           workspaceSeed: app?.html || null,
           researchEnabled: isBuilderResearchEnabled(),
-          resumeFrom: loopResume,
-          extraRounds: loopResume ? (BUILDER_MAX_ROUNDS - 1) : 0,
         });
         if (built?.app) {
           const parsed = built.app;
@@ -20569,9 +20537,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     // The program runs in a Web Worker with a complete neuter list (fetch/XHR/
     // WebSocket/importScripts/indexedDB/caches/Worker/SharedArrayBuffer/Atomics/
     // navigator/close) and a MessageChannel bridge to the host for forge.* calls.
-    // Stage 1 is deterministic: zero LLM calls by default (forge.llm budget-gated).
-    // Limits (host-enforced, configurable): wall-clock, tool-call count, llm-call
-    // budget, output size, per-call timeout, concurrency. Abort = terminate + reject.
+    // run_program is a workspace tool: the LLM writes a JS script that calls
+    // forge.tools.run(name, args) to batch other workspace tools deterministically
+    // (no LLM in the middle) and forge.finish(result) to end the script — the
+    // result is fed back to the LLM as the run_program tool result. The LLM then
+    // continues the loop (more tools, another run_program, or finish).
+    // Limits (host-enforced, configurable): wall-clock, tool-call count, output
+    // size, per-call timeout, concurrency. Abort = terminate + reject.
     const CODE_MODE_WORKER_SRC = [
       'try { self.fetch = undefined; } catch (e) {}',
       'try { self.XMLHttpRequest = undefined; } catch (e) {}',
@@ -20620,13 +20592,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       '      },',
       '      sleep: function (ms) { return __rpc("sleep", { ms: Math.max(0, Math.min(60000, ms | 0)) }); },',
       '      print: function () { const a = []; for (let i = 0; i < arguments.length; i++) a.push(arguments[i]); __rpc("print", { args: a }); },',
-      '      llm: function (opts) { return __rpc("llm", { opts: opts || {} }); },',
-      '      finish: function (payload) { __finished = true; __rpc("finish", { payload: payload || {} }); },',
+      '      finish: function (result) { __finished = true; __rpc("finish", { result: result }); },',
       '    };',
       '    try {',
       '      const fn = new Function("forge", "return (async () => {" + d.code + "\\n})();");',
       '      Promise.resolve().then(() => fn(forge)).then(',
-      '        () => { if (!__finished) __rpc("finish", { payload: { __implicit: true } }); },',
+      '        () => { if (!__finished) __rpc("finish", { result: { __implicit: true } }); },',
       '        (err) => self.postMessage({ rpc: "fatal", error: String((err && err.stack) || err) })',
       '      );',
       '    } catch (e) { self.postMessage({ rpc: "fatal", error: String((e && e.stack) || e) }); }',
@@ -20655,7 +20626,6 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         const wallMs = Math.max(5000, Math.min(600000, (limits.wallClockSecs || 60) * 1000));
         const perCallMs = Math.max(5000, Math.min(120000, (limits.perCallTimeoutSecs || 30) * 1000));
         const maxToolCalls = Math.max(1, Math.min(200, limits.toolCallCount || 40));
-        const maxLlmCalls = Math.max(0, Math.min(20, limits.llmCallBudget || 0));
         const maxConcurrency = Math.max(1, Math.min(32, limits.concurrency || 8));
         const maxOutBytes = Math.max(1024 * 1024, limits.outputBytes || (8 * 1024 * 1024));
         const finish = (r) => {
@@ -20696,20 +20666,11 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
               if (type === 'finish') {
                 if (finished) return { ok: false, error: 'finish called twice' };
                 finished = true;
-                const payload = (data.args && data.args.payload) || {};
-                let ctxStr; try { ctxStr = JSON.stringify(payload); } catch (e) { return { ok: false, error: 'finish payload not JSON-serializable: ' + (e && e.message) }; }
-                if (ctxStr.length > maxOutBytes) return { ok: false, error: 'finish payload too large (>' + maxOutBytes + ' bytes); reduce context/assets' };
-                // Stage 1 ends here — resolve the outer promise with the context.
-                const assets = (payload && payload.assets && typeof payload.assets === 'object') ? payload.assets : {};
-                finish({ ok: true, context: payload, assets, printed: [] });
-                return { ok: true, result: payload };
-              }
-              if (type === 'llm') {
-                if (llmCalls >= maxLlmCalls) return { ok: false, error: 'forge.llm budget exhausted (' + maxLlmCalls + ' calls); the contract is no LLM in stage 1 by default' };
-                if (!llmRunner) return { ok: false, error: 'forge.llm is not available' };
-                llmCalls++;
-                const res = await llmRunner(data.args && data.args.opts);
-                return { ok: true, result: res };
+                const result = (data.args && data.args.result);
+                let rStr; try { rStr = JSON.stringify(result); } catch (e) { return { ok: false, error: 'finish result not JSON-serializable: ' + (e && e.message) }; }
+                if (rStr.length > maxOutBytes) return { ok: false, error: 'finish result too large (>' + maxOutBytes + ' bytes); return a smaller value' };
+                finish({ ok: true, result });
+                return { ok: true, result };
               }
               if (type === 'tool') {
                 const name = String((data.args && data.args.name) || '');
@@ -20757,191 +20718,6 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           fail('code mode failed to start: ' + ((e && e.message) || String(e)));
         }
       });
-    }
-
-    // ——— Code mode stage 2: one final LLM call to assemble the app ————
-    // Given the original user prompt + the processed context (+ assets), make
-    // a single LLM call and extract the app JSON (same shape as classic forgeApp).
-    // Mirrors forgeApp's streaming/jsonMode/provider-branch logic in miniature.
-    async function assembleApp({ msgs, context, assets, signal, wantCar, status }) {
-      const sys = [SYSTEM_PROMPT];
-      if (wantCar) sys.push(CAR_COMPAT_SYSTEM_ADDON);
-      sys.push('You are in the FINAL assembly stage of code mode. Your code-mode program already ran and produced this processed context. Assemble the final app from it. Return the full JSON app payload exactly as specified (title, summary, html, optional message). The app must be a single self-contained HTML string using only window.ForgeHost APIs — same rules as the classic one-shot path. Do NOT call any tools; just return the JSON.');
-      const ctxStr = JSON.stringify({ context, assets });
-      const assemblyMessages = [
-        { role: 'system', content: sys.join('\n\n') },
-        { role: 'user', content: String(msgs && msgs.length ? (msgs.find(m => m.role === 'user') || msgs[msgs.length - 1]).content : '') + '\n\nProcessed context from your code-mode program:\n' + ctxStr },
-      ];
-      let recvChars = 0; let lastTick = 0;
-      const onDelta = (d) => {
-        try {
-          recvChars += String(d || '').length;
-          const now = Date.now();
-          if (now - lastTick > 800) { lastTick = now; const kb = recvChars >= 1024 ? (recvChars/1024).toFixed(1)+'k' : String(recvChars); if (status) status('Assembling… ' + kb + ' chars'); }
-        } catch (_) {}
-      };
-      let raw;
-      if (isGeminiHostProvider()) {
-        raw = await geminiStreamGenerateContent(assemblyMessages, signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
-      } else {
-        raw = await chatCompletionsStream(assemblyMessages, signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
-      }
-      raw = typeof raw === 'string' ? raw : ((raw && raw.content) || '');
-      if (status) status('Parsing app payload…');
-      genLog('info', 'code mode assemble · received ' + raw.length + ' chars · parsing');
-      const parsed = extractJson(raw);
-      if (!parsed || !parsed.html) throw new Error('Code-mode assembly payload missing html');
-      return {
-        id: currentApp?.id || uid(),
-        title: String(parsed.title || 'Untitled app').slice(0, 80),
-        summary: String(parsed.summary || '').slice(0, 240),
-        html: String(parsed.html),
-        createdAt: currentApp?.createdAt || Date.now(),
-        updatedAt: Date.now(),
-        carCompatible: !!wantCar,
-        _message: String(parsed.message || ''),
-      };
-    }
-
-    // ——— Code mode driver: round-1 read_code_mode_md → write_program → run → assemble ———
-    // Returns { app, message } on success, { classicRaw } when the model never
-    // opts into code mode (caller falls through to the classic path), or throws.
-    async function runCodeMode({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled }) {
-      const owner = currentApp?.id || '__new__';
-      let armed = false;
-      const messages = msgs.slice();
-      // Round 1: offer read_code_mode_md (+ read_loop_md if the loop flag is on).
-      // The model picks one or neither; if neither, we return classicRaw.
-      loopStatus('code mode offered (read_code_mode_md)', 'info', 'start');
-      const r1Tools = [BUILDER_TOOL_READ_CODE_MODE];
-      if (isAgenticLoopEnabled()) r1Tools.push(BUILDER_TOOL_READ_LOOP);
-      const res1 = await builderRound(messages, r1Tools, signal);
-      const tcs1 = Array.isArray(res1 && res1.tool_calls) ? res1.tool_calls : [];
-      const content1 = String((res1 && res1.content) || '');
-      if (!tcs1.length) {
-        loopStatus('model chose single-shot (classic) mode', 'info', 'classic');
-        return { classicRaw: content1 };
-      }
-      messages.push({ role: 'assistant', content: content1 || '', tool_calls: tcs1 });
-      let choseCodeMode = false;
-      for (const tc of tcs1) {
-        const name = String((tc.function && tc.function.name) || tc.name || '');
-        const tcId = String(tc.id || '');
-        if (name === 'read_code_mode_md') {
-          const md = await getCodeModeMd();
-          loopStatus('model chose code mode · CODE_MODE.md ' + md.length + ' chars', 'info', 'start');
-          messages.push({ role: 'tool', tool_call_id: tcId, name, content: md });
-          choseCodeMode = true;
-        } else if (name === 'read_loop_md') {
-          // Model chose the agentic loop instead — load the real LOOP.md here so
-          // the caller can continue the loop from round 2 with the workspace
-          // already armed (no second offer round — single decision turn).
-          let md = await getLoopMd();
-          if (researchEnabled) md += '\n\n## Optional research tools enabled\nAfter opting into workspace mode, you may use `web_search` and `web_fetch` for focused public-web research. They are read-only, limited to http(s) requests, and should be used sparingly. Do not send secrets or unrelated user data.\n';
-          messages.push({ role: 'tool', tool_call_id: tcId, name, content: md });
-          return { loopResume: { messages, armed: true, round: 1, researchEnabled, wantCar, handoff: true } };
-        } else {
-          messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, error: 'call read_code_mode_md (or read_loop_md) first' }) });
-        }
-      }
-      if (!choseCodeMode) {
-        // Model called something unexpected; fall through to classic with its content.
-        return { classicRaw: content1 };
-      }
-      // ——— Rounds 2..N: write_program loop (hybrid) ————
-      // The model writes a script; the host runs it deterministically; the
-      // forge.finish() context is fed back as the write_program tool result.
-      // The model can call write_program again (another script, another batch
-      // of tool calls) or stop (no tool calls) to trigger the final assembly.
-      // Guideline: minimize rounds (pack more into each script). Hard
-      // constraint: each script must call forge.finish(). Safety cap below.
-      const CODE_MODE_MAX_ROUNDS = 10;
-      const limits = getCodeModeLimits();
-      const toolRunner = async (name, args) => {
-        if (name === '__list__') {
-          try { const cat = toolsList({ riskMax: 'confirm' }); return { ok: true, result: { tools: (cat && cat.tools) || [] } }; }
-          catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
-        }
-        try {
-          const r = await toolsRun({ name, args, riskMax: 'confirm' });
-          return { ok: true, result: r };
-        } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
-      };
-      const onToolCall = (name, args) => {
-        try { loopStatus('forge.tools.run · ' + name, 'info', 'js'); } catch (_) {}
-      };
-      const onPrint = (args) => { try { for (const a of (args || [])) genLog('info', 'code-mode print: ' + String(a)); } catch (_) {} };
-      const llmRunner = async (opts) => {
-        // Budget is enforced inside runCodeModeProgram; if we get here, budget>0.
-        try {
-          const r = await chatCompletions(opts.messages || [], signal, { maxTokens: getGenMaxTokens() });
-          return { ok: true, result: r };
-        } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
-      };
-      let accumulatedContext = {};
-      let accumulatedAssets = {};
-      let programRounds = 0;
-      for (let round = 0; round < CODE_MODE_MAX_ROUNDS; round++) {
-        const res = await builderRound(messages, [BUILDER_TOOL_WRITE_PROGRAM], signal);
-        const tcs = Array.isArray(res && res.tool_calls) ? res.tool_calls : [];
-        const content = String((res && res.content) || '');
-        if (!tcs.length) {
-          // Model returned no write_program — time to assemble.
-          loopStatus('code mode · ' + programRounds + ' script(s) ran · assembling', 'info', 'assemble');
-          break;
-        }
-        messages.push({ role: 'assistant', content: content || '', tool_calls: tcs });
-        let wroteProgram = false;
-        for (const tc of tcs) {
-          const name = String((tc.function && tc.function.name) || tc.name || '');
-          const tcId = String(tc.id || '');
-          if (name !== 'write_program') {
-            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, error: 'expected write_program (or no tool calls to finish)' }) });
-            continue;
-          }
-          wroteProgram = true;
-          programRounds++;
-          let a; try { a = JSON.parse(tc.function && tc.function.arguments || '{}'); } catch (_) { a = {}; }
-          const program = String(a.code || '');
-          const programDesc = String(a.description || '');
-          if (!program) {
-            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, error: 'write_program: code is required' }) });
-            continue;
-          }
-          loopStatus('write_program #' + programRounds + ' · ' + programDesc + ' · ' + (program.length / 1024).toFixed(1) + 'k chars', 'info', 'write');
-          if (status) status('Running program ' + programRounds + '…');
-          genLog('info', 'code mode script #' + programRounds + ' · ' + program.length + ' bytes · limits wall=' + limits.wallClockSecs + 's calls=' + limits.toolCallCount + ' llm=' + limits.llmCallBudget);
-          const stage1 = await runCodeModeProgram(program, { signal, limits, toolRunner, llmRunner, onToolCall, onPrint });
-          if (!stage1.ok) {
-            genLog('warn', 'code mode script #' + programRounds + ' failed: ' + stage1.error);
-            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, round: programRounds, error: String(stage1.error || 'unknown').slice(0, 8000) }) });
-          } else {
-            // Accumulate context + assets from this script.
-            try {
-              const ctx = stage1.context || {};
-              Object.assign(accumulatedContext, ctx);
-              if (stage1.assets && typeof stage1.assets === 'object') Object.assign(accumulatedAssets, stage1.assets);
-            } catch (_) {}
-            const ctxStr = JSON.stringify(stage1.context || {});
-            genLog('info', 'code mode script #' + programRounds + ' done · context ' + ctxStr.length + ' chars · accumulated ' + Object.keys(accumulatedContext).length + ' keys');
-            messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: true, round: programRounds, context: stage1.context || {}, bytes: program.length }).slice(0, 60000) });
-          }
-        }
-        if (!wroteProgram) {
-          // Model called a non-write_program tool (or all write_program calls
-          // were empty) — treat as done, assemble from what we have.
-          loopStatus('code mode · model stopped · assembling from ' + programRounds + ' script(s)', 'info', 'assemble');
-          break;
-        }
-      }
-      // Stage 2: one final LLM call to assemble the app from accumulated context.
-      if (status) status('Assembling app…');
-      genLog('info', 'code mode stage 2 · assembling from ' + programRounds + ' script(s) · ' + Object.keys(accumulatedContext).length + ' context keys · ' + Object.keys(accumulatedAssets).length + ' assets');
-      const app = await assembleApp({ msgs, context: accumulatedContext, assets: accumulatedAssets, signal, wantCar, status });
-      const message = String(app._message || t('chat.builtDefault', { name: app.title }));
-      delete app._message;
-      loopStatus('code mode done · ' + programRounds + ' script(s) · html ' + (app.html.length / 1024).toFixed(1) + 'k chars', 'ok', 'done');
-      return { app, message };
     }
 
     function builderB64ToBlob(b64, mime) {
@@ -21059,26 +20835,20 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       },
     };
 
-    // Code mode: round-1 opt-in tool (offered when isCodeModeEnabled()).
-    const BUILDER_TOOL_READ_CODE_MODE = {
+    // run_program: code mode as a workspace tool (offered when isCodeModeEnabled()).
+    // The LLM writes a JS script that batches workspace tools deterministically
+    // (no LLM in the middle) via forge.tools.run(name, args) and ends with
+    // forge.finish(result) — the result is fed back as the run_program tool
+    // result. The LLM then continues the loop (more tools, another run_program,
+    // or finish). Naturally hybrid: mix scripts + direct tool calls + prose.
+    const BUILDER_TOOL_RUN_PROGRAM = {
       type: 'function',
       function: {
-        name: 'read_code_mode_md',
-        description: 'Load the Forge code-mode protocol. Call this FIRST (instead of answering) only when the app benefits from many tool calls, parallel asset/data operations, or heavy preprocessing before the final app is assembled. Returns the full code-mode instructions (you write a short JS orchestrator that runs Forge tools deterministically — no LLM in the middle — then one final call assembles the app).',
-        parameters: { type: 'object', properties: {}, required: [] },
-      },
-    };
-
-    // write_program: the model's code-mode program (stage 1). Stored; the host
-    // runs it deterministically, then makes one final assembly LLM call.
-    const BUILDER_TOOL_WRITE_PROGRAM = {
-      type: 'function',
-      function: {
-        name: 'write_program',
-        description: 'Code mode: write a JS script that orchestrates Forge tools deterministically (no LLM inside the script). The program uses forge.tools.run(name, args), forge.tools.list(), forge.sleep(ms), forge.print(...), forge.finish({context, assets?}). The host runs it in a sandboxed Worker; the forge.finish() context is fed back to you as the tool result. You may call write_program again (another script, another batch of tool calls) — context accumulates across rounds. When you stop calling write_program, the host makes one final LLM call to assemble the app from the accumulated context. Guideline: minimize rounds (pack as much as possible into each script). Hard constraint: each script must call forge.finish().',
+        name: 'run_program',
+        description: 'Code mode: run a JS script that orchestrates workspace tools deterministically (no LLM inside the script). Use it to batch many tool calls in one turn — e.g. fetch several URLs in parallel, generate/filter images, compute/validate data — then forge.finish(result) with a compact value. The script runs in a sandboxed Worker (no DOM/fetch/XHR/WebSocket) with the API: forge.tools.run(name, args) to call any other workspace tool (fs_write, gen_image, web_search, etc. — see forge.tools.list()), forge.tools.list(), forge.sleep(ms), forge.print(...), forge.finish(result) to end the script and return its value to you. You may call run_program again with another script, mix in direct tool calls, or call finish to assemble the app — whichever fits. Limits per script: wall-clock, tool-call count, concurrency, output size (see AI settings). The script cannot call run_program or finish (the workspace finish) — return a value from forge.finish instead.',
         parameters: { type: 'object', properties: {
-          code: { type: 'string', description: 'The JavaScript program. Plain async JS; top-level await allowed. Runs in a Worker (no DOM/fetch/XHR/WebSocket). Call forge.finish({context, assets?}) once with a compact context.' },
-          description: { type: 'string', description: 'One-line description of what the program does (for the console log).' },
+          code: { type: 'string', description: 'Plain async JS; top-level await allowed. Call forge.tools.run(name, args) for tool calls, then forge.finish(result) with a compact JSON-serializable value.' },
+          description: { type: 'string', description: 'One-line description of what the script does (for the console log).' },
         }, required: ['code'] },
       },
     };
@@ -21153,50 +20923,6 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       return txt;
     }
 
-    // ——— Code mode (per-provider flag, CODE_MODE.md protocol) ————
-    // Same fetch+fallback shape as getLoopMd(). read_code_mode_md returns this.
-    let codeModeMdCache = null;
-    const CODE_MODE_MD_FALLBACK = [
-      '# Forge code-mode protocol',
-      '',
-      'You are in code mode: write short JS programs that orchestrate Forge tools deterministically (no LLM inside scripts), then one final call assembles the app.',
-      'Hybrid: call write_program N times — each script runs in a Worker, calls forge.finish({context, assets?}), and the context is fed back. When you stop calling write_program, one final LLM call assembles the app from the accumulated context.',
-      'Guideline: minimize rounds (pack as much as possible into each script). Hard constraint: each script must call forge.finish().',
-      'API: forge.tools.run(name, args), forge.tools.list(), forge.sleep(ms), forge.print(...), forge.finish({context, assets?}), forge.llm (budget-gated; 0 by default = rejected).',
-      'Rules: runs in a Worker (no DOM/fetch/XHR/WebSocket); keep context compact (it accumulates); do not loop forever (wall-clock + max-rounds cap).',
-      'Final call: return the full JSON app payload {title, summary, html, message?} — single self-contained HTML, only window.ForgeHost APIs.',
-    ].join('\n');
-    async function getCodeModeMd() {
-      if (codeModeMdCache == null) {
-        let txt = null;
-        try {
-          const r = await fetch('CODE_MODE.md', { cache: 'no-store' });
-          if (r && r.ok) txt = await r.text();
-        } catch (_) {}
-        if (!txt || txt.length < 200) txt = CODE_MODE_MD_FALLBACK;
-        codeModeMdCache = txt;
-      }
-      // Append the actual configured limit values (computed fresh each call
-      // from getCodeModeLimits(), so the model sees the real numbers).
-      const L = getCodeModeLimits();
-      const limitsBlock = [
-        '',
-        '## Your configured limits (right now)',
-        '',
-        '- Wall-clock per script: **' + L.wallClockSecs + 's**',
-        '- Max tool calls per script: **' + L.toolCallCount + '**',
-        '- Max forge.llm calls per script: **' + L.llmCallBudget + '**' + (L.llmCallBudget === 0 ? ' (none — the call is rejected unless you raise the budget in AI settings)' : ''),
-        '- Per-call timeout: **' + L.perCallTimeoutSecs + 's**',
-        '- Concurrency: **' + L.concurrency + '** in-flight',
-        '- Output size: **' + Math.round(L.outputBytes / (1024 * 1024)) + ' MB**',
-        '- Max write_program rounds: **10**',
-        '- Code size: **256 KB**',
-        '',
-        'Pack as much as possible into each script to minimize rounds. Each round is an LLM turn.',
-      ].join('\n');
-      return codeModeMdCache + limitsBlock;
-    }
-
     async function builderExecTool(name, argsRaw, ctx) {
       let a = {};
       try { a = typeof argsRaw === 'string' ? JSON.parse(argsRaw || '{}') : (argsRaw || {}); }
@@ -21256,6 +20982,43 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           loopStatus('finish · assembled html ' + (app.html.length / 1024).toFixed(1) + 'k chars', 'info', 'finish');
           return { ok: true, htmlChars: app.html.length, title: app.title };
         }
+        case 'run_program': {
+          // Code mode as a workspace tool: run a sandboxed JS script that
+          // batches other workspace tools deterministically (no LLM in the
+          // middle) and forge.finish(result) — the result is the tool result.
+          const code = String(a.code || '');
+          const programDesc = String(a.description || '');
+          if (!code) return { ok: false, error: 'run_program: code is required' };
+          if (code.length > BUILDER_JS_MAX_CODE_BYTES) return { ok: false, error: 'run_program: code too large (>' + BUILDER_JS_MAX_CODE_BYTES + ' bytes)' };
+          const limits = getCodeModeLimits();
+          // Sub-runner routes forge.tools.run to the SAME workspace dispatcher,
+          // blocking recursion (run_program) + the workspace finish.
+          const subRunner = async (n2, a2) => {
+            if (n2 === 'run_program') return { ok: false, error: 'run_program cannot be nested — call forge.tools.run with another workspace tool' };
+            if (n2 === 'finish') return { ok: false, error: 'finish cannot be called from inside run_program — return a value via forge.finish(result) instead' };
+            if (n2 === '__list__') {
+              const cat = BUILDER_TOOLS.filter(t => t && t.function && t.function.name !== 'finish' && t.function.name !== 'run_program')
+                .map(t => ({ name: t.function.name, description: t.function.description }));
+              if (ctx.researchEnabled) for (const t of BUILDER_RESEARCH_TOOLS) cat.push({ name: t.function.name, description: t.function.description });
+              return { ok: true, result: { tools: cat } };
+            }
+            try { return await builderExecTool(n2, a2, ctx); }
+            catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+          };
+          const onToolCall = (n2) => { try { loopStatus('run_program · forge.tools.run · ' + n2, 'info', 'js'); } catch (_) {} };
+          const onPrint = (args2) => { try { for (const v of (args2 || [])) genLog('info', 'run_program print: ' + String(v)); } catch (_) {} };
+          loopStatus('run_program · ' + programDesc + ' · ' + (code.length / 1024).toFixed(1) + 'k chars · limits wall=' + limits.wallClockSecs + 's calls=' + limits.toolCallCount, 'info', 'js');
+          const r = await runCodeModeProgram(code, { signal: ctx.signal, limits, toolRunner: subRunner, onToolCall, onPrint });
+          if (!r.ok) {
+            loopStatus('run_program FAILED · ' + String(r.error || '').slice(0, 120), 'warn', 'js');
+            return { ok: false, error: 'run_program failed: ' + String(r.error || 'unknown') };
+          }
+          let rStr; try { rStr = JSON.stringify(r.result); } catch (e) { return { ok: false, error: 'run_program result not JSON-serializable: ' + (e && e.message) }; }
+          const maxRes = 60000;
+          if (rStr.length > maxRes) return { ok: false, error: 'run_program result too large (' + rStr.length + ' chars > ' + maxRes + '); return a smaller value or write files to the workspace instead' };
+          loopStatus('run_program · done · result ' + rStr.length + ' chars', 'ok', 'js');
+          return { ok: true, result: r.result };
+        }
         default:
           return { ok: false, error: 'unknown tool: ' + name };
       }
@@ -21301,7 +21064,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         // Cleared on success / classic / max-rounds / new build / Stop.
         setBuilderResume(owner, messages, armed, researchEnabled, wantCar, round);
         const tools = armed
-          ? (researchEnabled ? BUILDER_TOOLS.concat(BUILDER_RESEARCH_TOOLS) : BUILDER_TOOLS)
+          ? (isCodeModeEnabled() ? [BUILDER_TOOL_RUN_PROGRAM].concat(researchEnabled ? BUILDER_TOOLS.concat(BUILDER_RESEARCH_TOOLS) : BUILDER_TOOLS) : (researchEnabled ? BUILDER_TOOLS.concat(BUILDER_RESEARCH_TOOLS) : BUILDER_TOOLS))
           : [BUILDER_TOOL_READ_LOOP];
         const res = await builderRound(messages, tools, signal);
         const tcs = Array.isArray(res && res.tool_calls) ? res.tool_calls : [];
@@ -21503,12 +21266,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         });
       }
       // Agentic builder pointer (per-provider flag): one short paragraph, one tool.
-      if (isAgenticLoopEnabled()) {
+      if (isAgenticLoopEnabled() || isCodeModeEnabled()) {
         system += '\n\nBUILD OPTION (agentic): If this app is too large or complex to deliver as one JSON payload, call the tool read_loop_md now to load the workspace builder protocol (scratch files, JS runner, image generation, host-side assembly) and build it in rounds instead. Use it only when a single response would not be enough; otherwise ignore this option and return the JSON payload exactly as specified.';
+        if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool after read_loop_md — write a JS script that batches workspace tools deterministically (no LLM in the middle) via forge.tools.run(name, args) and forge.finish(result); the result is fed back to you. Mix scripts, direct tool calls, and prose as needed.';
         if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
-      }
-      if (isCodeModeEnabled()) {
-        system += '\n\nBUILD OPTION (code): If this app needs many tool calls, parallel asset/data operations, or heavy preprocessing before the final app, call the tool read_code_mode_md to load the code-mode protocol. You write a short JS orchestrator that runs Forge tools deterministically (no LLM in the middle), then one final call assembles the app. Use it only when the classic one-shot or the round-by-round loop are a poor fit; otherwise ignore this option and return the JSON payload exactly as specified.';
       }
       const msgs = [{ role: 'system', content: system }];
 
@@ -21545,47 +21306,15 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         genLog('info', 'forge start · ' + who + ' · user ' + userText.length + ' chars · history ' + (msgs.length - 2) + ' · attachments ' + (attachments?.length || 0) + ' · budget ' + getGenMaxTokens() + ' tok');
       } catch (_) {}
 
-      // Agentic builder loop (per-provider flag). Round 1 offers read_loop_md;
+      // Agentic builder loop (per-provider flag) or code mode (which implies
+      // the loop — run_program is a workspace tool). Round 1 offers read_loop_md;
       // if the model never calls it, round-1 content flows into the classic path.
       let raw = null;
-      let loopResume = null;
-      if (isCodeModeEnabled()) {
-        // Code mode: model writes a JS orchestrator (stage 1, deterministic),
-        // then one final LLM call assembles the app (stage 2). If the model
-        // instead calls read_loop_md (both flags on), it returns a loopResume
-        // snapshot so the agentic branch continues from round 2 — one decision
-        // turn, no re-offer. If it calls neither, classicRaw flows to the
-        // classic path.
-        const cm = await runCodeMode({
-          msgs, signal: abortController.signal, wantCar, status,
-          workspaceSeed: currentApp?.html || null,
-          researchEnabled: isBuilderResearchEnabled(),
-        });
-        if (cm && cm.app) {
-          const app = {
-            id: currentApp?.id || uid(),
-            title: String(cm.app.title || 'Untitled app').slice(0, 80),
-            summary: String(cm.app.summary || '').slice(0, 240),
-            html: String(cm.app.html),
-            createdAt: currentApp?.createdAt || Date.now(),
-            updatedAt: Date.now(),
-            carCompatible: !!wantCar,
-          };
-          const message = String(cm.message || t('chat.builtDefault', { name: app.title }));
-          genLog('info', 'forge done (code mode) · "' + app.title + '" · html ' + (app.html.length / 1024).toFixed(1) + 'k chars');
-          return { app, message };
-        }
-        if (cm && cm.classicRaw != null) raw = cm.classicRaw;
-        if (cm && cm.loopResume) loopResume = cm.loopResume;
-        // loopResume: model picked the agentic loop — fall through to it.
-      }
-      if (isAgenticLoopEnabled() && raw == null) {
+      if ((isAgenticLoopEnabled() || isCodeModeEnabled()) && raw == null) {
         const built = await runBuilderLoop({
           msgs, signal: abortController.signal, wantCar, status,
           workspaceSeed: currentApp?.html || null,
           researchEnabled: isBuilderResearchEnabled(),
-          resumeFrom: loopResume,
-          extraRounds: loopResume ? (BUILDER_MAX_ROUNDS - 1) : 0,
         });
         if (built && built.app) {
           const app = {
@@ -24228,7 +23957,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       try { genLog('info', 'code mode ' + (el.genCodeMode.checked ? 'enabled' : 'disabled') + ' for ' + activeProviderId); } catch (_) {}
     });
     // Code-mode limits: save on change/blur (shared handler)
-    const cmInputs = ['cmWallClock', 'cmToolCalls', 'cmLlmBudget', 'cmOutputMb', 'cmPerCall', 'cmConcurrency'];
+    const cmInputs = ['cmWallClock', 'cmToolCalls', 'cmOutputMb', 'cmPerCall', 'cmConcurrency'];
     for (const id of cmInputs) {
       const node = el[id];
       if (!node) continue;
