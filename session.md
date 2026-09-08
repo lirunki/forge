@@ -1,47 +1,46 @@
 # Forge (phone) session log — LOCKED
 
-## Future feature — Forge code mode (not implemented)
+## Code mode (implemented at 2.7.65/195)
 
-**Definition:** Code mode is not another workspace/tool-loop mode. It asks the LLM to generate JavaScript that orchestrates Forge tools, preprocesses their inputs and outputs, and then calls the LLM again with the processed context before producing the final mini-app.
+**Definition:** Code mode is a per-provider opt-in (`LS.codeMode`, mirrors
+`agenticLoop`) that adds a `run_program` tool to the agentic builder loop's
+workspace tools. The LLM calls `run_program({ code })` to run a sandboxed JS
+script that orchestrates Forge tools deterministically (no LLM in the middle)
+via `forge.tools.run(name, args)` + `forge.finish(result)`; the result is fed
+back as the tool result. The LLM then continues the loop (more tools, another
+`run_program`, or `finish`) — naturally hybrid.
 
-### Intended flow
-```text
-Forge request → LLM generates workflow JS → restricted executor
-  → calls Forge tools → preprocesses/postprocesses results
-  → calls LLM again → final mini-app payload / finish
-```
+### History (design pivoted mid-session)
+1. v1 (2.7.61/191): standalone `read_code_mode_md` + `write_program` +
+   `assembleApp` (separate stage-2 LLM call) + `CODE_MODE.md` + `getCodeCodeModeMd`.
+2. v2 (2.7.63/193): hybrid — multiple `write_program` rounds, context
+   accumulates, one final `assembleApp` LLM call.
+3. v3 (2.7.64/194): **simplification** — replaced the whole v1/v2 machinery
+   with a single workspace tool `run_program`. `run_program` routes
+   `forge.tools.run` to the same `builderExecTool` dispatcher the agentic loop
+   uses (`fs_write`, `gen_image`, `web_search`, …); the workspace-files gap
+   ("wrote assets locally, just the names") closed for free because `finish`
+   already inlines workspace files. Dropped `llmCallBudget` (no `forge.llm`).
+4. v4 (2.7.65/195): `run_program` docs sourced from `CODEMODE.md` (a real
+   markdown file appended to `LOOP.md` when code mode is on) instead of a
+   hardcoded string. Same fetch+fallback pattern as `LOOP.md`.
 
-### Why it may help mini-app forging
-- Parallel asset/data operations with `Promise.all`.
-- Image-generation pipelines with filtering, normalization, selection, and provider/model fallback.
-- Compact preprocessing of web/tool output before the final LLM context.
-- Deterministic retries, branching, aggregation, and validation.
-- Less conversational overhead for complex, asset-heavy, or data-driven apps.
+### Current surface (2.7.65/195)
+- `LS.codeMode` (per-provider) + `LS.codeModeLimits` (wall-clock, tool-call
+  count, output size, per-call timeout, concurrency — **no LLM budget**).
+- `run_program({ code, description? })` in `BUILDER_TOOLS` (gated on
+  `isCodeModeEnabled()`); routes `forge.tools.run` to `builderExecTool` via a
+  `subRunner` that blocks `run_program`/`finish` recursion.
+- `CODE_MODE_WORKER_SRC` (neutered Worker + MessageChannel RPC): `forge.tools.run`,
+  `forge.sleep`, `forge.print`, `forge.finish(result)`. No `forge.llm`.
+- `runCodeModeProgram`: wall-clock, tool-call count, concurrency (queued),
+  output size, per-call timeout, abort. Returns `{ ok, result }`.
+- `getLoopMd()` appends `CODEMODE.md` + dynamic limit values when code mode on.
+- `codeMode` on => agentic loop treated as on (`run_program` is a workspace tool).
 
-### Recommended scope
-- Optional advanced mode; do not replace classic or current agentic builder behavior.
-- Prefer implementing it first as a builder capability/tool, e.g. `run_code_workflow`, rather than changing the default Forge path.
-- Simple apps should continue using classic generation; complex workflows may opt into code mode.
-- The generated program needs an explicit final result contract, such as returning a final LLM response or calling `finish`.
-
-### Mandatory safety/design constraints
-- Execute generated JS in a restricted sandbox, not unrestricted host `new Function()`.
-- No DOM, `window`, cookies, arbitrary storage, fetch/XHR/WebSocket, Capacitor, native bridge, or unrestricted filesystem access.
-- Expose narrow APIs only, conceptually: `forge.tools.run`, `forge.llm`, `forge.print`, `forge.sleep`, and explicitly scoped workspace/finalization helpers.
-- Route tool calls through existing risk tiers and confirmation/veto controls.
-- Apply code-size, runtime, loop, output-size, tool-call, and cancellation limits.
-- Reuse `ai.cancel(id)` semantics and make all tool/LLM calls abortable.
-- Never expose API keys to generated code or mini-apps.
-
-### Open implementation questions
-1. Dedicated `ai.code` host API versus builder tool `run_code_workflow`.
-2. Sandbox implementation supporting asynchronous allowlisted host functions.
-3. How generated code returns/streams intermediate progress.
-4. Whether code mode should be explicitly selected or automatically offered for complex builds.
-5. How `finish` and final LLM calls are represented without allowing apps to bypass host validation.
-
-**Status:** Design captured for future work only. Do not implement or enable by default without a new plan and smoke tests.
-
+### See also
+- [`docs/code-mode-plan.md`](docs/code-mode-plan.md) — v1 design plan (historical)
+- [`docs/workspace-folder-plan.md`](docs/workspace-folder-plan.md) — future work
 ## ⛔ INVARIANT
 **Never delete folders without explicit user permission.** See [`INVARIANTS.md`](INVARIANTS.md).
 
@@ -58,7 +57,7 @@ it's all there.
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.7.40 / versionCode 170** (FGS notification lifecycle fix; prior 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
+| Version | **2.7.65 / versionCode 195** (code mode = `run_program` loop tool + `CODEMODE.md`; prior 2.7.64/194 run_program simplification, 2.7.63/193 hybrid write_program rounds, 2.7.62/192 wall-clock 300s→600s fix, 2.7.61/191 code mode feature, 2.7.60/190 resume button, 2.7.56/184 custom languages, 2.7.40/170 FGS notification lifecycle, 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -66,7 +65,7 @@ it's all there.
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | **2026-08-29 — 2.7.40/170 FGS notification lifecycle fix** · 2026-08-26 — 2.7.38/168 agentic Reforge + session workspace + agenticLoop backup · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
+| **Last rebuild** | **2026-09-08 — 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md`** (`79294e3`) · 2026-09-08 — 2.7.64/194 run_program simplification (`66e364c`) · 2026-09-08 — 2.7.63/193 hybrid write_program rounds (`162ba90`) · 2026-09-08 — 2.7.62/192 wall-clock 300s→600s fix (`399e349`) · 2026-09-07 — 2.7.61/191 code mode feature (`5cf692f`) · 2026-09-07 — 2.7.60/190 resume button (`a304e86`) · 2026-09-07 — 2.7.60/190 custom languages (`7182bf8`) · 2026-08-29 — 2.7.40/170 FGS notification lifecycle · 2.7.38/168 agentic Reforge + persistent workspace · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
 | **Release artifacts** | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`) · GPL-3.0 · upload-key signed
 
 ### Locked product baseline
@@ -2840,3 +2839,170 @@ Smoke (on device):
 [ ] Provider/network error mid-loop still shows Resume (unchanged)
 [ ] Flag OFF → classic path unchanged (no resume button on any error)
 ```
+
+## Code mode feature (2026-09-07 · 2.7.61/191 · `5cf692f`)
+
+### What the user asked for
+A new Forge builder mode ("code mode") where the LLM writes a short JS
+orchestrator that runs Forge tools deterministically (no LLM in the middle),
+then one final LLM call assembles the app. Opt-in per provider (mirror
+`agenticLoop`). Limits configurable in an unfoldable under "Builder
+capabilities," visible only when code mode is opted in.
+
+### What landed (v1 — later superseded by 2.7.64/194)
+- `LS.codeMode` + `LS.codeModeLimits` per-provider flag + limits.
+- `genCodeMode` checkbox + `codeModeLimitsWrap` unfoldable (6 limit inputs:
+  wall-clock, tool-call count, LLM-call budget, output bytes, per-call timeout,
+  concurrency). loadPrefs/savePrefs/Drive backup/restore wired.
+- `www/CODE_MODE.md` protocol asset (+ android sync, `forge_check.sh` parity,
+  `build_forge.sh` sync line, `CODE_MODE_MD_FALLBACK` + `getCodeCodeModeMd()`).
+- `CODE_MODE_WORKER_SRC` (neutered Worker + MessageChannel RPC) + `runCodeModeProgram`
+  with limits (wall-clock, tool-call, LLM-budget, output-bytes, concurrency-queue,
+  per-call-timeout, abort).
+- `assembleApp` (separate stage-2 LLM call) + `runCodeMode` driver (round-1
+  `read_code_mode_md` → `write_program` → run → assemble).
+- `BUILDER_TOOL_READ_CODE_MODE` + `BUILDER_TOOL_WRITE_PROGRAM`.
+- Wired into `forgeApp` + `reforgeAppWithAi` with BUILD OPTION system-prompt
+  paragraphs + `loopResume` threading (when both code-mode + agentic-loop flags
+  on, round 1 offered both; model picking `read_loop_md` handed off to the
+  agentic loop from round 2 armed).
+- Worker `print` fix (`{ args }` → `{ args: a }` — was a ReferenceError).
+- 22 new i18n keys.
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (syntax, www≡assets, backticks,
+  1 raw `</script>`, 28 tools, docs baselines 2.7.61/191).
+- 6 protocol + 7 limits + 3 print + 4 loopResume = 20 smoke tests pass.
+- Built + installed; on-device: code mode round-1 offer, `write_program`,
+  stage-1 run, stage-2 assemble all worked.
+
+## Code mode wall-clock limit 300s → 600s fix (2026-09-08 · 2.7.62/192 · `399e349`)
+
+### Problem
+The user specified 360s wall-clock; the console showed `wall=60s` (the
+default). Three coupled 300s caps silently discarded the 360:
+1. HTML input `max="300"` → browser clamps.
+2. `savePrefs` `num(el.cmWallClock, 5, 300)` → 360 > 300 → `null` → fell back
+   to `CODE_MODE_LIMIT_DEFAULTS.wallClockSecs = 60`.
+3. `runCodeModeProgram` `Math.min(300000, …)` → would clamp 360 → 300 even if
+   it had saved.
+
+### Fix
+Raised all three 300s → 600s (10-min headroom): HTML `max`, `savePrefs` `num(…,
+5, 600)`, `runCodeModeProgram` `Math.min(600000, …)`. Per-call timeout (120s)
+and other limits were already consistent — no change.
+
+### Verified
+Gate green at 2.7.62/192; on-device: re-entered 360, log showed `wall=360s`.
+
+## Code mode hybrid — multiple write_program rounds (2026-09-08 · 2.7.63/193 · `162ba90`)
+
+### What the user asked for
+Relax code mode from a rigid 2-turn flow to a hybrid: the LLM may call
+`write_program` N times (each script runs deterministically, `forge.finish()`
+context fed back), then stops → one final `assembleApp` LLM call from
+accumulated context. Guideline: minimize rounds. Hard constraint: each script
+must call `forge.finish()`. Also: inject the actual configured limit values
+into `CODE_MODE.md` so the model sees the real numbers.
+
+### What landed (v2 — later superseded by 2.7.64/194)
+- `runCodeMode` gained a multi-round `write_program` loop (≤10 rounds) with
+  context/assets accumulation across rounds + error-retry (failed script's
+  error fed back; model can write a corrected script).
+- `getCodeCodeModeMd()` appends "Your configured limits (right now)" with
+  the actual values from `getCodeCodeLimits()`.
+- `CODE_MODE.md` rewritten for the hybrid flow.
+- `BUILDER_TOOL_WRITE_PROGRAM` description updated.
+
+### Verified
+6 multi-round smoke tests pass (single, three, fail→retry, immediate stop,
+max cap, accumulate+overwrite). Gate green at 2.7.63/193.
+
+## Workspace-folder design plan (2026-09-08 · `b5dd04e` — docs only)
+
+### What the user asked for
+A "Builder capabilities" configuration for where the workspace (codemode or
+forgeloop) writes its scratch files. Default internal storage; user can
+provide another folder. Binary files stored as the actual file (`.jpg`, …),
+not base64, so the user can browse them. Lock the whole plan as future work.
+
+### What landed (plan only — NOT implemented)
+`docs/workspace-folder-plan.md` (151 lines): locked decisions (arbitrary SAF
+tree via `ACTION_OPEN_DOCUMENT_TREE` + `DocumentFile`; builder scratch — live
+writes during the build; `Directory.Data` default; clear-on-new-build; binary
+files as actual files with real extensions; v1 keeps resume in memory; revoked
+SAF permission mid-build = hard fault). Requires a new `WorkspaceBridgePlugin.java`
+(~200 lines) + 3-backend JS adapter + Settings UI + boot `treeStat` + clear hook.
+
+## Code mode = run_program loop tool (simplification) (2026-09-08 · 2.7.64/194 · `66e364c`)
+
+### What the user asked for
+Replace the standalone code-mode machinery with a single workspace tool:
+`run_program({ code })` in `BUILDER_TOOLS`. The LLM calls it → the host runs
+the JS in the sandboxed Worker → `forge.tools.run(name, args)` routes to the
+**same** `builderExecTool` dispatcher the agentic loop uses → `forge.finish(result)`
+→ the result is the tool result fed back. The LLM continues the loop (more
+tools, another `run_program`, or `finish`). Naturally hybrid. Drop `llmCallBudget`.
+
+### What it removed (~250 lines, net −826)
+- `assembleApp` (separate stage-2 LLM call), `runCodeMode` (round-1 offer +
+  `write_program` loop + `loopResume`), `BUILDER_TOOL_READ_CODE_MODE`,
+  `BUILDER_TOOL_WRITE_PROGRAM`, `getCodeCodeModeMd` + `CODE_MODE_MD_FALLBACK` +
+  `codeModeMdCache`, `www/CODE_MODE.md` (+ android sync, gate parity, build
+  sync), the `loopResume` threading in `forgeApp`/`reforgeAppWithAi`.
+- `llmCallBudget` (defaults, `cmLlmBudget` UI/label/el/prefs, `forge.llm`
+  dropped from the Worker API).
+- `runCodeMode`/`assembleApp`/`BUILDER_TOOL_READ_CODE_MODE`/`BUILDER_TOOL_WRITE_PROGRAM`.
+
+### What it kept + added
+- `CODE_MODE_WORKER_SRC` (simplified: `forge.finish(result)` ends the script;
+  no `forge.llm`) + `runCodeModeProgram` (returns `{ ok, result }`).
+- `BUILDER_TOOL_RUN_PROGRAM` + `case 'run_program'` in `builderExecTool`:
+  runs `runCodeModeProgram` with a `subRunner` that routes
+  `forge.tools.run` to `builderExecTool` (blocks `run_program`/`finish`
+  recursion); result capped at 60k chars.
+- `codeMode` on ⇒ agentic loop treated as on (`run_program` is a workspace
+  tool, offered after `read_loop_md`). BUILD OPTION paragraphs mention
+  `run_program` when code mode on.
+
+### Why this was the right pivot
+The workspace-files gap ("wrote assets locally, just the names") closed for
+free: a script writes files via `forge.tools.run('fs_write', …)` to the real
+workspace fs; the LLM then calls `finish`, which already inlines
+`<script src>`/`<link>`/`@asset(path)` from the workspace. No content
+round-trips through the LLM. One tool, one loop, no parallel protocol.
+
+### Verified
+6 `run_program` routing smoke tests pass (write+finish, parallel writes,
+recursion blocked, finish blocked, throw→error, implicit finish). Gate green
+at 2.7.64/194.
+
+## Source code-mode docs from CODEMODE.md (2026-09-08 · 2.7.65/195 · `79294e3`)
+
+### What the user asked for
+The `run_program` documentation should come from a real markdown file
+(`CODEMODE.md`), not a hardcoded string — same fetch+fallback pattern as
+`LOOP.md`. Also: `LOOP.md` should mention `run_program` when code mode is on
+(it was missing — `run_js` was documented, `run_program` wasn't).
+
+### What landed
+- `www/CODEMODE.md` (2903 bytes) — the `run_program` section: the `forge.*`
+  API, the hard constraint (`forge.finish(result)`), limits, `run_program`
+  vs `run_js` (when to use each).
+- `CODEMODE_MD_FALLBACK` + `getCodeCodeModeMd()` (fetcher+cache, mirrors
+  `getLoopMd`/`BUILDER_LOOP_MD_FALLBACK`).
+- `getLoopMd()` appends `await getCodeCodeModeMd()` + a dynamic "Your code-mode
+  limits (right now)" block (wall-clock, tool-call count, per-call timeout,
+  concurrency, output size — from `getCodeCodeLimits()`) when
+  `isCodeModeEnabled()`.
+- `forge_check.sh`: `CODEMODE.md` www↔assets parity (same gate as `LOOP.md`).
+- `build_forge.sh`: syncs `CODEMODE.md` to assets.
+
+### Verified
+Gate green at 2.7.65/195 (`CODEMODE.md` parity passes, 2903 bytes). Debug APK
+built + installed.
+
+### Files
+`www/CODEMODE.md` (+ android sync), `www/index.html` (+ assets sync),
+`forge_check.sh`, `build_forge.sh`, version baselines (build.gradle, docs/api.md,
+docs/tools.md, package.json) → 2.7.65/195.
