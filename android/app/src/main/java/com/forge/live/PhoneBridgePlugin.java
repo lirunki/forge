@@ -65,6 +65,10 @@ public class PhoneBridgePlugin extends Plugin {
         caps.put("bluetooth", pm.hasSystemFeature("android.hardware.bluetooth"));
         caps.put("hotspot", pm.hasSystemFeature("android.hardware.wifi"));
         caps.put("tts", true);
+        // Distribution flavor ("full" = F-Droid/website/sideload, "play" = Google Play).
+        // Host uses this to hide features that aren't shipped on the Play build
+        // (e.g. the code-mode checkbox). BuildConfig is generated in this package.
+        try { caps.put("flavor", BuildConfig.FLAVOR); } catch (Throwable ignored) {}
         caps.put("permissions", (Object) permissionSnapshot());
         call.resolve(caps);
     }

@@ -1625,11 +1625,13 @@ termux-reload-settings</div>
           </div>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.builderResearchHint">Per provider: when the agentic builder loop is enabled, allow web_search and web_fetch for research. Off = no network research tools in the builder.</p>
 
-          <div class="check" style="margin-top:0.45rem;">
-            <input type="checkbox" id="genCodeMode" />
-            <label for="genCodeMode" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.codeMode">Allow code mode</label>
+          <div id="codeModeRow">
+            <div class="check" style="margin-top:0.45rem;">
+              <input type="checkbox" id="genCodeMode" />
+              <label for="genCodeMode" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.codeMode">Allow code mode</label>
+            </div>
+            <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.codeModeHint">Per provider: the model writes a short JS orchestrator that runs Forge tools deterministically (no LLM in the middle), then one final call assembles the app. Good for data/asset-heavy apps. Off = classic one-shot or agentic loop only.</p>
           </div>
-          <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.codeModeHint">Per provider: the model writes a short JS orchestrator that runs Forge tools deterministically (no LLM in the middle), then one final call assembles the app. Good for data/asset-heavy apps. Off = classic one-shot or agentic loop only.</p>
           <div id="codeModeLimitsWrap" class="hidden">
             <details style="margin:0.5rem 0 0.25rem;padding:0.4rem 0.6rem;border:1px solid var(--border);border-radius:10px;">
               <summary style="cursor:pointer;color:var(--muted);font-size:0.84rem;user-select:none;" data-i18n="ai.codeModeLimits">Code mode limits</summary>
@@ -5536,6 +5538,15 @@ termux-reload-settings</div>
           if (j && typeof j === 'object') Object.assign(window.__FORGE_BUILD, j);
         }
       } catch (_) {}
+      // Distribution flavor ("full" vs "play") from BuildConfig via PhoneBridge.
+      // The Play build hides/disables code mode (not shipped there). Best-effort;
+      // on failure flavor stays unset and code mode is available (safe default
+      // for non-Play/fresh installs where the checkbox should be present).
+      try {
+        const caps = await phoneCall('getCapabilities', {});
+        if (caps && caps.flavor) window.__FORGE_BUILD.flavor = String(caps.flavor);
+        applyCodeModeFlavorVisibility();
+      } catch (_) {}
       try {
         const node = document.getElementById('forgeBuildInfo');
         if (node) {
@@ -6353,7 +6364,22 @@ termux-reload-settings</div>
     function getCodeModeMap() {
       try { return JSON.parse(localStorage.getItem(LS.codeMode) || '{}') || {}; } catch (_) { return {}; }
     }
+    /** Distribution flavor gate. The Google Play build ("play" flavor) does not
+     * ship code mode — the checkbox is hidden and isCodeModeEnabled() is forced
+     * false so the builder can never arm it (and getLoopMd won't append
+     * CODEMODE.md). Defaults to available (false) until flavor resolves, so the
+     * checkbox stays present on full/debug/fresh installs. */
+    function isPlayFlavor() {
+      try { return !!window.__FORGE_BUILD && window.__FORGE_BUILD.flavor === 'play'; } catch (_) { return false; }
+    }
+    function applyCodeModeFlavorVisibility() {
+      try {
+        const row = document.getElementById('codeModeRow');
+        if (row) row.classList.toggle('hidden', isPlayFlavor());
+      } catch (_) {}
+    }
     function isCodeModeEnabled() {
+      if (isPlayFlavor()) return false;
       try { return !!getCodeModeMap()[activeProviderId]; } catch (_) { return false; }
     }
     function setCodeModeEnabled(on) {
@@ -6366,6 +6392,7 @@ termux-reload-settings</div>
     function syncCodeModeCheckbox() {
       try { if (el.genCodeMode) el.genCodeMode.checked = isCodeModeEnabled(); } catch (_) {}
       try { syncCodeModeLimitsVisibility(); } catch (_) {}
+      try { applyCodeModeFlavorVisibility(); } catch (_) {}
     }
     /** Code-mode runtime limits. All configurable in the Builder capabilities
      *  unfoldable (visible only when code mode is opted in for the active

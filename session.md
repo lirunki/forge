@@ -57,7 +57,7 @@ it's all there.
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.7.66 / versionCode 196** (code-mode orchestration guidance — run_program for orchestration only, static files via fs_write; prior 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md`, 2.7.64/194 run_program simplification, 2.7.63/193 hybrid write_program rounds, 2.7.62/192 wall-clock 300s→600s fix, 2.7.61/191 code mode feature, 2.7.60/190 resume button, 2.7.56/184 custom languages, 2.7.40/170 FGS notification lifecycle, 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
+| Version | **2.7.67 / versionCode 197** (code mode gated off on the Google Play build via `BuildConfig.FLAVOR` — checkbox hidden + `isCodeModeEnabled()` forced false on the `play` flavor; full/debug/F-Droid unaffected; prior 2.7.66/196 code-mode orchestration guidance — run_program for orchestration only, static files via fs_write, 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md`, 2.7.64/194 run_program simplification, 2.7.63/193 hybrid write_program rounds, 2.7.62/192 wall-clock 300s→600s fix, 2.7.61/191 code mode feature, 2.7.60/190 resume button, 2.7.56/184 custom languages, 2.7.40/170 FGS notification lifecycle, 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -65,7 +65,7 @@ it's all there.
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | **2026-09-08 — 2.7.66/196 code-mode orchestration guidance (`2ac03a2`)** · 2026-09-08 — 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md` (`79294e3`) · 2026-09-08 — 2.7.64/194 run_program simplification (`66e364c`) · 2026-09-08 — 2.7.63/193 hybrid write_program rounds (`162ba90`) · 2026-09-08 — 2.7.62/192 wall-clock 300s→600s fix (`399e349`) · 2026-09-07 — 2.7.61/191 code mode feature (`5cf692f`) · 2026-09-07 — 2.7.60/190 resume button (`a304e86`) · 2026-09-07 — 2.7.60/190 custom languages (`7182bf8`) · 2026-08-29 — 2.7.40/170 FGS notification lifecycle · 2.7.38/168 agentic Reforge + persistent workspace · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
+| **Last rebuild** | **2026-09-09 — 2.7.67/197 code mode gated off on Play build via `BuildConfig.FLAVOR` (`a550ece`)** · 2026-09-08 — 2.7.66/196 code-mode orchestration guidance (`2ac03a2`) · 2026-09-08 — 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md` (`79294e3`) · 2026-09-08 — 2.7.64/194 run_program simplification (`66e364c`) · 2026-09-08 — 2.7.63/193 hybrid write_program rounds (`162ba90`) · 2026-09-08 — 2.7.62/192 wall-clock 300s→600s fix (`399e349`) · 2026-09-07 — 2.7.61/191 code mode feature (`5cf692f`) · 2026-09-07 — 2.7.60/190 resume button (`a304e86`) · 2026-09-07 — 2.7.60/190 custom languages (`7182bf8`) · 2026-08-29 — 2.7.40/170 FGS notification lifecycle · 2.7.38/168 agentic Reforge + persistent workspace · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
 | **Release artifacts** | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`) · GPL-3.0 · upload-key signed
 
 ### Locked product baseline
@@ -3058,3 +3058,75 @@ Smoke:
 [ ] Data-heavy app (fetch 5 URLs, aggregate) → run_program used for the batch
 [ ] Reforge with code mode ON → same orchestration-vs-direct split
 [ ] Classic path (flags off) unchanged
+
+## Code mode hidden on the Google Play build (2026-09-09)
+
+**2.7.67 / versionCode 197** (from 2.7.66/196). Native 1-liner + host-only gate;
+no build-script or gate changes.
+
+### What the user asked for
+Disable the **Allow code mode** checkbox (only the checkbox) on the **Google
+Play AAB** (`play` flavor) so code mode is present only on the debug APK and
+the F-Droid/website (`full`) APK. Don't ship it on Play.
+
+### Why flavor detection via `BuildConfig.FLAVOR`
+The two flavors share one source tree and one `assets/public/index.html`
+(www ≡ assets parity is a locked invariant + gate step 2). So the host file is
+identical across flavors — the only way to differ UI per flavor is to read the
+Gradle-defined flavor at runtime. `buildFeatures { buildConfig true }` is
+already on; `BuildConfig.FLAVOR` is `"full"` or `"play"` (verified in the
+generated source per flavor). Single source of truth, robust to any build
+method (debug/release/manual gradle), no generated per-flavor asset files, no
+build_forge.sh / release_forge.sh changes, no gate-parity exceptions.
+
+### What landed
+
+| Piece | Detail |
+|---|---|
+| **Native** (`PhoneBridgePlugin.getCapabilities`) | `try { caps.put("flavor", BuildConfig.FLAVOR); } catch (Throwable ignored) {}` — `BuildConfig` is generated in package `com.forge.live` (same package, no import). `getCapabilities` is light (PackageManager feature checks, no telephony) and already the capability surface. |
+| **Host boot** (`__FORGE_BUILD` async block) | After `App.getInfo()` + `fetch('forge-build.json')`, calls `phoneCall('getCapabilities', {})` and sets `window.__FORGE_BUILD.flavor = caps.flavor`, then `applyCodeModeFlavorVisibility()`. Best-effort: on failure flavor stays unset → code mode available (safe default for non-Play / fresh installs where the checkbox should appear). |
+| **Host gate** (`isPlayFlavor`) | `window.__FORGE_BUILD.flavor === 'play'`. |
+| **Host gate** (`isCodeModeEnabled`) | Returns `false` if `isPlayFlavor()` — the single builder gate, so the loop never arms code mode on Play and `getLoopMd()` won't append `CODEMODE.md`. Covers forgeApp + reforgeAppWithAi arming points + all `isCodeModeEnabled()` checks. |
+| **DOM** | Wrapped the checkbox `.check` row + its `<p class="field-hint">` in `<div id="codeModeRow">`. `applyCodeModeFlavorVisibility()` toggles `hidden` on that row. Called from `syncCodeModeCheckbox()` (loadPrefs / provider switch / Drive restore) and once at boot after flavor resolves. |
+| **Restore defense** | A Drive backup restore that brings `remoteCodeMode=true` onto a Play build sets localStorage, but `isCodeModeEnabled()` still returns false on Play → checkbox stays unchecked + hidden; the stored pref is harmless (and would take effect if the user later installs the full flavor, which is expected). |
+
+### Why not a per-flavor `forge-build.json` asset override
+That would avoid the native change but requires generating/maintaining a
+second stamped `forge-build.json` in `src/play/assets/public/` (gitignored,
+regenerated per build by both `build_forge.sh` and `release_forge.sh`), plus
+gate-parity reasoning. `BuildConfig.FLAVOR` is cleaner: one line native, zero
+build-script churn, single source of truth.
+
+### Verified
+- `forge_check.sh` + `forge_docs_check` PASS (syntax, www≡assets incl.
+  LOOP.md/CODEMODE.md/turnkey-config.json, backtick sanity, 1 raw `</script>`,
+  28 host tools, docs baselines 2.7.67/197).
+- Generated `BuildConfig.java`: full → `FLAVOR = "full"`, play → `FLAVOR = "play"`.
+- Native dex (both flavors) contains `FLAVOR` / `flavor` / `getCapabilities`
+  strings (the `caps.put("flavor", BuildConfig.FLAVOR)` compiled in).
+- Host assets contain `isPlayFlavor` / `applyCodeModeFlavorVisibility` /
+  `codeModeRow` (8 refs) + the boot `phoneCall('getCapabilities')` flavor fetch.
+- Both flavor debug APKs built: `~/downloads/Forge-debug-rebuilt.apk` (full,
+  8.0 MB) + `~/downloads/Forge-play-debug.apk` (play, 8.0 MB).
+
+### Files
+`android/app/src/main/java/com/forge/live/PhoneBridgePlugin.java` (1 line),
+`www/index.html` (+ assets sync — boot flavor fetch, `isPlayFlavor` /
+`applyCodeModeFlavorVisibility`, `isCodeModeEnabled` gate, `#codeModeRow`
+wrap, `syncCodeModeCheckbox` call), `android/app/build.gradle` (2.7.67/197),
+`docs/api.md` + `docs/tools.md` (baselines), `package.json` (2.7.67).
+
+Smoke (on device):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk (FULL) → About v2.7.67 (197)
+[ ] AI tab → AI settings → "Allow code mode" checkbox + hint present (toggle works)
+[ ] adb install -r ~/downloads/Forge-play-debug.apk (PLAY) → About v2.7.67 (197)
+[ ] AI tab → AI settings → NO "Allow code mode" row (checkbox + hint hidden)
+[ ] Play build: forge/reforge never arms code mode even if a restored backup
+    carried codeMode=true for a provider (isCodeModeEnabled() === false)
+[ ] Play build: console has no "agentic loop armed · code mode" lines;
+    CODEMODE.md is not appended to LOOP.md
+[ ] Full build: code mode still arms as before (regression)
+[ ] Agentic loop (separate flag) still present on both flavors (only code mode
+    is Play-gated)
+```
