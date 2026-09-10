@@ -21899,60 +21899,58 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
 
     function renameLibraryApp(app) {
       if (!app?.id) return;
-      const curTitle = app.title || 'Untitled';
+      const curTitle = app.title || t('lib.untitled');
       const curSummary = app.summary || '';
-      let title;
-      try {
-        title = prompt('Rename app', curTitle);
-      } catch (_) {
-        title = null;
-      }
-      if (title == null) return; // cancelled
-      title = String(title).trim().slice(0, 80);
-      if (!title) {
-        setLibStatus('Name cannot be empty', 'err');
-        return;
-      }
-      let summary = curSummary;
-      try {
-        const sIn = prompt('Summary (optional)', curSummary);
-        if (sIn != null) summary = String(sIn).trim().slice(0, 240);
-      } catch (_) {}
-
-      const list = getLibrary();
-      const idx = list.findIndex(x => x.id === app.id);
-      if (idx < 0) {
-        setLibStatus('App not found in library', 'err');
-        return;
-      }
-      const next = {
-        ...list[idx],
-        title,
-        summary,
-        updatedAt: Date.now(),
+      const wrap = document.createElement('div');
+      wrap.className = 'tour-overlay';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.innerHTML = '<div class="tour-card"><h2></h2><label></label><input type="text" data-field="title" maxlength="80"><label></label><textarea data-field="summary" maxlength="240" rows="4"></textarea><div class="tour-actions"><button class="btn secondary small" data-act="cancel" type="button"></button><button class="btn small" data-act="save" type="button"></button></div></div>';
+      const card = wrap.querySelector('.tour-card');
+      const titleInput = wrap.querySelector('[data-field="title"]');
+      const summaryInput = wrap.querySelector('[data-field="summary"]');
+      card.querySelector('h2').textContent = t('lib.rename');
+      const labels = card.querySelectorAll('label');
+      labels[0].textContent = t('lib.rename');
+      labels[1].textContent = t('lib.summary');
+      titleInput.value = curTitle;
+      summaryInput.value = curSummary;
+      card.querySelector('[data-act="cancel"]').textContent = t('common.cancel');
+      card.querySelector('[data-act="save"]').textContent = t('common.save');
+      const finish = (save) => {
+        try { wrap.remove(); } catch (_) {}
+        if (!save) return;
+        let title = String(titleInput.value || '').trim().slice(0, 80);
+        if (!title) { setLibStatus('Name cannot be empty', 'err'); return; }
+        const summary = String(summaryInput.value || '').trim().slice(0, 240);
+        const list = getLibrary();
+        const idx = list.findIndex(x => x.id === app.id);
+        if (idx < 0) { setLibStatus('App not found in library', 'err'); return; }
+        const next = { ...list[idx], title, summary, updatedAt: Date.now() };
+        list[idx] = next;
+        setLibrary(list);
+        clearDriveTombstone(next.id);
+        if (currentApp?.id === next.id) {
+          currentApp = { ...currentApp, title, summary, updatedAt: next.updatedAt };
+          try {
+            el.previewTitle.textContent = currentApp.title + (currentApp.carCompatible ? ' ⚓' : '');
+            el.subtitle.textContent = currentApp.title ? t('header.running', { name: currentApp.title }) : t('header.subtitle');
+          } catch (_) {}
+        }
+        if (Capacitor.isNativePlatform()) {
+          try { ShortcutBridge.updatePinned({ id: next.id, title: next.title || 'Forge app' }).catch(() => {}); } catch (_) {}
+        }
+        renderLibrary();
+        setLibStatus('Renamed to “' + title + '”', 'ok');
       };
-      list[idx] = next;
-      setLibrary(list);
-      clearDriveTombstone(next.id);
-      if (currentApp?.id === next.id) {
-        currentApp = { ...currentApp, title, summary, updatedAt: next.updatedAt };
-        try {
-          el.previewTitle.textContent = currentApp.title + (currentApp.carCompatible ? ' ⚓' : '');
-          el.subtitle.textContent = currentApp.title ? t('header.running', { name: currentApp.title }) : t('header.subtitle');
-        } catch (_) {}
-      }
-      // Keep pinned shortcut label in sync when possible
-      if (Capacitor.isNativePlatform()) {
-        try {
-          ShortcutBridge.updatePinned({
-            id: next.id,
-            title: next.title || 'Forge app',
-          }).catch(() => {});
-        } catch (_) {}
-      }
-      renderLibrary();
-      setLibStatus(`Renamed to “${title}”`, 'ok');
+      card.querySelector('[data-act="cancel"]').onclick = () => finish(false);
+      card.querySelector('[data-act="save"]').onclick = () => finish(true);
+      wrap.addEventListener('click', (e) => { if (e.target === wrap) finish(false); });
+      document.body.appendChild(wrap);
+      titleInput.focus();
+      titleInput.select();
     }
+
 
     // ─── Library folders ───
     const LIB_ROOT_ID = 'root';
