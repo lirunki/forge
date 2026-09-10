@@ -702,7 +702,7 @@
       box-shadow: var(--shadow);
     }
     .tour-card h2 { font-size: 1.05rem; margin-bottom: 0.35rem; }
-    .tour-card p { color: var(--muted); font-size: 0.9rem; margin-bottom: 0.85rem; }
+    .tour-card p { color: var(--muted); font-size: 0.9rem; margin-bottom: 0.85rem; white-space: pre-line; }
     .tour-mode-list { display: grid; gap: 0.45rem; margin: 0.15rem 0 0.95rem; }
     .tour-mode-opt {
       display: flex; gap: 0.6rem; align-items: flex-start;
@@ -1790,9 +1790,6 @@ termux-reload-settings</div>
  "ai.advanced": "Advanced: provider, model, endpoint",
  "ai.agenticLoop": "Allow agentic builder loop",
  "ai.agenticLoopHint": "Per provider: for apps too big for one response, the model can opt into workspace mode (scratch files, JS runner, image tools, host-side assembly). Off = classic one-shot JSON only.",
- "ai.codeMode": "Allow code mode",
- "ai.codeModeHint": "Per provider: the model writes a short JS orchestrator that runs Forge tools deterministically (no LLM in the middle), then one final call assembles the app. Good for data/asset-heavy apps. Off = classic one-shot or agentic loop only.",
- "ai.codeModeLimits": "Code mode limits",
  "ai.az.apikey": "api-key header (typical Azure)",
  "ai.az.auth": "Auth style",
  "ai.az.bearer": "Authorization: Bearer",
@@ -1809,6 +1806,9 @@ termux-reload-settings</div>
  "ai.builderCapabilities": "Builder capabilities",
  "ai.builderResearch": "Allow web research",
  "ai.builderResearchHint": "Per provider: when the agentic builder loop is enabled, allow web_search and web_fetch for research. Off = no network research tools in the builder.",
+ "ai.codeMode": "Allow code mode",
+ "ai.codeModeHint": "Per provider: the model writes a short JS orchestrator that runs Forge tools deterministically (no LLM in the middle), then one final call assembles the app. Good for data/asset-heavy apps. Off = classic one-shot or agentic loop only.",
+ "ai.codeModeLimits": "Code mode limits",
  "ai.connectedSample": "Connected. Sample: {sample}",
  "ai.console": "Console",
  "ai.consoleHint": "Debug mini-app, bridge, and ForgeHost errors.",
@@ -1905,14 +1905,14 @@ termux-reload-settings</div>
  "chat.noKey": "No AI key yet. Use Easy setup (free providers like Groq or Gemini) — or paste a key in the AI tab.",
  "chat.openAppTab": "→ Open the App tab to use “{name}”.",
  "chat.placeholder": "Describe the app you want…",
+ "chat.resumeBuild": "↻ Resume build",
+ "chat.resumeGone": "The previous build context is no longer available. Start again.",
  "chat.send": "Forge it",
  "chat.stop": "Stop",
  "chat.stopBody": "Stop the current build? Any in-flight request is abandoned and the UI resets to idle.",
  "chat.stopOk": "Stop",
  "chat.stopTitle": "Stop generation?",
  "chat.stopped": "Stopped.",
- "chat.resumeBuild": "↻ Resume build",
- "chat.resumeGone": "The previous build context is no longer available. Start again.",
  "chips.dark": "Dark mode",
  "chips.notify": "Notifications",
  "chips.perms": "Permission pack",
@@ -2021,29 +2021,29 @@ termux-reload-settings</div>
  "imp.opening": "Opening shared HTML…",
  "imp.pick": "Pick an .html mini-app…",
  "imp.readFail": "Could not read file: {msg}",
- "lang.auto": "Auto (device language)",
  "lang.add": "Add custom language…",
- "lang.manage": "Manage custom languages",
- "lang.manageTitle": "Custom languages",
- "lang.customTitle": "Add custom language",
+ "lang.auto": "Auto (device language)",
+ "lang.cancelGen": "Cancel",
+ "lang.cancelled": "Cancelled.",
+ "lang.customEmpty": "No custom languages yet.",
+ "lang.customGenerate": "Generate",
+ "lang.customHint": "Generates a translation dictionary with the current AI provider. Takes a minute or two; free turn-key models work. Restart Forge to use it.",
  "lang.customName": "Name",
  "lang.customNamePh": "e.g. Klingon",
+ "lang.customNeedBoth": "Add both a name and a description of how it should sound.",
+ "lang.customSaved": "Saved — restart Forge to use {name}.",
  "lang.customSpec": "How does it sound?",
  "lang.customSpecPh": "How the Klingons speak; English from the ghetto; pirate English…",
- "lang.customHint": "Generates a translation dictionary with the current AI provider. Takes a minute or two; free turn-key models work. Restart Forge to use it.",
- "lang.customNeedBoth": "Add both a name and a description of how it should sound.",
- "lang.customGenerate": "Generate",
- "lang.cancelGen": "Cancel",
- "lang.translating": "Translating into {name}…",
- "lang.receiving": "Receiving… {kb} chars",
- "lang.customSaved": "Saved — restart Forge to use {name}.",
- "lang.customEmpty": "No custom languages yet.",
- "lang.deleteTitle": "Delete language?",
+ "lang.customTitle": "Add custom language",
  "lang.deleteBody": "Delete {name}? Its translations will be removed. Restart Forge to apply.",
- "lang.noKey": "Add an AI key in AI settings first.",
+ "lang.deleteTitle": "Delete language?",
  "lang.genFail": "Generation failed: {msg}",
+ "lang.manage": "Manage custom languages",
+ "lang.manageTitle": "Custom languages",
+ "lang.noKey": "Add an AI key in AI settings first.",
  "lang.parseFail": "Model did not return a valid dictionary.",
- "lang.cancelled": "Cancelled.",
+ "lang.receiving": "Receiving… {kb} chars",
+ "lang.translating": "Translating into {name}…",
  "lib.backup": "Backup",
  "lib.backupTitle": "Backup library to Google Drive / folder",
  "lib.changeIcon": "Change icon",
@@ -2052,7 +2052,22 @@ termux-reload-settings</div>
  "lib.delete": "Delete from library",
  "lib.deleteFolder": "Delete folder",
  "lib.deleted": "Deleted \"{name}\"",
+ "lib.demoInstalled": "Already installed",
+ "lib.demoNeedsForge": "Requires Forge {version} or newer",
+ "lib.demoUntitled": "Untitled demo",
+ "lib.demosDownloading": "Downloading {name}…",
+ "lib.demosEmpty": "No demos are available right now.",
+ "lib.demosFailed": "Could not load demos: {msg}",
+ "lib.demosFailedOne": "Could not download {name}: {msg}",
+ "lib.demosInstall": "Download selected",
+ "lib.demosInstalledCount": "Installed {n} demo(s).",
+ "lib.demosLead": "Choose demos to add to your Library. Installed demos are unchecked; downloading again creates a renamed copy.",
+ "lib.demosLoading": "Loading demos…",
+ "lib.demosNoneInstalled": "No demos were installed.",
+ "lib.demosNoneSelected": "No demos selected.",
+ "lib.demosTitle": "Download demos",
  "lib.depthLimitReached": "Depth limit reached (3 levels)",
+ "lib.downloadDemos": "Download demos",
  "lib.empty": "No saved apps yet. Build one and tap Save, Import any .html, or install the Kitchen sink lab.",
  "lib.export": "Export HTML",
  "lib.folderContents": "{folders} subfolder(s), {apps} app(s) inside.",
@@ -2215,6 +2230,7 @@ termux-reload-settings</div>
  "tab.library": "Library",
  "tour.next": "Next",
  "tour.s1Body": "Describe an app in Chat — or attach a UI sketch — then tap Forge it. Forge builds a real mini-app on your phone.",
+ "tour.s1Example": "Try: “Build a tic-tac-toe game where I play against the AI.”",
  "tour.s1Title": "Welcome to Forge",
  "tour.s2Body": "Attach images with 🖼 / 📷. Open the blue 💡 Hints button anytime for tips and refine chips (Dark mode, Share, QR…).",
  "tour.s2Title": "Sketches & refine",
@@ -2223,6 +2239,7 @@ termux-reload-settings</div>
  "tour.s3Body": "Open the App tab to try your mini-app. In immersive mode the ← Forge chip fades — tap near the top-left to show it again.",
  "tour.s3Title": "Run the App",
  "tour.s4Body": "Save apps, set an emoji icon, Open in a new window (split-screen), or pin to the Home screen.",
+ "tour.s4Samples": "Long-press the Library folder to find Kitchen sink and download demo apps.",
  "tour.s4Title": "Library & Home",
  "tour.s5Body": "Connect free AI providers here. Mini-apps can use notifications, jobs, mic WAV, QR scan, Termux, and more via ForgeHost.",
  "tour.s5Title": "AI & device bridges",
@@ -2439,11 +2456,11 @@ termux-reload-settings</div>
  "chat.noKey": "Aún no hay clave de IA. Usa Configuración fácil (proveedores gratis como Groq o Gemini) — o pega una clave en la pestaña IA.",
  "chat.openAppTab": "→ Abre la pestaña App para usar “{name}”.",
  "chat.placeholder": "Describe la app que quieres…",
+ "chat.resumeBuild": "↻ Reanudar compilación",
+ "chat.resumeGone": "El contexto de compilación anterior ya no está disponible. Comienza de nuevo.",
  "chat.send": "Crear",
  "chat.stop": "Detener",
  "chat.stopped": "Detenido.",
- "chat.resumeBuild": "↻ Reanudar compilación",
- "chat.resumeGone": "El contexto de compilación anterior ya no está disponible. Comienza de nuevo.",
  "chips.dark": "Modo oscuro",
  "chips.notify": "Notificaciones",
  "chips.perms": "Permisos",
@@ -2556,7 +2573,22 @@ termux-reload-settings</div>
  "lib.delete": "Eliminar de la biblioteca",
  "lib.deleteFolder": "Eliminar carpeta",
  "lib.deleted": "Eliminado “{name}”",
+ "lib.demoInstalled": "Ya instalado",
+ "lib.demoNeedsForge": "Requiere Forge {version} o posterior",
+ "lib.demoUntitled": "Demo sin título",
+ "lib.demosDownloading": "Descargando {name}…",
+ "lib.demosEmpty": "No hay demos disponibles ahora.",
+ "lib.demosFailed": "No se pudieron cargar los demos: {msg}",
+ "lib.demosFailedOne": "No se pudo descargar {name}: {msg}",
+ "lib.demosInstall": "Descargar seleccionados",
+ "lib.demosInstalledCount": "{n} demo(s) instalado(s).",
+ "lib.demosLead": "Elige demos para añadir a tu biblioteca. Los demos instalados aparecen sin marcar; volver a descargarlos crea una copia renombrada.",
+ "lib.demosLoading": "Cargando demos…",
+ "lib.demosNoneInstalled": "No se instalaron demos.",
+ "lib.demosNoneSelected": "No se seleccionaron demos.",
+ "lib.demosTitle": "Descargar demos",
  "lib.depthLimitReached": "Límite de profundidad alcanzado (3 niveles)",
+ "lib.downloadDemos": "Descargar demos",
  "lib.empty": "Aún no hay apps guardadas. Crea una y toca Guardar, Importa cualquier .html o instala el laboratorio Kitchen sink.",
  "lib.export": "Exportar HTML",
  "lib.folderContents": "{folders} subcarpeta(s), {apps} app(s) dentro.",
@@ -2788,6 +2820,7 @@ termux-reload-settings</div>
  "tab.library": "Biblioteca",
  "tour.next": "Siguiente",
  "tour.s1Body": "Describe una app en Chat — o adjunta un boceto de UI — y toca Crear. Forge crea una mini-app real en tu teléfono.",
+ "tour.s1Example": "Prueba: «Crea un tres en raya donde juegue contra la IA».",
  "tour.s1Title": "Bienvenido a Forge",
  "tour.s2Body": "Adjunta imágenes con 🖼 / 📷. Abre el botón azul 💡 Consejos cuando quieras para tips y fichas de refinado (Modo oscuro, Compartir, QR…).",
  "tour.s2Title": "Bocetos y refinado",
@@ -2796,6 +2829,7 @@ termux-reload-settings</div>
  "tour.s3Body": "Abre la pestaña App para probar tu mini-app. En modo inmersivo la ficha ← Forge se desvanece — toca cerca de arriba a la izquierda para mostrarla otra vez.",
  "tour.s3Title": "Ejecuta la app",
  "tour.s4Body": "Guarda apps, pon un icono emoji, Abre en ventana nueva (pantalla dividida) o ancla a la pantalla de inicio.",
+ "tour.s4Samples": "Mantén pulsada la carpeta Biblioteca para encontrar Kitchen sink y descargar demos.",
  "tour.s4Title": "Biblioteca e Inicio",
  "tour.s5Body": "Conecta aquí proveedores de IA gratis. Las mini-apps pueden usar notificaciones, trabajos, micrófono WAV, escaneo QR, Termux y más vía ForgeHost.",
  "tour.s5Title": "IA y puentes del dispositivo",
@@ -3012,11 +3046,11 @@ termux-reload-settings</div>
  "chat.noKey": "Pas encore de clé IA. Utilisez l’assistant (fournisseurs gratuits comme Groq ou Gemini) — ou collez une clé dans l’onglet IA.",
  "chat.openAppTab": "→ Ouvrez l’onglet App pour utiliser « {name} ».",
  "chat.placeholder": "Décrivez l’app que vous voulez…",
+ "chat.resumeBuild": "↻ Reprendre la compilation",
+ "chat.resumeGone": "Le contexte de compilation précédent n'est plus disponible. Recommencez.",
  "chat.send": "Créer",
  "chat.stop": "Arrêter",
  "chat.stopped": "Arrêté.",
- "chat.resumeBuild": "↻ Reprendre la compilation",
- "chat.resumeGone": "Le contexte de compilation précédent n'est plus disponible. Recommencez.",
  "chips.dark": "Mode sombre",
  "chips.notify": "Notifications",
  "chips.perms": "Autorisations",
@@ -3129,7 +3163,22 @@ termux-reload-settings</div>
  "lib.delete": "Supprimer de la bibliothèque",
  "lib.deleteFolder": "Supprimer le dossier",
  "lib.deleted": "« {name} » supprimée",
+ "lib.demoInstalled": "Déjà installée",
+ "lib.demoNeedsForge": "Forge {version} ou version ultérieure requis",
+ "lib.demoUntitled": "Démo sans titre",
+ "lib.demosDownloading": "Téléchargement de {name}…",
+ "lib.demosEmpty": "Aucune démo disponible pour le moment.",
+ "lib.demosFailed": "Impossible de charger les démos : {msg}",
+ "lib.demosFailedOne": "Impossible de télécharger {name} : {msg}",
+ "lib.demosInstall": "Télécharger la sélection",
+ "lib.demosInstalledCount": "{n} démo(s) installée(s).",
+ "lib.demosLead": "Choisissez des démos à ajouter à votre bibliothèque. Les démos installées sont décochées ; les télécharger à nouveau crée une copie renommée.",
+ "lib.demosLoading": "Chargement des démos…",
+ "lib.demosNoneInstalled": "Aucune démo installée.",
+ "lib.demosNoneSelected": "Aucune démo sélectionnée.",
+ "lib.demosTitle": "Télécharger des démos",
  "lib.depthLimitReached": "Limite de profondeur atteinte (3 niveaux)",
+ "lib.downloadDemos": "Télécharger des démos",
  "lib.empty": "Aucune app enregistrée. Créez-en une et touchez Enregistrer, importez un .html ou installez le labo Kitchen sink.",
  "lib.export": "Exporter le HTML",
  "lib.folderContents": "{folders} sous-dossier(s), {apps} app(s) à l’intérieur.",
@@ -3361,6 +3410,7 @@ termux-reload-settings</div>
  "tab.library": "Bibliothèque",
  "tour.next": "Suivant",
  "tour.s1Body": "Décrivez une app dans Chat — ou joignez un croquis d’interface — puis touchez Créer. Forge construit une vraie mini-app sur votre téléphone.",
+ "tour.s1Example": "Essayez : « Crée un morpion où je joue contre l’IA. »",
  "tour.s1Title": "Bienvenue dans Forge",
  "tour.s2Body": "Joignez des images avec 🖼 / 📷. Ouvrez le bouton bleu 💡 Astuces à tout moment pour des conseils et suggestions (Mode sombre, Partage, QR…).",
  "tour.s2Title": "Croquis et retouches",
@@ -3369,6 +3419,7 @@ termux-reload-settings</div>
  "tour.s3Body": "Ouvrez l’onglet App pour essayer votre mini-app. En mode immersif, la puce ← Forge s’estompe — touchez près du coin supérieur gauche pour la réafficher.",
  "tour.s3Title": "Lancer l’app",
  "tour.s4Body": "Enregistrez des apps, définissez une icône émoji, Ouvrez dans une nouvelle fenêtre (écran partagé) ou épinglez sur l’écran d’accueil.",
+ "tour.s4Samples": "Maintenez la pression sur le dossier Bibliothèque pour trouver Kitchen sink et télécharger des démos.",
  "tour.s4Title": "Bibliothèque et accueil",
  "tour.s5Body": "Connectez ici des fournisseurs IA gratuits. Les mini-apps peuvent utiliser notifications, jobs, micro WAV, scan QR, Termux et plus via ForgeHost.",
  "tour.s5Title": "IA et ponts de l’appareil",
@@ -3585,11 +3636,11 @@ termux-reload-settings</div>
  "chat.noKey": "Ainda sem chave de IA. Use a Configuração fácil (provedores grátis como Groq ou Gemini) — ou cole uma chave na aba IA.",
  "chat.openAppTab": "→ Abra a aba App para usar “{name}”.",
  "chat.placeholder": "Descreva o app que você quer…",
+ "chat.resumeBuild": "↻ Retomar compilação",
+ "chat.resumeGone": "O contexto de compilação anterior não está mais disponível. Comece novamente.",
  "chat.send": "Criar",
  "chat.stop": "Parar",
  "chat.stopped": "Parado.",
- "chat.resumeBuild": "↻ Retomar compilação",
- "chat.resumeGone": "O contexto de compilação anterior não está mais disponível. Comece novamente.",
  "chips.dark": "Modo escuro",
  "chips.notify": "Notificações",
  "chips.perms": "Permissões",
@@ -3702,7 +3753,22 @@ termux-reload-settings</div>
  "lib.delete": "Excluir da biblioteca",
  "lib.deleteFolder": "Excluir pasta",
  "lib.deleted": "“{name}” excluído",
+ "lib.demoInstalled": "Já instalado",
+ "lib.demoNeedsForge": "Requer Forge {version} ou mais recente",
+ "lib.demoUntitled": "Demo sem título",
+ "lib.demosDownloading": "Baixando {name}…",
+ "lib.demosEmpty": "Nenhum demo disponível agora.",
+ "lib.demosFailed": "Não foi possível carregar os demos: {msg}",
+ "lib.demosFailedOne": "Não foi possível baixar {name}: {msg}",
+ "lib.demosInstall": "Baixar selecionados",
+ "lib.demosInstalledCount": "{n} demo(s) instalado(s).",
+ "lib.demosLead": "Escolha demos para adicionar à sua biblioteca. Demos instalados ficam desmarcados; baixar novamente cria uma cópia renomeada.",
+ "lib.demosLoading": "Carregando demos…",
+ "lib.demosNoneInstalled": "Nenhum demo foi instalado.",
+ "lib.demosNoneSelected": "Nenhum demo selecionado.",
+ "lib.demosTitle": "Baixar demos",
  "lib.depthLimitReached": "Limite de profundidade atingido (3 níveis)",
+ "lib.downloadDemos": "Baixar demos",
  "lib.empty": "Ainda sem apps salvos. Crie um e toque em Salvar, importe qualquer .html ou instale o laboratório Kitchen sink.",
  "lib.export": "Exportar HTML",
  "lib.folderContents": "{folders} subpasta(s), {apps} app(s) dentro.",
@@ -3934,6 +4000,7 @@ termux-reload-settings</div>
  "tab.library": "Biblioteca",
  "tour.next": "Próximo",
  "tour.s1Body": "Descreva um app no Chat — ou anexe um esboço de UI — e toque em Criar. O Forge cria uma mini-app de verdade no seu telefone.",
+ "tour.s1Example": "Experimente: “Crie um jogo da velha onde eu jogo contra a IA.”",
  "tour.s1Title": "Bem-vindo ao Forge",
  "tour.s2Body": "Anexe imagens com 🖼 / 📷. Abra o botão azul 💡 Dicas quando quiser para dicas e fichas de refinamento (Modo escuro, Compartilhar, QR…).",
  "tour.s2Title": "Esboços e refinamento",
@@ -3942,6 +4009,7 @@ termux-reload-settings</div>
  "tour.s3Body": "Abra a aba App para experimentar sua mini-app. No modo imersivo a ficha ← Forge some — toque perto do canto superior esquerdo para mostrá-la de novo.",
  "tour.s3Title": "Rode o app",
  "tour.s4Body": "Salve apps, defina um ícone de emoji, Abra numa nova janela (tela dividida) ou fixe na tela inicial.",
+ "tour.s4Samples": "Mantenha a pasta Biblioteca pressionada para encontrar o Kitchen sink e baixar demos.",
  "tour.s4Title": "Biblioteca e início",
  "tour.s5Body": "Conecte aqui provedores de IA grátis. As mini-apps podem usar notificações, jobs, microfone WAV, escaneamento QR, Termux e mais via ForgeHost.",
  "tour.s5Title": "IA e pontes do dispositivo",
@@ -4158,11 +4226,11 @@ termux-reload-settings</div>
  "chat.noKey": "AI キーがまだありません。簡単セットアップ（Groq や Gemini などの無料プロバイダー）を利用するか、AI タブでキーを貼り付けてください。",
  "chat.openAppTab": "→ App タブを開いて“{name}”を使ってください。",
  "chat.placeholder": "ほしいアプリを表現してください…",
+ "chat.resumeBuild": "↻ ビルドを再開",
+ "chat.resumeGone": "以前のビルド コンテキストはもう利用できません。もう一度開始してください。",
  "chat.send": "作る",
  "chat.stop": "停止",
  "chat.stopped": "停止しました。",
- "chat.resumeBuild": "↻ ビルドを再開",
- "chat.resumeGone": "以前のビルド コンテキストはもう利用できません。もう一度開始してください。",
  "chips.dark": "ダークモード",
  "chips.notify": "通知",
  "chips.perms": "パーミッション",
@@ -4275,7 +4343,22 @@ termux-reload-settings</div>
  "lib.delete": "ライブラリから削除",
  "lib.deleteFolder": "フォルダを削除",
  "lib.deleted": "“{name}” を削除しました",
+ "lib.demoInstalled": "インストール済み",
+ "lib.demoNeedsForge": "Forge {version} 以降が必要です",
+ "lib.demoUntitled": "無題のデモ",
+ "lib.demosDownloading": "{name} をダウンロード中…",
+ "lib.demosEmpty": "現在利用できるデモはありません。",
+ "lib.demosFailed": "デモを読み込めませんでした：{msg}",
+ "lib.demosFailedOne": "{name} をダウンロードできませんでした：{msg}",
+ "lib.demosInstall": "選択したデモをダウンロード",
+ "lib.demosInstalledCount": "{n} 件のデモをインストールしました。",
+ "lib.demosLead": "ライブラリに追加するデモを選択。インストール済みは未選択で、再ダウンロードすると名前を変えたコピーが作成されます。",
+ "lib.demosLoading": "デモを読み込み中…",
+ "lib.demosNoneInstalled": "デモはインストールされませんでした。",
+ "lib.demosNoneSelected": "デモが選択されていません。",
+ "lib.demosTitle": "デモをダウンロード",
  "lib.depthLimitReached": "深さの上限に達しました（3レベル）",
+ "lib.downloadDemos": "デモをダウンロード",
  "lib.empty": "まだ保存したアプリはありません。作って保存するか、任意の .html をインポートするか、Kitchen sink 実験室をインストールしてください。",
  "lib.export": "HTML をエクスポート",
  "lib.folderContents": "サブフォルダ {folders} 件、アプリ {apps} 件が含まれます。",
@@ -4507,6 +4590,7 @@ termux-reload-settings</div>
  "tab.library": "ライブラリ",
  "tour.next": "次へ",
  "tour.s1Body": "チャットでアプリを表現するか UI スケッチを添付して「作る」をタップ。Forge がスマホ上に本物のミニアプリを構築します。",
+ "tour.s1Example": "例：「AIと対戦する三目並べゲームを作って」",
  "tour.s1Title": "Forge へようこそ",
  "tour.s2Body": "🖼 / 📷で画像を添付。青い💡ヒントボタンでいつでもヒントとリファインチップ（ダークモード、共有、QR…）を確認。",
  "tour.s2Title": "スケッチとリファイン",
@@ -4515,6 +4599,7 @@ termux-reload-settings</div>
  "tour.s3Body": "App タブでミニアプリを試せます。イマーシブモードでは ← Forge チップが薄れます — 左上の近くをタップすると再表示します。",
  "tour.s3Title": "アプリを実行",
  "tour.s4Body": "アプリを保存、絵文字アイコンを設定、新規ウィンドウで開く（分割画面）、ホーム画面にピン留め。",
+ "tour.s4Samples": "ライブラリフォルダーを長押しすると、Kitchen sinkやデモのダウンロードを見つけられます。",
  "tour.s4Title": "ライブラリとホーム",
  "tour.s5Body": "ここで無料 AI プロバイダーを接続。ミニアプリは通知、ジョブ、マイク WAV、QR スキャン、Termux などを ForgeHost 経由で利用できます。",
  "tour.s5Title": "AI とデバイスブリッジ",
@@ -4731,11 +4816,11 @@ termux-reload-settings</div>
  "chat.noKey": "AI 키가 아직 없습니다. 간편 설정(무료 제공자 Groq 또는 Gemini)을 사용하거나 AI 탭에서 키를 붙여 넣으세요.",
  "chat.openAppTab": "→ “{name}”을(를) 사용하려면 앱 탭을 여세요.",
  "chat.placeholder": "원하는 앱을 설명하세요…",
+ "chat.resumeBuild": "↻ 빌드 다시 시작",
+ "chat.resumeGone": "이전 빌드 컨텍스트를 더 이상 사용할 수 없습니다. 다시 시작하세요.",
  "chat.send": "만들기",
  "chat.stop": "중지",
  "chat.stopped": "중지됨.",
- "chat.resumeBuild": "↻ 빌드 다시 시작",
- "chat.resumeGone": "이전 빌드 컨텍스트를 더 이상 사용할 수 없습니다. 다시 시작하세요.",
  "chips.dark": "다크 모드",
  "chips.notify": "알림",
  "chips.perms": "권한 팩",
@@ -4848,7 +4933,22 @@ termux-reload-settings</div>
  "lib.delete": "라이브러리에서 삭제",
  "lib.deleteFolder": "폴더 삭제",
  "lib.deleted": "\"{name}\" 삭제됨",
+ "lib.demoInstalled": "이미 설치됨",
+ "lib.demoNeedsForge": "Forge {version} 이상 필요",
+ "lib.demoUntitled": "제목 없는 데모",
+ "lib.demosDownloading": "{name} 다운로드 중…",
+ "lib.demosEmpty": "현재 사용할 수 있는 데모가 없습니다.",
+ "lib.demosFailed": "데모를 불러오지 못했습니다: {msg}",
+ "lib.demosFailedOne": "{name} 다운로드 실패: {msg}",
+ "lib.demosInstall": "선택 항목 다운로드",
+ "lib.demosInstalledCount": "데모 {n}개를 설치했습니다.",
+ "lib.demosLead": "라이브러리에 추가할 데모를 선택하세요. 설치된 데모는 기본적으로 선택되지 않으며, 다시 다운로드하면 이름이 바뀐 복사본이 만들어집니다.",
+ "lib.demosLoading": "데모 불러오는 중…",
+ "lib.demosNoneInstalled": "설치된 데모가 없습니다.",
+ "lib.demosNoneSelected": "선택한 데모가 없습니다.",
+ "lib.demosTitle": "데모 다운로드",
  "lib.depthLimitReached": "깊이 제한 도달(3단계)",
+ "lib.downloadDemos": "데모 다운로드",
  "lib.empty": "아직 저장된 앱 없음. 하나를 만들고 저장을 누르거나, .html을 가져오거나, Kitchen sink 실험실을 설치하세요.",
  "lib.export": "HTML 내보내기",
  "lib.folderContents": "하위 폴더 {folders}개, 앱 {apps}개가 있습니다.",
@@ -5080,6 +5180,7 @@ termux-reload-settings</div>
  "tab.library": "라이브러리",
  "tour.next": "다음",
  "tour.s1Body": "채팅에서 앱을 설명하거나 — UI 스케치를 첨부한 뒤 — 만들기를 누르세요. Forge가 폰에서 실제 미니 앱을 만듭니다.",
+ "tour.s1Example": "예: “AI와 대결하는 틱택토 게임을 만들어 줘.”",
  "tour.s1Title": "Forge에 오신 것을 환영합니다",
  "tour.s2Body": "🖼 / 📷로 이미지를 첨부하세요. 파란 💡 힌트 버튼을 언제든 열어 팁과 다듬기 칩(다크 모드, 공유, QR…)을 보세요.",
  "tour.s2Title": "스케치와 다듬기",
@@ -5088,6 +5189,7 @@ termux-reload-settings</div>
  "tour.s3Body": "앱 탭을 열어 미니 앱을 시도하세요. 몰입 모드에서는 ← Forge 칩이 흐려집니다 — 다시 보려면 좌측 상단 근처를 누르세요.",
  "tour.s3Title": "앱 실행",
  "tour.s4Body": "앱을 저장하고, 이모지 아이콘을 설정하고, 새 창에서 열거나(분할 화면) 홈 화면에 고정하세요.",
+ "tour.s4Samples": "라이브러리 폴더를 길게 눌러 Kitchen sink와 데모 다운로드를 찾아보세요.",
  "tour.s4Title": "라이브러리와 홈",
  "tour.s5Body": "여기서 무료 AI 제공자를 연결하세요. 미니 앱은 ForgeHost 통해 알림, 작업, 마이크 WAV, QR 스캔, Termux 등을 사용할 수 있습니다.",
  "tour.s5Title": "AI와 기기 브리지",
@@ -22302,10 +22404,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
             items: [
               { id: 'newfolder', label: t('lib.createSubfolder') },
               { id: 'kitchen', label: t('lib.kitchen') },
+              { id: 'demos', label: t('lib.downloadDemos') },
             ],
           });
           if (choice === 'newfolder') createFolderFlow(null);
           else if (choice === 'kitchen') installKitchenSink();
+          else if (choice === 'demos') downloadDemos();
         },
       });
 
@@ -23005,21 +23109,24 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     // ——— Product tour ———
     function buildTourSteps() {
       return [
-        { title: t('tour.s1Title'), body: t('tour.s1Body'), tab: 'chat' },
+        { title: t('tour.s1Title'), body: t('tour.s1Body') + '\n\n' + t('tour.s1Example'), tab: 'chat' },
         { title: t('tour.s2Title'), body: t('tour.s2Body'), tab: 'chat' },
         { title: t('tour.s2bTitle'), body: t('tour.s2bBody'), tab: 'chat' },
         { title: t('tour.s3Title'), body: t('tour.s3Body'), tab: 'preview' },
-        { title: t('tour.s4Title'), body: t('tour.s4Body'), tab: 'library' },
+        { title: t('tour.s4Title'), body: t('tour.s4Body') + '\n\n' + t('tour.s4Samples'), tab: 'library' },
         { title: t('tour.s5Title'), body: t('tour.s5Body'), tab: 'settings' },
       ];
     }
     let TOUR_STEPS = buildTourSteps();
     let tourStep = 0;
+    function tourVersion() {
+      try { const b = window.__FORGE_BUILD || {}; return String(b.versionCode || b.version || 'dev'); } catch (_) { return 'dev'; }
+    }
     function isTourDone() {
-      try { return localStorage.getItem('forge_tour_v1') === '1'; } catch (_) { return false; }
+      try { return localStorage.getItem('forge_tour_seen_v2') === tourVersion(); } catch (_) { return false; }
     }
     function markTourDone() {
-      try { localStorage.setItem('forge_tour_v1', '1'); } catch (_) {}
+      try { localStorage.setItem('forge_tour_seen_v2', tourVersion()); } catch (_) {}
     }
     function renderTour() {
       if (!el.tourOverlay) return;
@@ -23038,6 +23145,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     }
     function openTour(force = false) {
       if (!force && isTourDone()) return;
+      TOUR_STEPS = buildTourSteps();
       tourStep = 0;
       el.tourOverlay?.classList.remove('hidden');
       renderTour();
@@ -23052,6 +23160,20 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       renderTour();
     }
 
+
+    // ——— GitHub demo samples ———
+    const DEMO_MANIFEST_URL = 'https://raw.githubusercontent.com/lirunki/forge/main/samples/manifest.json';
+    const DEMO_SAMPLES_BASE = 'https://raw.githubusercontent.com/lirunki/forge/main/samples/';
+    function compareForgeVersions(a, b) { const pa=String(a||'0').replace(/^v/i,'').split('.').map(x=>parseInt(x,10)||0), pb=String(b||'0').replace(/^v/i,'').split('.').map(x=>parseInt(x,10)||0); for(let i=0;i<3;i++){if((pa[i]||0)!==(pb[i]||0))return(pa[i]||0)-(pb[i]||0);} return 0; }
+    function demoTitleForInstall(title, list) { const base=String(title||t('lib.demoUntitled')).trim()||t('lib.demoUntitled'); let c=base,n=2,names=new Set(list.map(x=>String(x.title||'').toLowerCase())); while(names.has(c.toLowerCase())) c=base+' ('+n++ +')'; return c; }
+    async function downloadDemos() {
+      setLibStatus(t('lib.demosLoading'), '');
+      try { const r=await fetch(DEMO_MANIFEST_URL,{cache:'no-store'}); if(!r.ok)throw new Error('HTTP '+r.status); const manifest=await r.json(); const samples=Array.isArray(manifest?.samples)?manifest.samples:[]; if(!samples.length){setLibStatus(t('lib.demosEmpty'),'err');return;}
+        const current=String(window.__FORGE_BUILD?.version||'0'), installed=getLibrary(), wrap=document.createElement('div'); wrap.className='tour-overlay'; const card=document.createElement('div'); card.className='tour-card'; card.style.maxWidth='min(560px,96vw)'; card.innerHTML='<h2></h2><p></p><div class="demo-pick-list"></div><div class="tour-actions"><button class="btn secondary small" data-act="cancel"></button><button class="btn small" data-act="install"></button></div>'; card.querySelector('h2').textContent=t('lib.demosTitle'); card.querySelector('p').textContent=t('lib.demosLead'); const listEl=card.querySelector('.demo-pick-list'), checks=[];
+        for(const s of samples){const min=String(s.minimumForgeVersion||'0'), bad=compareForgeVersions(current,min)<0, has=installed.some(x=>x.sampleId===s.id), label=document.createElement('label'); label.style.cssText='display:flex;gap:.55rem;align-items:flex-start;border:1px solid var(--border);border-radius:10px;padding:.6rem;opacity:'+(bad?'.55':'1'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!bad&&!has; cb.disabled=bad; cb.style.marginTop='.2rem'; const text=document.createElement('span'), status=bad?t('lib.demoNeedsForge',{version:min}):(has?t('lib.demoInstalled'):''); text.innerHTML='<b>'+escapeHtml((s.icon||'🧩')+' '+(s.title||t('lib.demoUntitled')))+' </b><br><small>'+escapeHtml(s.description||'')+(status?'<br>'+escapeHtml(status):'')+'</small>'; label.append(cb,text); listEl.appendChild(label); checks.push({s,cb}); }
+        card.querySelector('[data-act="cancel"]').textContent=t('common.cancel'); card.querySelector('[data-act="install"]').textContent=t('lib.demosInstall'); const finish=()=>{try{wrap.remove();}catch(_){}}; card.querySelector('[data-act="cancel"]').onclick=finish; card.querySelector('[data-act="install"]').onclick=async()=>{const chosen=checks.filter(x=>x.cb.checked).map(x=>x.s); if(!chosen.length){setLibStatus(t('lib.demosNoneSelected'),'');finish();return;} finish(); let list=getLibrary(),count=0; for(const s of chosen){try{setLibStatus(t('lib.demosDownloading',{name:s.title||''}),''); const hr=await fetch(DEMO_SAMPLES_BASE+encodeURIComponent(String(s.file||'')),{cache:'no-store'}); if(!hr.ok)throw new Error('HTTP '+hr.status); const html=await hr.text(); if(!/<html[\s>]/i.test(html)||html.length>8*1024*1024)throw new Error('Invalid demo HTML'); const now=Date.now(); list.push({id:'sample_'+String(s.id||'demo').replace(/[^a-z0-9_-]/gi,'_')+'_'+now.toString(36),sampleId:String(s.id||''),sampleVersion:String(s.version||manifest.updatedAt||''),source:'forge-github-demos',title:demoTitleForInstall(s.title,list),summary:s.description||'',html,iconEmoji:s.icon||'🧩',iconColor:'#6D28D9',createdAt:now,updatedAt:now});count++;}catch(e){setLibStatus(t('lib.demosFailedOne',{name:s.title||'',msg:e?.message||'error'}),'err');}} setLibrary(list); renderLibrary(); setLibStatus(count?t('lib.demosInstalledCount',{n:count}):t('lib.demosNoneInstalled'),count?'ok':'err');}; wrap.appendChild(card); wrap.onclick=e=>{if(e.target===wrap)finish();}; document.body.appendChild(wrap);
+      } catch(e) { setLibStatus(t('lib.demosFailed',{msg:e?.message||'offline'}),'err'); }
+    }
 
     // ——— Kitchen-sink demo mini-app (full ForgeHost surface) ———
     function kitchenSinkHtml() {

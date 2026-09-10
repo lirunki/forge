@@ -1,0 +1,275 @@
+{
+  "manifestVersion": 1,
+  "samples": [
+    {
+      "id": "alto-low-poly-flight",
+      "title": "ALTO — Low-Poly Flight",
+      "description": "Try the ALTO — Low-Poly Flight Forge mini-app demo.",
+      "file": "ALTO_Low_Poly_Flight.html",
+      "icon": "✈️",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "bonefall",
+      "title": "Bonefall",
+      "description": "Try the Bonefall Forge mini-app demo.",
+      "file": "Bonefall.html",
+      "icon": "🦴",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "car-assist",
+      "title": "Car Assist",
+      "description": "Try the Car Assist Forge mini-app demo.",
+      "file": "Car_Assist.html",
+      "icon": "🚗",
+      "category": "AI & device",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "chess-llm-vs-stockfish",
+      "title": "Chess vs LLM",
+      "description": "Try the Chess vs LLM Forge mini-app demo.",
+      "file": "Chess_llm_vs_stockfish.html",
+      "icon": "♟️",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "chess-simple-llm",
+      "title": "Forge Chess",
+      "description": "Try the Forge Chess Forge mini-app demo.",
+      "file": "Chess_simple_LLM.html",
+      "icon": "♟️",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "chess-vs-llm-stockfish",
+      "title": "Chess vs AI",
+      "description": "Play chess against an AI opponent with Stockfish support.",
+      "file": "Chess_vs_LLM_Stockfish.html",
+      "icon": "♟️",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "forge-go",
+      "title": "Forge Go",
+      "description": "Try the Forge Go Forge mini-app demo.",
+      "file": "Forge_Go.html",
+      "icon": "⚫",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "forge-llm-chat",
+      "title": "Forge AI Chat",
+      "description": "A rich AI chat mini-app using ForgeHost tools and attachments.",
+      "file": "Forge_LLM_Chat.html",
+      "icon": "💬",
+      "category": "AI",
+      "minimumForgeVersion": "2.6.48"
+    },
+    {
+      "id": "forge-tts",
+      "title": "Forge TTS",
+      "description": "Try the Forge TTS Forge mini-app demo.",
+      "file": "Forge_TTS.html",
+      "icon": "🔊",
+      "category": "AI & audio",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "galaxia",
+      "title": "GALAXIA",
+      "description": "Try the GALAXIA Forge mini-app demo.",
+      "file": "GALAXIA.html",
+      "icon": "🌌",
+      "category": "Science",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "getris",
+      "title": "Getris",
+      "description": "Try the Getris Forge mini-app demo.",
+      "file": "Getris.html",
+      "icon": "🧩",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "gravity-pong",
+      "title": "Gravity Pong",
+      "description": "Try the Gravity Pong Forge mini-app demo.",
+      "file": "Gravity_Pong.html",
+      "icon": "🏓",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "laser-membrane",
+      "title": "Laser Membrane",
+      "description": "Try the Laser Membrane Forge mini-app demo.",
+      "file": "Laser_Membrane.html",
+      "icon": "🔦",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "live-talk",
+      "title": "Live Talk",
+      "description": "Try the Live Talk Forge mini-app demo.",
+      "file": "Live_Talk.html",
+      "icon": "🎙️",
+      "category": "AI & audio",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "loop-light",
+      "title": "Loop Light",
+      "description": "Try the Loop Light Forge mini-app demo.",
+      "file": "Loop_Light.html",
+      "icon": "💡",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "menu-translator",
+      "title": "Menu Translator",
+      "description": "Photograph a menu and translate dishes with AI vision.",
+      "file": "Menu_Translator.html",
+      "icon": "🍜",
+      "category": "AI",
+      "minimumForgeVersion": "2.6.28"
+    },
+    {
+      "id": "minipaint-ai",
+      "title": "MiniPaint+AI",
+      "description": "Try the MiniPaint+AI Forge mini-app demo.",
+      "file": "MiniPaint_AI.html",
+      "icon": "🎨",
+      "category": "Creative",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "nebula-run",
+      "title": "Nebula Run",
+      "description": "Try the Nebula Run Forge mini-app demo.",
+      "file": "Nebula_Run.html",
+      "icon": "🚀",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "neon-serpent",
+      "title": "Neon Serpent",
+      "description": "Try the Neon Serpent Forge mini-app demo.",
+      "file": "Neon_Serpent.html",
+      "icon": "🐍",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "neon-tic-tac-toe",
+      "title": "Neon Tic-Tac-Toe",
+      "description": "Play tic-tac-toe against an AI opponent.",
+      "file": "Neon_Tic_Tac_Toe.html",
+      "icon": "⭕",
+      "category": "Games",
+      "minimumForgeVersion": "2.7.0"
+    },
+    {
+      "id": "orrery-3d-solar-system",
+      "title": "Orrery — 3D Solar System",
+      "description": "Try the Orrery — 3D Solar System Forge mini-app demo.",
+      "file": "Orrery_3D_Solar_System.html",
+      "icon": "🪐",
+      "category": "Science",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "physics-drop",
+      "title": "Physics Drop",
+      "description": "Try the Physics Drop Forge mini-app demo.",
+      "file": "Physics_Drop.html",
+      "icon": "⚛️",
+      "category": "Science",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "realtime-translate",
+      "title": "RealTime Translate",
+      "description": "Try the RealTime Translate Forge mini-app demo.",
+      "file": "RealTime_Translate.html",
+      "icon": "🌐",
+      "category": "AI & audio",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "sms-conversation-copy",
+      "title": "SMS Conversation Copy",
+      "description": "Try the SMS Conversation Copy Forge mini-app demo.",
+      "file": "SMS_Conversation_Copy.html",
+      "icon": "💬",
+      "category": "Phone",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "sms-translate-speak",
+      "title": "SMS Translate",
+      "description": "Try the SMS Translate Forge mini-app demo.",
+      "file": "SMS_Translate_Speak.html",
+      "icon": "📱",
+      "category": "AI & audio",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "simple-llm-chat",
+      "title": "Simple LLM Chat",
+      "description": "Try the Simple LLM Chat Forge mini-app demo.",
+      "file": "Simple_LLM_Chat.html",
+      "icon": "💬",
+      "category": "AI",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "space-invaders",
+      "title": "Space Invaders",
+      "description": "Try the Space Invaders Forge mini-app demo.",
+      "file": "Space_Invaders.html",
+      "icon": "👾",
+      "category": "Games",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "still-water",
+      "title": "Still Water",
+      "description": "Try the Still Water Forge mini-app demo.",
+      "file": "Still_Water.html",
+      "icon": "🌊",
+      "category": "Creative",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "trace-loop",
+      "title": "Trace Loop",
+      "description": "Try the Trace Loop Forge mini-app demo.",
+      "file": "Trace_Loop.html",
+      "icon": "🔁",
+      "category": "AI",
+      "minimumForgeVersion": "2.6.0"
+    },
+    {
+      "id": "voiceforge",
+      "title": "VoiceForge",
+      "description": "Try the VoiceForge Forge mini-app demo.",
+      "file": "VoiceForge.html",
+      "icon": "🎤",
+      "category": "AI & audio",
+      "minimumForgeVersion": "2.6.0"
+    }
+  ]
+}
