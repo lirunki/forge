@@ -3130,3 +3130,58 @@ Smoke (on device):
 [ ] Agentic loop (separate flag) still present on both flavors (only code mode
     is Play-gated)
 ```
+
+## Termux agent: always-copy install, lockfile recovery, drop Java builtin (2026-09-10 · 2.7.75/205 · `e23b5f5`)
+
+Three termux-agent changes, all in the `termux-agent/` assets + the plugin:
+
+1. **install.sh — always copy the agent binary.** Replaced the
+   `copy_if_changed` skips for the two agent-binary copies with unconditional
+   `cp -f` + `chmod +x`, so a re-run always refreshes the binary even if
+   byte-identical. Kept `copy_if_changed` for `install.sh` itself. Guarded
+   the `$SRC_DIR/$AGENT_NAME` self-copy (when the agent only exists in
+   `SRC_DIR`, `SRC == $SRC_DIR/$AGENT_NAME` and `cp` would "same file" error)
+   with a `[[ "$SRC" != "$SRC_DIR/$AGENT_NAME" ]]` check. (The earlier
+   same-file `cp` error at `/storage/emulated/0/Download/ForgeBridge/install.sh`
+   was the regression that surfaced this.)
+
+2. **forge-termux-agent — robust lockfile recovery.** `acquire_start_lock`
+   previously reclaimed the `.agent-start.lock` only when `kill -0` failed —
+   which never happens if the OS recycled the PID to an unrelated process,
+   leaving the lock held forever. Now, when the lock is present it reads the
+   owner PID and verifies it's alive **and** its `/proc/<pid>/cmdline`
+   contains `forge-termux-agent`. If yes → wait + retry (genuinely held). If
+   no (dead, or PID reused by a non-agent process) → `rm -f` the pid file and
+   `rmdir` the lock, then proceed.
+
+3. **TermuxBridgePlugin.java — drop the `builtinAgentFile()` fallback.**
+   `writeAssetOrBuiltin` previously tried the asset, then fell back to a
+   ~120-line hand-maintained Java string literal of the same script. The
+   fallback never fires for a shipped APK (assets are always present), so it
+   was pure drift liability (it had already rotted for `install.sh` before
+   this session). Removed `builtinAgentFile()` entirely; `writeAssetOrBuiltin`
+   now reads the asset only (try-with-resources) and throws
+   `Missing asset: termux-agent/<name>` if absent/empty. The `termux-agent/`
+   asset files are now the single source of truth — no more hand-synced Java
+   string to keep in step.
+
+Version bumped 3 iterations 2.7.69/199 → 2.7.71/201 → 2.7.73/203 →
+**2.7.75/205**; docs version baselines (`docs/tools.md`, `docs/api.md`)
+updated to match. Committed `e23b5f5` and pushed to `origin/main`.
+
+### Files
+`android/app/src/main/assets/termux-agent/install.sh`,
+`android/app/src/main/assets/termux-agent/forge-termux-agent`,
+`android/app/src/main/java/com/forge/live/TermuxBridgePlugin.java`,
+`android/app/build.gradle` (2.7.75/205),
+`docs/api.md` + `docs/tools.md` (baselines).
+
+Smoke (on device):
+```text
+[ ] adb install -r ~/downloads/Forge-debug-rebuilt.apk → About v2.7.75 (205)
+[ ] bash /storage/emulated/0/Download/ForgeBridge/install.sh → no "same file"
+    cp error; agent binary copied; "Installed/updated" message
+[ ] Stale .agent-start.lock (dead PID) → next --daemon reclaims it and starts
+[ ] Live .agent-start.lock (real agent launcher) → waits, does not steal
+[ ] Re-run install.sh with agent already current → still re-copies binary
+```
