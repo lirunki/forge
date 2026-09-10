@@ -3,8 +3,22 @@
   "samples": [
     {
       "id": "alto-low-poly-flight",
-      "title": "ALTO — Low-Poly Flight",
-      "description": "Try the ALTO — Low-Poly Flight Forge mini-app demo.",
+      "title": {
+        "en": "ALTO — Low-Poly Flight",
+        "es": "ALTO — Vuelo Low-Poly",
+        "fr": "ALTO — Vol Low-Poly",
+        "pt": "ALTO — Voo Low-Poly",
+        "ja": "ALTO — ローポリ飛行",
+        "ko": "ALTO — 로우 폴리 비행"
+      },
+      "description": {
+        "en": "Try the ALTO — Low-Poly Flight Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: ALTO — Vuelo Low-Poly.",
+        "fr": "Essayez la démo de mini-app Forge « ALTO — Vol Low-Poly ».",
+        "pt": "Experimente o demo de mini-app Forge: ALTO — Voo Low-Poly.",
+        "ja": "Forgeミニアプリのデモ「ALTO — ローポリ飛行」を試せます。",
+        "ko": "Forge 미니 앱 데모 ALTO — 로우 폴리 비행을(를) 사용해 보세요."
+      },
       "file": "ALTO_Low_Poly_Flight.html",
       "icon": "✈️",
       "category": "Games",
@@ -12,8 +26,22 @@
     },
     {
       "id": "bonefall",
-      "title": "Bonefall",
-      "description": "Try the Bonefall Forge mini-app demo.",
+      "title": {
+        "en": "Bonefall",
+        "es": "Bonefall",
+        "fr": "Bonefall",
+        "pt": "Bonefall",
+        "ja": "Bonefall",
+        "ko": "Bonefall"
+      },
+      "description": {
+        "en": "Try the Bonefall Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Bonefall.",
+        "fr": "Essayez la démo de mini-app Forge « Bonefall ».",
+        "pt": "Experimente o demo de mini-app Forge: Bonefall.",
+        "ja": "Forgeミニアプリのデモ「Bonefall」を試せます。",
+        "ko": "Forge 미니 앱 데모 Bonefall을(를) 사용해 보세요."
+      },
       "file": "Bonefall.html",
       "icon": "🦴",
       "category": "Games",
@@ -21,8 +49,22 @@
     },
     {
       "id": "car-assist",
-      "title": "Car Assist",
-      "description": "Try the Car Assist Forge mini-app demo.",
+      "title": {
+        "en": "Car Assist",
+        "es": "Asistente para el coche",
+        "fr": "Assistant voiture",
+        "pt": "Assistente de carro",
+        "ja": "カーアシスト",
+        "ko": "자동차 도우미"
+      },
+      "description": {
+        "en": "Try the Car Assist Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Asistente para el coche.",
+        "fr": "Essayez la démo de mini-app Forge « Assistant voiture ».",
+        "pt": "Experimente o demo de mini-app Forge: Assistente de carro.",
+        "ja": "Forgeミニアプリのデモ「カーアシスト」を試せます。",
+        "ko": "Forge 미니 앱 데모 자동차 도우미을(를) 사용해 보세요."
+      },
       "file": "Car_Assist.html",
       "icon": "🚗",
       "category": "AI & device",
@@ -30,8 +72,22 @@
     },
     {
       "id": "chess-llm-vs-stockfish",
-      "title": "Chess vs LLM",
-      "description": "Try the Chess vs LLM Forge mini-app demo.",
+      "title": {
+        "en": "Chess vs LLM",
+        "es": "Ajedrez contra LLM",
+        "fr": "Échecs contre LLM",
+        "pt": "Xadrez contra LLM",
+        "ja": "LLM対戦チェス",
+        "ko": "LLM 대 체스"
+      },
+      "description": {
+        "en": "Try the Chess vs LLM Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Ajedrez contra LLM.",
+        "fr": "Essayez la démo de mini-app Forge « Échecs contre LLM ».",
+        "pt": "Experimente o demo de mini-app Forge: Xadrez contra LLM.",
+        "ja": "Forgeミニアプリのデモ「LLM対戦チェス」を試せます。",
+        "ko": "Forge 미니 앱 데모 LLM 대 체스을(를) 사용해 보세요."
+      },
       "file": "Chess_llm_vs_stockfish.html",
       "icon": "♟️",
       "category": "Games",
@@ -39,8 +95,22 @@
     },
     {
       "id": "chess-simple-llm",
-      "title": "Forge Chess",
-      "description": "Try the Forge Chess Forge mini-app demo.",
+      "title": {
+        "en": "Forge Chess",
+        "es": "Ajedrez Forge",
+        "fr": "Échecs Forge",
+        "pt": "Xadrez Forge",
+        "ja": "Forgeチェス",
+        "ko": "Forge 체스"
+      },
+      "description": {
+        "en": "Try the Forge Chess Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Ajedrez Forge.",
+        "fr": "Essayez la démo de mini-app Forge « Échecs Forge ».",
+        "pt": "Experimente o demo de mini-app Forge: Xadrez Forge.",
+        "ja": "Forgeミニアプリのデモ「Forgeチェス」を試せます。",
+        "ko": "Forge 미니 앱 데모 Forge 체스을(를) 사용해 보세요."
+      },
       "file": "Chess_simple_LLM.html",
       "icon": "♟️",
       "category": "Games",
@@ -48,8 +118,22 @@
     },
     {
       "id": "chess-vs-llm-stockfish",
-      "title": "Chess vs AI",
-      "description": "Play chess against an AI opponent with Stockfish support.",
+      "title": {
+        "en": "Chess vs AI",
+        "es": "Ajedrez contra IA",
+        "fr": "Échecs contre IA",
+        "pt": "Xadrez contra IA",
+        "ja": "AI対戦チェス",
+        "ko": "AI 대 체스"
+      },
+      "description": {
+        "en": "Try the Chess vs AI Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Ajedrez contra IA.",
+        "fr": "Essayez la démo de mini-app Forge « Échecs contre IA ».",
+        "pt": "Experimente o demo de mini-app Forge: Xadrez contra IA.",
+        "ja": "Forgeミニアプリのデモ「AI対戦チェス」を試せます。",
+        "ko": "Forge 미니 앱 데모 AI 대 체스을(를) 사용해 보세요."
+      },
       "file": "Chess_vs_LLM_Stockfish.html",
       "icon": "♟️",
       "category": "Games",
@@ -57,8 +141,22 @@
     },
     {
       "id": "forge-go",
-      "title": "Forge Go",
-      "description": "Try the Forge Go Forge mini-app demo.",
+      "title": {
+        "en": "Forge Go",
+        "es": "Forge Go",
+        "fr": "Forge Go",
+        "pt": "Forge Go",
+        "ja": "Forge Go",
+        "ko": "Forge Go"
+      },
+      "description": {
+        "en": "Try the Forge Go Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Forge Go.",
+        "fr": "Essayez la démo de mini-app Forge « Forge Go ».",
+        "pt": "Experimente o demo de mini-app Forge: Forge Go.",
+        "ja": "Forgeミニアプリのデモ「Forge Go」を試せます。",
+        "ko": "Forge 미니 앱 데모 Forge Go을(를) 사용해 보세요."
+      },
       "file": "Forge_Go.html",
       "icon": "⚫",
       "category": "Games",
@@ -66,8 +164,22 @@
     },
     {
       "id": "forge-llm-chat",
-      "title": "Forge AI Chat",
-      "description": "A rich AI chat mini-app using ForgeHost tools and attachments.",
+      "title": {
+        "en": "Forge AI Chat",
+        "es": "Chat de IA Forge",
+        "fr": "Chat IA Forge",
+        "pt": "Chat de IA Forge",
+        "ja": "Forge AIチャット",
+        "ko": "Forge AI 채팅"
+      },
+      "description": {
+        "en": "A rich AI chat mini-app using ForgeHost tools and attachments.",
+        "es": "Un chat de IA completo con herramientas y archivos adjuntos de ForgeHost.",
+        "fr": "Un chat IA riche utilisant les outils et pièces jointes ForgeHost.",
+        "pt": "Um chat de IA completo com ferramentas e anexos do ForgeHost.",
+        "ja": "ForgeHostのツールと添付ファイルに対応したAIチャットです。",
+        "ko": "ForgeHost 도구와 첨부 파일을 사용하는 풍부한 AI 채팅입니다."
+      },
       "file": "Forge_LLM_Chat.html",
       "icon": "💬",
       "category": "AI",
@@ -75,8 +187,22 @@
     },
     {
       "id": "forge-tts",
-      "title": "Forge TTS",
-      "description": "Try the Forge TTS Forge mini-app demo.",
+      "title": {
+        "en": "Forge TTS",
+        "es": "Forge TTS",
+        "fr": "Forge TTS",
+        "pt": "Forge TTS",
+        "ja": "Forge TTS",
+        "ko": "Forge TTS"
+      },
+      "description": {
+        "en": "Try the Forge TTS Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Forge TTS.",
+        "fr": "Essayez la démo de mini-app Forge « Forge TTS ».",
+        "pt": "Experimente o demo de mini-app Forge: Forge TTS.",
+        "ja": "Forgeミニアプリのデモ「Forge TTS」を試せます。",
+        "ko": "Forge 미니 앱 데모 Forge TTS을(를) 사용해 보세요."
+      },
       "file": "Forge_TTS.html",
       "icon": "🔊",
       "category": "AI & audio",
@@ -84,8 +210,22 @@
     },
     {
       "id": "galaxia",
-      "title": "GALAXIA",
-      "description": "Try the GALAXIA Forge mini-app demo.",
+      "title": {
+        "en": "GALAXIA",
+        "es": "GALAXIA",
+        "fr": "GALAXIA",
+        "pt": "GALAXIA",
+        "ja": "GALAXIA",
+        "ko": "GALAXIA"
+      },
+      "description": {
+        "en": "Try the GALAXIA Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: GALAXIA.",
+        "fr": "Essayez la démo de mini-app Forge « GALAXIA ».",
+        "pt": "Experimente o demo de mini-app Forge: GALAXIA.",
+        "ja": "Forgeミニアプリのデモ「GALAXIA」を試せます。",
+        "ko": "Forge 미니 앱 데모 GALAXIA을(를) 사용해 보세요."
+      },
       "file": "GALAXIA.html",
       "icon": "🌌",
       "category": "Science",
@@ -93,8 +233,22 @@
     },
     {
       "id": "getris",
-      "title": "Getris",
-      "description": "Try the Getris Forge mini-app demo.",
+      "title": {
+        "en": "Getris",
+        "es": "Getris",
+        "fr": "Getris",
+        "pt": "Getris",
+        "ja": "Getris",
+        "ko": "Getris"
+      },
+      "description": {
+        "en": "Try the Getris Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Getris.",
+        "fr": "Essayez la démo de mini-app Forge « Getris ».",
+        "pt": "Experimente o demo de mini-app Forge: Getris.",
+        "ja": "Forgeミニアプリのデモ「Getris」を試せます。",
+        "ko": "Forge 미니 앱 데모 Getris을(를) 사용해 보세요."
+      },
       "file": "Getris.html",
       "icon": "🧩",
       "category": "Games",
@@ -102,8 +256,22 @@
     },
     {
       "id": "gravity-pong",
-      "title": "Gravity Pong",
-      "description": "Try the Gravity Pong Forge mini-app demo.",
+      "title": {
+        "en": "Gravity Pong",
+        "es": "Pong gravitatorio",
+        "fr": "Pong gravitationnel",
+        "pt": "Pong gravitacional",
+        "ja": "グラビティ・ポン",
+        "ko": "중력 퐁"
+      },
+      "description": {
+        "en": "Try the Gravity Pong Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Pong gravitatorio.",
+        "fr": "Essayez la démo de mini-app Forge « Pong gravitationnel ».",
+        "pt": "Experimente o demo de mini-app Forge: Pong gravitacional.",
+        "ja": "Forgeミニアプリのデモ「グラビティ・ポン」を試せます。",
+        "ko": "Forge 미니 앱 데모 중력 퐁을(를) 사용해 보세요."
+      },
       "file": "Gravity_Pong.html",
       "icon": "🏓",
       "category": "Games",
@@ -111,8 +279,22 @@
     },
     {
       "id": "laser-membrane",
-      "title": "Laser Membrane",
-      "description": "Try the Laser Membrane Forge mini-app demo.",
+      "title": {
+        "en": "Laser Membrane",
+        "es": "Membrana láser",
+        "fr": "Membrane laser",
+        "pt": "Membrana laser",
+        "ja": "レーザーメンブレン",
+        "ko": "레이저 멤브레인"
+      },
+      "description": {
+        "en": "Try the Laser Membrane Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Membrana láser.",
+        "fr": "Essayez la démo de mini-app Forge « Membrane laser ».",
+        "pt": "Experimente o demo de mini-app Forge: Membrana laser.",
+        "ja": "Forgeミニアプリのデモ「レーザーメンブレン」を試せます。",
+        "ko": "Forge 미니 앱 데모 레이저 멤브레인을(를) 사용해 보세요."
+      },
       "file": "Laser_Membrane.html",
       "icon": "🔦",
       "category": "Games",
@@ -120,8 +302,22 @@
     },
     {
       "id": "live-talk",
-      "title": "Live Talk",
-      "description": "Try the Live Talk Forge mini-app demo.",
+      "title": {
+        "en": "Live Talk",
+        "es": "Conversación en vivo",
+        "fr": "Discussion en direct",
+        "pt": "Conversa ao vivo",
+        "ja": "ライブトーク",
+        "ko": "라이브 토크"
+      },
+      "description": {
+        "en": "Try the Live Talk Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Conversación en vivo.",
+        "fr": "Essayez la démo de mini-app Forge « Discussion en direct ».",
+        "pt": "Experimente o demo de mini-app Forge: Conversa ao vivo.",
+        "ja": "Forgeミニアプリのデモ「ライブトーク」を試せます。",
+        "ko": "Forge 미니 앱 데모 라이브 토크을(를) 사용해 보세요."
+      },
       "file": "Live_Talk.html",
       "icon": "🎙️",
       "category": "AI & audio",
@@ -129,8 +325,22 @@
     },
     {
       "id": "loop-light",
-      "title": "Loop Light",
-      "description": "Try the Loop Light Forge mini-app demo.",
+      "title": {
+        "en": "Loop Light",
+        "es": "Luz en bucle",
+        "fr": "Lumière en boucle",
+        "pt": "Luz em loop",
+        "ja": "ループライト",
+        "ko": "루프 라이트"
+      },
+      "description": {
+        "en": "Try the Loop Light Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Luz en bucle.",
+        "fr": "Essayez la démo de mini-app Forge « Lumière en boucle ».",
+        "pt": "Experimente o demo de mini-app Forge: Luz em loop.",
+        "ja": "Forgeミニアプリのデモ「ループライト」を試せます。",
+        "ko": "Forge 미니 앱 데모 루프 라이트을(를) 사용해 보세요."
+      },
       "file": "Loop_Light.html",
       "icon": "💡",
       "category": "Games",
@@ -138,8 +348,22 @@
     },
     {
       "id": "menu-translator",
-      "title": "Menu Translator",
-      "description": "Photograph a menu and translate dishes with AI vision.",
+      "title": {
+        "en": "Menu Translator",
+        "es": "Traductor de menús",
+        "fr": "Traducteur de menus",
+        "pt": "Tradutor de menus",
+        "ja": "メニュー翻訳",
+        "ko": "메뉴 번역"
+      },
+      "description": {
+        "en": "Photograph a menu and translate dishes with AI vision.",
+        "es": "Fotografía un menú y traduce sus platos con visión de IA.",
+        "fr": "Photographiez un menu et traduisez les plats avec la vision IA.",
+        "pt": "Fotografe um menu e traduza os pratos com visão de IA.",
+        "ja": "メニューを撮影し、AIビジョンで料理を翻訳します。",
+        "ko": "메뉴를 촬영하고 AI 비전으로 요리를 번역하세요."
+      },
       "file": "Menu_Translator.html",
       "icon": "🍜",
       "category": "AI",
@@ -147,8 +371,22 @@
     },
     {
       "id": "minipaint-ai",
-      "title": "MiniPaint+AI",
-      "description": "Try the MiniPaint+AI Forge mini-app demo.",
+      "title": {
+        "en": "MiniPaint+AI",
+        "es": "MiniPaint+IA",
+        "fr": "MiniPaint+IA",
+        "pt": "MiniPaint+IA",
+        "ja": "MiniPaint+AI",
+        "ko": "MiniPaint+AI"
+      },
+      "description": {
+        "en": "Try the MiniPaint+AI Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: MiniPaint+IA.",
+        "fr": "Essayez la démo de mini-app Forge « MiniPaint+IA ».",
+        "pt": "Experimente o demo de mini-app Forge: MiniPaint+IA.",
+        "ja": "Forgeミニアプリのデモ「MiniPaint+AI」を試せます。",
+        "ko": "Forge 미니 앱 데모 MiniPaint+AI을(를) 사용해 보세요."
+      },
       "file": "MiniPaint_AI.html",
       "icon": "🎨",
       "category": "Creative",
@@ -156,8 +394,22 @@
     },
     {
       "id": "nebula-run",
-      "title": "Nebula Run",
-      "description": "Try the Nebula Run Forge mini-app demo.",
+      "title": {
+        "en": "Nebula Run",
+        "es": "Carrera Nebula",
+        "fr": "Course Nebula",
+        "pt": "Corrida Nebula",
+        "ja": "ネビュラ・ラン",
+        "ko": "네뷸라 런"
+      },
+      "description": {
+        "en": "Try the Nebula Run Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Carrera Nebula.",
+        "fr": "Essayez la démo de mini-app Forge « Course Nebula ».",
+        "pt": "Experimente o demo de mini-app Forge: Corrida Nebula.",
+        "ja": "Forgeミニアプリのデモ「ネビュラ・ラン」を試せます。",
+        "ko": "Forge 미니 앱 데모 네뷸라 런을(를) 사용해 보세요."
+      },
       "file": "Nebula_Run.html",
       "icon": "🚀",
       "category": "Games",
@@ -165,8 +417,22 @@
     },
     {
       "id": "neon-serpent",
-      "title": "Neon Serpent",
-      "description": "Try the Neon Serpent Forge mini-app demo.",
+      "title": {
+        "en": "Neon Serpent",
+        "es": "Serpiente de neón",
+        "fr": "Serpent néon",
+        "pt": "Serpente neon",
+        "ja": "ネオン・サーペント",
+        "ko": "네온 서펜트"
+      },
+      "description": {
+        "en": "Try the Neon Serpent Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Serpiente de neón.",
+        "fr": "Essayez la démo de mini-app Forge « Serpent néon ».",
+        "pt": "Experimente o demo de mini-app Forge: Serpente neon.",
+        "ja": "Forgeミニアプリのデモ「ネオン・サーペント」を試せます。",
+        "ko": "Forge 미니 앱 데모 네온 서펜트을(를) 사용해 보세요."
+      },
       "file": "Neon_Serpent.html",
       "icon": "🐍",
       "category": "Games",
@@ -174,8 +440,22 @@
     },
     {
       "id": "neon-tic-tac-toe",
-      "title": "Neon Tic-Tac-Toe",
-      "description": "Play tic-tac-toe against an AI opponent.",
+      "title": {
+        "en": "Neon Tic-Tac-Toe",
+        "es": "Tres en raya neón",
+        "fr": "Morpion néon",
+        "pt": "Jogo da velha neon",
+        "ja": "ネオン三目並べ",
+        "ko": "네온 틱택토"
+      },
+      "description": {
+        "en": "Play tic-tac-toe against an AI opponent.",
+        "es": "Juega al tres en raya contra un oponente de IA.",
+        "fr": "Jouez au morpion contre un adversaire IA.",
+        "pt": "Jogue jogo da velha contra um adversário de IA.",
+        "ja": "AIの対戦相手と三目並べを遊べます。",
+        "ko": "AI 상대와 틱택토를 플레이하세요."
+      },
       "file": "Neon_Tic_Tac_Toe.html",
       "icon": "⭕",
       "category": "Games",
@@ -183,8 +463,22 @@
     },
     {
       "id": "orrery-3d-solar-system",
-      "title": "Orrery — 3D Solar System",
-      "description": "Try the Orrery — 3D Solar System Forge mini-app demo.",
+      "title": {
+        "en": "Orrery — 3D Solar System",
+        "es": "Planetario — Sistema solar 3D",
+        "fr": "Orrery — Système solaire 3D",
+        "pt": "Planetário — Sistema solar 3D",
+        "ja": "オラリー — 3D太陽系",
+        "ko": "오러리 — 3D 태양계"
+      },
+      "description": {
+        "en": "Try the Orrery — 3D Solar System Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Planetario — Sistema solar 3D.",
+        "fr": "Essayez la démo de mini-app Forge « Orrery — Système solaire 3D ».",
+        "pt": "Experimente o demo de mini-app Forge: Planetário — Sistema solar 3D.",
+        "ja": "Forgeミニアプリのデモ「オラリー — 3D太陽系」を試せます。",
+        "ko": "Forge 미니 앱 데모 오러리 — 3D 태양계을(를) 사용해 보세요."
+      },
       "file": "Orrery_3D_Solar_System.html",
       "icon": "🪐",
       "category": "Science",
@@ -192,8 +486,22 @@
     },
     {
       "id": "physics-drop",
-      "title": "Physics Drop",
-      "description": "Try the Physics Drop Forge mini-app demo.",
+      "title": {
+        "en": "Physics Drop",
+        "es": "Caída de física",
+        "fr": "Chute physique",
+        "pt": "Queda de física",
+        "ja": "物理ドロップ",
+        "ko": "물리 드롭"
+      },
+      "description": {
+        "en": "Try the Physics Drop Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Caída de física.",
+        "fr": "Essayez la démo de mini-app Forge « Chute physique ».",
+        "pt": "Experimente o demo de mini-app Forge: Queda de física.",
+        "ja": "Forgeミニアプリのデモ「物理ドロップ」を試せます。",
+        "ko": "Forge 미니 앱 데모 물리 드롭을(를) 사용해 보세요."
+      },
       "file": "Physics_Drop.html",
       "icon": "⚛️",
       "category": "Science",
@@ -201,8 +509,22 @@
     },
     {
       "id": "realtime-translate",
-      "title": "RealTime Translate",
-      "description": "Try the RealTime Translate Forge mini-app demo.",
+      "title": {
+        "en": "RealTime Translate",
+        "es": "Traducción en tiempo real",
+        "fr": "Traduction en temps réel",
+        "pt": "Tradução em tempo real",
+        "ja": "リアルタイム翻訳",
+        "ko": "실시간 번역"
+      },
+      "description": {
+        "en": "Try the RealTime Translate Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Traducción en tiempo real.",
+        "fr": "Essayez la démo de mini-app Forge « Traduction en temps réel ».",
+        "pt": "Experimente o demo de mini-app Forge: Tradução em tempo real.",
+        "ja": "Forgeミニアプリのデモ「リアルタイム翻訳」を試せます。",
+        "ko": "Forge 미니 앱 데모 실시간 번역을(를) 사용해 보세요."
+      },
       "file": "RealTime_Translate.html",
       "icon": "🌐",
       "category": "AI & audio",
@@ -210,8 +532,22 @@
     },
     {
       "id": "sms-conversation-copy",
-      "title": "SMS Conversation Copy",
-      "description": "Try the SMS Conversation Copy Forge mini-app demo.",
+      "title": {
+        "en": "SMS Conversation Copy",
+        "es": "Copia de conversación SMS",
+        "fr": "Copie de conversation SMS",
+        "pt": "Cópia de conversa SMS",
+        "ja": "SMS会話コピー",
+        "ko": "SMS 대화 복사"
+      },
+      "description": {
+        "en": "Try the SMS Conversation Copy Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Copia de conversación SMS.",
+        "fr": "Essayez la démo de mini-app Forge « Copie de conversation SMS ».",
+        "pt": "Experimente o demo de mini-app Forge: Cópia de conversa SMS.",
+        "ja": "Forgeミニアプリのデモ「SMS会話コピー」を試せます。",
+        "ko": "Forge 미니 앱 데모 SMS 대화 복사을(를) 사용해 보세요."
+      },
       "file": "SMS_Conversation_Copy.html",
       "icon": "💬",
       "category": "Phone",
@@ -219,8 +555,22 @@
     },
     {
       "id": "sms-translate-speak",
-      "title": "SMS Translate",
-      "description": "Try the SMS Translate Forge mini-app demo.",
+      "title": {
+        "en": "SMS Translate",
+        "es": "Traductor de SMS",
+        "fr": "Traduction SMS",
+        "pt": "Tradução de SMS",
+        "ja": "SMS翻訳",
+        "ko": "SMS 번역"
+      },
+      "description": {
+        "en": "Try the SMS Translate Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Traductor de SMS.",
+        "fr": "Essayez la démo de mini-app Forge « Traduction SMS ».",
+        "pt": "Experimente o demo de mini-app Forge: Tradução de SMS.",
+        "ja": "Forgeミニアプリのデモ「SMS翻訳」を試せます。",
+        "ko": "Forge 미니 앱 데모 SMS 번역을(를) 사용해 보세요."
+      },
       "file": "SMS_Translate_Speak.html",
       "icon": "📱",
       "category": "AI & audio",
@@ -228,8 +578,22 @@
     },
     {
       "id": "simple-llm-chat",
-      "title": "Simple LLM Chat",
-      "description": "Try the Simple LLM Chat Forge mini-app demo.",
+      "title": {
+        "en": "Simple LLM Chat",
+        "es": "Chat LLM sencillo",
+        "fr": "Chat LLM simple",
+        "pt": "Chat LLM simples",
+        "ja": "シンプルLLMチャット",
+        "ko": "간단한 LLM 채팅"
+      },
+      "description": {
+        "en": "Try the Simple LLM Chat Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Chat LLM sencillo.",
+        "fr": "Essayez la démo de mini-app Forge « Chat LLM simple ».",
+        "pt": "Experimente o demo de mini-app Forge: Chat LLM simples.",
+        "ja": "Forgeミニアプリのデモ「シンプルLLMチャット」を試せます。",
+        "ko": "Forge 미니 앱 데모 간단한 LLM 채팅을(를) 사용해 보세요."
+      },
       "file": "Simple_LLM_Chat.html",
       "icon": "💬",
       "category": "AI",
@@ -237,8 +601,22 @@
     },
     {
       "id": "space-invaders",
-      "title": "Space Invaders",
-      "description": "Try the Space Invaders Forge mini-app demo.",
+      "title": {
+        "en": "Space Invaders",
+        "es": "Invasores del espacio",
+        "fr": "Space Invaders",
+        "pt": "Invasores do espaço",
+        "ja": "スペースインベーダー",
+        "ko": "스페이스 인베이더"
+      },
+      "description": {
+        "en": "Try the Space Invaders Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Invasores del espacio.",
+        "fr": "Essayez la démo de mini-app Forge « Space Invaders ».",
+        "pt": "Experimente o demo de mini-app Forge: Invasores do espaço.",
+        "ja": "Forgeミニアプリのデモ「スペースインベーダー」を試せます。",
+        "ko": "Forge 미니 앱 데모 스페이스 인베이더을(를) 사용해 보세요."
+      },
       "file": "Space_Invaders.html",
       "icon": "👾",
       "category": "Games",
@@ -246,8 +624,22 @@
     },
     {
       "id": "still-water",
-      "title": "Still Water",
-      "description": "Try the Still Water Forge mini-app demo.",
+      "title": {
+        "en": "Still Water",
+        "es": "Agua tranquila",
+        "fr": "Eau calme",
+        "pt": "Água tranquila",
+        "ja": "静かな水",
+        "ko": "고요한 물"
+      },
+      "description": {
+        "en": "Try the Still Water Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Agua tranquila.",
+        "fr": "Essayez la démo de mini-app Forge « Eau calme ».",
+        "pt": "Experimente o demo de mini-app Forge: Água tranquila.",
+        "ja": "Forgeミニアプリのデモ「静かな水」を試せます。",
+        "ko": "Forge 미니 앱 데모 고요한 물을(를) 사용해 보세요."
+      },
       "file": "Still_Water.html",
       "icon": "🌊",
       "category": "Creative",
@@ -255,8 +647,22 @@
     },
     {
       "id": "trace-loop",
-      "title": "Trace Loop",
-      "description": "Try the Trace Loop Forge mini-app demo.",
+      "title": {
+        "en": "Trace Loop",
+        "es": "Rastrea el bucle",
+        "fr": "Trace la boucle",
+        "pt": "Rastreie o loop",
+        "ja": "トレースループ",
+        "ko": "트레이스 루프"
+      },
+      "description": {
+        "en": "Try the Trace Loop Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: Rastrea el bucle.",
+        "fr": "Essayez la démo de mini-app Forge « Trace la boucle ».",
+        "pt": "Experimente o demo de mini-app Forge: Rastreie o loop.",
+        "ja": "Forgeミニアプリのデモ「トレースループ」を試せます。",
+        "ko": "Forge 미니 앱 데모 트레이스 루프을(를) 사용해 보세요."
+      },
       "file": "Trace_Loop.html",
       "icon": "🔁",
       "category": "AI",
@@ -264,8 +670,22 @@
     },
     {
       "id": "voiceforge",
-      "title": "VoiceForge",
-      "description": "Try the VoiceForge Forge mini-app demo.",
+      "title": {
+        "en": "VoiceForge",
+        "es": "VoiceForge",
+        "fr": "VoiceForge",
+        "pt": "VoiceForge",
+        "ja": "VoiceForge",
+        "ko": "VoiceForge"
+      },
+      "description": {
+        "en": "Try the VoiceForge Forge mini-app demo.",
+        "es": "Prueba el demo de mini-app de Forge: VoiceForge.",
+        "fr": "Essayez la démo de mini-app Forge « VoiceForge ».",
+        "pt": "Experimente o demo de mini-app Forge: VoiceForge.",
+        "ja": "Forgeミニアプリのデモ「VoiceForge」を試せます。",
+        "ko": "Forge 미니 앱 데모 VoiceForge을(를) 사용해 보세요."
+      },
       "file": "VoiceForge.html",
       "icon": "🎤",
       "category": "AI & audio",
