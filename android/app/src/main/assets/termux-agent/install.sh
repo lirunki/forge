@@ -16,7 +16,6 @@ elif [[ -f "$SRC_DIR/$AGENT_NAME" ]]; then
   SRC="$SRC_DIR/$AGENT_NAME"
 else
   echo "Missing $AGENT_NAME next to install.sh or in $SRC_DIR" >&2
-  echo "Run Forge → Device bridges → Install agent again to export both files." >&2
   exit 1
 fi
 
