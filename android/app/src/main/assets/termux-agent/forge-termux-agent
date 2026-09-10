@@ -37,25 +37,10 @@ acquire_start_lock() {
       trap 'rm -f "$START_LOCK/pid" 2>/dev/null || true; rmdir "$START_LOCK" 2>/dev/null || true' EXIT INT TERM
       return 0
     fi
-    # Recover locks left by a killed Termux shell. A PID alone is not enough:
-    # verify that the recorded process is actually this Forge agent launcher
-    # (or its Python child), not a recycled PID or unrelated process.
-    local owner="" owner_cmd="" owner_env=""
+    # Recover only a demonstrably stale lock; never race a live launcher.
+    local owner=""
     owner="$(cat "$START_LOCK/pid" 2>/dev/null || true)"
-    if [[ "$owner" =~ ^[0-9]+$ ]]; then
-      if ! kill -0 "$owner" 2>/dev/null; then
-        rmdir "$START_LOCK" 2>/dev/null || true
-      else
-        owner_cmd="$(tr '\0' ' ' < "/proc/$owner/cmdline" 2>/dev/null || true)"
-        owner_env="$(tr '\0' '\n' < "/proc/$owner/environ" 2>/dev/null || true)"
-        if [[ "$owner_cmd" != *"forge-termux-agent"* ]] && \
-           { [[ "$owner_cmd" != *"python"* ]] || [[ "$owner_env" != *"FORGE_BRIDGE_ROOT=$ROOT"* || "$owner_env" != *"FORGE_AGENT_PORT=$PORT"* ]]; }; then
-          rm -f "$START_LOCK/pid" 2>/dev/null || true
-          rmdir "$START_LOCK" 2>/dev/null || true
-        fi
-      fi
-    else
-      rm -f "$START_LOCK/pid" 2>/dev/null || true
+    if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
       rmdir "$START_LOCK" 2>/dev/null || true
     fi
     sleep 0.1
