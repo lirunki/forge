@@ -43,8 +43,10 @@ copy_if_changed() {
 }
 
 changed=0
-copy_if_changed "$SRC" "$BIN/$AGENT_NAME" && changed=1 || true
-copy_if_changed "$SRC" "$SRC_DIR/$AGENT_NAME" && changed=1 || true
+cp -f "$SRC" "$BIN/$AGENT_NAME"; chmod +x "$BIN/$AGENT_NAME"; changed=1
+if [[ "$SRC" != "$SRC_DIR/$AGENT_NAME" ]]; then
+  cp -f "$SRC" "$SRC_DIR/$AGENT_NAME"; chmod +x "$SRC_DIR/$AGENT_NAME"; changed=1
+fi
 if [[ -f "$HERE/install.sh" ]]; then
   copy_if_changed "$HERE/install.sh" "$SRC_DIR/install.sh" && changed=1 || true
 fi

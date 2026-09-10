@@ -37,12 +37,22 @@ acquire_start_lock() {
       trap 'rm -f "$START_LOCK/pid" 2>/dev/null || true; rmdir "$START_LOCK" 2>/dev/null || true' EXIT INT TERM
       return 0
     fi
-    # Recover only a demonstrably stale lock; never race a live launcher.
-    local owner=""
+    # If the lock is present, verify the owner is still a live Forge agent
+    # launcher; if not (dead, or PID reused by an unrelated process) clear
+    # the stale lock and proceed.
+    local owner="" cmd=""
     owner="$(cat "$START_LOCK/pid" 2>/dev/null || true)"
-    if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
-      rmdir "$START_LOCK" 2>/dev/null || true
+    if [[ "$owner" =~ ^[0-9]+$ ]] && kill -0 "$owner" 2>/dev/null; then
+      cmd="$(tr '\0' ' ' < "/proc/$owner/cmdline" 2>/dev/null || true)"
+      if [[ "$cmd" == *"forge-termux-agent"* ]]; then
+        # Live launcher owns the lock — wait and retry.
+        sleep 0.1
+        continue
+      fi
     fi
+    # Owner dead or not the agent — reclaim the stale lock.
+    rm -f "$START_LOCK/pid" 2>/dev/null || true
+    rmdir "$START_LOCK" 2>/dev/null || true
     sleep 0.1
   done
   echo "could not acquire Forge agent start lock; try again" >&2
