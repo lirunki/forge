@@ -33,21 +33,23 @@ if ! command -v python3 >/dev/null && ! command -v python >/dev/null; then
   }
 fi
 
-# Always replace the installed agent. Removing first avoids ETXTBSY on
-# Android/Termux when the previous agent is still running.
-install_agent() {
+copy_if_changed() {
   local src="$1" dst="$2"
-  rm -f "$dst"
-  cp -f "$src" "$dst"
-  chmod +x "$dst"
+  if [[ ! -f "$dst" ]] || ! cmp -s "$src" "$dst"; then
+    cp -f "$src" "$dst"
+    chmod +x "$dst"
+    return 0
+  fi
+  return 1
 }
 
-install_agent "$SRC" "$BIN/$AGENT_NAME"
-install_agent "$SRC" "$SRC_DIR/$AGENT_NAME"
+changed=0
+copy_if_changed "$SRC" "$BIN/$AGENT_NAME" && changed=1 || true
+copy_if_changed "$SRC" "$SRC_DIR/$AGENT_NAME" && changed=1 || true
 if [[ -f "$HERE/install.sh" ]]; then
-  install_agent "$HERE/install.sh" "$SRC_DIR/install.sh"
+  copy_if_changed "$HERE/install.sh" "$SRC_DIR/install.sh" && changed=1 || true
 fi
-changed=1
+chmod +x "$BIN/$AGENT_NAME" "$SRC_DIR/$AGENT_NAME"
 
 BASHRC="$HOME/.bashrc"
 if [[ ! -f "$BASHRC" ]]; then
