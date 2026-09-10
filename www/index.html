@@ -16567,9 +16567,11 @@ Notifications / jobs / clipboard / share / toast / keep-awake / openUrl:
   await ForgeHost.keepAwake.start({ title, text }); await ForgeHost.keepAwake.stop()
 
 Microphone / audio routing:
-  await ForgeHost.mic.listen({ lang }) // { transcript }; mic.record({ durationMs }) → wav; mic.startStream({ sampleRate, aec:true }) → 'mic.pcm' events
-  await ForgeHost.audio.setRoute('speaker'|'earpiece'|'bluetooth'); await ForgeHost.audio.play({ dataUrl, route })
-  await ForgeHost.tts.speak(text, { lang, route })  // on-device only; prefer ForgeHost.ai.tts for cloud
+ await ForgeHost.mic.listen({ lang }) // { transcript }; mic.record({ durationMs }) → wav; mic.startStream({ sampleRate, aec:true }) → 'mic.pcm' events
+ Routes are distinct: speaker = phone loudspeaker; earpiece = phone handset receiver (NOT Bluetooth); bluetooth = connected Bluetooth earphones; wired = wired/USB headset. Use route:'bluetooth' explicitly for Bluetooth.
+ await ForgeHost.audio.setRoute('speaker'|'earpiece'|'bluetooth'); await ForgeHost.audio.play({ dataUrl, route })
+ await ForgeHost.tts.speak(text, { lang, route }) // on-device; cloud audio: ForgeHost.ai.tts({ ..., play:false }) then ForgeHost.audio.play({ dataUrl, route })
+ Browser speechSynthesis is not reliably routeable; use ForgeHost TTS/audio when output selection matters.
 
 QR scan / filesystem / Termux:
   await ForgeHost.qr.scan({ title })  // { text, format }; await ForgeHost.qr.decodeImage({ dataUrl })
@@ -20973,6 +20975,14 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         parameters: { type: 'object', properties: {}, required: [] },
       },
     };
+    const BUILDER_TOOL_READ_API = {
+      type: 'function',
+      function: {
+        name: 'read_api_md',
+        description: 'Load the full ForgeHost API reference when the compact system-prompt reference is insufficient. Use for exact method signatures, return shapes, permissions, camera/media, attachments, TTS/audio routing, or host tools. Call only when needed.',
+        parameters: { type: 'object', properties: {}, required: [] },
+      },
+    };
 
     // run_program: code mode as a workspace tool (offered when isCodeModeEnabled()).
     // The LLM writes a JS script that batches workspace tools deterministically
@@ -21039,6 +21049,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
 
     let builderLoopMdCache = null;
     let codeModeMdCache = null;
+    let builderApiMdCache = null;
     const BUILDER_LOOP_MD_FALLBACK = [
       '# Forge workspace builder protocol',
       '',
@@ -21047,6 +21058,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       'Rules:',
       '- index.html stays SMALL: reference local files via <script src="src/main.js">' + '</scr' + 'ipt>, <link rel="stylesheet" href="assets/style.css">, and @asset("images/gen_1.png") tokens. finish() inlines all of them.',
       '- The final app must use only the ForgeHost APIs from the system prompt. No external CDNs.',
+      '- If exact ForgeHost signatures or details are needed, call read_api_md; it loads the full API reference after workspace mode is armed.',
       '- run_js is offline pure JS (no DOM, no fetch); use api.readText, api.readBase64, api.write, api.list, api.print.',
       '- Call finish with {title, summary, message} when the app is complete. finish is the only way to deliver.',
       '- Limits: 200 files, 10MB/file, 64MB total, 6 images, 10s per run_js, 24 rounds.',
@@ -21089,6 +21101,17 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       'offline pure compute over workspace files (api.*); use run_program when',
       'you need to call tools.',
     ].join('\n');
+    async function getApiMd() {
+      if (builderApiMdCache == null) {
+        let txt = null;
+        try {
+          const r = await fetch('API.md', { cache: 'no-store' });
+          if (r && r.ok) txt = await r.text();
+        } catch (_) {}
+        builderApiMdCache = txt && txt.length > 200 ? txt : 'Full API.md was unavailable. Use the ForgeHost quick reference in the system prompt and continue with the builder.';
+      }
+      return builderApiMdCache;
+    }
     async function getCodeModeMd() {
       if (codeModeMdCache == null) {
         let txt = null;
@@ -21275,7 +21298,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         // Cleared on success / classic / max-rounds / new build / Stop.
         setBuilderResume(owner, messages, armed, researchEnabled, wantCar, round);
         const tools = armed
-          ? (isCodeModeEnabled() ? [BUILDER_TOOL_RUN_PROGRAM].concat(researchEnabled ? BUILDER_TOOLS.concat(BUILDER_RESEARCH_TOOLS) : BUILDER_TOOLS) : (researchEnabled ? BUILDER_TOOLS.concat(BUILDER_RESEARCH_TOOLS) : BUILDER_TOOLS))
+          ? (isCodeModeEnabled() ? [BUILDER_TOOL_RUN_PROGRAM].concat(researchEnabled ? [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS, BUILDER_RESEARCH_TOOLS) : [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS)) : (researchEnabled ? [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS, BUILDER_RESEARCH_TOOLS) : [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS)))
           : [BUILDER_TOOL_READ_LOOP];
         const res = await builderRound(messages, tools, signal);
         const tcs = Array.isArray(res && res.tool_calls) ? res.tool_calls : [];
@@ -21304,6 +21327,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
             try { status && status('Builder mode: loading protocol…'); } catch (_) {}
             messages.push({ role: 'tool', tool_call_id: tcId, name, content: md });
             armed = true;
+            continue;
+          }
+          if (name === 'read_api_md') {
+            const api = await getApiMd();
+            loopStatus('model loaded full API.md · ' + api.length + ' chars', 'info', 'read');
+            messages.push({ role: 'tool', tool_call_id: tcId, name, content: api });
             continue;
           }
           if (!armed) {

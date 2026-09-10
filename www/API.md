@@ -1,3 +1,7 @@
+# ForgeHost API reference
+
+This is the full ForgeHost reference for workspace builds. The compact API summary is in the system prompt. In workspace mode, call `read_api_md` only when exact signatures, return shapes, permissions, camera/media, attachments, TTS/audio routing, or host tools are needed.
+
 # Forge Host API reference
 
 > Canonical source: `forge/www/index.html` (the `SYSTEM_PROMPT` + `ForgeHost` bridge).

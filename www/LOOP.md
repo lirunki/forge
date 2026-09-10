@@ -54,6 +54,10 @@ So `index.html` must reference workspace files exactly like this:
 References to files that don't exist in the workspace are left as-is (broken).
 Never reference external CDNs/URLs — the final app must be fully self-contained.
 
+## Full ForgeHost API
+
+The system prompt contains a compact API summary. If exact method signatures, return shapes, permissions, camera/media, attachments, TTS/audio routing, or host tools are needed, call `read_api_md`. It returns the current full ForgeHost API reference. Use it only when the compact summary is insufficient.
+
 ## Tool reference
 
 - `fs_write({ path, content, mime?, encoding? })` — `encoding:"base64"` for
