@@ -1605,6 +1605,15 @@ termux-reload-settings</div>
 
           <div class="row2">
             <div>
+              <label for="reasoningEffort" data-i18n="ai.reasoningEffort">Reasoning effort</label>
+              <select id="reasoningEffort">
+                <option value="default" selected data-i18n="ai.reasoningDefault">Provider default</option>
+                <option value="low" data-i18n="ai.reasoningLow">Low</option>
+                <option value="medium" data-i18n="ai.reasoningMedium">Medium</option>
+                <option value="high" data-i18n="ai.reasoningHigh">High</option>
+              </select>
+            </div>
+            <div>
               <label for="genTimeoutSecs" data-i18n="ai.genTimeout">Max generation time (s)</label>
               <input id="genTimeoutSecs" type="number" inputmode="numeric" min="30" max="1800" step="10" value="600" />
             </div>
@@ -1618,6 +1627,7 @@ termux-reload-settings</div>
  <p class="field-hint" data-i18n="ai.imageGenerationModelHint">Used by the agentic builder image tool.</p>
  <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.genTimeoutHint">Watchdog for Forge it / Reforge: when time is up you can extend or stop. Progress lands in Console.</p>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.maxTokensHint">Output budget for Forge it / Reforge. Raise it if big apps get cut off (max-token limit); lower it if a provider rejects the request.</p>
+          <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.reasoningHint">Saved per provider and model. Forge tries compatible reasoning, hidden-thinking, and prompt-caching request formats, then falls back to the normal request if unsupported.</p>
               </div>
             </details>
 
@@ -1844,6 +1854,12 @@ termux-reload-settings</div>
  "ai.hint": "<b>Easiest:</b> use <b>Turn-key setup</b> for a free Google / Grok / Groq key, or paste any API key below — Forge picks the provider from the key shape. Advanced options stay collapsed unless you need them.",
  "ai.imageGenerationModel": "Default image-generation model",
  "ai.imageGenerationModelHint": "Used by the agentic builder image tool.",
+ "ai.reasoningEffort": "Reasoning effort",
+ "ai.reasoningDefault": "Provider default",
+ "ai.reasoningLow": "Low",
+ "ai.reasoningMedium": "Medium",
+ "ai.reasoningHigh": "High",
+ "ai.reasoningHint": "Saved per provider and model. Forge tries compatible reasoning, hidden-thinking, and prompt-caching request formats, then falls back to the normal request if unsupported.",
  "ai.json.auto": "Auto (send if supported)",
  "ai.json.off": "Off",
  "ai.json.on": "Always request json_object",
@@ -6170,6 +6186,7 @@ termux-reload-settings</div>
       termuxSetupDone: 'forge_termux_setup_done_v1',
       genTimeout: 'forge_gen_timeout_v1',
       genMaxTokens: 'forge_gen_max_tokens_v1',
+      reasoningPrefs: 'forge_reasoning_prefs_v1',
       agenticLoop: 'forge_agentic_loop_v1',
       builderResearch: 'forge_builder_research_v1',
       builderAsk: 'forge_builder_ask_v1',
@@ -6759,6 +6776,7 @@ termux-reload-settings</div>
       btnExitApp: document.getElementById('btnExitApp'),
       genTimeoutSecs: document.getElementById('genTimeoutSecs'),
       genMaxTokens: document.getElementById('genMaxTokens'),
+      reasoningEffort: document.getElementById('reasoningEffort'),
       genAgenticLoop: document.getElementById('genAgenticLoop'),
       genBuilderResearch: document.getElementById('genBuilderResearch'),
       genBuilderAsk: document.getElementById('genBuilderAsk'),
@@ -6883,6 +6901,28 @@ termux-reload-settings</div>
     }
 
     // ——— Generation watchdog + console turn-logging ———
+    /** Per-provider/model request preferences. Defaults preserve the old request. */
+    function getReasoningPrefs() {
+      try { return JSON.parse(localStorage.getItem(LS.reasoningPrefs) || '{}') || {}; } catch (_) { return {}; }
+    }
+    function reasoningPrefKey(providerId, model) {
+      return String(providerId || currentProviderId()) + '::' + String(model || el.model?.value || '').trim();
+    }
+    function getReasoningPref(providerId, model) {
+      const p = getReasoningPrefs()[reasoningPrefKey(providerId, model)] || {};
+      return { effort: ['default','low','medium','high'].includes(p.effort) ? p.effort : 'default' };
+    }
+    function setReasoningPref(providerId, model, effort) {
+      try {
+        const all = getReasoningPrefs();
+        const key = reasoningPrefKey(providerId, model);
+        if (effort === 'default') delete all[key]; else all[key] = { effort };
+        localStorage.setItem(LS.reasoningPrefs, JSON.stringify(all));
+      } catch (_) {}
+    }
+    function syncReasoningEffort() {
+      if (el.reasoningEffort) el.reasoningEffort.value = getReasoningPref(activeProviderId, el.model?.value).effort;
+    }
     /** Max generation time setting (seconds, clamped 30–1800, default 600). */
     function getGenTimeoutSecs() {
       let v = parseInt(String(localStorage.getItem(LS.genTimeout) || ''), 10);
@@ -7350,6 +7390,7 @@ termux-reload-settings</div>
       return {
         providerId: id,
         provider: p,
+        reasoningEffort: getReasoningPref(id, model).effort,
         key,
         base,
         model,
@@ -7365,6 +7406,43 @@ termux-reload-settings</div>
 
     function getAiRuntime() {
       return aiCallContext || buildAiRuntime(currentProviderId());
+    }
+
+    /** Optional provider hints; empty by default preserves the old wire request. */
+    function getAiRequestOptions(rt, opts = {}) {
+      const effort = rt?.reasoningEffort || 'default';
+      if (opts.disableAdaptive || rt?.disableAdaptive || effort === 'default') return { openai: {}, gemini: null };
+      const budget = effort === 'low' ? 1024 : effort === 'medium' ? 4096 : 16384;
+      const variant = Math.max(0, Number(opts.adaptiveVariant || 0));
+      // Providers disagree about the spelling/location of these optional fields.
+      // Variant 0 is the common OpenAI-compatible dialect; variant 1 is the
+      // Responses/reasoning dialect; variant 2 is a gateway-style extra body.
+      let openai;
+      if (variant === 1) {
+        openai = { reasoning: { effort, summary: 'none' }, prompt_cache_key: 'forge:' + String(rt.providerId) + ':' + String(rt.model) };
+      } else if (variant >= 2) {
+        openai = { extra_body: { reasoning_effort: effort, include_reasoning: false, thinking: { type: 'enabled' } }, prompt_cache_key: 'forge:' + String(rt.providerId) + ':' + String(rt.model) };
+      } else {
+        openai = {
+          reasoning_effort: effort,
+          include_reasoning: false,
+          prompt_cache_key: 'forge:' + String(rt.providerId) + ':' + String(rt.model),
+        };
+      }
+      return { openai, gemini: { thinkingConfig: { thinkingBudget: budget, includeThoughts: false } } };
+    }
+    function nextAdaptiveOpts(opts = {}) {
+      const n = Number(opts.adaptiveVariant || 0) + 1;
+      return n <= 2
+        ? Object.assign({}, opts, { adaptiveVariant: n })
+        : Object.assign({}, opts, { disableAdaptive: true });
+    }
+    function isAdaptiveOptionError(text) {
+      return /reasoning_effort|include_reasoning|return_reasoning|thinking|prompt_cache|cache_control|unknown.?parameter|unsupported/i.test(String(text || ''));
+    }
+    function removeAdaptiveOptions(body) {
+      for (const k of ['reasoning_effort','include_reasoning','return_reasoning','thinking','prompt_cache_key','cache_control']) delete body[k];
+      if (body.generationConfig) delete body.generationConfig.thinkingConfig;
     }
 
     // === Stream / agent cancellation + agent tool-call veto (2.6.54) ===
@@ -8320,6 +8398,7 @@ termux-reload-settings</div>
       el.model.value = prof.model || p.defaultModel || '';
       el.temperature.value = prof.temperature || '0.4';
       el.jsonMode.value = prof.jsonMode || p.jsonMode || 'auto';
+      syncReasoningEffort();
 
       let keyHow = '';
       if (remember) {
@@ -8820,6 +8899,7 @@ termux-reload-settings</div>
           if (el.genMaxTokens && Number.isFinite(mt) && mt >= 1024 && mt <= 262144) el.genMaxTokens.value = String(mt);
           if (el.imageGenerationModel) el.imageGenerationModel.value = getImageGenerationModel();
         } catch (_) {}
+        syncReasoningEffort();
         syncAgenticLoopCheckbox();
         syncBuilderResearchCheckbox();
         syncBuilderAskCheckbox();
@@ -8857,6 +8937,7 @@ termux-reload-settings</div>
         if (Number.isFinite(gt) && gt >= 30 && gt <= 1800) localStorage.setItem(LS.genTimeout, String(gt));
         const mt = parseInt(el.genMaxTokens && el.genMaxTokens.value, 10);
         if (Number.isFinite(mt) && mt >= 1024 && mt <= 262144) localStorage.setItem(LS.genMaxTokens, String(mt));
+        if (el.reasoningEffort) setReasoningPref(activeProviderId, el.model?.value, el.reasoningEffort.value);
         const imageModel = String(el.imageGenerationModel?.value || '').trim();
         if (imageModel) localStorage.setItem(LS.imageGenerationModel, imageModel);
         // Code-mode limits
@@ -18093,6 +18174,7 @@ Permission & safety UX:
       const url = `${root}/responses`;
       const { instructions, input } = messagesToResponsesInput(messages);
       const body = { model, input };
+      Object.assign(body, getAiRequestOptions(rt, opts).openai);
       if (instructions) body.instructions = instructions;
       const temperature = parseFloat(rt.temperature);
       if (!Number.isNaN(temperature)) body.temperature = temperature;
@@ -18104,13 +18186,22 @@ Permission & safety UX:
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
         if (res.status < 200 || res.status >= 300) {
-          throw new Error(`Responses ${res.status}: ${typeof res.data === 'string' ? res.data : JSON.stringify(res.data)}`);
+          const errText = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+          if (rt.reasoningEffort !== 'default' && isAdaptiveOptionError(errText)) {
+            return responsesApiCompletion(messages, signal, Object.assign({}, opts, { disableAdaptive: true }));
+          }
+          throw new Error(`Responses ${res.status}: ${errText}`);
         }
       } else {
         const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
         const text = await res.text();
         try { data = JSON.parse(text); } catch { throw new Error(`Responses bad JSON: ${text.slice(0, 300)}`); }
-        if (!res.ok) throw new Error(`Responses ${res.status}: ${text.slice(0, 500)}`);
+        if (!res.ok) {
+          if (rt.reasoningEffort !== 'default' && isAdaptiveOptionError(text)) {
+            return responsesApiCompletion(messages, signal, Object.assign({}, opts, { disableAdaptive: true }));
+          }
+          throw new Error(`Responses ${res.status}: ${text.slice(0, 500)}`);
+        }
       }
 
       // OpenAI/xAI responses shapes
@@ -18524,6 +18615,8 @@ Permission & safety UX:
       if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
       const temperature = parseFloat(getAiRuntime().temperature);
       body.generationConfig = {};
+      const adaptiveGemini = getAiRequestOptions(getAiRuntime(), opts).gemini;
+      if (adaptiveGemini) Object.assign(body.generationConfig, adaptiveGemini);
       if (!Number.isNaN(temperature)) body.generationConfig.temperature = temperature;
       if (opts.maxTokens > 0) body.generationConfig.maxOutputTokens = opts.maxTokens;
       if (tools && tools.length) {
@@ -18928,14 +19021,24 @@ Permission & safety UX:
       if (backendForRuntime(getAiRuntime()) === 'gemini') {
         try {
           const g = await geminiStreamGenerateContent(messages, signal, {
+            maxTokens: opts.maxTokens,
+            adaptiveVariant: opts.adaptiveVariant,
+            disableAdaptive: opts.disableAdaptive,
             tools, tool_choice: toolChoice, fullResponse: full || !!tools, onDelta,
           });
           return g;
         } catch (e) {
           // fall back to non-streaming gemini and emit one delta
-          const g = await geminiGenerateContent(messages, signal, {
-            tools, tool_choice: toolChoice, fullResponse: full || !!tools, jsonMode: opts.jsonMode,
-          });
+          let g;
+          try {
+            g = await geminiGenerateContent(messages, signal, {
+              maxTokens: opts.maxTokens,
+              tools, tool_choice: toolChoice, fullResponse: full || !!tools, jsonMode: opts.jsonMode,
+            });
+          } catch (geminiErr) {
+            if (opts.disableAdaptive || !isAdaptiveOptionError(geminiErr?.message || geminiErr)) throw geminiErr;
+            g = await geminiGenerateContent(messages, signal, { maxTokens: opts.maxTokens, tools, tool_choice: toolChoice, fullResponse: full || !!tools, jsonMode: opts.jsonMode, disableAdaptive: true });
+          }
           const content = (g && typeof g === 'object' && !Array.isArray(g)) ? (g.content != null ? String(g.content) : '') : String(g ?? '');
           if (onDelta && content) try { onDelta(content, { done: true }); } catch (_) {}
           return g;
@@ -18945,6 +19048,7 @@ Permission & safety UX:
       const { url, headers, model } = resolveEndpoint();
       const temperature = parseFloat(getAiRuntime().temperature);
       const body = { model, messages: normalizeChatMessages(messages), stream: true };
+      Object.assign(body, getAiRequestOptions(getAiRuntime(), opts).openai);
       // Generation budget: mini-app HTML payloads can exceed provider defaults
       // (often 4k-8k tokens) — ask for a large completion budget. Providers that
       // reject the param will 4xx and the call falls back / surfaces the error.
@@ -18980,6 +19084,9 @@ Permission & safety UX:
       }
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
+        if (getAiRuntime().reasoningEffort !== 'default' && isAdaptiveOptionError(errText)) {
+          return chatCompletionsStream(messages, signal, Object.assign(nextAdaptiveOpts(opts), { onDelta }));
+        }
         // Retry once without response_format / tools if the provider rejects them (same logic as chatCompletions)
         if (body.response_format && /response_format|unknown.?parameter|unsupported/i.test(errText)) {
           delete body.response_format;
@@ -19265,12 +19372,21 @@ Permission & safety UX:
     async function chatCompletions(messages, signal, opts = {}) {
       // Gemini native generateContent (not OpenAI /chat/completions)
       if (backendForRuntime(getAiRuntime()) === 'gemini') {
-        const g = await geminiGenerateContent(messages, signal, {
+        let g;
+        try {
+          g = await geminiGenerateContent(messages, signal, {
+          maxTokens: opts.maxTokens,
+          adaptiveVariant: opts.adaptiveVariant,
+          disableAdaptive: opts.disableAdaptive,
           tools: opts.tools || opts.functions,
           tool_choice: opts.tool_choice != null ? opts.tool_choice : opts.toolChoice,
           fullResponse: !!(opts.fullResponse || opts.returnToolCalls || opts.tools || opts.functions),
           jsonMode: opts.jsonMode,
-        });
+          });
+        } catch (geminiErr) {
+          if (opts.disableAdaptive || !isAdaptiveOptionError(geminiErr?.message || geminiErr)) throw geminiErr;
+          g = await geminiGenerateContent(messages, signal, { maxTokens: opts.maxTokens, tools: opts.tools || opts.functions, tool_choice: opts.tool_choice != null ? opts.tool_choice : opts.toolChoice, fullResponse: !!(opts.fullResponse || opts.returnToolCalls || opts.tools || opts.functions), jsonMode: opts.jsonMode, disableAdaptive: true });
+        }
         if (g && typeof g === 'object' && !Array.isArray(g) && ('content' in g || 'tool_calls' in g)) {
           if (opts.fullResponse || opts.returnToolCalls) return g;
           return g.content != null ? g.content : '';
@@ -19284,6 +19400,7 @@ Permission & safety UX:
         model,
         messages: normalizeChatMessages(messages),
       };
+      Object.assign(body, getAiRequestOptions(getAiRuntime(), opts).openai);
       if (opts.maxTokens > 0) body.max_tokens = opts.maxTokens;
       if (!Number.isNaN(temperature)) body.temperature = temperature;
 
@@ -19317,6 +19434,9 @@ Permission & safety UX:
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         if (res.status < 200 || res.status >= 300) {
           const errText = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+          if (rt.reasoningEffort !== 'default' && isAdaptiveOptionError(errText)) {
+            return chatCompletions(messages, signal, nextAdaptiveOpts(opts));
+          }
           // Retry once without response_format if provider rejects it
           if (body.response_format && /response_format|unknown.?parameter|unsupported/i.test(errText)) {
             delete body.response_format;
@@ -19363,6 +19483,9 @@ Permission & safety UX:
       });
       if (!res.ok) {
         const errText = await res.text();
+        if (getAiRuntime().reasoningEffort !== 'default' && isAdaptiveOptionError(errText)) {
+          return chatCompletions(messages, signal, nextAdaptiveOpts(opts));
+        }
         if (body.response_format && /response_format|unknown.?parameter|unsupported/i.test(errText)) {
           delete body.response_format;
           res = await fetch(url, {
@@ -24802,7 +24925,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       savePrefs();
     });
 
-    ['apiBase','apiKey','model','temperature','jsonMode','genTimeoutSecs','genMaxTokens','imageGenerationModel',
+    ['apiBase','apiKey','model','temperature','jsonMode','reasoningEffort','genTimeoutSecs','genMaxTokens','imageGenerationModel',
      'azureResource','azureDeployment','azureApiVersion','azureAuth'].forEach(id => {
       el[id]?.addEventListener('change', savePrefs);
       el[id]?.addEventListener('blur', savePrefs);
