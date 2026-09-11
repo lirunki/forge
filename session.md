@@ -3185,3 +3185,33 @@ Smoke (on device):
 [ ] Live .agent-start.lock (real agent launcher) → waits, does not steal
 [ ] Re-run install.sh with agent already current → still re-copies binary
 ```
+
+## Future TODO — Bluetooth TTS route reliability
+
+Investigate and fix occasional Bluetooth TTS fallback to the phone handset receiver.
+Observed behavior: mini-apps request `route:'bluetooth'`, but audio sometimes comes from
+the small internal earpiece instead of the connected Bluetooth earphones.
+
+Likely host causes in `AudioRouteHelper` / TTS and audio playback bridges:
+- Bluetooth is routed through `MODE_IN_COMMUNICATION`, which selects the communication
+  profile rather than ordinary media/A2DP playback.
+- `setCommunicationDevice()` / SCO activation is treated as successful without verifying
+  the actual active device; Android may silently fall back to `TYPE_BUILTIN_EARPIECE`.
+- TTS/audio starts immediately without waiting for Bluetooth route negotiation.
+- WanderGuide and similar apps split narration into sentences, repeatedly applying and
+  restoring the route, increasing renegotiation opportunities.
+- `MediaPlayer.setPreferredDevice()` failures are ignored and playback continues.
+
+Future investigation/fix plan (do not implement without a separate task):
+1. Add diagnostics for requested route, available outputs, active communication device,
+   device type, and warnings.
+2. Verify Bluetooth is actually active after route selection; do not report Bluetooth
+   success when the active device is the built-in earpiece.
+3. Add a short route-settling wait or device-callback confirmation before starting TTS.
+4. Consider a host-managed narration session that keeps the route active across queued
+   utterances instead of apply/restore for every sentence.
+5. Evaluate separate strategies: communication/SCO for native TTS versus media/A2DP for
+   generated cloud audio, with explicit quality/reliability trade-offs.
+6. Test across Bluetooth A2DP, SCO/HFP, BLE headsets, Android API levels, and OEM devices.
+
+No code changes were made for this TODO. Current implementation remains best-effort.
