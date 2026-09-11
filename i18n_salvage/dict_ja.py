@@ -617,4 +617,16 @@ JA = {
   "txs.notInstalled": "Termux未インストール — Termuxを入れてから、かんたんTermuxセットアップ。",
   "txs.playNeedsAgent": "Play版Termux{ver} — forge-termux-agentが必要。かんたんTermuxセットアップをタップ。",
   "txs.webOnly": "TermuxブリッジはForge Androidアプリ内でのみ動作します。",
+  'ai.builderAsk': 'モデルが質問できるようにする',
+  'ai.builderAskHint': '有効にすると、ビルダーが一時停止して選択肢を尋ねます。自由入力で答えるには、ラベルが完全に「Other」の選択肢を使います。',
+  'ask.title': 'ビルダーからの質問',
+  'ask.answerLabel': '回答',
+  'ask.cancel': 'キャンセル',
+  'ask.send': '送信',
+  'ask.defaultQuestion': '選択してください',
+  'ask.invalidOptions': '質問には2つ以上の選択肢が必要です',
+  'ask.cancelled': '質問をキャンセルしました',
+
+  'ask.other': 'その他',
+
 }

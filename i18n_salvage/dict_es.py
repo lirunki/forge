@@ -525,4 +525,16 @@ ES = {
   "ai.keyLabel.openai": "Clave de API de OpenAI",
   "ai.keyLabel.huggingface": "Token de Hugging Face",
   "ai.keyLabel.azure": "Clave de API de Azure",
+  'ai.builderAsk': 'Permitir que el modelo me haga preguntas',
+  'ai.builderAskHint': 'Cuando está activado, el creador puede pausarse y pedirte que elijas entre opciones. Usa una opción llamada exactamente «Other» para responder con texto libre.',
+  'ask.title': 'Pregunta del creador',
+  'ask.answerLabel': 'Tu respuesta',
+  'ask.cancel': 'Cancelar',
+  'ask.send': 'Enviar',
+  'ask.defaultQuestion': 'Elige una opción',
+  'ask.invalidOptions': 'La pregunta requiere al menos dos opciones',
+  'ask.cancelled': 'Pregunta cancelada',
+
+  'ask.other': 'Otro',
+
 }

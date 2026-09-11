@@ -470,4 +470,16 @@ EN = {
   "txp.bridgeNotReady": "Termux found · bridge not ready",
   "txp.error": "Termux: error",
   "txp.webPreview": "Termux: web preview",
+  'ai.builderAsk': 'Allow the model to ask me questions',
+  'ai.builderAskHint': 'When enabled, the builder can pause and ask you to choose between options. Use an option labeled exactly “Other” for a free-text answer.',
+  'ask.title': 'Builder question',
+  'ask.answerLabel': 'Your answer',
+  'ask.cancel': 'Cancel',
+  'ask.send': 'Send',
+  'ask.defaultQuestion': 'Choose an option',
+  'ask.invalidOptions': 'Ask requires at least two options',
+  'ask.cancelled': 'Ask cancelled',
+
+  'ask.other': 'Other',
+
 }

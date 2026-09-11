@@ -529,4 +529,16 @@ KO = {
   "setup.whyEasy.groq": "무료 등급에 신용카드 불필요. 빠른 모델 — Gemini가 말썽일 때 좋음.",
   "setup.whyEasy.openrouter": "가입하고, 키 만들면 Forge가 무료 모델 라우터로 기본 설정. 시도에 결제 불필요.",
   "setup.whyEasy.xai": "이미 xAI API 크레딧을 구매한 경우에만 사용. 무료 설정은 대신 Gemini나 Groq 선택.",
+  'ai.builderAsk': '모델이 나에게 질문하도록 허용',
+  'ai.builderAskHint': '켜면 빌더가 잠시 멈추고 선택지를 물어볼 수 있습니다. 자유 입력 답변에는 라벨이 정확히 “Other”인 선택지를 사용하세요.',
+  'ask.title': '빌더 질문',
+  'ask.answerLabel': '답변',
+  'ask.cancel': '취소',
+  'ask.send': '보내기',
+  'ask.defaultQuestion': '옵션을 선택하세요',
+  'ask.invalidOptions': '질문에는 두 개 이상의 옵션이 필요합니다',
+  'ask.cancelled': '질문이 취소되었습니다',
+
+  'ask.other': '기타',
+
 }

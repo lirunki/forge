@@ -524,4 +524,16 @@ FR = {
   "ai.keyLabel.openai": "ClÃ© dâAPI OpenAI",
   "ai.keyLabel.huggingface": "Jeton Hugging Face",
   "ai.keyLabel.azure": "ClÃ© dâAPI Azure",
+  'ai.builderAsk': 'Autoriser le modèle à me poser des questions',
+  'ai.builderAskHint': 'Lorsque cette option est activée, le générateur peut s’arrêter pour vous faire choisir parmi des options. Utilisez une option nommée exactement « Other » pour une réponse libre.',
+  'ask.title': 'Question du générateur',
+  'ask.answerLabel': 'Votre réponse',
+  'ask.cancel': 'Annuler',
+  'ask.send': 'Envoyer',
+  'ask.defaultQuestion': 'Choisissez une option',
+  'ask.invalidOptions': 'La question nécessite au moins deux options',
+  'ask.cancelled': 'Question annulée',
+
+  'ask.other': 'Autre',
+
 }

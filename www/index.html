@@ -1630,6 +1630,11 @@ termux-reload-settings</div>
           </div>
           <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.agenticLoopHint">Per provider: for apps too big for one response, the model can opt into workspace mode (scratch files, JS runner, image tools, host-side assembly). Off = classic one-shot JSON only.</p>
           <div class="check" style="margin-top:0.45rem;">
+            <input type="checkbox" id="genBuilderAsk" />
+            <label for="genBuilderAsk" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.builderAsk">Allow the model to ask me questions</label>
+          </div>
+          <p class="field-hint" style="margin:0.15rem 0 0;" data-i18n="ai.builderAskHint">When enabled, the builder can pause and ask you to choose between options. “Other” opens a free-text answer.</p>
+          <div class="check" style="margin-top:0.45rem;">
             <input type="checkbox" id="genBuilderResearch" />
             <label for="genBuilderResearch" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.builderResearch">Allow web research</label>
           </div>
@@ -1794,10 +1799,6 @@ termux-reload-settings</div>
  "about.body": "Forge runs <b>HTML mini-apps</b> on your phone. <b>Open with Forge</b> or <b>Share → Forge</b> from WhatsApp, Files, Drive, etc. to import a .html and run it. You can also Import from Library, generate with AI, or try the Kitchen sink API lab. Bridges: phone/SMS/location, TTS/audio, mic, camera/QR, files, Termux, share, notify/jobs, AI, storage. Pin to Home screen. Backup library under Settings → Library backup.",
  "about.lang": "Language",
  "about.langRestart": "Saved — restart Forge to apply.",
- "lang.restartTitle": "Forge needs to restart",
- "lang.restartBody": "I need to restart Forge to apply the new language.",
- "lang.restartOk": "OK",
- "lang.restartLater": "Later",
  "about.title": "About Forge",
  "ai.activeBrain": "Active brain",
  "ai.addOai": "+ Add OpenAI provider",
@@ -1817,6 +1818,8 @@ termux-reload-settings</div>
  "ai.brain": "Brain: {label}{key}",
  "ai.brainNotSet": "Brain: not set — run Turn-key setup",
  "ai.brainReady": "Brain set: {name}",
+ "ai.builderAsk": "Allow the model to ask me questions",
+ "ai.builderAskHint": "When enabled, the builder can pause and ask you to choose between options. Use an option labeled exactly “Other” for a free-text answer.",
  "ai.builderCapabilities": "Builder capabilities",
  "ai.builderResearch": "Allow web research",
  "ai.builderResearchHint": "Per provider: when the agentic builder loop is enabled, allow web_search and web_fetch for research. Off = no network research tools in the builder.",
@@ -1891,6 +1894,14 @@ termux-reload-settings</div>
  "ai.title": "AI settings",
  "ai.turnkeyHint": "<b>Turn-key free AI:</b> Google Gemini (easiest on Android), Groq, or OpenRouter free models. xAI/Grok API is usually paid — not on the free path. No jargon: we open the page, you paste a key.",
  "ai.usingNote": "Using {label}. {note}",
+ "ask.answerLabel": "Your answer",
+ "ask.cancel": "Cancel",
+ "ask.cancelled": "Ask cancelled",
+ "ask.defaultQuestion": "Choose an option",
+ "ask.invalidOptions": "Ask requires at least two options",
+ "ask.other": "Other",
+ "ask.send": "Send",
+ "ask.title": "Builder question",
  "boot.aiTip": "Tip: open AI → Turn-key setup for free Gemini (Google account), Groq, or OpenRouter — about a minute. Grok API is usually paid.",
  "boot.termuxTip": "Optional: connect Termux for shell-powered mini-apps — AI tab → Easy Termux setup (one command on Play Termux).",
  "bridges.checking": "Checking Termux…",
@@ -2057,6 +2068,10 @@ termux-reload-settings</div>
  "lang.noKey": "Add an AI key in AI settings first.",
  "lang.parseFail": "Model did not return a valid dictionary.",
  "lang.receiving": "Receiving… {kb} chars",
+ "lang.restartBody": "I need to restart Forge to apply the new language.",
+ "lang.restartLater": "Later",
+ "lang.restartOk": "OK",
+ "lang.restartTitle": "Forge needs to restart",
  "lang.translating": "Translating into {name}…",
  "lib.backup": "Backup",
  "lib.backupTitle": "Backup library to Google Drive / folder",
@@ -2357,10 +2372,6 @@ termux-reload-settings</div>
  "about.body": "Forge ejecuta <b>mini-apps HTML</b> en tu teléfono. Usa <b>Abrir con Forge</b> o <b>Compartir → Forge</b> desde WhatsApp, Archivos, Drive, etc. para importar un .html y ejecutarlo. También puedes Importar desde Biblioteca, generar con IA o probar el laboratorio Kitchen sink. Puentes: teléfono/SMS/ubicación, TTS/audio, micrófono, cámara/QR, archivos, Termux, compartir, notificaciones/trabajos, IA, almacenamiento. Ancla a la pantalla de inicio. Copia de seguridad en Ajustes → Copia de la biblioteca.",
  "about.lang": "Idioma",
  "about.langRestart": "Guardado: reinicia Forge para aplicarlo.",
- "lang.restartTitle": "Forge necesita reiniciarse",
- "lang.restartBody": "Necesito reiniciar Forge para aplicar el nuevo idioma.",
- "lang.restartOk": "Aceptar",
- "lang.restartLater": "Más tarde",
  "about.title": "Acerca de Forge",
  "ai.addOai": "+ Añadir proveedor OpenAI",
  "ai.advanced": "Avanzado: proveedor, modelo, endpoint",
@@ -2377,6 +2388,8 @@ termux-reload-settings</div>
  "ai.brain": "Cerebro: {label}{key}",
  "ai.brainNotSet": "Cerebro: no configurado — ejecuta la configuración guiada",
  "ai.brainReady": "Cerebro configurado: {name}",
+ "ai.builderAsk": "Permitir que el modelo me haga preguntas",
+ "ai.builderAskHint": "Cuando está activado, el creador puede pausarse y pedirte que elijas entre opciones. Usa una opción llamada exactamente «Other» para responder con texto libre.",
  "ai.connectedSample": "Conectado. Muestra: {sample}",
  "ai.console": "Consola",
  "ai.consoleHint": "Depura mini-apps, puentes y errores de ForgeHost.",
@@ -2449,6 +2462,14 @@ termux-reload-settings</div>
  "ai.title": "Ajustes de IA",
  "ai.turnkeyHint": "<b>IA gratis guiada:</b> Google Gemini (lo más fácil en Android), Groq o modelos gratis de OpenRouter. La API de xAI/Grok suele ser de pago — fuera de la ruta gratis. Sin jerga: abrimos la página, pegas una clave.",
  "ai.usingNote": "Usando {label}. {note}",
+ "ask.answerLabel": "Tu respuesta",
+ "ask.cancel": "Cancelar",
+ "ask.cancelled": "Pregunta cancelada",
+ "ask.defaultQuestion": "Elige una opción",
+ "ask.invalidOptions": "La pregunta requiere al menos dos opciones",
+ "ask.other": "Otro",
+ "ask.send": "Enviar",
+ "ask.title": "Pregunta del creador",
  "boot.aiTip": "Consejo: abre IA → Configuración guiada para Gemini gratis (cuenta Google), Groq u OpenRouter — un minuto. La API de Grok suele ser de pago.",
  "boot.termuxTip": "Opcional: conecta Termux para mini-apps con shell — pestaña IA → Configuración fácil de Termux (un comando en Termux de Play).",
  "bridges.checking": "Comprobando Termux…",
@@ -2583,6 +2604,10 @@ termux-reload-settings</div>
  "imp.pick": "Elige una mini-app .html…",
  "imp.readFail": "No se pudo leer el archivo: {msg}",
  "lang.auto": "Auto (idioma del dispositivo)",
+ "lang.restartBody": "Necesito reiniciar Forge para aplicar el nuevo idioma.",
+ "lang.restartLater": "Más tarde",
+ "lang.restartOk": "Aceptar",
+ "lang.restartTitle": "Forge necesita reiniciarse",
  "lib.backup": "Copia",
  "lib.backupTitle": "Copia de la biblioteca a Google Drive / carpeta",
  "lib.changeIcon": "Cambiar icono",
@@ -2951,10 +2976,6 @@ termux-reload-settings</div>
  "about.body": "Forge exécute des <b>mini-apps HTML</b> sur votre téléphone. Utilisez <b>Ouvrir avec Forge</b> ou <b>Partager → Forge</b> depuis WhatsApp, Fichiers, Drive, etc. pour importer un .html et l’exécuter. Vous pouvez aussi importer depuis la Bibliothèque, générer avec l’IA ou essayer le labo Kitchen sink. Ponts : téléphone/SMS/position, TTS/audio, micro, caméra/QR, fichiers, Termux, partage, notifications/jobs, IA, stockage. Épinglez sur l’écran d’accueil. Sauvegarde dans Paramètres → Sauvegarde de la bibliothèque.",
  "about.lang": "Langue",
  "about.langRestart": "Enregistré — redémarrez Forge pour l’appliquer.",
- "lang.restartTitle": "Forge doit redémarrer",
- "lang.restartBody": "Je dois redémarrer Forge pour appliquer la nouvelle langue.",
- "lang.restartOk": "OK",
- "lang.restartLater": "Plus tard",
  "about.title": "À propos de Forge",
  "ai.addOai": "+ Ajouter un fournisseur OpenAI",
  "ai.advanced": "Avancé : fournisseur, modèle, endpoint",
@@ -2971,6 +2992,8 @@ termux-reload-settings</div>
  "ai.brain": "Cerveau : {label}{key}",
  "ai.brainNotSet": "Cerveau : non configuré — lancez l’assistant gratuit",
  "ai.brainReady": "Cerveau configuré : {name}",
+ "ai.builderAsk": "Autoriser le modèle à me poser des questions",
+ "ai.builderAskHint": "Lorsque cette option est activée, le générateur peut s’arrêter pour vous faire choisir parmi des options. Utilisez une option nommée exactement « Other » pour une réponse libre.",
  "ai.connectedSample": "Connecté. Extrait : {sample}",
  "ai.console": "Console",
  "ai.consoleHint": "Déboguez mini-apps, ponts et erreurs ForgeHost.",
@@ -3043,6 +3066,14 @@ termux-reload-settings</div>
  "ai.title": "Réglages IA",
  "ai.turnkeyHint": "<b>IA gratuite guidée :</b> Google Gemini (le plus simple sur Android), Groq ou les modèles gratuits d’OpenRouter. L’API xAI/Grok est généralement payante — hors parcours gratuit. Sans jargon : on ouvre la page, vous collez une clé.",
  "ai.usingNote": "Utilise {label}. {note}",
+ "ask.answerLabel": "Votre réponse",
+ "ask.cancel": "Annuler",
+ "ask.cancelled": "Question annulée",
+ "ask.defaultQuestion": "Choisissez une option",
+ "ask.invalidOptions": "La question nécessite au moins deux options",
+ "ask.other": "Autre",
+ "ask.send": "Envoyer",
+ "ask.title": "Question du générateur",
  "boot.aiTip": "Astuce : ouvrez IA → Assistant pour Gemini gratuit (compte Google), Groq ou OpenRouter — environ une minute. L’API Grok est généralement payante.",
  "boot.termuxTip": "Facultatif : connectez Termux pour des mini-apps avec shell — onglet IA → Configuration facile de Termux (une commande sur Termux Play).",
  "bridges.checking": "Vérification de Termux…",
@@ -3177,6 +3208,10 @@ termux-reload-settings</div>
  "imp.pick": "Choisissez une mini-app .html…",
  "imp.readFail": "Impossible de lire le fichier : {msg}",
  "lang.auto": "Auto (langue de l’appareil)",
+ "lang.restartBody": "Je dois redémarrer Forge pour appliquer la nouvelle langue.",
+ "lang.restartLater": "Plus tard",
+ "lang.restartOk": "OK",
+ "lang.restartTitle": "Forge doit redémarrer",
  "lib.backup": "Sauvegarde",
  "lib.backupTitle": "Sauvegarder la bibliothèque vers Google Drive / dossier",
  "lib.changeIcon": "Changer l’icône",
@@ -3545,10 +3580,6 @@ termux-reload-settings</div>
  "about.body": "O Forge executa <b>mini-apps HTML</b> no seu telefone. Use <b>Abrir com o Forge</b> ou <b>Compartilhar → Forge</b> do WhatsApp, Arquivos, Drive, etc. para importar um .html e executá-lo. Também pode importar da Biblioteca, gerar com IA ou experimentar o laboratório Kitchen sink. Pontes: telefone/SMS/localização, TTS/áudio, microfone, câmera/QR, arquivos, Termux, compartilhar, notificações/jobs, IA, armazenamento. Fixe na tela inicial. Backup em Configurações → Backup da biblioteca.",
  "about.lang": "Idioma",
  "about.langRestart": "Salvo — reinicie o Forge para aplicar.",
- "lang.restartTitle": "O Forge precisa reiniciar",
- "lang.restartBody": "Preciso reiniciar o Forge para aplicar o novo idioma.",
- "lang.restartOk": "OK",
- "lang.restartLater": "Mais tarde",
  "about.title": "Sobre o Forge",
  "ai.addOai": "+ Adicionar provedor OpenAI",
  "ai.advanced": "Avançado: provedor, modelo, endpoint",
@@ -3565,6 +3596,8 @@ termux-reload-settings</div>
  "ai.brain": "Cérebro: {label}{key}",
  "ai.brainNotSet": "Cérebro: não configurado — rode a configuração guiada",
  "ai.brainReady": "Cérebro configurado: {name}",
+ "ai.builderAsk": "Permitir que o modelo me faça perguntas",
+ "ai.builderAskHint": "Quando ativado, o construtor pode pausar e pedir que você escolha uma opção. Use uma opção chamada exatamente “Other” para responder com texto livre.",
  "ai.connectedSample": "Conectado. Amostra: {sample}",
  "ai.console": "Console",
  "ai.consoleHint": "Depure mini-apps, pontes e erros do ForgeHost.",
@@ -3637,6 +3670,14 @@ termux-reload-settings</div>
  "ai.title": "Configurações de IA",
  "ai.turnkeyHint": "<b>IA grátis guiada:</b> Google Gemini (mais fácil no Android), Groq ou modelos grátis do OpenRouter. A API xAI/Grok normalmente é paga — fora do caminho grátis. Sem jargão: abrimos a página, você cola uma chave.",
  "ai.usingNote": "Usando {label}. {note}",
+ "ask.answerLabel": "Sua resposta",
+ "ask.cancel": "Cancelar",
+ "ask.cancelled": "Pergunta cancelada",
+ "ask.defaultQuestion": "Escolha uma opção",
+ "ask.invalidOptions": "A pergunta exige pelo menos duas opções",
+ "ask.other": "Outro",
+ "ask.send": "Enviar",
+ "ask.title": "Pergunta do construtor",
  "boot.aiTip": "Dica: abra IA → Configuração guiada para Gemini grátis (conta Google), Groq ou OpenRouter — cerca de um minuto. A API do Grok normalmente é paga.",
  "boot.termuxTip": "Opcional: conecte o Termux para mini-apps com shell — aba IA → Configuração fácil do Termux (um comando no Termux da Play).",
  "bridges.checking": "Verificando Termux…",
@@ -3771,6 +3812,10 @@ termux-reload-settings</div>
  "imp.pick": "Escolha uma mini-app .html…",
  "imp.readFail": "Não foi possível ler o arquivo: {msg}",
  "lang.auto": "Auto (idioma do dispositivo)",
+ "lang.restartBody": "Preciso reiniciar o Forge para aplicar o novo idioma.",
+ "lang.restartLater": "Mais tarde",
+ "lang.restartOk": "OK",
+ "lang.restartTitle": "O Forge precisa reiniciar",
  "lib.backup": "Backup",
  "lib.backupTitle": "Backup da biblioteca para Google Drive / pasta",
  "lib.changeIcon": "Alterar ícone",
@@ -4139,10 +4184,6 @@ termux-reload-settings</div>
  "about.body": "Forgeはスマホで<b>HTMLミニアプリ</b>を実行します。WhatsApp、ファイル、Driveなどから<b>Forgeで開く</b>または<b>共有 → Forge</b>で.htmlを取り込んで実行できます。ライブラリからのインポート、AIでの生成、Kitchen sink APIラボも利用可能。ブリッジ：電話/SMS/位置情報、TTS/オーディオ、マイク、カメラ/QR、ファイル、Termux、共有、通知/ジョブ、AI、ストレージ。ホーム画面にピン留め。設定 → ライブラリバックアップでバックアップ。",
  "about.lang": "言語",
  "about.langRestart": "保存しました。Forgeを再起動すると適用されます。",
- "lang.restartTitle": "Forgeを再起動します",
- "lang.restartBody": "新しい言語を適用するため、Forgeを再起動する必要があります。",
- "lang.restartOk": "OK",
- "lang.restartLater": "後で",
  "about.title": "Forge について",
  "ai.addOai": "+ OpenAI プロバイダーを追加",
  "ai.advanced": "詳細：プロバイダー、モデル、エンドポイント",
@@ -4159,6 +4200,8 @@ termux-reload-settings</div>
  "ai.brain": "ブレイン：{label}{key}",
  "ai.brainNotSet": "ブレイン：未設定 — 簡単セットアップを実行してください",
  "ai.brainReady": "ブレイン設定済み：{name}",
+ "ai.builderAsk": "モデルが質問できるようにする",
+ "ai.builderAskHint": "有効にすると、ビルダーが一時停止して選択肢を尋ねます。自由入力で答えるには、ラベルが完全に「Other」の選択肢を使います。",
  "ai.connectedSample": "接続済み。サンプル：{sample}",
  "ai.console": "コンソール",
  "ai.consoleHint": "ミニアプリ、ブリッジ、ForgeHost のエラーをデバッグ。",
@@ -4231,6 +4274,14 @@ termux-reload-settings</div>
  "ai.title": "AI 設定",
  "ai.turnkeyHint": "<b>無料 AIの簡単セットアップ：</b>Google Gemini（Android で一番楽）、Groq、OpenRouter の無料モデル。xAI/Grok API は通常有料です。難しい言葉はありません：ページを開くので、キーを貼り付けるだけ。",
  "ai.usingNote": "{label} を使用中。{note}",
+ "ask.answerLabel": "回答",
+ "ask.cancel": "キャンセル",
+ "ask.cancelled": "質問をキャンセルしました",
+ "ask.defaultQuestion": "選択してください",
+ "ask.invalidOptions": "質問には2つ以上の選択肢が必要です",
+ "ask.other": "その他",
+ "ask.send": "送信",
+ "ask.title": "ビルダーからの質問",
  "boot.aiTip": "ヒント：AI → 簡単セットアップで無料の Gemini（Google アカウント）、Groq、OpenRouter — 1分ほど。Grok API は通常有料です。",
  "boot.termuxTip": "オプション：Termux を接続するとシェルを使うミニアプリが可能 — AI タブ → Termux 簡単セットアップ（Play 版 Termux ではコマンド1本）。",
  "bridges.checking": "Termux 確認中…",
@@ -4365,6 +4416,10 @@ termux-reload-settings</div>
  "imp.pick": ".html ミニアプリを選んでください…",
  "imp.readFail": "ファイルを読み込めませんでした：{msg}",
  "lang.auto": "自動（端末の言語）",
+ "lang.restartBody": "新しい言語を適用するため、Forgeを再起動する必要があります。",
+ "lang.restartLater": "後で",
+ "lang.restartOk": "OK",
+ "lang.restartTitle": "Forgeを再起動します",
  "lib.backup": "バックアップ",
  "lib.backupTitle": "ライブラリを Google Drive / フォルダーへバックアップ",
  "lib.changeIcon": "アイコンを変更",
@@ -4733,10 +4788,6 @@ termux-reload-settings</div>
  "about.body": "Forge는 폰에서 <b>HTML 미니 앱</b>을 실행합니다. WhatsApp, 파일, Drive 등에서 <b>Forge로 열기</b> 또는 <b>공유 → Forge</b>로 .html을 가져와 실행할 수 있습니다. 라이브러리에서 가져오기, AI로 생성, Kitchen sink API 실험실도 가능합니다. 브리지: 전화/SMS/위치, TTS/오디오, 마이크, 카메라/QR, 파일, Termux, 공유, 알림/작업, AI, 저장소. 홈 화면에 고정. 설정 → 라이브러리 백업에서 백업.",
  "about.lang": "언어",
  "about.langRestart": "저장됨 — 적용하려면 Forge를 다시 시작하세요.",
- "lang.restartTitle": "Forge를 다시 시작해야 합니다",
- "lang.restartBody": "새 언어를 적용하려면 Forge를 다시 시작해야 합니다.",
- "lang.restartOk": "확인",
- "lang.restartLater": "나중에",
  "about.title": "Forge 정보",
  "ai.addOai": "+ OpenAI 제공자 추가",
  "ai.advanced": "고급: 제공자, 모델, 엔드포인트",
@@ -4753,6 +4804,8 @@ termux-reload-settings</div>
  "ai.brain": "두뇌: {label}{key}",
  "ai.brainNotSet": "두뇌: 설정 안 됨 — 턴키 설정을 실행하세요",
  "ai.brainReady": "두뇌 설정됨: {name}",
+ "ai.builderAsk": "모델이 나에게 질문하도록 허용",
+ "ai.builderAskHint": "켜면 빌더가 잠시 멈추고 선택지를 물어볼 수 있습니다. 자유 입력 답변에는 라벨이 정확히 “Other”인 선택지를 사용하세요.",
  "ai.connectedSample": "연결됨. 샘플: {sample}",
  "ai.console": "콘솔",
  "ai.consoleHint": "미니 앱, 브리지, ForgeHost 오류 디버깅.",
@@ -4825,6 +4878,14 @@ termux-reload-settings</div>
  "ai.title": "AI 설정",
  "ai.turnkeyHint": "<b>턴키 무료 AI:</b> Google Gemini(Android에서 가장 쉬움), Groq, 또는 OpenRouter 무료 모델. xAI/Grok API는 보통 유료 — 무료 경로가 아닙니다. 어려운 용어 없음: 페이지를 열고, 키를 복사해 붙여 넣습니다.",
  "ai.usingNote": "{label} 사용 중. {note}",
+ "ask.answerLabel": "답변",
+ "ask.cancel": "취소",
+ "ask.cancelled": "질문이 취소되었습니다",
+ "ask.defaultQuestion": "옵션을 선택하세요",
+ "ask.invalidOptions": "질문에는 두 개 이상의 옵션이 필요합니다",
+ "ask.other": "기타",
+ "ask.send": "보내기",
+ "ask.title": "빌더 질문",
  "boot.aiTip": "팁: AI → 턴키 설정에서 무료 Gemini(Google 계정), Groq, OpenRouter — 약 1분. Grok API는 보통 유료입니다.",
  "boot.termuxTip": "선택: 셸 기반 미니 앱을 위해 Termux 연결 — AI 탭 → Termux 간편 설정(Play Termux에서 명령 한 줄).",
  "bridges.checking": "Termux 확인 중…",
@@ -4959,6 +5020,10 @@ termux-reload-settings</div>
  "imp.pick": ".html 미니 앱 선택…",
  "imp.readFail": "파일을 읽을 수 없습니다: {msg}",
  "lang.auto": "자동(기기 언어)",
+ "lang.restartBody": "새 언어를 적용하려면 Forge를 다시 시작해야 합니다.",
+ "lang.restartLater": "나중에",
+ "lang.restartOk": "확인",
+ "lang.restartTitle": "Forge를 다시 시작해야 합니다",
  "lib.backup": "백업",
  "lib.backupTitle": "라이브러리를 Google Drive / 폴더에 백업",
  "lib.changeIcon": "아이콘 변경",
@@ -5761,6 +5826,7 @@ termux-reload-settings</div>
       genMaxTokens: 'forge_gen_max_tokens_v1',
       agenticLoop: 'forge_agentic_loop_v1',
       builderResearch: 'forge_builder_research_v1',
+      builderAsk: 'forge_builder_ask_v1',
       codeMode: 'forge_code_mode_v1',
       codeModeLimits: 'forge_code_mode_limits_v1',
     };
@@ -6349,6 +6415,7 @@ termux-reload-settings</div>
       genMaxTokens: document.getElementById('genMaxTokens'),
       genAgenticLoop: document.getElementById('genAgenticLoop'),
       genBuilderResearch: document.getElementById('genBuilderResearch'),
+      genBuilderAsk: document.getElementById('genBuilderAsk'),
       genCodeMode: document.getElementById('genCodeMode'),
       cmWallClock: document.getElementById('cmWallClock'),
       cmToolCalls: document.getElementById('cmToolCalls'),
@@ -6515,6 +6582,23 @@ termux-reload-settings</div>
     }
     function syncBuilderResearchCheckbox() {
       try { if (el.genBuilderResearch) el.genBuilderResearch.checked = isBuilderResearchEnabled(); } catch (_) {}
+    }
+    /** Per-provider builder question/choice capability. */
+    function getBuilderAskMap() {
+      try { return JSON.parse(localStorage.getItem(LS.builderAsk) || '{}') || {}; } catch (_) { return {}; }
+    }
+    function isBuilderAskEnabled() {
+      try { return !!getBuilderAskMap()[activeProviderId]; } catch (_) { return false; }
+    }
+    function setBuilderAskEnabled(on) {
+      try {
+        const m = getBuilderAskMap();
+        if (on) m[activeProviderId] = true; else delete m[activeProviderId];
+        localStorage.setItem(LS.builderAsk, JSON.stringify(m));
+      } catch (_) {}
+    }
+    function syncBuilderAskCheckbox() {
+      try { if (el.genBuilderAsk) el.genBuilderAsk.checked = isBuilderAskEnabled(); } catch (_) {}
     }
     /** Per-provider code-mode flag (mirrors agentic loop). When on, round 1
      *  of forgeApp/reforgeAppWithAi offers read_code_mode_md alongside
@@ -8392,6 +8476,7 @@ termux-reload-settings</div>
         } catch (_) {}
         syncAgenticLoopCheckbox();
         syncBuilderResearchCheckbox();
+        syncBuilderAskCheckbox();
         syncCodeModeCheckbox();
         // Code-mode limits (load into the inputs; defaults if absent)
         try {
@@ -8830,6 +8915,7 @@ termux-reload-settings</div>
         knownKeys: Array.isArray(knownKeys) ? knownKeys : [],
         agenticLoop: getAgenticLoopMap(),
         builderResearch: getBuilderResearchMap(),
+        builderAsk: getBuilderAskMap(),
         codeMode: getCodeModeMap(),
         codeModeLimits: getCodeModeLimits(),
         setupDone: lsGet(LS.setupDone) || '',
@@ -8856,6 +8942,7 @@ termux-reload-settings</div>
           legacy: bundle?.legacy || {},
           agenticLoop: bundle?.agenticLoop || {},
           builderResearch: bundle?.builderResearch || {},
+          builderAsk: bundle?.builderAsk || {},
           codeMode: bundle?.codeMode || {},
           codeModeLimits: bundle?.codeModeLimits || {},
         });
@@ -8880,6 +8967,7 @@ termux-reload-settings</div>
       const remoteKeys = Array.isArray(bundle.knownKeys) ? bundle.knownKeys : [];
       const remoteAgenticLoop = bundle.agenticLoop && typeof bundle.agenticLoop === 'object' ? bundle.agenticLoop : null;
       const remoteBuilderResearch = bundle.builderResearch && typeof bundle.builderResearch === 'object' ? bundle.builderResearch : null;
+      const remoteBuilderAsk = bundle.builderAsk && typeof bundle.builderAsk === 'object' ? bundle.builderAsk : null;
       const remoteCodeMode = bundle.codeMode && typeof bundle.codeMode === 'object' ? bundle.codeMode : null;
       const remoteCodeModeLimits = bundle.codeModeLimits && typeof bundle.codeModeLimits === 'object' ? bundle.codeModeLimits : null;
 
@@ -8966,6 +9054,11 @@ termux-reload-settings</div>
       if (remoteBuilderResearch) {
         try { localStorage.setItem(LS.builderResearch, JSON.stringify(remoteBuilderResearch)); } catch (_) {}
         syncBuilderResearchCheckbox();
+      }
+      // Older backups have no builderAsk field; leave local preferences intact.
+      if (remoteBuilderAsk) {
+        try { localStorage.setItem(LS.builderAsk, JSON.stringify(remoteBuilderAsk)); } catch (_) {}
+        syncBuilderAskCheckbox();
       }
       // Older backups have no codeMode field; leave local preferences intact.
       if (remoteCodeMode) {
@@ -19811,6 +19904,7 @@ Return complete html, not a diff.`;
         system += '\n\nBUILD OPTION (agentic reforge): If the existing app is large, call read_loop_md and use the workspace tools. The workspace is seeded with the existing index.html. Preserve behavior, then call finish.';
         if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool — it runs a JS script that orchestrates many workspace tools in one turn (loops, parallel calls, branching on a tool result) via forge.tools.run(name, args) + forge.finish(result); the return value is fed back to you. Use it ONLY to orchestrate tool calls you would otherwise repeat: static files you can write now (index.html, CSS, JS modules, already-computed data) go through fs_write directly, never wrapped in run_program, and a single tool call is a direct tool call. See CODEMODE.md (loaded after read_loop_md) for the one rule and a worked 10-image example.';
         if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
+ if (isBuilderAskEnabled()) system += '\n\nUSER QUESTION OPTION: After read_loop_md, ask is available. Use it only for meaningful choices. Offer 2–8 concise options and put your preferred choice first. To let the user type any custom answer, include an option whose entire label is exactly Other. Do NOT use labels such as Other - explanation, Other (explanation), or Other: explanation; any suffix prevents the free-text box from opening.';
       }
       const msgs = [
         { role: 'system', content: system },
@@ -21051,6 +21145,18 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         parameters: { type: 'object', properties: {}, required: [] },
       },
     };
+    const BUILDER_TOOL_ASK = {
+      type: 'function',
+      function: {
+        name: 'ask',
+        description: 'Pause the build and ask the user to choose one option. Put the recommended choice first and set preferredIndex to its zero-based index. To offer a free-text answer, include one option whose entire label is exactly "Other" — do not write "Other - explanation", "Other (explanation)", or add any suffix. Only the exact label Other opens the free-text field.',
+        parameters: { type: 'object', properties: {
+          question: { type: 'string', description: 'Short, specific question for the user.' },
+          options: { type: 'array', minItems: 2, maxItems: 8, items: { type: 'string' }, description: '2–8 concise choices. Put the preferred choice first when possible. If custom text is allowed, use the standalone label exactly Other.' },
+          preferredIndex: { type: 'integer', minimum: 0, maximum: 7, description: 'Zero-based preferred option index. Defaults to 0.' },
+        }, required: ['question', 'options'] },
+      },
+    };
     const BUILDER_TOOL_READ_API = {
       type: 'function',
       function: {
@@ -21121,6 +21227,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         message: { type: 'string', description: 'Short friendly reply to the user' },
         entry: { type: 'string', description: 'Entry HTML file, default index.html' },
       }, required: ['title'] } } },
+      BUILDER_TOOL_ASK,
     ];
 
     let builderLoopMdCache = null;
@@ -21233,6 +21340,64 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       return builderLoopMdCache;
     }
 
+    function builderAskUser(args, signal) {
+      return new Promise((resolve) => {
+        const q = String(args?.question || t('ask.defaultQuestion')).trim().slice(0, 1200);
+        const raw = Array.isArray(args?.options) ? args.options : [];
+        const options = raw.map(x => String(x == null ? '' : x).trim().slice(0, 240)).filter(Boolean).slice(0, 8);
+        if (options.length < 2) { resolve({ ok: false, error: t('ask.invalidOptions') }); return; }
+        let preferred = Number.isInteger(args?.preferredIndex) ? args.preferredIndex : 0;
+        if (preferred < 0 || preferred >= options.length) preferred = 0;
+        const wrap = document.createElement('div');
+        wrap.className = 'tour-overlay';
+        wrap.setAttribute('role', 'dialog');
+        wrap.setAttribute('aria-modal', 'true');
+        wrap.innerHTML = '<div class="tour-card" style="max-width:32rem"><h2></h2><p class="field-hint" style="font-size:.95rem;line-height:1.45"></p><div data-ask-options style="display:grid;gap:.45rem;margin-top:.75rem"></div></div>';
+        wrap.querySelector('h2').textContent = t('ask.title');
+        wrap.querySelector('p').textContent = q;
+        const box = wrap.querySelector('[data-ask-options]');
+        let done = false;
+        let timer;
+        const finish = (value) => {
+          if (done) return; done = true; clearTimeout(timer); wrap.remove(); resolve(value);
+        };
+        const onAbort = () => finish({ ok: false, cancelled: true, error: t('ask.cancelled') });
+        signal?.addEventListener('abort', onAbort, { once: true });
+        options.forEach((label, index) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'btn secondary small'; b.style.textAlign = 'left';
+          b.textContent = (index === preferred ? '★ ' : '') + label;
+          b.onclick = async () => {
+            if (/^other$/i.test(label)) {
+              const answer = await forgeAskFreeText(t('ask.other'), q);
+              finish(answer == null ? { ok: false, cancelled: true, error: t('ask.cancelled') } : { ok: true, answer, selected: label, index });
+            } else finish({ ok: true, answer: label, selected: label, index, preferred: index === preferred });
+          };
+          box.appendChild(b);
+        });
+        timer = setTimeout(() => onAbort(), 10 * 60 * 1000);
+        document.body.appendChild(wrap);
+      });
+    }
+    function forgeAskFreeText(title, question) {
+      return new Promise((resolve) => {
+        const wrap = document.createElement('div'); wrap.className = 'tour-overlay';
+        wrap.innerHTML = '<div class="tour-card" style="max-width:32rem"><h2></h2><p class="field-hint"></p><textarea data-ask-input rows="4" style="width:100%;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:.75rem .85rem;font:inherit;caret-color:var(--text);"></textarea><div class="tour-actions"><button class="btn secondary small" data-act="cancel" type="button"></button><button class="btn small" data-act="ok" type="button"></button></div></div>';
+        wrap.querySelector('h2').textContent = title; wrap.querySelector('p').textContent = question;
+        wrap.querySelector('[data-act="cancel"]').textContent = t('ask.cancel');
+        wrap.querySelector('[data-act="ok"]').textContent = t('ask.send');
+        const input = wrap.querySelector('[data-ask-input]');
+        input.setAttribute('aria-label', t('ask.answerLabel'));
+        input.addEventListener('focus', () => { input.style.borderColor = 'var(--accent)'; input.style.outline = 'none'; });
+        input.addEventListener('blur', () => { input.style.borderColor = 'var(--border)'; });
+        const finish = (v) => { wrap.remove(); resolve(v); };
+        wrap.querySelector('[data-act="cancel"]').onclick = () => finish(null);
+        wrap.querySelector('[data-act="ok"]').onclick = () => finish(String(input.value || '').trim() || null);
+        wrap.addEventListener('click', e => { if (e.target === wrap) finish(null); });
+        document.body.appendChild(wrap); input.focus();
+      });
+    }
+
     async function builderExecTool(name, argsRaw, ctx) {
       let a = {};
       try { a = typeof argsRaw === 'string' ? JSON.parse(argsRaw || '{}') : (argsRaw || {}); }
@@ -21285,6 +21450,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           const r = await toolsWebFetch(fetchArgs);
           loopStatus('web_fetch · ' + String(a.url || '').slice(0, 100), 'info', 'research');
           return r;
+        }
+        case 'ask': {
+          if (!ctx.askEnabled) return { ok: false, error: 'ask is not enabled for this provider' };
+          const answer = await builderAskUser(a, ctx.signal);
+          loopStatus('ask · user answered', 'ok', 'ask');
+          return answer;
         }
         case 'finish': {
           const app = await builderAssemble(fs, a);
@@ -21376,6 +21547,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         const tools = armed
           ? (isCodeModeEnabled() ? [BUILDER_TOOL_RUN_PROGRAM].concat(researchEnabled ? [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS, BUILDER_RESEARCH_TOOLS) : [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS)) : (researchEnabled ? [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS, BUILDER_RESEARCH_TOOLS) : [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS)))
           : [BUILDER_TOOL_READ_LOOP];
+        if (armed && isBuilderAskEnabled()) tools.splice(isCodeModeEnabled() ? 1 : 0, 0, BUILDER_TOOL_ASK);
         const res = await builderRound(messages, tools, signal);
         const tcs = Array.isArray(res && res.tool_calls) ? res.tool_calls : [];
         const content = String((res && res.content) || '');
@@ -21419,7 +21591,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           try { status && status('Builder round ' + round + ' · ' + name + '…'); } catch (_) {}
           let out;
           try {
-            out = await builderExecTool(name, tc.function && tc.function.arguments, { fs, state, wantCar, signal, researchEnabled });
+            out = await builderExecTool(name, tc.function && tc.function.arguments, { fs, state, wantCar, signal, researchEnabled, askEnabled: isBuilderAskEnabled() });
           } catch (e) {
             out = { ok: false, error: String((e && e.message) || e) };
           }
@@ -21586,6 +21758,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         system += '\n\nBUILD OPTION (agentic): If this app is too large or complex to deliver as one JSON payload, call the tool read_loop_md now to load the workspace builder protocol (scratch files, JS runner, image generation, host-side assembly) and build it in rounds instead. Use it only when a single response would not be enough; otherwise ignore this option and return the JSON payload exactly as specified.';
         if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool after read_loop_md — it runs a JS script that orchestrates many workspace tools in one turn (loops, parallel calls, branching on a tool result) via forge.tools.run(name, args) + forge.finish(result); the return value is fed back to you. Use it ONLY to orchestrate tool calls you would otherwise repeat: static files you can write now (index.html, CSS, JS modules, already-computed data) go through fs_write directly, never wrapped in run_program, and a single tool call is a direct tool call. See CODEMODE.md for the one rule and a worked 10-image example.';
         if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
+ if (isBuilderAskEnabled()) system += '\n\nUSER QUESTION OPTION: After read_loop_md, ask is available. Use it only for meaningful choices. Offer 2–8 concise options and put your preferred choice first. To let the user type any custom answer, include an option whose entire label is exactly Other. Do NOT use labels such as Other - explanation, Other (explanation), or Other: explanation; any suffix prevents the free-text box from opening.';
       }
       const msgs = [{ role: 'system', content: system }];
 
@@ -24271,6 +24444,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       switchProvider(el.provider.value, { fromUser: true });
       syncAgenticLoopCheckbox();
       syncBuilderResearchCheckbox();
+      syncBuilderAskCheckbox();
       syncCodeModeCheckbox();
     });
 
@@ -24295,6 +24469,10 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.genBuilderResearch?.addEventListener('change', () => {
       setBuilderResearchEnabled(!!el.genBuilderResearch.checked);
       try { genLog('info', 'builder web research ' + (el.genBuilderResearch.checked ? 'enabled' : 'disabled') + ' for ' + activeProviderId); } catch (_) {}
+    });
+    el.genBuilderAsk?.addEventListener('change', () => {
+      setBuilderAskEnabled(!!el.genBuilderAsk.checked);
+      try { genLog('info', 'builder ask tool ' + (el.genBuilderAsk.checked ? 'enabled' : 'disabled') + ' for ' + activeProviderId); } catch (_) {}
     });
     el.genCodeMode?.addEventListener('change', () => {
       setCodeModeEnabled(!!el.genCodeMode.checked);
