@@ -2,6 +2,7 @@ package com.forge.live;
 
 import android.app.ActivityManager;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Bundle;
@@ -39,10 +40,13 @@ public class RunActivity extends MainActivity {
         }
         String title2 = title.trim();
         try {
+            Bitmap icon = ShortcutBridgePlugin.renderAppIconBitmap(
+                    intent.getStringExtra("forge_icon_emoji"),
+                    intent.getStringExtra("forge_icon_color"));
             if (Build.VERSION.SDK_INT >= 28) {
-                desc = new ActivityManager.TaskDescription(title2, R.mipmap.ic_launcher);
+                desc = new ActivityManager.TaskDescription(title2, icon);
             } else {
-                desc = new ActivityManager.TaskDescription(title2, BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher));
+                desc = new ActivityManager.TaskDescription(title2, icon != null ? icon : BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher));
             }
             setTaskDescription(desc);
             setTitle(title2);

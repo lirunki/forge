@@ -25,12 +25,15 @@ public class ShortcutBridgePlugin extends Plugin {
     public static final String ACTION_OPEN_APP = "com.forge.live.OPEN_APP";
     public static final String EXTRA_APP_ID = "forge_app_id";
     public static final String EXTRA_APP_TITLE = "forge_app_title";
+    public static final String EXTRA_RUNNER_SOURCE = "forge_runner_source";
+    public static final String RUNNER_SOURCE_HOME = "home_shortcut";
     private String pendingAppId = null;
     private String pendingAppTitle = null;
     private String pendingPayload = null;
     private String pendingNotifyTag = null;
     private Integer pendingNotifyId = null;
     private String pendingLaunchSource = null;
+    private boolean pendingHomeShortcut = false;
 
     public static Intent buildRunIntent(Context context, String id, String title) {
         if (id == null) {
@@ -46,6 +49,7 @@ public class ShortcutBridgePlugin extends Plugin {
         launch.setData(Uri.parse("forge://app/" + Uri.encode(id2)));
         launch.putExtra(EXTRA_APP_ID, id2);
         launch.putExtra(EXTRA_APP_TITLE, title2);
+        launch.putExtra(EXTRA_RUNNER_SOURCE, "forge");
         launch.addFlags(403177472);
         return launch;
     }
@@ -106,6 +110,7 @@ public class ShortcutBridgePlugin extends Plugin {
             this.pendingAppTitle = q.trim();
         }
         this.pendingPayload = payload;
+        this.pendingHomeShortcut = RUNNER_SOURCE_HOME.equals(intent.getStringExtra(EXTRA_RUNNER_SOURCE));
         this.pendingNotifyTag = notifyTag;
         this.pendingNotifyId = notifyId;
         if (fromNotify) {
@@ -134,6 +139,8 @@ public class ShortcutBridgePlugin extends Plugin {
             data.put("notifyId", (Object) num);
         }
         data.put("source", this.pendingLaunchSource);
+        String runnerSource = intent.getStringExtra(EXTRA_RUNNER_SOURCE);
+        if (RUNNER_SOURCE_HOME.equals(runnerSource)) data.put("homeShortcut", true);
         notifyListeners("appLaunch", data, true);
         // Consume launch markers on the Activity intent. Extras alone are not enough:
         // extractAppId() also reads forge://app/<id> (and ?id=). If data stays set,
@@ -166,6 +173,14 @@ public class ShortcutBridgePlugin extends Plugin {
             }
         } catch (Exception e4) {
         }
+    }
+
+    @PluginMethod
+    public void closeRunner(PluginCall call) {
+        if (getActivity() != null && getActivity() instanceof RunActivity) {
+            getActivity().finishAndRemoveTask();
+        }
+        call.resolve(new JSObject().put("closed", true));
     }
 
     @PluginMethod
@@ -209,6 +224,7 @@ public class ShortcutBridgePlugin extends Plugin {
             if (str5 != null) {
                 o.put("source", str5);
             }
+            if (this.pendingHomeShortcut) o.put("homeShortcut", true);
             o.put("pending", true);
             this.pendingAppId = null;
             this.pendingAppTitle = null;
@@ -216,6 +232,7 @@ public class ShortcutBridgePlugin extends Plugin {
             this.pendingNotifyTag = null;
             this.pendingNotifyId = null;
             this.pendingLaunchSource = null;
+            this.pendingHomeShortcut = false;
         } else {
             o.put("pending", false);
         }
@@ -280,6 +297,9 @@ public class ShortcutBridgePlugin extends Plugin {
         Intent launch = buildRunIntent(getContext(), id2, title2);
         String iconEmoji = call.getString("iconEmoji", call.getString("emoji", null));
         String iconColor = call.getString("iconColor", call.getString("color", null));
+        launch.putExtra("forge_icon_emoji", iconEmoji);
+        launch.putExtra("forge_icon_color", iconColor);
+        launch.putExtra(EXTRA_RUNNER_SOURCE, RUNNER_SOURCE_HOME);
         try {
             try {
                 if (Build.VERSION.SDK_INT >= 26) {
@@ -352,8 +372,17 @@ public class ShortcutBridgePlugin extends Plugin {
             }
             String shortcutId = "forge_app_" + sanitizeId(id2);
             Intent launch = buildRunIntent(getContext(), id2, title);
+            String iconEmoji = call.getString("iconEmoji", call.getString("emoji", null));
+            String iconColor = call.getString("iconColor", call.getString("color", null));
+            launch.putExtra("forge_icon_emoji", iconEmoji);
+            launch.putExtra("forge_icon_color", iconColor);
             String shortLabel = title.length() > 20 ? title.substring(0, 20) : title;
-            ShortcutInfo info = new ShortcutInfo.Builder(getContext(), shortcutId).setShortLabel(shortLabel).setLongLabel(title.length() > 50 ? title.substring(0, 50) : title).setIcon(Icon.createWithResource(getContext(), R.mipmap.ic_launcher)).setIntent(launch).build();
+            Icon icon = Icon.createWithResource(getContext(), R.mipmap.ic_launcher);
+            try {
+                Bitmap bmp = renderAppIconBitmap(iconEmoji, iconColor);
+                if (bmp != null) icon = Icon.createWithBitmap(bmp);
+            } catch (Exception ignored) {}
+            ShortcutInfo info = new ShortcutInfo.Builder(getContext(), shortcutId).setShortLabel(shortLabel).setLongLabel(title.length() > 50 ? title.substring(0, 50) : title).setIcon(icon).setIntent(launch).build();
             sm.updateShortcuts(Collections.singletonList(info));
             call.resolve(new JSObject().put("updated", true).put("shortcutId", shortcutId).put("runner", true));
         } catch (Exception e) {

@@ -6651,6 +6651,9 @@ termux-reload-settings</div>
 
     /** When true, Forge chrome is hidden and only the mini-app is shown. */
     let appMode = false;
+    // Home-screen shortcut launches run in RunActivity. Forge-opened apps keep
+    // the existing in-place behavior and retain the “← Forge” chip.
+    let homeShortcutMode = false;
     /** Where to return when leaving immersive mode: 'library' | 'preview' | 'chat' */
     let appModeReturnTab = 'library';
 
@@ -6720,9 +6723,16 @@ termux-reload-settings</div>
       scheduleExitChipFade();
     }
 
-    function enterAppMode(returnTab) {
+    function enterAppMode(returnTab, opts = {}) {
       appMode = true;
+      homeShortcutMode = !!opts.homeShortcut;
       appModeReturnTab = returnTab || 'library';
+      const exit = el.btnExitApp;
+      if (exit) {
+        exit.textContent = homeShortcutMode ? '× Close' : '← Forge';
+        exit.title = homeShortcutMode ? 'Close' : 'Back to Forge';
+        exit.setAttribute('aria-label', homeShortcutMode ? 'Close' : 'Back to Forge');
+      }
       document.body.classList.add('app-mode');
       // Always surface the preview view under the chrome-less shell
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -6743,6 +6753,7 @@ termux-reload-settings</div>
       try { await stopMicStreamSafe('exitAppMode'); } catch (_) {}
       try { await cleanupCameraTempSafe('exitAppMode'); } catch (_) {}
       appMode = false;
+      homeShortcutMode = false;
       clearTimeout(exitChipTimer);
       el.btnExitApp?.classList.remove('faded', 'show-temp');
       document.body.classList.remove('app-mode');
@@ -22629,6 +22640,8 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           ShortcutBridge.updatePinned({
             id: app.id,
             title: app.title || 'Forge app',
+            iconEmoji: app.iconEmoji || '⚡',
+            iconColor: app.iconColor || '#6D28D9',
           }).catch(() => {});
         }
       };
@@ -22658,6 +22671,8 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         ShortcutBridge.updatePinned({
           id: currentApp.id,
           title: currentApp.title || 'Forge app',
+          iconEmoji: currentApp.iconEmoji || '⚡',
+          iconColor: currentApp.iconColor || '#6D28D9',
         }).catch(() => {});
       }
     }
@@ -22710,7 +22725,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     /** Dedupe shortcut/notify opens — getPendingLaunch + retained appLaunch + onStart can triple-fire. */
     let _lastOpenAppById = { id: '', at: 0 };
 
-    function openAppById(id, title) {
+    function openAppById(id, title, opts = {}) {
       if (!id) return false;
       const idNorm = String(id).trim();
       if (!idNorm) return false;
@@ -22720,7 +22735,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // Same app already live (or opened moments ago): never reload — that drops in-flight
       // camera/mic host calls when returning from CameraX / another activity.
       if (alreadyCurrent && (appMode || hasDoc)) {
-        if (!appMode) enterAppMode('library');
+        if (!appMode) enterAppMode('library', opts);
         _lastOpenAppById = { id: idNorm, at: now };
         return true;
       }
@@ -22732,14 +22747,14 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       if (app?.html) {
         _lastOpenAppById = { id: idNorm, at: now };
         loadPreview(app);
-        enterAppMode('library');
+        enterAppMode('library', opts);
         return true;
       }
       // fallback: draft match
       if (currentApp?.id === idNorm && currentApp?.html) {
         _lastOpenAppById = { id: idNorm, at: now };
         if (!hasDoc) loadPreview(currentApp);
-        enterAppMode('chat');
+        enterAppMode('chat', opts);
         return true;
       }
       exitAppMode('library');
@@ -22778,13 +22793,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       try {
         const pending = await ShortcutBridge.getPendingLaunch();
         if (pending?.pending) {
-          if (pending.id) openAppById(pending.id, pending.title);
+          if (pending.id) openAppById(pending.id, pending.title, { homeShortcut: !!pending.homeShortcut });
           if (pending.payload || pending.source === 'notify') ingestLaunchPayload(pending);
         }
       } catch (_) {}
       try {
         await ShortcutBridge.addListener('appLaunch', (data) => {
-          if (data?.id) openAppById(data.id, data.title);
+          if (data?.id) openAppById(data.id, data.title, { homeShortcut: !!data.homeShortcut });
           if (data?.payload || data?.source === 'notify') ingestLaunchPayload(data);
         });
       } catch (_) {}
@@ -24055,7 +24070,13 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       saveDraft();
       exitAppMode('chat');
     });
-    el.btnExitApp?.addEventListener('click', () => exitAppMode());
+    el.btnExitApp?.addEventListener('click', () => {
+      if (homeShortcutMode && Capacitor.isNativePlatform()) {
+        ShortcutBridge.closeRunner?.().catch(() => {});
+        return;
+      }
+      exitAppMode();
+    });
     // Reveal faded ← Forge chip on edge tap / touch near top-left
     document.addEventListener('touchstart', (e) => {
       if (!appMode) return;
