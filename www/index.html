@@ -19370,8 +19370,9 @@ Permission & safety UX:
     }
 
     async function chatCompletions(messages, signal, opts = {}) {
+      const rt = getAiRuntime();
       // Gemini native generateContent (not OpenAI /chat/completions)
-      if (backendForRuntime(getAiRuntime()) === 'gemini') {
+      if (backendForRuntime(rt) === 'gemini') {
         let g;
         try {
           g = await geminiGenerateContent(messages, signal, {
