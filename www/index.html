@@ -7198,6 +7198,7 @@ termux-reload-settings</div>
 
     /** @type {{role:'user'|'assistant'|'system', content:string, attachments?: any[]}[]} */
     let chat = [];
+ let forgeDebugTranscript = [];
     /** Pending image attachments for the next Forge chat turn (UI sketches, screenshots). */
     /** @type {{id:string, name:string, mime:string, dataUrl:string, bytes:number}[]} */
     let pendingAttachments = [];
@@ -10794,6 +10795,7 @@ termux-reload-settings</div>
         msg.attachments = extras.attachments;
       }
       if (extras.resume) msg.resume = true;
+      if (extras.copyTranscript) msg.copyTranscript = true;
       chat.push(msg);
       renderChat(true);
       saveDraft();
@@ -10844,12 +10846,58 @@ termux-reload-settings</div>
           btn.onclick = () => { try { resumeForgeBuild(); } catch (_) {} };
           div.appendChild(btn);
         }
+        if (m.copyTranscript && m.role === 'assistant') {
+          const btn = document.createElement('button');
+          btn.className = 'btn secondary small';
+          btn.type = 'button';
+          btn.textContent = tf('chat.copyTranscript', 'Copy session transcript');
+          btn.onclick = async () => {
+            try { await copyText(buildSessionTranscript()); btn.textContent = tf('chat.copiedTranscript', 'Transcript copied'); setTimeout(() => { btn.textContent = tf('chat.copyTranscript', 'Copy session transcript'); }, 1600); }
+            catch (_) { btn.textContent = tf('chat.copyFailed', 'Copy failed'); }
+          };
+          div.appendChild(btn);
+        }
         el.messages.appendChild(div);
       }
       // Re-append the persistent progress feed after a rebuild (it lives in the
       // DOM only; renderChat wipes el.messages). Cleared at build settle.
       if (forgeProgressItems.length) renderForgeProgressFeed();
       if (scroll) el.messages.scrollTop = el.messages.scrollHeight;
+    }
+
+    function buildSessionTranscript() {
+      const lines = ['Forge session transcript', ''];
+      if (forgeDebugTranscript.length) {
+        lines.push('--- LLM exchange ---');
+        for (const e of forgeDebugTranscript) {
+          lines.push('[' + String(e.direction || '').toUpperCase() + ']');
+          lines.push(String(e.content || ''));
+          lines.push('');
+        }
+      }
+      for (const m of chat) {
+        if (!m || m.role === 'system') continue;
+        const role = m.role === 'user' ? 'USER' : 'FORGE';
+        lines.push('[' + role + ']');
+        lines.push(String(m.content || (m.attachments?.length ? '(image attached)' : '')));
+        if (m.attachments?.length) lines.push('[attachments: ' + m.attachments.map(a => a?.name || 'image').join(', ') + ']');
+        lines.push('');
+      }
+      const pending = pendingBuilderResume;
+      if (pending?.messages?.length) {
+        lines.push('--- builder context ---');
+        for (const m of pending.messages) {
+          if (!m || m.role === 'system') continue;
+          let content = m.content;
+          if (Array.isArray(content)) content = content.map(p => p?.text || JSON.stringify(p)).join(' ');
+          if (content == null) content = '';
+          lines.push('[' + String(m.role).toUpperCase() + ']');
+          lines.push(String(content));
+          if (m.tool_calls) lines.push('[tool calls: ' + m.tool_calls.map(tc => tc?.function?.name || tc?.name || 'unknown').join(', ') + ']');
+          lines.push('');
+        }
+      }
+      return lines.join('\n').trim() + '\n';
     }
 
     // ——— Host bridge for iframe ———
@@ -17276,6 +17324,15 @@ Permission & safety UX:
 Return ONLY valid JSON, with no Markdown or explanation:
 {"title":"Short name","summary":"One sentence","message":"Short reply","html":"<!DOCTYPE html>..."}
 Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain JavaScript; make it complete and usable; do not invent ForgeHost APIs; use ForgeHost only when needed and await calls with try/catch; escape the HTML correctly inside JSON. Keep the app simple. Before returning, verify every referenced function exists and the HTML is complete.`;
+    let tinyPromptMdCache = null;
+    async function getTinyPromptMd() {
+      if (tinyPromptMdCache == null) {
+        let txt = null;
+        try { const r = await fetch('TINY_PROMPT.md', { cache: 'no-store' }); if (r && r.ok) txt = await r.text(); } catch (_) {}
+        tinyPromptMdCache = txt && txt.length > 100 ? txt : 'Return only valid JSON with title, summary, message, and complete html. Build one simple standalone HTML app with inline CSS and JavaScript. Do not use workspace tools. Check functions, quotes, braces, and JSON escaping before returning.';
+      }
+      return tinyPromptMdCache;
+    }
     let tinyLoopMdCache = null;
     async function getTinyLoopMd() {
       if (tinyLoopMdCache == null) {
@@ -20478,7 +20535,10 @@ ${html}
       // System: factory rules + reforge emphasis (profile may use compact prompt)
       const promptProfile = getPromptProfile(activeProviderId, el.model?.value);
       let system = systemPromptForProfile(promptProfile);
-      if (promptProfile === 'tiny') system += '\n\nTINY MODEL LOOP PROTOCOL:\n' + await getTinyLoopMd();
+      if (promptProfile === 'tiny') {
+        system += '\n\nTINY SINGLE-SHOT PROMPT:\n' + await getTinyPromptMd();
+        if (isAgenticLoopEnabled()) system += '\n\nTINY LOOP OPTION: If you need to build in small workspace steps, call read_tiny_loop. Forge will then provide TINY_LOOP.md and expose only fs_read, fs_write, and finish. Otherwise return the required JSON directly.';
+      }
       system += `
 
 REFORGE MODE (active):
@@ -20521,11 +20581,13 @@ Return complete html, not a diff.`;
       } catch (_) {}
 
       let raw;
-      if (promptProfile !== 'tiny' && (isAgenticLoopEnabled() || isCodeModeEnabled()) && raw == null) {
+      if (((promptProfile === 'tiny' && isAgenticLoopEnabled()) || (promptProfile !== 'tiny' && (isAgenticLoopEnabled() || isCodeModeEnabled()))) && raw == null) {
         const built = await runBuilderLoop({
           msgs, signal: abortController?.signal, wantCar, status: (s) => setPreviewStatus(s, ''),
           workspaceSeed: app?.html || null,
-          researchEnabled: isBuilderResearchEnabled(),
+          researchEnabled: promptProfile === 'tiny' ? false : isBuilderResearchEnabled(),
+          askEnabled: false,
+          tinyLoop: promptProfile === 'tiny',
         });
         if (built?.app) {
           const parsed = built.app;
@@ -21747,6 +21809,14 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         parameters: { type: 'object', properties: {}, required: [] },
       },
     };
+    const BUILDER_TOOL_READ_TINY_LOOP = {
+      type: 'function',
+      function: {
+        name: 'read_tiny_loop',
+        description: 'Load the compact Tiny workspace protocol. Call this only when you need to build through fs_read, fs_write, and finish instead of returning one JSON response.',
+        parameters: { type: 'object', properties: {}, required: [] },
+      },
+    };
     const BUILDER_TOOL_ASK = {
       type: 'function',
       function: {
@@ -21831,6 +21901,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       }, required: ['title'] } } },
       BUILDER_TOOL_ASK,
     ];
+    // Tiny loop is deliberately restricted to workspace file assembly. Tiny
+    // models do not receive research, Ask, Code Mode, or the full tool set.
+    const BUILDER_TINY_TOOLS = BUILDER_TOOLS.filter((tool) => {
+      const name = tool && tool.function && tool.function.name;
+      return name === 'fs_read' || name === 'fs_write' || name === 'finish';
+    });
 
     let builderLoopMdCache = null;
     let codeModeMdCache = null;
@@ -22005,6 +22081,17 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       try { a = typeof argsRaw === 'string' ? JSON.parse(argsRaw || '{}') : (argsRaw || {}); }
       catch (_) { return { ok: false, error: 'bad tool arguments (not valid JSON)' }; }
       const fs = ctx.fs;
+      if (name === 'ask') {
+        if (!ctx.askEnabled) return { ok: false, error: 'ask is not enabled for this provider' };
+        try {
+          const answer = await builderAskUser(a, ctx.signal);
+          loopStatus('ask · user answered', 'ok', 'ask');
+          return answer && typeof answer === 'object' ? answer : { ok: false, error: 'ask returned no answer' };
+        } catch (e) {
+          loopStatus('ask failed · ' + String(e?.message || e).slice(0, 120), 'warn', 'ask');
+          return { ok: false, error: 'ask failed: ' + String(e?.message || e) };
+        }
+      }
       switch (name) {
         case 'fs_write': {
           const b64 = String(a.encoding || 'text').toLowerCase() === 'base64';
@@ -22052,12 +22139,6 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           const r = await toolsWebFetch(fetchArgs);
           loopStatus('web_fetch · ' + String(a.url || '').slice(0, 100), 'info', 'research');
           return r;
-        }
-        case 'ask': {
-          if (!ctx.askEnabled) return { ok: false, error: 'ask is not enabled for this provider' };
-          const answer = await builderAskUser(a, ctx.signal);
-          loopStatus('ask · user answered', 'ok', 'ask');
-          return answer;
         }
         case 'finish': {
           const app = await builderAssemble(fs, a);
@@ -22118,7 +22199,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
 
     /** Drive the agentic build. Returns { app } on success, { classicRaw } when the
      *  model never opts in (classic path reuses the round-1 content), or throws. */
-    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled = false, resumeFrom, extraRounds = 0 }) {
+    async function runBuilderLoop({ msgs, signal, wantCar, status, workspaceSeed, researchEnabled = false, askEnabled = false, tinyLoop = false, resumeFrom, extraRounds = 0 }) {
       const owner = currentApp?.id || '__new__';
       const fs = activeBuilderFs && activeBuilderOwner === owner ? activeBuilderFs : builderNewFs();
       activeBuilderFs = fs;
@@ -22147,10 +22228,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         // Cleared on success / classic / max-rounds / new build / Stop.
         setBuilderResume(owner, messages, armed, researchEnabled, wantCar, round);
         const tools = armed
-          ? (isCodeModeEnabled() ? [BUILDER_TOOL_RUN_PROGRAM].concat(researchEnabled ? [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS, BUILDER_RESEARCH_TOOLS) : [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS)) : (researchEnabled ? [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS, BUILDER_RESEARCH_TOOLS) : [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS)))
-          : [BUILDER_TOOL_READ_LOOP];
-        if (armed && isBuilderAskEnabled()) tools.splice(isCodeModeEnabled() ? 1 : 0, 0, BUILDER_TOOL_ASK);
+          ? (tinyLoop ? BUILDER_TINY_TOOLS : (isCodeModeEnabled() ? [BUILDER_TOOL_RUN_PROGRAM].concat(researchEnabled ? [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS, BUILDER_RESEARCH_TOOLS) : [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS)) : (researchEnabled ? [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS, BUILDER_RESEARCH_TOOLS) : [BUILDER_TOOL_READ_API].concat(BUILDER_TOOLS))))
+          : [tinyLoop ? BUILDER_TOOL_READ_TINY_LOOP : BUILDER_TOOL_READ_LOOP];
         const res = await builderRound(messages, tools, signal);
+        try { forgeDebugTranscript.push({ direction: 'llm → forge', content: JSON.stringify(res) }); } catch (_) {}
         const tcs = Array.isArray(res && res.tool_calls) ? res.tool_calls : [];
         const content = String((res && res.content) || '');
         if (!tcs.length) {
@@ -22168,12 +22249,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         for (const tc of tcs) {
           const name = String((tc.function && tc.function.name) || tc.name || '');
           const tcId = String(tc.id || '');
-          if (name === 'read_loop_md') {
-            let md = await getLoopMd();
-            if (researchEnabled) {
+          if (name === 'read_loop_md' || name === 'read_tiny_loop') {
+            const tinyProtocol = name === 'read_tiny_loop';
+            let md = tinyProtocol ? await getTinyLoopMd() : await getLoopMd();
+            if (researchEnabled && !tinyProtocol) {
               md += '\n\n## Optional research tools enabled\nAfter opting into workspace mode, you may use `web_search` and `web_fetch` for focused public-web research. They are read-only, limited to http(s) requests, and should be used sparingly. Do not send secrets or unrelated user data.\n';
             }
-            loopStatus('model chose workspace mode · LOOP.md ' + md.length + ' chars', 'info', 'start');
+            loopStatus('model chose workspace mode · ' + (tinyProtocol ? 'TINY_LOOP.md' : 'LOOP.md') + ' ' + md.length + ' chars', 'info', 'start');
             try { status && status('Builder mode: loading protocol…'); } catch (_) {}
             messages.push({ role: 'tool', tool_call_id: tcId, name, content: md });
             armed = true;
@@ -22185,7 +22267,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
             messages.push({ role: 'tool', tool_call_id: tcId, name, content: api });
             continue;
           }
-          if (!armed) {
+          if (!armed && name !== 'ask') {
             messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify({ ok: false, error: 'call read_loop_md first to load the builder protocol' }) });
             continue;
           }
@@ -22193,11 +22275,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           try { status && status('Builder round ' + round + ' · ' + name + '…'); } catch (_) {}
           let out;
           try {
-            out = await builderExecTool(name, tc.function && tc.function.arguments, { fs, state, wantCar, signal, researchEnabled, askEnabled: isBuilderAskEnabled() });
+            out = await builderExecTool(name, tc.function && tc.function.arguments, { fs, state, wantCar, signal, researchEnabled, askEnabled });
           } catch (e) {
             out = { ok: false, error: String((e && e.message) || e) };
           }
-          messages.push({ role: 'tool', tool_call_id: tcId, name, content: JSON.stringify(out).slice(0, 60000) });
+          const toolContent = JSON.stringify(out).slice(0, 60000);
+          forgeDebugTranscript.push({ direction: 'forge → llm', content: JSON.stringify({ name, arguments: tc.function?.arguments || '', result: out }) });
+          messages.push({ role: 'tool', tool_call_id: tcId, name, content: toolContent });
           if (state.result) {
             loopStatus('done · ' + round + ' rounds · ' + fs.count() + ' files · html ' + (state.result.html.length / 1024).toFixed(1) + 'k chars', 'ok', 'done');
             clearBuilderResume();
@@ -22315,7 +22399,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         } else {
           genLog('error', 'forge resume failed: ' + (err?.message || err));
           const resumeOk = hasBuilderResumeFor(owner);
-          addMessage('assistant', forgeFailMessage(err), { resume: resumeOk });
+          addMessage('assistant', forgeFailMessage(err), { resume: resumeOk, copyTranscript: true });
         }
       } finally {
         watchdog.stop();
@@ -22339,7 +22423,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // One system message only, and it must be first (provider requirement).
       const promptProfile = getPromptProfile(activeProviderId, el.model?.value);
       let system = systemPromptForProfile(promptProfile);
-      if (promptProfile === 'tiny') system += '\n\nTINY MODEL LOOP PROTOCOL:\n' + await getTinyLoopMd();
+      if (promptProfile === 'tiny') {
+        system += '\n\nTINY SINGLE-SHOT PROMPT:\n' + await getTinyPromptMd();
+        if (isAgenticLoopEnabled()) system += '\n\nTINY LOOP OPTION: If you need to build in small workspace steps, call read_tiny_loop. Forge will then provide TINY_LOOP.md and expose only fs_read, fs_write, and finish. Otherwise return the required JSON directly.';
+      }
       genLog('info', 'prompt profile · ' + promptProfile);
 
       // Car-compatible mode (for AAForge / Android Auto)
@@ -22360,12 +22447,16 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       }
       // Agentic builder pointer (per-provider flag): one short paragraph, one tool.
       if (isAgenticLoopEnabled() || isCodeModeEnabled()) {
-        system += '\n\nBUILD OPTION (agentic): If this app is too large or complex to deliver as one JSON payload, call the tool read_loop_md now to load the workspace builder protocol (scratch files, JS runner, image generation, host-side assembly) and build it in rounds instead. Use it only when a single response would not be enough; otherwise ignore this option and return the JSON payload exactly as specified.';
+        if (promptProfile !== 'tiny') {
+          system += '\n\nBUILD OPTION (agentic): Call read_loop_md when the app is too large or complex to deliver in one JSON payload. For a straightforward build, return the required JSON directly.';
+          if (isBuilderAskEnabled()) system += ' If the user asks to brainstorm, compare ideas, defer building, or make a meaningful choice, enter workspace mode, use ask, then continue building after the answer.';
+        }
         if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool after read_loop_md — it runs a JS script that orchestrates many workspace tools in one turn (loops, parallel calls, branching on a tool result) via forge.tools.run(name, args) + forge.finish(result); the return value is fed back to you. Use it ONLY to orchestrate tool calls you would otherwise repeat: static files you can write now (index.html, CSS, JS modules, already-computed data) go through fs_write directly, never wrapped in run_program, and a single tool call is a direct tool call. See CODEMODE.md for the one rule and a worked 10-image example.';
         if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
  if (isBuilderAskEnabled()) system += '\n\nUSER QUESTION OPTION: After read_loop_md, ask is available. Use it only for meaningful choices. Offer 2–8 concise options and put your preferred choice first. To let the user type any custom answer, include an option whose entire label is exactly Other. Do NOT use labels such as Other - explanation, Other (explanation), or Other: explanation; any suffix prevents the free-text box from opening.';
       }
       const msgs = [{ role: 'system', content: system }];
+      forgeDebugTranscript = [{ direction: 'forge → llm', content: JSON.stringify(msgs) }];
 
       const latestUser = {
         role: 'user',
@@ -22388,6 +22479,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         }
       }
       msgs.push({ role: 'user', content: chatTurnToLlmContent(latestUser) });
+      forgeDebugTranscript[0] = { direction: 'forge → llm', content: JSON.stringify(msgs) };
 
       await bgStart('Forge', attachments?.length ? 'Reading sketch & building…' : 'Building your app…');
 
@@ -22404,12 +22496,15 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // the loop — run_program is a workspace tool). Round 1 offers read_loop_md;
       // if the model never calls it, round-1 content flows into the classic path.
       let raw = null;
-      if (promptProfile !== 'tiny' && (isAgenticLoopEnabled() || isCodeModeEnabled()) && raw == null) {
+      if (((promptProfile === 'tiny' && isAgenticLoopEnabled()) || (promptProfile !== 'tiny' && (isAgenticLoopEnabled() || isCodeModeEnabled()))) && raw == null) {
         const built = await runBuilderLoop({
           msgs, signal: abortController.signal, wantCar, status,
           workspaceSeed: currentApp?.html || null,
-          researchEnabled: isBuilderResearchEnabled(),
+          researchEnabled: promptProfile === 'tiny' ? false : isBuilderResearchEnabled(),
+          askEnabled: promptProfile === 'tiny' ? false : isBuilderAskEnabled(),
+          tinyLoop: promptProfile === 'tiny',
         });
+        if (built && built.messageOnly) return { messageOnly: built.messageOnly };
         if (built && built.app) {
           const app = {
             id: currentApp?.id || uid(),
@@ -22468,10 +22563,15 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         }
       }
       if (repetitionDetected) throw new Error('The model entered a repetition loop. Tiny models work better with a shorter app request or the Normal prompt profile.');
+      forgeDebugTranscript.push({ direction: 'llm → forge', content: String(raw || '') });
       status('Parsing app payload…');
       genLog('info', 'received ' + raw.length + ' chars · parsing');
       const parsed = extractJson(raw);
-      if (!parsed.html) throw new Error('Payload missing html');
+      if (!parsed.html) {
+        const conversational = String(parsed.message || parsed.summary || '').trim();
+        if (conversational) return { messageOnly: conversational };
+        throw new Error('Payload missing html');
+      }
       status('Validating HTML…');
       const app = {
         id: currentApp?.id || uid(),
@@ -22517,7 +22617,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       genFailedByTimeout = false;
 
       try {
-        const { app, message } = await forgeApp(userText, attachments, (s) => forgeProgress.status(s));
+        const builtResult = await forgeApp(userText, attachments, (s) => forgeProgress.status(s));
+        if (builtResult?.messageOnly) {
+          addMessage('assistant', builtResult.messageOnly);
+          return;
+        }
+        const { app, message } = builtResult;
         // Stale = user abandoned this generation OR a newer one started while
         // this native (uncancellable) request was still in flight. Either way
         // discard the late result — don't load/preview, don't clobber the new gen.
@@ -22542,7 +22647,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         } else {
           genLog('error', 'forge failed: ' + (err?.message || err));
           const resumeOk = hasBuilderResumeFor(currentApp?.id || '__new__');
-          addMessage('assistant', forgeFailMessage(err), { resume: resumeOk });
+          addMessage('assistant', forgeFailMessage(err), { resume: resumeOk, copyTranscript: true });
         }
       } finally {
         watchdog.stop();

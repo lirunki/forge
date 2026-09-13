@@ -1,5 +1,14 @@
 # Forge (phone) session log — LOCKED
 
+## Current prompt profiles and builder modes (2.7.79/209)
+
+- Prompt profiles are persisted per `providerId::model`: Tiny, Normal, and Advanced.
+- Tiny single-shot uses the bundled `www/TINY_PROMPT.md`; it does not receive workspace tools.
+- Tiny Loop, when enabled for the provider, initially exposes only `read_tiny_loop`. The Tiny protocol is returned only after that request; then only `fs_read`, `fs_write`, and `finish` are available. Tiny never receives Ask, Web research, Code Mode, or the full workspace tool set.
+- Normal/Advanced use the full `SYSTEM_PROMPT`. When the agentic loop or Code Mode is enabled, the compact system guidance points to `read_loop_md` for complex builds. Web and Code Mode instructions are conditional; Ask guidance/tooling is conditional on the provider Ask setting.
+- Normal/Advanced `read_loop_md` returns `LOOP.md`, optionally followed by Web instructions and/or `CODEMODE.md` plus current limits. Ask is a tool available after the workspace loop is armed; it is not appended to the protocol response.
+- Tiny protocol is bundled as `www/TINY_LOOP.md`; host and Android assets must remain synchronized.
+
 ## Code mode (implemented at 2.7.65/195)
 
 **Definition:** Code mode is a per-provider opt-in (`LS.codeMode`, mirrors
