@@ -513,6 +513,8 @@
     .status-line.ok { color: #6ee7b7; }
     .field-hint { font-size: 0.75rem; color: var(--muted); margin: -0.45rem 0 0.75rem; line-height: 1.35; }
     .provider-grid { display: grid; gap: 0.15rem; }
+ .ai-settings-subsection { color: #b8860b; }
+ .ai-settings-subsection:hover, .ai-settings-subsection:focus { color: #d4a017; }
     .hidden { display: none !important; }
     .pill-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.2rem 0 0.85rem; }
     .pill {
@@ -1507,7 +1509,7 @@ termux-reload-settings</div>
 
           <div id="aiAdvanced" style="margin-bottom:0.5rem;">
             <details id="aiProviderSettings" style="margin-bottom:0.5rem;">
-              <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;user-select:none;" data-i18n="ai.providerKeys">Provider &amp; keys</summary>
+              <summary class="ai-settings-subsection" style="cursor:pointer;font-size:0.88rem;user-select:none;" data-i18n="ai.providerKeys">Provider &amp; keys</summary>
               <div style="padding-top:0.75rem;">
           <label for="provider" data-i18n="ai.provider">Provider</label>
           <select id="provider"></select>
@@ -1574,11 +1576,16 @@ termux-reload-settings</div>
             <input type="checkbox" id="rememberKey" checked />
             <label for="rememberKey" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ai.remember">Remember keys &amp; settings on this device</label>
           </div>
+          <div class="settings-block" style="margin-top:0.65rem;">
+            <button class="btn secondary small" id="btnTestAi" type="button" data-i18n="ai.test">Test connection</button>
+            <button class="btn secondary small" id="btnForgetKey" type="button" data-i18n="ai.forget">Forget this key</button>
+          </div>
+          <div class="status-line" id="aiStatus" style="margin-top:0.55rem;"></div>
               </div>
             </details>
 
             <details id="aiModelSettings" style="margin-bottom:0.5rem;">
-              <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;user-select:none;" data-i18n="ai.modelGeneration">Model &amp; generation</summary>
+              <summary class="ai-settings-subsection" style="cursor:pointer;font-size:0.88rem;user-select:none;" data-i18n="ai.modelGeneration">Model &amp; generation</summary>
               <div style="padding-top:0.75rem;">
           <label for="model" data-i18n="ai.model">Model</label>
           <input id="model" type="text" list="modelSuggestions" placeholder="grok-2-latest" autocomplete="off" />
@@ -1640,7 +1647,7 @@ termux-reload-settings</div>
             </details>
 
             <details id="aiBuilderSettings" style="margin-bottom:0.5rem;">
-              <summary style="cursor:pointer;color:var(--muted);font-size:0.88rem;user-select:none;" data-i18n="ai.builderCapabilities">Builder capabilities</summary>
+              <summary class="ai-settings-subsection" style="cursor:pointer;font-size:0.88rem;user-select:none;" data-i18n="ai.builderCapabilities">Builder capabilities</summary>
               <div style="padding-top:0.75rem;">
           <div class="check" style="margin-top:0.45rem;">
             <input type="checkbox" id="genAgenticLoop" />
@@ -1682,12 +1689,6 @@ termux-reload-settings</div>
               </div>
             </details>
           </div>
-
-          <div class="settings-block" style="margin-top:0.25rem;">
-            <button class="btn secondary small" id="btnTestAi" type="button" data-i18n="ai.test">Test connection</button>
-            <button class="btn secondary small" id="btnForgetKey" type="button" data-i18n="ai.forget">Forget this key</button>
-          </div>
-          <div class="status-line" id="aiStatus" style="margin-top:0.55rem;"></div>
               </div>
             </details>
           </div>
