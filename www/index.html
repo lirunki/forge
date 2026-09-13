@@ -1605,6 +1605,14 @@ termux-reload-settings</div>
 
           <div class="row2">
             <div>
+              <label for="promptProfile" data-i18n="ai.promptProfile">Prompt profile</label>
+              <select id="promptProfile">
+                <option value="tiny" data-i18n="ai.promptTiny">Tiny model</option>
+                <option value="normal" selected data-i18n="ai.promptNormal">Normal model</option>
+                <option value="advanced" data-i18n="ai.promptAdvanced">Advanced model</option>
+              </select>
+            </div>
+            <div>
               <label for="reasoningEffort" data-i18n="ai.reasoningEffort">Reasoning effort</label>
               <select id="reasoningEffort">
                 <option value="default" selected data-i18n="ai.reasoningDefault">Provider default</option>
@@ -1860,6 +1868,10 @@ termux-reload-settings</div>
  "ai.reasoningMedium": "Medium",
  "ai.reasoningHigh": "High",
  "ai.reasoningHint": "Saved per provider and model. Forge tries compatible reasoning, hidden-thinking, and prompt-caching request formats, then falls back to the normal request if unsupported.",
+ "ai.promptProfile": "Prompt profile",
+ "ai.promptTiny": "Tiny model",
+ "ai.promptNormal": "Normal model",
+ "ai.promptAdvanced": "Advanced model",
  "ai.json.auto": "Auto (send if supported)",
  "ai.json.off": "Off",
  "ai.json.on": "Always request json_object",
@@ -6187,6 +6199,8 @@ termux-reload-settings</div>
       genTimeout: 'forge_gen_timeout_v1',
       genMaxTokens: 'forge_gen_max_tokens_v1',
       reasoningPrefs: 'forge_reasoning_prefs_v1',
+      promptProfiles: 'forge_prompt_profiles_v1',
+      promptProfilesFetchedAt: 'forge_prompt_profiles_fetched_at_v1',
       agenticLoop: 'forge_agentic_loop_v1',
       builderResearch: 'forge_builder_research_v1',
       builderAsk: 'forge_builder_ask_v1',
@@ -6777,6 +6791,7 @@ termux-reload-settings</div>
       genTimeoutSecs: document.getElementById('genTimeoutSecs'),
       genMaxTokens: document.getElementById('genMaxTokens'),
       reasoningEffort: document.getElementById('reasoningEffort'),
+      promptProfile: document.getElementById('promptProfile'),
       genAgenticLoop: document.getElementById('genAgenticLoop'),
       genBuilderResearch: document.getElementById('genBuilderResearch'),
       genBuilderAsk: document.getElementById('genBuilderAsk'),
@@ -6920,6 +6935,57 @@ termux-reload-settings</div>
         localStorage.setItem(LS.reasoningPrefs, JSON.stringify(all));
       } catch (_) {}
     }
+    let PROMPT_PROFILE_CONFIG = { version: 1, profiles: { tiny: { label: 'Tiny model' }, normal: { label: 'Normal model' }, advanced: { label: 'Advanced model' } }, recommendations: [] };
+    const PROMPT_PROFILE_REMOTE_URL = 'https://raw.githubusercontent.com/lirunki/forge/main/www/prompt-profiles.json';
+    function validPromptProfileConfig(x) {
+      try {
+        if (!x || typeof x !== 'object' || !x.profiles) return null;
+        const out = { version: Number(x.version) || 1, profiles: {}, recommendations: [] };
+        for (const id of ['tiny','normal','advanced']) { if (!x.profiles[id]) return null; out.profiles[id] = { label: String(x.profiles[id].label || id).slice(0, 80) }; }
+        for (const r of (Array.isArray(x.recommendations) ? x.recommendations : [])) {
+          if (!['tiny','normal','advanced'].includes(r?.profile) || !Array.isArray(r.patterns)) continue;
+          const patterns = r.patterns.filter(p => typeof p === 'string' && p.length < 300).slice(0, 20);
+          if (patterns.length) out.recommendations.push({ profile: r.profile, patterns });
+        }
+        return out;
+      } catch (_) { return null; }
+    }
+    function promptProfileMap() { try { return JSON.parse(localStorage.getItem(LS.promptProfiles) || '{}') || {}; } catch (_) { return {}; } }
+    function promptProfileKey(providerId, model) { return String(providerId || currentProviderId()) + '::' + String(model || el.model?.value || '').trim(); }
+    function recommendedPromptProfile(model) {
+      const name = String(model || '').toLowerCase();
+      for (const r of PROMPT_PROFILE_CONFIG.recommendations || []) if ((r.patterns || []).some(p => { try { return new RegExp(p, 'i').test(name); } catch (_) { return false; } })) return r.profile;
+      return 'normal';
+    }
+    function getPromptProfile(providerId, model) { const saved = promptProfileMap()[promptProfileKey(providerId, model)]; return ['tiny','normal','advanced'].includes(saved) ? saved : recommendedPromptProfile(model); }
+    function setPromptProfile(providerId, model, profile) { try { const m = promptProfileMap(); m[promptProfileKey(providerId, model)] = profile; localStorage.setItem(LS.promptProfiles, JSON.stringify(m)); } catch (_) {} }
+    function syncPromptProfile() { if (el.promptProfile) el.promptProfile.value = getPromptProfile(activeProviderId, el.model?.value); }
+    async function initPromptProfileConfig() {
+      // The APK asset is the guaranteed baseline. Git refreshes only when a
+      // provider is selected, and never more than once per hour.
+      try {
+        const local = await fetch('prompt-profiles.json', { cache: 'no-store' });
+        const bundled = validPromptProfileConfig(await local.json());
+        if (bundled) PROMPT_PROFILE_CONFIG = bundled;
+      } catch (_) {}
+    }
+    async function refreshPromptProfileConfigForProvider() {
+      const now = Date.now();
+      const last = Number(localStorage.getItem(LS.promptProfilesFetchedAt) || 0);
+      if (Number.isFinite(last) && now - last < 60 * 60 * 1000) return false;
+      // Mark before the request so repeated provider changes cannot fan out
+      // concurrent hourly fetches. A later provider change can retry next hour.
+      try { localStorage.setItem(LS.promptProfilesFetchedAt, String(now)); } catch (_) {}
+      try {
+        const remote = await fetch(PROMPT_PROFILE_REMOTE_URL, { cache: 'no-store' });
+        const cfg = validPromptProfileConfig(await remote.json());
+        if (!cfg) return false;
+        PROMPT_PROFILE_CONFIG = cfg;
+        syncPromptProfile();
+        return true;
+      } catch (_) { return false; }
+    }
+
     function syncReasoningEffort() {
       if (el.reasoningEffort) el.reasoningEffort.value = getReasoningPref(activeProviderId, el.model?.value).effort;
     }
@@ -7391,6 +7457,7 @@ termux-reload-settings</div>
         providerId: id,
         provider: p,
         reasoningEffort: getReasoningPref(id, model).effort,
+        promptProfile: getPromptProfile(id, model),
         key,
         base,
         model,
@@ -8399,6 +8466,7 @@ termux-reload-settings</div>
       el.temperature.value = prof.temperature || '0.4';
       el.jsonMode.value = prof.jsonMode || p.jsonMode || 'auto';
       syncReasoningEffort();
+      syncPromptProfile();
 
       let keyHow = '';
       if (remember) {
@@ -8443,6 +8511,9 @@ termux-reload-settings</div>
       // Re-save so matched vault key is written under this provider id
       saveCurrentProfile();
       const p = getProvider(nextId);
+      // Provider selection is the refresh trigger; the helper enforces the
+      // one-hour network throttle. Do not block provider switching on it.
+      refreshPromptProfileConfigForProvider();
       const hasKey = !!el.apiKey.value.trim();
       const howLabel = {
         saved: 'key restored',
@@ -8900,6 +8971,7 @@ termux-reload-settings</div>
           if (el.imageGenerationModel) el.imageGenerationModel.value = getImageGenerationModel();
         } catch (_) {}
         syncReasoningEffort();
+        syncPromptProfile();
         syncAgenticLoopCheckbox();
         syncBuilderResearchCheckbox();
         syncBuilderAskCheckbox();
@@ -8938,6 +9010,7 @@ termux-reload-settings</div>
         const mt = parseInt(el.genMaxTokens && el.genMaxTokens.value, 10);
         if (Number.isFinite(mt) && mt >= 1024 && mt <= 262144) localStorage.setItem(LS.genMaxTokens, String(mt));
         if (el.reasoningEffort) setReasoningPref(activeProviderId, el.model?.value, el.reasoningEffort.value);
+        if (el.promptProfile) setPromptProfile(activeProviderId, el.model?.value, el.promptProfile.value);
         const imageModel = String(el.imageGenerationModel?.value || '').trim();
         if (imageModel) localStorage.setItem(LS.imageGenerationModel, imageModel);
         // Code-mode limits
@@ -17196,6 +17269,60 @@ Permission & safety UX:
 - If the mini-app needs AI, use ForgeHost.ai.* and offer a provider menu via listProviders/setProvider.
 `;
 
+    const TINY_MODEL_PROMPT = `You are Forge. Build a complete mobile-first single-file HTML mini-app.
+Return ONLY valid JSON, with no Markdown or explanation:
+{"title":"Short name","summary":"One sentence","message":"Short reply","html":"<!DOCTYPE html>..."}
+Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain JavaScript; make it complete and usable; do not invent ForgeHost APIs; use ForgeHost only when needed and await calls with try/catch; escape the HTML correctly inside JSON. Keep the app simple. Before returning, verify every referenced function exists and the HTML is complete.`;
+    let tinyLoopMdCache = null;
+    async function getTinyLoopMd() {
+      if (tinyLoopMdCache == null) {
+        let txt = null;
+        try { const r = await fetch('TINY_LOOP.md', { cache: 'no-store' }); if (r && r.ok) txt = await r.text(); } catch (_) {}
+        tinyLoopMdCache = txt && txt.length > 100 ? txt : 'Use one complete simple HTML file. Do not repeat code or functions. Check braces, quotes, and function names before returning. If output becomes repetitive, stop and return the shortest complete app.';
+      }
+      return tinyLoopMdCache;
+    };
+    const ADVANCED_MODEL_PROMPT = '\n\nBUILD PROFILE: This is an advanced model. You may use the full Forge workspace protocol and advanced builder capabilities when useful. Prefer a complete result over unnecessary tool calls.';
+    function systemPromptForProfile(profile) {
+      if (profile === 'tiny') return TINY_MODEL_PROMPT + '\nNever repeat the same code or sentence. If you cannot finish, stop and return the shortest complete app instead.';
+      if (profile === 'advanced') return SYSTEM_PROMPT + ADVANCED_MODEL_PROMPT;
+      return SYSTEM_PROMPT;
+    }
+
+    function hasGenerationRepetition(text) {
+      const raw = String(text || '');
+      const s = raw.replace(/\\s+/g, ' ').trim();
+      if (s.length < 240) return false;
+      const tail = s.slice(-9000);
+      // Exact long-fragment repetition.
+      if (/(.{24,180})\\1\\1\\1/.test(tail)) return true;
+      // Tiny models often mutate one or two tokens on each retry. Normalize
+      // identifiers/numbers and catch the same line or function being emitted
+      // three times, plus obvious unfinished-generation markers.
+      const lines = raw.split(/\\r?\\n/).map(x => x.trim()).filter(x => x.length >= 18);
+      const counts = new Map();
+      for (const line of lines.slice(-240)) {
+        const key = line.toLowerCase().replace(/\\b[a-z_$][\\w$]*\\b/g, 'ID').replace(/\\d+/g, 'N').replace(/\\s+/g, ' ');
+        const n = (counts.get(key) || 0) + 1;
+        counts.set(key, n);
+        if (n >= 3 && (/^(function|const|let|var|if|for|while)\\b/i.test(line) || line.includes('{'))) return true;
+      }
+      const funcs = tail.match(/function\\s+[a-z_$][\\w$]*\\s*\\([^)]*\\)\\s*\\{/gi) || [];
+      const fnCounts = new Map(funcs.map(f => [f.toLowerCase().replace(/\\s+/g, ''), 0]));
+      for (const f of funcs) {
+        const key = f.toLowerCase().replace(/\\s+/g, '');
+        fnCounts.set(key, fnCounts.get(key) + 1);
+        if (fnCounts.get(key) >= 3) return true;
+      }
+      return /(?:<<<|\\bthis is the end\\b|\\bto be continued\\b)$/i.test(tail);
+    }
+    function forgeGenerationMaxTokens(profile) {
+      // All profiles honor the user's Max output tokens setting. The Tiny
+      // profile is simplified by prompt and repetition safeguards, not by
+      // silently changing the configured provider budget.
+      return getGenMaxTokens();
+    }
+
     function extractJson(text) {
       let s = String(text || '').trim();
       // 1) Most common: model returns raw JSON. Parse the WHOLE text first so
@@ -20345,8 +20472,10 @@ ${html}
     async function reforgeAppWithAi(app, opts = {}) {
       const wantCar = !!opts.wantCar;
       const toolSettings = opts.tools || loadReforgeToolSettings();
-      // System: factory rules + reforge emphasis (SYSTEM_PROMPT already documents host API)
-      let system = SYSTEM_PROMPT;
+      // System: factory rules + reforge emphasis (profile may use compact prompt)
+      const promptProfile = getPromptProfile(activeProviderId, el.model?.value);
+      let system = systemPromptForProfile(promptProfile);
+      if (promptProfile === 'tiny') system += '\n\nTINY MODEL LOOP PROTOCOL:\n' + await getTinyLoopMd();
       system += `
 
 REFORGE MODE (active):
@@ -20389,7 +20518,7 @@ Return complete html, not a diff.`;
       } catch (_) {}
 
       let raw;
-      if ((isAgenticLoopEnabled() || isCodeModeEnabled()) && raw == null) {
+      if (promptProfile !== 'tiny' && (isAgenticLoopEnabled() || isCodeModeEnabled()) && raw == null) {
         const built = await runBuilderLoop({
           msgs, signal: abortController?.signal, wantCar, status: (s) => setPreviewStatus(s, ''),
           workspaceSeed: app?.html || null,
@@ -22205,7 +22334,10 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       savePrefs();
       clearBuilderResume();
       // One system message only, and it must be first (provider requirement).
-      let system = SYSTEM_PROMPT;
+      const promptProfile = getPromptProfile(activeProviderId, el.model?.value);
+      let system = systemPromptForProfile(promptProfile);
+      if (promptProfile === 'tiny') system += '\n\nTINY MODEL LOOP PROTOCOL:\n' + await getTinyLoopMd();
+      genLog('info', 'prompt profile · ' + promptProfile);
 
       // Car-compatible mode (for AAForge / Android Auto)
       const wantCar = !!(el.btnCar && el.btnCar.getAttribute('aria-pressed') === 'true');
@@ -22269,7 +22401,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // the loop — run_program is a workspace tool). Round 1 offers read_loop_md;
       // if the model never calls it, round-1 content flows into the classic path.
       let raw = null;
-      if ((isAgenticLoopEnabled() || isCodeModeEnabled()) && raw == null) {
+      if (promptProfile !== 'tiny' && (isAgenticLoopEnabled() || isCodeModeEnabled()) && raw == null) {
         const built = await runBuilderLoop({
           msgs, signal: abortController.signal, wantCar, status,
           workspaceSeed: currentApp?.html || null,
@@ -22294,9 +22426,18 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       let recvChars = 0;
       let lastRecvTick = 0;
       let lastGenLogTick = 0;
+      let streamedText = '';
+      let repetitionDetected = false;
       const onDelta = (d) => {
         try {
-          recvChars += String(d || '').length;
+          const piece = String(d || '');
+          recvChars += piece.length;
+          streamedText = (streamedText + piece).slice(-12000);
+          if (!repetitionDetected && hasGenerationRepetition(streamedText)) {
+            repetitionDetected = true;
+            genLog('warn', 'model repetition loop detected · stopping generation');
+            try { abortController.abort(); } catch (_) {}
+          }
           const now = Date.now();
           if (now - lastRecvTick > 800) {
             lastRecvTick = now;
@@ -22315,13 +22456,15 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // maxTokens: large mini-app payloads routinely exceed provider default output
       // limits (4k-8k) — without an explicit budget the HTML gets cut off mid-JSON.
       // Budget comes from the AI tab setting (getGenMaxTokens, default 32768).
+      const generationMaxTokens = forgeGenerationMaxTokens(promptProfile);
       if (raw == null) {
         if (isGeminiHostProvider() && attachments?.length) {
-          raw = await geminiStreamGenerateContent(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
+          raw = await geminiStreamGenerateContent(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: generationMaxTokens });
         } else {
-          raw = await chatCompletionsStream(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: getGenMaxTokens() });
+          raw = await chatCompletionsStream(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: generationMaxTokens });
         }
       }
+      if (repetitionDetected) throw new Error('The model entered a repetition loop. Tiny models work better with a shorter app request or the Normal prompt profile.');
       status('Parsing app payload…');
       genLog('info', 'received ' + raw.length + ' chars · parsing');
       const parsed = extractJson(raw);
@@ -24926,7 +25069,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       savePrefs();
     });
 
-    ['apiBase','apiKey','model','temperature','jsonMode','reasoningEffort','genTimeoutSecs','genMaxTokens','imageGenerationModel',
+    ['apiBase','apiKey','model','temperature','jsonMode','reasoningEffort','promptProfile','genTimeoutSecs','genMaxTokens','imageGenerationModel',
      'azureResource','azureDeployment','azureApiVersion','azureAuth'].forEach(id => {
       el[id]?.addEventListener('change', savePrefs);
       el[id]?.addEventListener('blur', savePrefs);
@@ -25085,6 +25228,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     // Init
     loadPrefs();
     initSetupProviders(); // turnkey catalog: compiled-in → cache → remote git fetch
+    initPromptProfileConfig(); // prompt profiles: bundled baseline; git refreshes on provider selection
     renderChat();
     renderRefineChips();
     renderLibrary();

@@ -27,8 +27,8 @@ android {
         applicationId "com.forge.live"
         minSdk 22
         targetSdk 36
-        versionCode 207
-        versionName "2.7.77"
+        versionCode 209
+        versionName "2.7.79"
     }
 
     // Two distribution flavors sharing one source tree:
