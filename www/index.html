@@ -1437,6 +1437,7 @@ termux-reload-settings</div>
           <div class="preview-title" data-i18n="lib.title">Saved apps</div>
           <button class="btn secondary small" id="btnImportLib" type="button" data-i18n="lib.import">Import</button>
           <button class="btn secondary small" id="btnRefreshLib" type="button" data-i18n="common.refresh">Refresh</button>
+          <button class="btn secondary small" id="btnInstallKitchen" type="button" data-i18n="lib.kitchen">Kitchen sink</button>
           <input type="file" id="importFile" accept=".html,.htm,text/html" hidden />
         </div>
         <div class="status-line" id="libStatus"></div>
@@ -9165,11 +9166,27 @@ termux-reload-settings</div>
       }
     }
     function getLibrary() {
-      try { return JSON.parse(localStorage.getItem(LS.library) || '[]'); }
-      catch { return []; }
+      try {
+        const list = JSON.parse(localStorage.getItem(LS.library) || '[]');
+        return Array.isArray(list) ? list.map((app) => {
+          // Kitchen Sink is bundled in the host and can be much larger than
+          // the remaining localStorage quota. Rehydrate its HTML on demand.
+          if (app?.builtin === 'kitchen-sink' || app?.id === 'app_kitchensink') {
+            return { ...app, builtin: 'kitchen-sink', html: kitchenSinkHtml() };
+          }
+          return app;
+        }) : [];
+      } catch { return []; }
     }
     function setLibrary(list) {
-      localStorage.setItem(LS.library, JSON.stringify(list));
+      const stored = (Array.isArray(list) ? list : []).map((app) => {
+        if (app?.builtin === 'kitchen-sink') {
+          const { html, ...metadata } = app;
+          return metadata;
+        }
+        return app;
+      });
+      localStorage.setItem(LS.library, JSON.stringify(stored));
     }
 
     // ——— Drive / cloud folder library backup (SAF) ———
@@ -11414,7 +11431,8 @@ termux-reload-settings</div>
     email: {
       compose: (opts) => call('email.compose', opts || {}),
     },
-    // Audio output routing (speaker / earpiece / wired / bluetooth)
+    // Audio output routing. Routes are intentionally user-facing as
+    // default | speaker | phone | bluetooth; phone is the handset earpiece.
     audio: {
       isAvailable: () => call('audio.isAvailable'),
       getRoute: () => call('audio.getRoute'),
@@ -11429,11 +11447,13 @@ termux-reload-settings</div>
       },
       clearRoute: () => call('audio.clearRoute'),
       listOutputs: () => call('audio.listOutputs'),
-      play: (opts) => call('audio.play', opts || {}),
+      // Native Android playback is routeable; default follows the system output.
+      play: (opts) => call('audio.play', Object.assign({ route: 'default' }, opts || {})),
       stop: () => call('audio.stop'),
       isPlaying: () => call('audio.isPlaying'),
     },
-    // On-device TTS (opts.route: auto|default|speaker|earpiece|wired|bluetooth|communication)
+    // On-device TTS (opts.route: default|speaker|phone|bluetooth; earpiece,
+    // wired, auto, and communication remain accepted compatibility aliases).
     tts: {
       isAvailable: () => call('tts.isAvailable'),
       speak: (text, opts) => call('tts.speak', Object.assign({ text }, opts || {})),
@@ -17288,8 +17308,8 @@ Notifications / jobs / clipboard / share / toast / keep-awake / openUrl:
 
 Microphone / audio routing:
  await ForgeHost.mic.listen({ lang }) // { transcript }; mic.record({ durationMs }) → wav; mic.startStream({ sampleRate, aec:true }) → 'mic.pcm' events
- Routes are distinct: speaker = phone loudspeaker; earpiece = phone handset receiver (NOT Bluetooth); bluetooth = connected Bluetooth earphones; wired = wired/USB headset. Use route:'bluetooth' explicitly for Bluetooth.
- await ForgeHost.audio.setRoute('speaker'|'earpiece'|'bluetooth'); await ForgeHost.audio.play({ dataUrl, route })
+ Routes: default = Android's current default output; speaker = phone loudspeaker; phone = phone handset receiver/earpiece (not Bluetooth); bluetooth = connected Bluetooth headphones/speaker; wired = wired/USB headset. Use route:'bluetooth' explicitly for Bluetooth and route:'default' when the user should hear normal system output.
+ await ForgeHost.audio.setRoute('default'|'speaker'|'phone'|'bluetooth'); await ForgeHost.audio.play({ dataUrl, route:'default'|'speaker'|'phone'|'bluetooth', wait:true })
  await ForgeHost.tts.speak(text, { lang, route }) // on-device; cloud audio: ForgeHost.ai.tts({ ..., play:false }) then ForgeHost.audio.play({ dataUrl, route })
  Browser speechSynthesis is not reliably routeable; use ForgeHost TTS/audio when output selection matters.
 
@@ -18239,10 +18259,11 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
       };
     }
 
-    /** Play a data-URL / remote audio. Uses native routed player when opts.route is set. */
+    /** Play a data-URL / remote audio. Native playback is used on Android so
+     * default, speaker, phone, and Bluetooth output remain reliably routeable. */
     async function playDataUrlAudio(dataUrl, opts = {}) {
-      const route = opts.route || opts.output || null;
-      if (route && Capacitor.isNativePlatform()) {
+      const route = opts.route || opts.output || 'default';
+      if (Capacitor.isNativePlatform()) {
         try {
           return await nativeCall(AudioRouteBridge, 'play', {
             dataUrl,
@@ -24767,12 +24788,14 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     }
 
     function installKitchenSink() {
+      try {
       const html = kitchenSinkHtml();
       const app = {
         id: 'app_kitchensink',
         title: 'Forge Kitchen Sink',
         summary: 'Full ForgeHost lab: AI, media, phone, apps, notify, jobs, termux, fs, state/secrets',
         html,
+        builtin: 'kitchen-sink',
         iconEmoji: '🧪',
         iconColor: '#0EA5E9',
         createdAt: Date.now(),
@@ -24782,10 +24805,19 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       list.push(app);
       setLibrary(list);
       clearDriveTombstone(app.id);
+      // Ensure the newly installed root app is visible even when the tree
+      // was collapsed before the install action was invoked.
+      const expanded = getExpandedSet();
+      expanded.add(LIB_ROOT_ID);
+      saveExpandedSet(expanded);
       renderLibrary();
       loadPreview(app);
       enterAppMode('library');
       setLibStatus(t('lib.kitchenInstalled'), 'ok');
+      } catch (e) {
+        console.error('[Forge] Kitchen sink install failed', e);
+        setLibStatus('Kitchen sink could not be added: ' + (e?.message || e), 'err');
+      }
     }
 
     // ——— Events ———
@@ -24991,6 +25023,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.btnOpenWindow?.addEventListener('click', () => currentApp && openAppInNewWindow(currentApp));
     el.btnExport?.addEventListener('click', exportCurrentApp);
     el.btnRefreshLib?.addEventListener('click', renderLibrary);
+  document.getElementById('btnInstallKitchen')?.addEventListener('click', installKitchenSink);
     el.btnDriveConnect?.addEventListener('click', async () => {
       try {
         await ensureDriveConnected({ forcePick: true });
@@ -25334,8 +25367,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     });
 
     // Init
-    loadPrefs();
-    initSetupProviders(); // turnkey catalog: compiled-in → cache → remote git fetch
+    loadPrefs();    initSetupProviders(); // turnkey catalog: compiled-in → cache → remote git fetch
     initPromptProfileConfig(); // prompt profiles: bundled baseline; git refreshes on provider selection
     renderChat();
     renderRefineChips();

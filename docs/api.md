@@ -142,7 +142,7 @@ const vs = await ForgeHost.ai.listVoices()   // alias ai.voices({ source:'cloud'
 // vs.options = [{value:'eve', label:'eve — Energetic & upbeat'}, …]  ← use for <select>
 // vs.ids / vs.labels / vs.list = string arrays (never objects)
 ```
-Voices — xAI: `eve|ara|leo|rex|sal|luna…` (default `eve`); OpenAI-compat: `alloy|nova…` (default `alloy`). Audio routes are distinct: `speaker` = phone loudspeaker, `earpiece` = phone handset receiver (not Bluetooth), `bluetooth` = connected Bluetooth earphones, `wired` = wired/USB headset. Use `route:'bluetooth'` explicitly for Bluetooth; do not label `earpiece` as Bluetooth. Browser `speechSynthesis` is not reliably routeable.
+Voices — xAI: `eve|ara|leo|rex|sal|luna…` (default `eve`); OpenAI-compat: `alloy|nova…` (default `alloy`). Audio routes: `default` = Android system output, `speaker` = phone loudspeaker, `phone`/`earpiece` = handset receiver (not Bluetooth), `bluetooth` = connected Bluetooth headphones/speaker, `wired` = wired/USB headset. Use `route:'bluetooth'` explicitly for Bluetooth. Browser `speechSynthesis` is not reliably routeable.
 
 ### STT (Patch 2)
 ```js
@@ -332,15 +332,19 @@ await ForgeHost.keepAwake.stop()
 
 ## Audio output routing
 ```js
-// Routes: auto|default|speaker|earpiece|wired|bluetooth|communication
+// User-facing routes: default|speaker|phone|bluetooth
+// Compatibility aliases: auto|earpiece|wired|communication
 await ForgeHost.audio.listOutputs()
 await ForgeHost.audio.getRoute()
 await ForgeHost.audio.setRoute('speaker')          // sticky
 await ForgeHost.audio.clearRoute()
-await ForgeHost.audio.play({ dataUrl, route:'speaker', wait:true })
+await ForgeHost.audio.play({ dataUrl, route:'default', wait:true })
+await ForgeHost.audio.play({ dataUrl, route:'speaker'|'phone'|'bluetooth', wait:true })
 await ForgeHost.audio.stop()
 // per-utterance: ForgeHost.tts.speak(text, { route:'bluetooth' }) / ForgeHost.ai.tts({ …, route:'bluetooth' })
 // Generated audio: ForgeHost.audio.play({ dataUrl, route:'bluetooth' })
+// Android uses native routed playback; Bluetooth A2DP uses media output and
+// SCO/BLE headsets use communication-device routing. Browser Audio is fallback only.
 ```
 
 ## Host LLM tools registry

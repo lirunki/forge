@@ -225,7 +225,13 @@ public final class AudioRouteHelper {
         String r = normalize(route);
         int usage;
         int content = AudioAttributes.CONTENT_TYPE_SPEECH;
-        if (ROUTE_SPEAKER.equals(r) || ROUTE_EARPIECE.equals(r) || ROUTE_BLUETOOTH.equals(r)
+        if (ROUTE_BLUETOOTH.equals(r)) {
+            // A2DP/media Bluetooth devices are not communication devices on
+            // Android 12+. Media usage lets MediaPlayer/TTS follow the paired
+            // Bluetooth output reliably; SCO/BLE routing is handled by apply().
+            usage = AudioAttributes.USAGE_MEDIA;
+            content = AudioAttributes.CONTENT_TYPE_SPEECH;
+        } else if (ROUTE_SPEAKER.equals(r) || ROUTE_EARPIECE.equals(r)
                 || ROUTE_COMMUNICATION.equals(r) || ROUTE_WIRED.equals(r)) {
             usage = AudioAttributes.USAGE_VOICE_COMMUNICATION;
         } else {
@@ -322,20 +328,27 @@ public final class AudioRouteHelper {
             }
 
             if (ROUTE_BLUETOOTH.equals(r)) {
-                am.setMode(AudioManager.MODE_IN_COMMUNICATION);
                 try { am.setSpeakerphoneOn(false); } catch (Exception ignored) {}
+                // A2DP is a media output, not a communication device. Do not
+                // force MODE_IN_COMMUNICATION or start SCO for ordinary paired
+                // Bluetooth headphones: that can make playback silent or move
+                // it to the handset. MediaPlayer gets the A2DP preferred device
+                // below, while TTS uses matching media audio attributes.
+                AudioDeviceInfo a2dp = findDevice(am, AudioDeviceInfo.TYPE_BLUETOOTH_A2DP);
+                AudioDeviceInfo ble = findDevice(am, AudioDeviceInfo.TYPE_BLE_HEADSET, AudioDeviceInfo.TYPE_HEARING_AID);
+                AudioDeviceInfo sco = findDevice(am, AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
+                if (a2dp != null) {
+                    am.setMode(AudioManager.MODE_NORMAL);
+                    lastApplied = r;
+                    return r;
+                }
+                am.setMode(AudioManager.MODE_IN_COMMUNICATION);
                 boolean ok = false;
                 if (Build.VERSION.SDK_INT >= 31) {
-                    AudioDeviceInfo dev = findDevice(am,
-                            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
-                            AudioDeviceInfo.TYPE_BLE_HEADSET,
-                            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-                            AudioDeviceInfo.TYPE_HEARING_AID);
-                    if (dev != null && am.setCommunicationDevice(dev)) {
-                        ok = true;
-                    }
+                    AudioDeviceInfo dev = ble != null ? ble : sco;
+                    if (dev != null && am.setCommunicationDevice(dev)) ok = true;
                 }
-                if (!ok) {
+                if (!ok && sco != null) {
                     try {
                         am.startBluetoothSco();
                         am.setBluetoothScoOn(true);
@@ -344,9 +357,7 @@ public final class AudioRouteHelper {
                         lastError = "Bluetooth SCO failed: " + e.getMessage();
                     }
                 }
-                if (!ok && lastError == null) {
-                    lastError = "No Bluetooth audio device available";
-                }
+                if (!ok && lastError == null) lastError = "No Bluetooth audio device available";
                 lastApplied = r;
                 return r;
             }

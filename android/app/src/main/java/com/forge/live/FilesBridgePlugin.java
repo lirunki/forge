@@ -43,6 +43,43 @@ public class FilesBridgePlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** Host-internal cleanup for stale picker copies. Not exposed through ForgeHost. */
+    @PluginMethod
+    public void cleanup(PluginCall call) {
+        File dir = new File(getContext().getCacheDir(), "forge_picks");
+        long olderThan = System.currentTimeMillis();
+        try {
+            if (call.getData() != null && call.getData().has("olderThan")) {
+                olderThan = (long) call.getData().getDouble("olderThan");
+            }
+        } catch (Exception ignored) {}
+        if (olderThan <= 0) olderThan = System.currentTimeMillis();
+        int deleted = 0;
+        long bytes = 0;
+        try {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    if (f == null || !f.isFile() || f.lastModified() > olderThan) continue;
+                    long size = f.length();
+                    if (f.delete()) {
+                        deleted++;
+                        bytes += size;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            call.reject("files.cleanup failed: " + e.getMessage(), e);
+            return;
+        }
+        JSObject o = new JSObject();
+        o.put("ok", true);
+        o.put("olderThan", olderThan);
+        o.put("deleted", deleted);
+        o.put("bytes", bytes);
+        call.resolve(o);
+    }
+
     @PluginMethod
     public void readStaged(PluginCall call) {
         call.setKeepAlive(true);

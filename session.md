@@ -296,14 +296,15 @@ Shipped in host **2.6.2 / versionCode 34**:
 - Native `AudioRouteBridge` + `AudioRouteHelper`
 - ForgeHost: `audio.getRoute/setRoute/clearRoute/listOutputs/play/stop`
 - `tts.speak` + `ai.tts` accept `route` / `output`
-- Routes: `auto|default|speaker|earpiece|wired|bluetooth|communication`
+- User-facing routes: `default|speaker|phone|bluetooth`; compatibility aliases include `auto|earpiece|wired|communication`.
 - Permissions: `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH` (≤30), `BLUETOOTH_CONNECT`
 - Best-effort; API 31+ communication device. No AEC yet.
 
 Smoke:
 ```js
-await ForgeHost.audio.setRoute('speaker')
-await ForgeHost.tts.speak('hello speaker', { route:'speaker' })
+await ForgeHost.audio.setRoute('bluetooth')
+await ForgeHost.audio.play({ dataUrl, route:'default', wait:true })
+await ForgeHost.tts.speak('hello Bluetooth', { route:'bluetooth' })
 await ForgeHost.audio.clearRoute()
 ```
 
