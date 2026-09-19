@@ -25367,7 +25367,13 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     });
 
     // Init
-    loadPrefs();    initSetupProviders(); // turnkey catalog: compiled-in → cache → remote git fetch
+    loadPrefs();
+ // Host-internal cleanup of stale native picker copies from prior runs.
+ // This is intentionally not exposed through ForgeHost to mini-apps.
+ if (Capacitor.isNativePlatform()) {
+ try { FilesBridge.cleanup({ olderThan: Date.now() }); } catch (_) {}
+ }
+ initSetupProviders(); // turnkey catalog: compiled-in → cache → remote git fetch
     initPromptProfileConfig(); // prompt profiles: bundled baseline; git refreshes on provider selection
     renderChat();
     renderRefineChips();
