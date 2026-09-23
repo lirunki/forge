@@ -6,6 +6,9 @@ import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -28,6 +31,9 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
     private String lastError = null;
     private final List<Runnable> whenReadyQueue = new ArrayList();
     private PluginCall speakingCall = null;
+    private PluginCall synthesisCall = null;
+    private File synthesisFile = null;
+    private File synthesisTempFile = null;
 
     private void enqueueWhenReady(final PluginCall call, final Runnable action) {
         if (this.ready && this.tts != null) {
@@ -94,17 +100,29 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
 
                     @Override // android.speech.tts.UtteranceProgressListener
                     public void onDone(String utteranceId) {
-                        TtsBridgePlugin.this.completeSpeaking(true, null);
+                        if (TtsBridgePlugin.this.synthesisCall != null) {
+                            TtsBridgePlugin.this.completeSynthesis(true, null);
+                        } else {
+                            TtsBridgePlugin.this.completeSpeaking(true, null);
+                        }
                     }
 
                     @Override // android.speech.tts.UtteranceProgressListener
                     public void onError(String utteranceId) {
-                        TtsBridgePlugin.this.completeSpeaking(false, "TTS utterance error");
+                        if (TtsBridgePlugin.this.synthesisCall != null) {
+                            TtsBridgePlugin.this.completeSynthesis(false, "TTS utterance error");
+                        } else {
+                            TtsBridgePlugin.this.completeSpeaking(false, "TTS utterance error");
+                        }
                     }
 
                     @Override // android.speech.tts.UtteranceProgressListener
                     public void onError(String utteranceId, int errorCode) {
-                        TtsBridgePlugin.this.completeSpeaking(false, "TTS error code " + errorCode);
+                        if (TtsBridgePlugin.this.synthesisCall != null) {
+                            TtsBridgePlugin.this.completeSynthesis(false, "TTS error code " + errorCode);
+                        } else {
+                            TtsBridgePlugin.this.completeSpeaking(false, "TTS error code " + errorCode);
+                        }
                     }
                 });
             } catch (Exception e) {
@@ -163,6 +181,58 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
             return;
         }
         c.reject(err != null ? err : "TTS failed");
+    }
+
+    private void completeSynthesis(final boolean ok, final String err) {
+        this.main.post(new Runnable() {
+            @Override public void run() {
+                PluginCall c = synthesisCall;
+                synthesisCall = null;
+                File f = synthesisFile;
+                File tmp = synthesisTempFile;
+                synthesisFile = null;
+                synthesisTempFile = null;
+                if (!ok) { if (tmp != null) try { tmp.delete(); } catch (Exception ignored) {} if (c != null) c.reject(err != null ? err : "TTS synthesis failed"); return; }
+                try {
+                    if (tmp == null || !tmp.isFile() || tmp.length() == 0) throw new Exception("TTS produced no audio file");
+                    if (f == null || f.getParentFile() == null || (!f.getParentFile().exists() && !f.getParentFile().mkdirs())) throw new Exception("Cannot create TTS destination");
+                    try (FileInputStream in = new FileInputStream(tmp); FileOutputStream out = new FileOutputStream(f)) {
+                        byte[] buf = new byte[32768]; int n; while ((n = in.read(buf)) >= 0) if (n > 0) out.write(buf, 0, n);
+                    }
+                    tmp.delete();
+                    if (!f.isFile() || f.length() == 0) throw new Exception("TTS destination is empty");
+                } catch (Exception e) { if (tmp != null) try { tmp.delete(); } catch (Exception ignored) {} if (c != null) c.reject("TTS file export failed: " + e.getMessage(), e); return; }
+                if (c == null) return;
+                JSObject o = new JSObject(); o.put("ok", true); o.put("path", f.getAbsolutePath()); o.put("size", f.length()); c.resolve(o);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void synthesizeToFile(final PluginCall call) {
+        final String text = call.getString("text", "");
+        final String rawPath = call.getString("path", "");
+        if (text == null || text.trim().isEmpty() || rawPath == null || rawPath.isEmpty()) { call.reject("text and path are required"); return; }
+        try {
+            File target = new File(rawPath).getCanonicalFile();
+            File shared = new File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "Forge/Staging").getCanonicalFile();
+            File cache = new File(getContext().getCacheDir(), "forge_picks").getCanonicalFile();
+            if (!(target.getPath().startsWith(shared.getPath() + File.separator) || target.getPath().startsWith(cache.getPath() + File.separator))) { call.reject("path not allowed"); return; }
+            File parent = target.getParentFile(); if (parent != null && !parent.exists()) parent.mkdirs();
+            final File tempTarget = new File(getContext().getCacheDir(), "forge_tts_" + UUID.randomUUID().toString() + ".wav");
+            final String lang = call.getString("lang", null), voiceName = call.getString("voice", null);
+            final float rate = Math.max(0.1f, Math.min(3.0f, call.getDouble("rate", Double.valueOf(1.0)).floatValue()));
+            final float pitch = Math.max(0.1f, Math.min(2.0f, call.getDouble("pitch", Double.valueOf(1.0)).floatValue()));
+            enqueueWhenReady(call, new Runnable() { @Override public void run() {
+                try {
+                    if (lang != null && !lang.isEmpty()) tts.setLanguage(Locale.forLanguageTag(lang));
+                    if (voiceName != null && !voiceName.isEmpty()) for (Voice v : tts.getVoices()) if (voiceName.equals(v.getName())) { tts.setVoice(v); break; }
+                    tts.setSpeechRate(rate); tts.setPitch(pitch); synthesisCall = call; synthesisFile = target; synthesisTempFile = tempTarget;
+                    Bundle b = new Bundle(); String id = UUID.randomUUID().toString();
+                    if (tts.synthesizeToFile(text, b, tempTarget, id) == -1) { synthesisCall = null; synthesisFile = null; synthesisTempFile = null; call.reject("TTS synthesis failed to start"); }
+                } catch (Exception e) { synthesisCall = null; synthesisFile = null; synthesisTempFile = null; call.reject("TTS synthesis failed: " + e.getMessage(), e); }
+            }});
+        } catch (Exception e) { call.reject("invalid output path: " + e.getMessage(), e); }
     }
 
     private JSObject statusObject() {

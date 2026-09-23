@@ -6,6 +6,8 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
 import android.util.Base64;
 import android.util.Log;
 import androidx.activity.result.ActivityResult;
@@ -24,13 +26,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@CapacitorPlugin(name = "FilesBridge")
+@CapacitorPlugin(
+        name = "FilesBridge",
+        permissions = {
+            @com.getcapacitor.annotation.Permission(alias = "audio", strings = {"android.permission.READ_MEDIA_AUDIO"})
+        })
 public class FilesBridgePlugin extends Plugin {
     private static final long DEFAULT_MAX_BYTES = 26214400;
-    private static final long HARD_MAX_BYTES = 41943040;
+    // Large media files are streamed to the private staging cache and then
+    // to Termux; keep a generous ceiling without changing the default pick limit.
+    private static final long HARD_MAX_BYTES = 268435456;
     private static final long INLINE_BASE64_MAX = 1433600;
     private boolean pendingMultiple = false;
     private long pendingMaxBytes = DEFAULT_MAX_BYTES;
+    private boolean pendingAllowInline = true;
 
     @PluginMethod
     public void isAvailable(PluginCall call) {
@@ -80,6 +89,123 @@ public class FilesBridgePlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** Host-only bridge: copy a provider URI to shared Download/Forge for Termux. */
+    @PluginMethod
+    public void exportShared(PluginCall call) {
+        call.setKeepAlive(true);
+        Uri uri = null;
+        File target = null;
+        try {
+            String rawUri = call.getString("uri", "");
+            String name = call.getString("name", "file");
+            if (rawUri == null || rawUri.isEmpty()) throw new Exception("uri required");
+            uri = Uri.parse(rawUri);
+            String safe = (name == null ? "file" : name).replaceAll("[\\\\/:*?\\\"<>|]", "_");
+            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
+            if (!dir.exists() && !dir.mkdirs()) throw new Exception("cannot create shared Download/Forge/Staging");
+            target = new File(dir, System.currentTimeMillis() + "_" + safe);
+            InputStream in = getContext().getContentResolver().openInputStream(uri);
+            if (in == null) throw new Exception("cannot open content URI");
+            try (InputStream input = in; FileOutputStream out = new FileOutputStream(target)) {
+                byte[] buf = new byte[32768];
+                int n;
+                while ((n = input.read(buf)) >= 0) if (n > 0) out.write(buf, 0, n);
+            }
+            JSObject result = new JSObject();
+            result.put("ok", true);
+            result.put("path", target.getAbsolutePath());
+            result.put("name", safe);
+            call.resolve(result);
+        } catch (Exception e) {
+            if (target != null) try { target.delete(); } catch (Exception ignored) {}
+            call.reject("files.exportShared failed: " + e.getMessage(), e);
+        }
+    }
+
+    /** Return a FileProvider URI for an existing shared output without reading it into WebView memory. */
+    @PluginMethod
+    public void shareUri(PluginCall call) {
+        try {
+            String raw = call.getString("path", "");
+            File root = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge").getCanonicalFile();
+            File target = new File(raw).getCanonicalFile();
+            if (!target.getPath().startsWith(root.getPath() + File.separator)) { call.reject("path not allowed"); return; }
+            if (!target.isFile() || target.length() <= 0) { call.reject("file missing or empty"); return; }
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", target);
+            JSObject result = new JSObject(); result.put("ok", true); result.put("uri", uri.toString()); result.put("size", target.length()); result.put("name", target.getName());
+            call.resolve(result);
+        } catch (Exception e) { call.reject("files.shareUri failed: " + e.getMessage(), e); }
+    }
+
+    /** Write a small generated binary into shared staging (for TTS/audio chunks). */
+    @PluginMethod
+    public void writeShared(PluginCall call) {
+        try {
+            String raw = call.getString("path", "");
+            String b64 = call.getString("base64", "");
+            File root = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging").getCanonicalFile();
+            File target = new File(raw).getCanonicalFile();
+            if (!target.getPath().startsWith(root.getPath() + File.separator)) { call.reject("path not allowed"); return; }
+            byte[] data = Base64.decode(b64, Base64.DEFAULT);
+            if (data.length > 32 * 1024 * 1024) { call.reject("file too large"); return; }
+            File parent = target.getParentFile(); if (parent != null) parent.mkdirs();
+            try (FileOutputStream out = new FileOutputStream(target)) { out.write(data); }
+            JSObject result = new JSObject(); result.put("ok", true); result.put("path", target.getAbsolutePath()); result.put("size", target.length()); call.resolve(result);
+        } catch (Exception e) { call.reject("files.writeShared failed: " + e.getMessage(), e); }
+    }
+
+    /** User-requested cleanup for temporary files in shared Download/Forge/Staging. */
+    @PluginMethod
+    public void cleanupStaging(PluginCall call) {
+        File sharedDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
+        File privateDir = new File(getContext().getCacheDir(), "forge_picks");
+        long olderThan = Long.MAX_VALUE;
+        try {
+            if (call.getData() != null && call.getData().has("olderThan")) {
+                olderThan = (long) call.getData().getDouble("olderThan");
+            }
+        } catch (Exception ignored) {}
+        int deleted = 0;
+        long bytes = 0;
+        try {
+            for (File dir : new File[] { sharedDir, privateDir }) {
+                File[] files = dir.listFiles();
+                if (files == null) continue;
+                for (File f : files) {
+                    if (f == null || !f.isFile() || f.lastModified() > olderThan) continue; // never delete folders implicitly
+                    long size = f.length();
+                    if (f.delete()) { deleted++; bytes += size; }
+                }
+            }
+            JSObject result = new JSObject();
+            result.put("ok", true);
+            result.put("deleted", deleted);
+            result.put("bytes", bytes);
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("files.cleanupStaging failed: " + e.getMessage(), e);
+        }
+    }
+
+    /** Host-only cleanup for a temporary shared Download/Forge transfer. */
+    @PluginMethod
+    public void deleteShared(PluginCall call) {
+        try {
+            String raw = call.getString("path", "");
+            File root = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge").getCanonicalFile();
+            File target = new File(raw).getCanonicalFile();
+            if (!target.getPath().startsWith(root.getPath() + File.separator)) {
+                call.reject("path not allowed");
+                return;
+            }
+            JSObject result = new JSObject();
+            result.put("ok", !target.exists() || target.delete());
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("files.deleteShared failed: " + e.getMessage(), e);
+        }
+    }
+
     @PluginMethod
     public void readStaged(PluginCall call) {
         call.setKeepAlive(true);
@@ -88,9 +214,11 @@ public class FilesBridgePlugin extends Plugin {
             if (path != null && !path.isEmpty()) {
                 File f = new File(path);
                 File cacheRoot = new File(getContext().getCacheDir(), "forge_picks");
+                File sharedRoot = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
                 String root = cacheRoot.getCanonicalPath();
+                String shared = sharedRoot.getCanonicalPath();
                 String target = f.getCanonicalPath();
-                if (!target.startsWith(root + File.separator) && !target.equals(root)) {
+                if (!(target.startsWith(root + File.separator) || target.startsWith(shared + File.separator))) {
                     call.reject("path not allowed");
                     return;
                 }
@@ -133,6 +261,54 @@ public class FilesBridgePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void readShared(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 33
+                && getContext().checkSelfPermission("android.permission.READ_MEDIA_AUDIO") != 0) {
+            requestPermissionForAlias("audio", call, "audioPermCallback");
+            return;
+        }
+        try {
+            String path = call.getString("path", "");
+            File root = new File(Environment.getExternalStorageDirectory(), "Download");
+            File target = new File(path == null ? "" : path);
+            String rootPath = root.getCanonicalPath();
+            String targetPath = target.getCanonicalPath();
+            if (!targetPath.startsWith(rootPath + File.separator) || !target.isFile()) {
+                call.reject("file not found");
+                return;
+            }
+            long max = HARD_MAX_BYTES;
+            if (target.length() > max) {
+                call.reject("File too large to read (" + target.length() + " > " + max + ")");
+                return;
+            }
+            String mime = call.getString("mime", "application/octet-stream");
+            byte[] bytes = readFileBytes(target, max);
+            String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+            JSObject result = new JSObject();
+            result.put("name", target.getName());
+            result.put("path", target.getAbsolutePath());
+            result.put("size", bytes.length);
+            result.put("mime", mime);
+            result.put("base64", b64);
+            result.put("dataUrl", "data:" + mime + ";base64," + b64);
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("files.readShared failed: " + e.getMessage(), e);
+        }
+    }
+
+    @com.getcapacitor.annotation.PermissionCallback
+    private void audioPermCallback(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 33
+                && getContext().checkSelfPermission("android.permission.READ_MEDIA_AUDIO") != 0) {
+            call.reject("Audio storage permission is required to read the extracted file");
+            return;
+        }
+        readShared(call);
+    }
+
+    @PluginMethod
     public void pick(PluginCall call) {
         call.setKeepAlive(true);
         boolean multiple = Boolean.TRUE.equals(call.getBoolean("multiple", false));
@@ -151,6 +327,12 @@ public class FilesBridgePlugin extends Plugin {
             max = HARD_MAX_BYTES;
         }
         this.pendingMaxBytes = max;
+        this.pendingAllowInline = true;
+        try {
+            if (call.getData() != null && call.getData().has("inline")) {
+                this.pendingAllowInline = call.getBoolean("inline", true);
+            }
+        } catch (Exception ignored) {}
         try {
             if (call.getData() != null) {
                 call.getData().put("_forgeMultiple", multiple);
@@ -394,29 +576,41 @@ public class FilesBridgePlugin extends Plugin {
         if (declared > maxBytes) {
             throw new Exception("File too large (" + declared + " bytes). Max " + maxBytes);
         }
-        InputStream in = getContext().getContentResolver().openInputStream(uri);
-        if (in == null) throw new Exception("Cannot open file");
-        File dir = new File(getContext().getCacheDir(), "forge_picks");
-        if (!dir.exists()) dir.mkdirs();
-        if (!dir.exists() || !dir.isDirectory()) {
-            in.close();
-            throw new Exception("Cannot create forge_picks cache dir");
-        }
         String safe = UUID.randomUUID().toString().replace("-", "").substring(0, 12) + "_" + name;
-        File out = new File(dir, safe);
+        File sharedDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
+        File privateDir = new File(getContext().getCacheDir(), "forge_picks");
+        File out = null;
         long total = 0;
-        try (InputStream input = in; FileOutputStream fos = new FileOutputStream(out)) {
-            byte[] buf = new byte[16384];
-            while (true) {
-                int n = input.read(buf);
-                if (n < 0) break;
-                total += n;
-                if (total > maxBytes) {
-                    throw new Exception("File too large while reading. Max " + maxBytes + " bytes");
+        Exception lastError = null;
+        // Prefer shared staging so Termux can consume the path; fall back to the
+        // historical private cache when scoped storage denies the direct write.
+        for (File dir : new File[] { sharedDir, privateDir }) {
+            File candidate = new File(dir, safe);
+            try {
+                if (!dir.exists() && !dir.mkdirs()) throw new Exception("cannot create " + dir);
+                if (!dir.isDirectory()) throw new Exception("not a directory: " + dir);
+                InputStream in = getContext().getContentResolver().openInputStream(uri);
+                if (in == null) throw new Exception("Cannot open file");
+                long written = 0;
+                try (InputStream input = in; FileOutputStream fos = new FileOutputStream(candidate)) {
+                    byte[] buf = new byte[16384];
+                    while (true) {
+                        int n = input.read(buf);
+                        if (n < 0) break;
+                        written += n;
+                        if (written > maxBytes) throw new Exception("File too large while reading. Max " + maxBytes + " bytes");
+                        fos.write(buf, 0, n);
+                    }
                 }
-                fos.write(buf, 0, n);
+                out = candidate;
+                total = written;
+                break;
+            } catch (Exception e) {
+                lastError = e;
+                try { candidate.delete(); } catch (Exception ignored) {}
             }
         }
+        if (out == null) throw new Exception("Unable to stage file: " + (lastError == null ? "unknown error" : lastError.getMessage()));
         JSObject o = new JSObject();
         o.put("name", name);
         o.put("type", mime);
@@ -432,7 +626,7 @@ public class FilesBridgePlugin extends Plugin {
             o.put("contentUri", contentUri.toString());
         } catch (Exception ignored) {
         }
-        if (total > 0 && total <= INLINE_BASE64_MAX) {
+        if (pendingAllowInline && total > 0 && total <= INLINE_BASE64_MAX) {
             byte[] bytes = readFileBytes(out, INLINE_BASE64_MAX);
             String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
             o.put("base64", b64);

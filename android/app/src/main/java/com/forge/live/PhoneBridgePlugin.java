@@ -69,6 +69,7 @@ public class PhoneBridgePlugin extends Plugin {
         // Host uses this to hide features that aren't shipped on the Play build
         // (e.g. the code-mode checkbox). BuildConfig is generated in this package.
         try { caps.put("flavor", BuildConfig.FLAVOR); } catch (Throwable ignored) {}
+        try { caps.put("debuggable", BuildConfig.DEBUG); } catch (Throwable ignored) {}
         caps.put("permissions", (Object) permissionSnapshot());
         call.resolve(caps);
     }

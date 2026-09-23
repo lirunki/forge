@@ -320,6 +320,14 @@ await ForgeHost.termux.isAvailable()   // { installed, execSupported, bridge, fl
 await ForgeHost.termux.open()
 await ForgeHost.termux.run({ script:'echo hi > ~/forge_out.txt' })           // fire-and-forget
 const r = await ForgeHost.termux.exec({ script:'python hello.py', timeoutMs:60000 })
+// Optional large-file transfers: Forge performs them before the script,
+// then deletes the temporary shared copies after termux.exec finishes.
+const r = await ForgeHost.termux.exec({
+  script: 'python process.py /tmp/' + pickedFile.name,
+  timeoutMs: 120000
+}, [
+  { file: pickedFile, destination: '/tmp/' + pickedFile.name }
+])
 // r = { ok, stdout, stderr, exitCode, bridge, err?, errmsg? }
 ```
 Google Play Termux has NO RUN_COMMAND; needs `forge-termux-agent` (localhost:8787). F-Droid/GitHub Termux: `allow-external-apps=true`. Prefer `termux.exec` when output is needed. Never run destructive scripts without an explicit user tap.

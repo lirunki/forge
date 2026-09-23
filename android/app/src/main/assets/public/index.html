@@ -1102,6 +1102,7 @@
         <div class="status-line" id="txPathStatus"></div>
         <div class="setup-actions">
           <button class="btn secondary" id="btnTxBackWelcome" type="button" data-i18n="common.back">Back</button>
+          <button class="btn secondary hidden" id="btnTxInstallPlay" type="button">Install Termux</button>
           <button class="btn" id="btnTxPathContinue" type="button" data-i18n="common.continue">Continue</button>
         </div>
       </div>
@@ -1721,6 +1722,7 @@ termux-reload-settings</div>
             <button class="btn secondary small" id="btnDriveRestoreSettings" type="button" data-i18n="drive.restore">Restore…</button>
             <button class="btn secondary small" id="btnShareBackup" type="button" data-i18n="drive.shareBackup">Share backup…</button>
             <button class="btn secondary small" id="btnMergeBackup" type="button" data-i18n="drive.mergeBackup">Merge backup…</button>
+            <button class="btn secondary small" id="btnCleanupStaging" type="button">Clean staging files</button>
             <button class="btn secondary small" id="btnDriveDisconnect" type="button" data-i18n="drive.disconnect">Disconnect</button>
           </div>
           <p class="field-hint" style="margin-top:0.55rem;margin-bottom:0;" data-i18n-html="drive.hint2">
@@ -6120,6 +6122,28 @@ termux-reload-settings</div>
        forge_check.sh asserts this assignment exists. Exposed as window.__FORGE_BUILD
        and surfaced in Settings → About Forge. */
     window.__FORGE_BUILD = window.__FORGE_BUILD || { version: '', versionCode: 0, sha: 'dev', builtAt: 0 };
+    async function checkHostedForgeUpdate() {
+      try {
+        if (window.__FORGE_UPDATE_CHECKED) return;
+        window.__FORGE_UPDATE_CHECKED = true;
+        const flavor = String(window.__FORGE_BUILD.flavor || '').toLowerCase();
+        if (flavor === 'play') return;
+        const r = await fetch('https://raw.githubusercontent.com/lirunki/forge/main/www/forge-updates.json', { cache: 'no-store' });
+        if (!r.ok) return;
+        const manifest = await r.json();
+        const channel = window.__FORGE_BUILD.debuggable || flavor === 'debug' ? 'debug' : 'fdroid';
+        const remote = manifest?.channels?.[channel];
+        const localCode = Number(window.__FORGE_BUILD.versionCode || 0);
+        if (!remote || Number(remote.versionCode || 0) <= localCode) return;
+        const key = 'forge.update.notice.' + channel + '.' + Number(remote.versionCode);
+        if (localStorage.getItem(key) === '1') return;
+        localStorage.setItem(key, '1');
+        const label = channel === 'debug' ? 'debug' : 'F-Droid/full';
+        const message = 'A newer Forge ' + label + ' version (' + String(remote.version || remote.versionCode) + ') is available.';
+        try { await PhoneBridge.toast({ message, long: true }); } catch (_) {}
+        if (remote.url) setTimeout(async () => { if (confirm(message + '\n\nOpen the download page?')) { try { await phoneCall('openUrl', { url: remote.url }); } catch (_) {} } }, 250);
+      } catch (_) {}
+    }
     (async () => {
       try {
         const App = window.Capacitor?.Plugins?.App;
@@ -6147,7 +6171,9 @@ termux-reload-settings</div>
       try {
         const caps = await phoneCall('getCapabilities', {});
         if (caps && caps.flavor) window.__FORGE_BUILD.flavor = String(caps.flavor);
+        if (caps && caps.debuggable) window.__FORGE_BUILD.debuggable = true;
         applyCodeModeFlavorVisibility();
+        checkHostedForgeUpdate();
       } catch (_) {}
       try {
         const node = document.getElementById('forgeBuildInfo');
@@ -6710,6 +6736,7 @@ termux-reload-settings</div>
       btnShareBackupGo: document.getElementById('btnShareBackupGo'),
       btnShareBackupCancel: document.getElementById('btnShareBackupCancel'),
       btnMergeBackup: document.getElementById('btnMergeBackup'),
+ btnCleanupStaging: document.getElementById('btnCleanupStaging'),
       mergeBackupFile: document.getElementById('mergeBackupFile'),
       mergeBackupOverlay: document.getElementById('mergeBackupOverlay'),
       mergeBackupConfigList: document.getElementById('mergeBackupConfigList'),
@@ -9166,30 +9193,77 @@ termux-reload-settings</div>
       }
     }
     function getLibrary() {
-      try {
-        const list = JSON.parse(localStorage.getItem(LS.library) || '[]');
-        return Array.isArray(list) ? list.map((app) => {
-          // Kitchen Sink is bundled in the host and can be much larger than
-          // the remaining localStorage quota. Rehydrate its HTML on demand.
-          if (app?.builtin === 'kitchen-sink' || app?.id === 'app_kitchensink') {
-            return { ...app, builtin: 'kitchen-sink', html: kitchenSinkHtml() };
-          }
-          return app;
-        }) : [];
-      } catch { return []; }
-    }
-    function setLibrary(list) {
-      const stored = (Array.isArray(list) ? list : []).map((app) => {
-        if (app?.builtin === 'kitchen-sink') {
-          const { html, ...metadata } = app;
-          return metadata;
-        }
-        return app;
-      });
-      localStorage.setItem(LS.library, JSON.stringify(stored));
-    }
+ const list = (() => { try { return JSON.parse(localStorage.getItem(LS.library) || '[]'); } catch { return []; } })();
+ return Array.isArray(list) ? list.map((app) => {
+ if (app?.builtin === 'kitchen-sink' || app?.id === 'app_kitchensink') return { ...app, builtin: 'kitchen-sink', html: kitchenSinkHtml() };
+ if (app?.htmlRef) return { ...app, html: libraryHtmlCache.get(app.htmlRef) || '' };
+ return app;
+ }) : [];
+}
+const LIB_HTML_DIR = 'forge_library_apps';
+const libraryHtmlCache = new Map();
+let libraryNativeMigration = null;
+function libraryStoredList(list) {
+ return (Array.isArray(list) ? list : []).map((app) => {
+  if (app?.builtin === 'kitchen-sink' || app?.id === 'app_kitchensink') {
+   const { html, ...metadata } = app;
+   return { ...metadata, builtin: 'kitchen-sink' };
+  }
+  const html = String(app?.html || '');
+  if (html && Capacitor.isNativePlatform()) {
+   const htmlRef = app.htmlRef || (LIB_HTML_DIR + '/' + String(app.id) + '.html');
+   libraryHtmlCache.set(htmlRef, html);
+   const { html: ignored, ...metadata } = app;
+   return { ...metadata, htmlRef };
+  }
+  return app;
+ });
+}
+async function persistLibraryNative(list) {
+ if (!Capacitor.isNativePlatform()) throw new Error('Native library storage unavailable');
+ const source = Array.isArray(list) ? list : [];
+ // Publish compact metadata immediately so the Library tree can refresh
+ // synchronously while native HTML files are written in the background.
+ const stored = libraryStoredList(source);
+ localStorage.setItem(LS.library, JSON.stringify(stored));
+ for (const app of source) {
+  if (!app?.id || app.builtin === 'kitchen-sink' || app.id === 'app_kitchensink') continue;
+  const html = String(app.html || libraryHtmlCache.get(app.htmlRef) || '');
+  if (!html) continue;
+  const htmlRef = app.htmlRef || (LIB_HTML_DIR + '/' + String(app.id) + '.html');
+  libraryHtmlCache.set(htmlRef, html);
+  await Filesystem.writeFile({ path: htmlRef, data: html, directory: Directory.Data, encoding: Encoding.UTF8, recursive: true });
+ }
+}
+function migrateLibraryNative() {
+ if (!Capacitor.isNativePlatform()) return Promise.resolve();
+ if (libraryNativeMigration) return libraryNativeMigration;
+ libraryNativeMigration = (async () => {
+  let list = [];
+  try { list = JSON.parse(localStorage.getItem(LS.library) || '[]'); } catch (_) {}
+  if (!Array.isArray(list) || !list.length) return;
+  const hasInline = list.some(a => a && a.html && a.id !== 'app_kitchensink');
+  if (hasInline) await persistLibraryNative(list);
+  for (const app of list) {
+   if (app?.htmlRef && !libraryHtmlCache.has(app.htmlRef)) {
+    try {
+     const r = await Filesystem.readFile({ path: app.htmlRef, directory: Directory.Data, encoding: Encoding.UTF8 });
+     libraryHtmlCache.set(app.htmlRef, typeof r.data === 'string' ? r.data : '');
+    } catch (_) {}
+   }
+  }
+ })().catch(e => { console.warn('[Forge] library native migration failed', e); });
+ return libraryNativeMigration;
+}
+function setLibrary(list) {
+ if (Capacitor.isNativePlatform()) {
+  persistLibraryNative(list).catch(e => console.error('[Forge] library save failed', e));
+  return;
+ }
+ localStorage.setItem(LS.library, JSON.stringify(libraryStoredList(list)));
+}
 
-    // ——— Drive / cloud folder library backup (SAF) ———
+// ——— Drive / cloud folder library backup (SAF) ———
     const DRIVE_FORMAT = 'forge-drive-library-v1';
     const DRIVE_APP_FORMAT = 'forge-drive-app-v1';
     const DRIVE_SETTINGS_FORMAT = 'forge-drive-settings-v1';
@@ -10942,7 +11016,7 @@ termux-reload-settings</div>
       const id = _id++;
       pending.set(id, { resolve, reject });
       parent.postMessage({ __forge: true, type: 'host-call', id, method, params: params || {} }, '*');
-      const ms = /^(ai\.|termux\.|files\.|http\.|tools\.|web\.|permissions\.requestPack|camera\.)/.test(method) ? 180000 : 60000;
+      const ms = /^termux\./.test(method) ? 1800000 : /^(ai\.|files\.|http\.|tools\.|web\.|permissions\.requestPack|camera\.)/.test(method) ? 180000 : 60000;
       setTimeout(() => {
         if (pending.has(id)) {
           pending.delete(id);
@@ -11198,6 +11272,10 @@ termux-reload-settings</div>
       pick: (opts) => call('files.pick', opts || {}),
       /** Read a large staged pick by path (host uses this automatically when needed). */
       readStaged: (opts) => call('files.readStaged', opts || {}),
+      /** Read a file produced in shared Download storage (limited to Download). */
+      readShared: (opts) => call('files.readShared', opts || {}),
+      writeShared: (opts) => call('files.writeShared', opts || {}),
+      shareUri: (opts) => call('files.shareUri', opts || {}),
     },
     // Use the host's configured AI (user's keys) — text + images/attachments (vision).
     // Provider menu: listProviders / setProvider pick among host-configured brains (no keys exposed).
@@ -11360,6 +11438,7 @@ termux-reload-settings</div>
        * Cloud uses the same key/provider as ai.chat. Returns { ok, via, dataUrl?, base64?, spoken, ... }.
        */
       tts: (opts) => call('ai.tts', typeof opts === 'string' ? { text: opts } : (opts || {})),
+      ttsToFile: (opts) => call('ai.ttsToFile', opts || {}),
       /** Voices: cloud (Grok/OpenAI) + optional native. Alias: ai.voices() */
       listVoices: async (opts) => normalizeVoicesResult(await call('ai.listVoices', opts || {})),
       voices: async (opts) => normalizeVoicesResult(await call('ai.voices', opts || {})),
@@ -11461,6 +11540,7 @@ termux-reload-settings</div>
       getVoices: async () => normalizeVoicesResult(await call('tts.getVoices')),
       getLanguages: () => call('tts.getLanguages'),
       setLanguage: (lang) => call('tts.setLanguage', { lang }),
+      synthesizeToFile: (opts) => call('tts.synthesizeToFile', opts || {}),
     },
     // Microphone / speech-to-text + WAV recording
     mic: {
@@ -11531,7 +11611,14 @@ termux-reload-settings</div>
       open: () => call('termux.open'),
       installAgent: () => call('termux.installAgent'),
       run: (opts) => call('termux.run', opts || {}),
-      exec: (opts) => call('termux.exec', opts || {}),
+      // Optional second argument: [{ file|uri, destination }]. Existing
+      // exec({ script, ... }) calls remain unchanged.
+      exec: (opts = {}, files = []) => {
+        const transfers = Array.isArray(files) ? files : [];
+        return transfers.length
+          ? call('termux.execWithFiles', { opts: opts || {}, files: transfers })
+          : call('termux.exec', opts || {});
+      },
     },
     /* === FORGE_HOST_TOOLS_API_BEGIN === */
     tools: {
@@ -14892,7 +14979,7 @@ termux-reload-settings</div>
       'clipboard.read', 'clipboard.write',
       'share', 'toast', 'openUrl',
       'notify',
-      'tts.speak', 'tts.stop', 'tts.getVoices',
+      'tts.speak', 'tts.stop', 'tts.getVoices', 'tts.synthesizeToFile',
       'audio.getRoute', 'audio.setRoute', 'audio.clearRoute', 'audio.listOutputs',
       'email.compose',
       'fs.readdir', 'fs.stat', 'fs.read',
@@ -15620,6 +15707,20 @@ termux-reload-settings</div>
             maxBytes: params.maxBytes || (20 * 1024 * 1024),
             forceAll: params.forceAll !== false,
           });
+        case 'files.writeShared':
+          requireNative('files.writeShared');
+          return await nativeCall(FilesBridge, 'writeShared', { path: params.path, base64: params.base64 });
+        case 'files.shareUri': {
+          requireNative('files.shareUri');
+          return await nativeCall(FilesBridge, 'shareUri', { path: params?.path || '' });
+        }
+        case 'files.readShared': {
+          requireNative('files.readShared');
+          return await nativeCall(FilesBridge, 'readShared', {
+            path: params.path,
+            mime: params.mime,
+          });
+        }
         case 'files.readStaged': {
           requireNative('files.readStaged');
           return await nativeCall(FilesBridge, 'readStaged', {
@@ -16053,12 +16154,15 @@ termux-reload-settings</div>
               channels: part.channels || params.channels,
               pcm: part.pcm || params.pcm,
               bitsPerSample: part.bitsPerSample || params.bitsPerSample,
+              timestamps: !!(part.timestamps || params.timestamps),
+              prompt: part.prompt || params.prompt || null,
             });
             const text = typeof result === 'string' ? result : (result && result.text) || '';
             return {
               ok: true,
               text,
               transcript: text,
+              segments: (result && result.segments) || [],
               language: language || null,
               provider: rt.provider?.label || '',
               providerId: rt.providerId,
@@ -16211,6 +16315,23 @@ termux-reload-settings</div>
             }
           });
           } finally { ttsFgs(); }
+        }
+        case 'ai.ttsToFile': {
+          requireNative('ai.ttsToFile');
+          const providerId = resolveMiniAppProviderId(params);
+          const modelOverride = params.ttsModel || params.speechModel || null;
+          return await withAiRuntime(providerId, modelOverride, async (rt) => {
+            const text = String(params.text || '').trim();
+            if (!text) throw new Error('ai.ttsToFile requires text');
+            const path = String(params.path || '');
+            if (!path) throw new Error('ai.ttsToFile requires path');
+            const audio = await cloudTtsSpeak(text, {
+              voice: params.voice, model: params.model || params.ttsModel,
+              format: params.format || 'mp3', rate: params.rate, speed: params.speed,
+            });
+            const saved = await nativeCall(FilesBridge, 'writeShared', { path, base64: audio.base64 });
+            return Object.assign({ ok: true, via: 'cloud', engine: audio.engine }, saved || {});
+          });
         }
         case 'ai.listVoices':
         case 'ai.voices': {
@@ -16740,6 +16861,11 @@ termux-reload-settings</div>
             wait: params.wait,
             route: params.route || params.output || undefined,
           });
+        case 'tts.synthesizeToFile':
+          return await nativeCall(TtsBridge, 'synthesizeToFile', {
+            text: params.text || '', path: params.path || '', lang: params.lang,
+            voice: params.voice, rate: params.rate, pitch: params.pitch,
+          });
         case 'audio.isAvailable':
           return await nativeCall(AudioRouteBridge, 'isAvailable', {});
         case 'audio.getRoute':
@@ -16995,13 +17121,56 @@ termux-reload-settings</div>
             label: params.label,
             description: params.description,
           });
+        case 'termux.execWithFiles': {
+          const opts = params.opts || {};
+          const transfers = Array.isArray(params.files) ? params.files : [];
+          const q = (v) => "'" + String(v).replace(/'/g, "'\\''") + "'";
+          const shared = [];
+          try {
+            const copies = [];
+            for (const item of transfers) {
+              const file = item?.file || {};
+              const uri = item?.uri || file.uri || file.contentUri;
+              const destination = String(item?.destination || '').trim();
+              if (!uri) throw new Error('termux.exec files entry requires file.uri or uri');
+              if (!destination.startsWith('/tmp/') && !destination.startsWith('$TMPDIR/')) throw new Error('termux.exec file destination must be under /tmp or $TMPDIR');
+              const r = await FilesBridge.exportShared({ uri, name: item?.name || file.name || 'file' });
+              if (!r?.path) throw new Error('Could not create shared transfer file');
+              shared.push(r.path);
+              const relative = destination.startsWith('$TMPDIR/') ? destination.slice(8) : destination.slice(5);
+              const slash = relative.lastIndexOf('/');
+              const dir = slash >= 0 ? relative.slice(0, slash) : '';
+              copies.push('mkdir -p "$TMPDIR"' + (dir ? '/' + q(dir) : '') + '; cp -- ' + q(r.path) + ' "$TMPDIR/' + relative + '"');
+            }
+            const command = String(opts.script || opts.command || '')
+              // Termux does not necessarily expose a writable global /tmp.
+              // Preserve the logical /tmp API while redirecting quoted paths
+              // to Termux's writable TMPDIR.
+              .replace(/'\/tmp\/([^']*)'/g, '"$TMPDIR/$1"')
+              .replace(/"\/tmp\/([^"]*)"/g, '"$TMPDIR/$1"');
+            if (!command) throw new Error('termux.exec requires script or command');
+            return await nativeCall(TermuxBridge, 'exec', {
+              script: 'set -eu; : "${TMPDIR:=$HOME/tmp}"; mkdir -p "$TMPDIR"; ' + copies.join('; ') + '; ' + command,
+              args: opts.args,
+              cwd: opts.cwd,
+              background: opts.background === true,
+              label: opts.label,
+              description: opts.description,
+              timeoutMs: opts.timeoutMs,
+            });
+          } finally {
+            for (const path of shared) {
+              try { await FilesBridge.deleteShared({ path }); } catch (_) {}
+            }
+          }
+        }
         case 'termux.exec':
           return await nativeCall(TermuxBridge, 'exec', {
             script: params.script,
             command: params.command,
             args: params.args,
             cwd: params.cwd,
-            background: params.background !== false,
+            background: params.background === true,
             label: params.label,
             description: params.description,
             timeoutMs: params.timeoutMs,
@@ -17924,14 +18093,20 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
 
       const form = new FormData();
       form.append('file', blob, name || 'audio.wav');
-      const language = p.language || p.lang || null;
+      // xAI requires a language for structured timestamped output. If an
+      // older mini-app still sends Auto-detect, use English rather than
+      // failing the request; current EchoLingo asks the user explicitly.
+      const language = p.language || p.lang || (isXaiHostProvider() && p.timestamps ? 'en' : null);
       if (isXaiHostProvider()) {
         if (language) form.append('language', String(language));
-        form.append('format', 'true');
+        if (p.prompt) form.append('prompt', String(p.prompt));
+        // xAI requires language when requesting its structured format.
+        if (p.timestamps) form.append('format', 'true');
       } else {
         form.append('model', String(p.model || 'whisper-1'));
         if (language) form.append('language', String(language));
-        form.append('response_format', 'json');
+        if (p.prompt) form.append('prompt', String(p.prompt));
+        form.append('response_format', p.timestamps ? 'verbose_json' : 'json');
       }
 
       const res = await fetchWithTransientRetry(sttUrl, { method: 'POST', headers, body: form });
@@ -17950,6 +18125,31 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
         (Array.isArray(data.segments) ? data.segments.map(s => s.text || '').join(' ') : '') ||
         '';
       if (!String(transcript).trim()) throw new Error('Empty transcript');
+      if (p.timestamps) {
+        const rawSegments = data.segments || data.result?.segments || data.transcription?.segments || data.chunks || [];
+        let segments = Array.isArray(rawSegments) ? rawSegments.map((s) => ({
+          start: Number(Array.isArray(s.timestamp) ? s.timestamp[0] : (s.start ?? s.start_time ?? s.startTime ?? 0)),
+          end: Number(Array.isArray(s.timestamp) ? (s.timestamp[1] ?? s.timestamp[0]) : (s.end ?? s.end_time ?? s.endTime ?? 0)),
+          text: String(s.text ?? s.transcript ?? s.content ?? '').trim(),
+        })).filter((s) => s.text) : [];
+        // Some compatible providers return word timestamps instead of segments.
+        if (!segments.length && Array.isArray(data.chunks) && data.chunks.length) {
+          segments = data.chunks.map((s) => ({
+            start: Number(Array.isArray(s.timestamp) ? s.timestamp[0] : 0),
+            end: Number(Array.isArray(s.timestamp) ? (s.timestamp[1] ?? s.timestamp[0]) : 0),
+            text: String(s.text || '').trim(),
+          })).filter((s) => s.text);
+        }
+        if (!segments.length && Array.isArray(data.words) && data.words.length) {
+          const words = data.words.filter((w) => w && (w.word || w.text));
+          if (words.length) segments = [{
+            start: Number(words[0].start ?? words[0].start_time ?? 0),
+            end: Number(words[words.length - 1].end ?? words[words.length - 1].end_time ?? 0),
+            text: words.map((w) => w.word ?? w.text).join(' ').trim(),
+          }];
+        }
+        return { text: String(transcript).trim(), segments };
+      }
       return String(transcript).trim();
     }
 
@@ -19888,6 +20088,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
         ckCopy: document.getElementById('txCkCopy'),
         ckOpen: document.getElementById('txCkOpen'),
         ckLive: document.getElementById('txCkLive'),
+        installPlay: document.getElementById('btnTxInstallPlay'),
       };
     }
 
@@ -20031,6 +20232,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
 
       if (txSetupPath === 'missing') {
         s.pathTitle.textContent = t('tx.pathMissingTitle');
+        if (s.installPlay) s.installPlay.classList.remove('hidden');
         s.pathLead.textContent = t('tx.pathMissingLead');
         s.pathChecklist.innerHTML = `
           <div class="setup-check-item on"><span class="ck">!</span><div>${t('tx.pathMissingC1')}</div></div>
@@ -20042,6 +20244,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
         return;
       }
 
+      if (s.installPlay) s.installPlay.classList.add('hidden');
       if (txSetupPath === 'run_command') {
         s.pathTitle.textContent = t('tx.fdroidTitle2');
         s.pathLead.textContent = t('tx.fdroidLead2');
@@ -20284,6 +20487,10 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
 
     function wireTermuxSetupWizard() {
       const g = (id) => document.getElementById(id);
+      g('btnTxInstallPlay')?.addEventListener('click', async () => {
+        try { await ForgeHost.openUrl('market://details?id=com.termux'); }
+        catch (_) { try { await ForgeHost.openUrl('https://play.google.com/store/apps/details?id=com.termux'); } catch (e) { setTermuxStatus(e?.message || String(e), 'err'); } }
+      });
       g('btnTxSetupStart')?.addEventListener('click', async () => {
         const info = await probeTermux();
         fillTxPathPanel(info);
@@ -24354,6 +24561,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
   <img id="pic" alt=""/>
   <div class="row">
     <button id="btnTts">Device TTS</button>
+ <button id="btnTts2Fs">TTS → staging file</button>
     <button class="sec" id="btnTtsStop">TTS stop</button>
     <button class="sec" id="btnRouteSpk">Route speaker</button>
     <button class="sec" id="btnRouteEar">Route earpiece</button>
@@ -24707,6 +24915,14 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     log(await H().qr.scan({ title: 'Scan something' }), 'ok');
   }); };
   document.getElementById('btnTts').onclick = function(){ safe(async function(){ log(await H().tts.speak('Forge kitchen sink on device TTS'), 'ok'); }); };
+  document.getElementById('btnTts2Fs').onclick = function(){ safe(async function(){
+    var h = H(), path = '/sdcard/Download/Forge/Staging/kitchen_sink_tts_' + Date.now() + '.mp3';
+    var r = await h.ai.tts({ text: 'Forge kitchen sink TTS to file using the selected provider.', play: false, returnAudio: true, format: 'mp3' });
+    var data = String(r && (r.base64 || '') || '');
+    if (!data && r && r.dataUrl && String(r.dataUrl).indexOf(',') >= 0) data = String(r.dataUrl).split(',').pop();
+    if (!data) throw new Error('TTS returned no audio data');
+    log(await h.files.writeShared({ path: path, base64: data }), 'ok');
+  }); };
   document.getElementById('btnTtsStop').onclick = function(){ safe(async function(){ log(await H().tts.stop(), 'ok'); }); };
   document.getElementById('btnRouteSpk').onclick = function(){ safe(async function(){ log(await H().audio.setRoute('speaker'), 'ok'); }); };
   document.getElementById('btnRouteEar').onclick = function(){ safe(async function(){ log(await H().audio.setRoute('earpiece'), 'ok'); }); };
@@ -25048,6 +25264,14 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       if (e.target === el.shareBackupOverlay) el.shareBackupOverlay.classList.add('hidden');
     });
     el.btnMergeBackup?.addEventListener('click', () => openMergeBackupSheet());
+ el.btnCleanupStaging?.addEventListener('click', async () => {
+   if (!confirm('Delete temporary files in Download/Forge/Staging?')) return;
+   try {
+     const r = await FilesBridge.cleanupStaging();
+     const n = Number(r?.deleted || 0);
+     toast(n ? `Deleted ${n} staging file${n === 1 ? '' : 's'}.` : 'Staging area is already empty.');
+   } catch (e) { toast('Could not clean staging: ' + (e?.message || e)); }
+ });
     el.mergeBackupFile?.addEventListener('change', () => onMergeBackupPicked());
     el.btnMergeBackupCancel?.addEventListener('click', () => { _mergeBackupData = null; el.mergeBackupOverlay?.classList.add('hidden'); });
     el.btnMergePresetAll?.addEventListener('click', () => _mergeBackupPreset('all'));
@@ -25371,9 +25595,12 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
  // Host-internal cleanup of stale native picker copies from prior runs.
  // This is intentionally not exposed through ForgeHost to mini-apps.
  if (Capacitor.isNativePlatform()) {
- try { FilesBridge.cleanup({ olderThan: Date.now() }); } catch (_) {}
+ // Only remove stale files at startup; do not race the first media picker.
+ try { FilesBridge.cleanup({ olderThan: Date.now() - 24 * 60 * 60 * 1000 }); } catch (_) {}
+ try { FilesBridge.cleanupStaging({ olderThan: Date.now() - 24 * 60 * 60 * 1000 }); } catch (_) {}
  }
  initSetupProviders(); // turnkey catalog: compiled-in → cache → remote git fetch
+ migrateLibraryNative().then(() => renderLibrary());
     initPromptProfileConfig(); // prompt profiles: bundled baseline; git refreshes on provider selection
     renderChat();
     renderRefineChips();

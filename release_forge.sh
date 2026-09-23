@@ -43,6 +43,21 @@ if command -v git >/dev/null 2>&1 && [ -d "$ROOT/.git" ]; then
 fi
 echo "  version=$VERSION_NAME code=$VERSION_CODE sha=$GIT_SHA"
 
+# Publish the version used by the full/F-Droid APK for the hosted non-Play update check.
+python3 - "$ROOT/www/forge-updates.json" "$VERSION_NAME" "$VERSION_CODE" <<'PYUPDATE'
+import json, sys
+path, version, code = sys.argv[1], sys.argv[2], int(sys.argv[3])
+try:
+    with open(path, encoding='utf-8') as f: data = json.load(f)
+except Exception:
+    data = {'schema': 1, 'channels': {}}
+data.setdefault('schema', 1); data.setdefault('channels', {})
+data['updatedAt'] = __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat().replace('+00:00', 'Z')
+data['channels']['fdroid'] = {'version': version, 'versionCode': code, 'url': 'https://github.com/lirunki/forge/releases'}
+with open(path, 'w', encoding='utf-8') as f: json.dump(data, f, indent=2); f.write('\n')
+PYUPDATE
+cp -f "$ROOT/www/forge-updates.json" "$ROOT/android/app/src/main/assets/public/forge-updates.json"
+
 # Stamp forge-build.json into www + assets (same as build_forge.sh).
 WWW="$ROOT/www"
 ASSETS="$ANDROID/app/src/main/assets/public"
@@ -60,6 +75,7 @@ for f in LOOP.md CODEMODE.md API.md; do
 done
 # Turn-key config ships as an asset (host fetches it locally + remote git URL).
 [ -f "$WWW/turnkey-config.json" ] && cp -f "$WWW/turnkey-config.json" "$ASSETS/turnkey-config.json"
+[ -f "$WWW/forge-updates.json" ] && cp -f "$WWW/forge-updates.json" "$ASSETS/forge-updates.json"
 for f in cordova.js cordova_plugins.js; do
   [ -f "$WWW/$f" ] && cp -f "$WWW/$f" "$ASSETS/$f"
 done

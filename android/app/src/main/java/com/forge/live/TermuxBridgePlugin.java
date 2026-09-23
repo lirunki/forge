@@ -313,8 +313,8 @@ public class TermuxBridgePlugin extends Plugin {
                 if (tMs < 3000) {
                     tMs = PathInterpolatorCompat.MAX_NUM_POINTS;
                 }
-                if (tMs > 600000) {
-                    tMs = 600000;
+                if (tMs > 1800000) {
+                    tMs = 1800000;
                 }
                 final int timeoutMs = tMs;
                 String bridge = pickBridge();
