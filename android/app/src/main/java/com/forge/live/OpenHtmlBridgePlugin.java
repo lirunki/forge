@@ -28,7 +28,10 @@ public class OpenHtmlBridgePlugin extends Plugin {
     private static final long MAX_BYTES = 12L * 1024L * 1024L;
 
     private static final Object LOCK = new Object();
+    private static final long CAPTURE_DEDUP_MS = 15000L;
     private static PendingHtml pending;
+    private static String lastCaptureKey = null;
+    private static long lastCaptureAt = 0L;
 
     static final class PendingHtml {
         final String uri;
@@ -125,6 +128,8 @@ public class OpenHtmlBridgePlugin extends Plugin {
             return false;
         }
 
+        String captureKey = action + "|" + (stream != null ? stream.toString() : "") + "|" + (textExtra != null ? Integer.toHexString(textExtra.hashCode()) : "");
+        long now = System.currentTimeMillis();
         PendingHtml p = new PendingHtml(
                 stream != null ? stream.toString() : null,
                 name,
@@ -133,6 +138,12 @@ public class OpenHtmlBridgePlugin extends Plugin {
                 textExtra
         );
         synchronized (LOCK) {
+            if (captureKey.equals(lastCaptureKey) && now - lastCaptureAt < CAPTURE_DEDUP_MS) {
+                Log.d(TAG, "Ignoring duplicate html intent within " + CAPTURE_DEDUP_MS + "ms: " + captureKey);
+                return false;
+            }
+            lastCaptureKey = captureKey;
+            lastCaptureAt = now;
             pending = p;
         }
         Log.d(TAG, "Captured html intent action=" + action + " uri=" + p.uri + " mime=" + p.mime);
