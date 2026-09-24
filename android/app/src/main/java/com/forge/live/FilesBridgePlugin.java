@@ -44,6 +44,7 @@ public class FilesBridgePlugin extends Plugin {
     private boolean pendingMultiple = false;
     private long pendingMaxBytes = DEFAULT_MAX_BYTES;
     private boolean pendingAllowInline = true;
+    private boolean pendingDirect = false;
     private static final String STAGING_PREFS = "forge_staging_v1";
     private static final String STAGING_TREE_URI = "treeUri";
     private static final String STAGING_DISPLAY = "displayName";
@@ -589,10 +590,17 @@ public class FilesBridgePlugin extends Plugin {
                 this.pendingAllowInline = call.getBoolean("inline", true);
             }
         } catch (Exception ignored) {}
+        this.pendingDirect = false;
+        try {
+            if (call.getData() != null && call.getData().has("direct")) {
+                this.pendingDirect = call.getBoolean("direct", false);
+            }
+        } catch (Exception ignored) {}
         try {
             if (call.getData() != null) {
                 call.getData().put("_forgeMultiple", multiple);
                 call.getData().put("_forgeMaxBytes", max);
+                call.getData().put("_forgeDirect", this.pendingDirect);
             }
         } catch (Exception e2) {
         }
@@ -647,6 +655,18 @@ public class FilesBridgePlugin extends Plugin {
         } catch (Exception e) {
         }
         return this.pendingMultiple;
+    }
+
+    private boolean callDirect(PluginCall call) {
+        try {
+            if (call.getData() != null && call.getData().has("_forgeDirect")) {
+                Object v = call.getData().get("_forgeDirect");
+                if (v instanceof Boolean) return ((Boolean) v).booleanValue();
+                if (v != null) return Boolean.parseBoolean(String.valueOf(v));
+            }
+        } catch (Exception e) {
+        }
+        return this.pendingDirect;
     }
 
     private long callMaxBytes(PluginCall call) {
@@ -712,7 +732,7 @@ public class FilesBridgePlugin extends Plugin {
                 } catch (Exception e) {
                 }
                 try {
-                    JSObject file = readUri(uri, maxBytes);
+                    JSObject file = callDirect(call) ? describeUri(uri, maxBytes) : readUri(uri, maxBytes);
                     if (first == null) {
                         first = file;
                     }
@@ -821,6 +841,22 @@ public class FilesBridgePlugin extends Plugin {
     /*
         Code decompiled incorrectly, please refer to instructions dump.
     */
+
+    private JSObject describeUri(Uri uri, long maxBytes) throws Exception {
+        String name = queryDisplayName(uri);
+        if (name == null || name.isEmpty()) name = "file";
+        name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
+        String mime = getContext().getContentResolver().getType(uri);
+        if (mime == null || mime.isEmpty()) mime = guessMimeFromName(name);
+        long size = querySize(uri);
+        if (size > maxBytes) throw new Exception("File too large (" + size + " bytes). Max " + maxBytes);
+        JSObject o = new JSObject();
+        o.put("name", name); o.put("type", mime); o.put("mime", mime); o.put("size", size);
+        o.put("uri", uri.toString()); o.put("contentUri", uri.toString()); o.put("inline", false);
+        o.put("base64", (String) null); o.put("dataUrl", (String) null);
+        o.put("note", "Direct content URI; stream it to a destination without staging");
+        return o;
+    }
 
     private JSObject readUri(Uri uri, long maxBytes) throws Exception {
         String name = queryDisplayName(uri);

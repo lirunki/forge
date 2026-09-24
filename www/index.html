@@ -12365,6 +12365,7 @@ function setLibrary(list) {
             multiple,
             maxBytes,
             forceAll: true,
+            direct: !!opts.direct,
           });
           console.log('[ForgeHost] files.pick native result raw', r);
           const normalized = await normalizePickResult(r, multiple);
@@ -15848,6 +15849,7 @@ function setLibrary(list) {
             multiple: !!params.multiple,
             maxBytes: params.maxBytes || (20 * 1024 * 1024),
             forceAll: params.forceAll !== false,
+            direct: !!params.direct,
           });
         case 'files.writeShared':
           requireNative('files.writeShared');
