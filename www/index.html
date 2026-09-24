@@ -1450,13 +1450,7 @@ termux-reload-settings</div>
         <div class="card">
           <h2 data-i18n="about.title">About Forge</h2>
           <p id="forgeBuildInfo" style="color:var(--muted);font-size:0.8rem;margin:0 0 8px;font-family:monospace;">Forge (dev build)</p>
-          <p style="color:var(--muted);font-size:0.9rem;" data-i18n-html="about.body">
-            Forge runs <b>HTML mini-apps</b> on your phone. <b>Open with Forge</b> or <b>Share → Forge</b>
-            from WhatsApp, Files, Drive, etc. to import a .html and run it. You can also Import from Library,
-            generate with AI, or try the Kitchen sink API lab.
-            Bridges: phone/SMS/location, TTS/audio, mic, camera/QR, files, Termux, share, notify/jobs, AI, storage.
-            Pin to Home screen. Backup library under Settings → Library backup.
-          </p>
+          <p style="color:var(--muted);font-size:0.9rem;" data-i18n-html="about.body">Forge runs <b>HTML mini-apps</b> on your phone. <b>Open with Forge</b> or <b>Share → Forge</b> from WhatsApp, Files, Drive, etc. to import a .html and run it. You can also Import from Library, generate with AI, or try the Kitchen sink API lab. Bridges: phone/SMS/location, TTS/audio, mic, camera/QR, files, Termux, share, notify/jobs, AI, storage. Pin to Home screen. Backup library under Settings → Library backup.</p>
           <div class="settings-block" style="margin-top:0.6rem;">
             <label for="langSelect" style="margin:0 0 0.35rem 0;" data-i18n="about.lang">Language</label>
             <div style="display:flex;gap:0.4rem;align-items:stretch;">
@@ -1722,14 +1716,10 @@ termux-reload-settings</div>
             <button class="btn secondary small" id="btnDriveRestoreSettings" type="button" data-i18n="drive.restore">Restore…</button>
             <button class="btn secondary small" id="btnShareBackup" type="button" data-i18n="drive.shareBackup">Share backup…</button>
             <button class="btn secondary small" id="btnMergeBackup" type="button" data-i18n="drive.mergeBackup">Merge backup…</button>
-            <button class="btn secondary small" id="btnCleanupStaging" type="button">Clean staging files</button>
+            <button class="btn secondary small" id="btnCleanupStaging" type="button" data-i18n="staging.cleanBtn">Clean staging files</button>
             <button class="btn secondary small" id="btnDriveDisconnect" type="button" data-i18n="drive.disconnect">Disconnect</button>
           </div>
-          <p class="field-hint" style="margin-top:0.55rem;margin-bottom:0;" data-i18n-html="drive.hint2">
-            Forge creates a <code>ForgeLibrary</code> subfolder with <code>manifest.json</code>,
-            <code>settings.json</code> (AI providers/keys), and per-app HTML.
-            Pick the same folder on another phone to sync apps + AI setup.
-          </p>
+          <p class="field-hint" style="margin-top:0.55rem;margin-bottom:0;" data-i18n-html="drive.hint2">Forge creates a <code>ForgeLibrary</code> subfolder with <code>manifest.json</code>, <code>settings.json</code> (AI providers/keys), and per-app HTML. Pick the same folder on another phone to sync apps + AI setup.</p>
         </div>
 
         <div class="card">
@@ -2312,7 +2302,32 @@ termux-reload-settings</div>
  "tour.s5Title": "AI & device bridges",
  "tour.skip": "Skip",
  "tour.t1Body": "Build real mini-apps with AI — then run them on your phone.",
- "tour.t1Title": "Welcome to Forge",
+  "tour.t1Title": "Welcome to Forge",
+ "staging.change": "Change staging location",
+ "staging.changeMsg": "Choose where Forge should store temporary staging files.",
+ "staging.changeTitle": "Change staging location",
+ "staging.cleanBtn": "Clean staging files",
+ "staging.cleanFail": "Could not clean staging: {msg}",
+ "staging.cleanMsg": "Clean the current staging location?",
+ "staging.cleanOk": "Clean current staging location",
+ "staging.cleanTitle": "Clean staging files",
+ "staging.cleanedMsg": "Cleaned staging location:\n{location}\n\nWhere should Forge keep staging files now?",
+ "staging.cleanedTitle": "Staging cleaned",
+ "staging.continue": "Continue",
+ "staging.deletedMany": "Deleted {n} staging files.",
+ "staging.deletedOne": "Deleted 1 staging file.",
+ "staging.empty": "Staging area is already empty.",
+ "staging.failedMsg": "Current staging location:\n{location}\n\nChoose a location Forge should use now.",
+ "staging.failedTitle": "Could not clean staging",
+ "staging.folder": "Choose a folder…",
+ "staging.folderSetFail": "Could not set staging folder",
+ "staging.folderWarn": "Forge will create a ForgeStaging folder inside the selected location and only write or delete files there.",
+ "staging.internal": "Use Forge internal cache",
+ "staging.internalName": "Forge internal cache",
+ "staging.keep": "✓ Keep {location}",
+ "staging.needApp": "Staging cleanup requires the Forge app.",
+ "staging.selectedFolder": "selected folder",
+ "staging.setTo": "Staging location set to {location}.",
  "tx.agentChecking": "Agent: checking…",
  "tx.agentLead": "Google Play Termux cannot accept RUN_COMMAND from other apps. The Forge agent is a small listener in Termux (port 8787).",
  "tx.agentTitle": "Install & start agent",
@@ -2982,7 +2997,32 @@ termux-reload-settings</div>
  "tour.s5Title": "IA y puentes del dispositivo",
  "tour.skip": "Omitir",
  "tour.t1Body": "Crea mini-apps reales con IA — y ejecútalas en tu teléfono.",
- "tour.t1Title": "Bienvenido a Forge",
+  "tour.t1Title": "Bienvenido a Forge",
+ "staging.change": "Cambiar ubicación de staging",
+ "staging.changeMsg": "Elige dónde debe guardar Forge los archivos temporales de staging.",
+ "staging.changeTitle": "Cambiar ubicación de staging",
+ "staging.cleanBtn": "Limpiar archivos de staging",
+ "staging.cleanFail": "No se pudo limpiar el staging: {msg}",
+ "staging.cleanMsg": "¿Limpiar la ubicación de staging actual?",
+ "staging.cleanOk": "Limpiar ubicación de staging actual",
+ "staging.cleanTitle": "Limpiar archivos de staging",
+ "staging.cleanedMsg": "Ubicación de staging limpiada:\n{location}\n\n¿Dónde debe guardar Forge los archivos de staging ahora?",
+ "staging.cleanedTitle": "Staging limpio",
+ "staging.continue": "Continuar",
+ "staging.deletedMany": "Se eliminaron {n} archivos de staging.",
+ "staging.deletedOne": "Se eliminó 1 archivo de staging.",
+ "staging.empty": "El área de staging ya está vacía.",
+ "staging.failedMsg": "Ubicación de staging actual:\n{location}\n\nElige una ubicación que Forge deba usar ahora.",
+ "staging.failedTitle": "No se pudo limpiar el staging",
+ "staging.folder": "Elegir una carpeta…",
+ "staging.folderSetFail": "No se pudo establecer la carpeta de staging",
+ "staging.folderWarn": "Forge creará una carpeta ForgeStaging dentro de la ubicación seleccionada y solo escribirá o borrará archivos allí.",
+ "staging.internal": "Usar caché interna de Forge",
+ "staging.internalName": "Caché interna de Forge",
+ "staging.keep": "✓ Conservar {location}",
+ "staging.needApp": "Limpiar staging requiere la app de Forge.",
+ "staging.selectedFolder": "carpeta seleccionada",
+ "staging.setTo": "Ubicación de staging: {location}.",
  "tx.agentChecking": "Agente: comprobando…",
  "tx.agentLead": "Termux de Google Play no puede aceptar RUN_COMMAND de otras apps. El agente de Forge es un pequeño listener en Termux (puerto 8787).",
  "tx.agentTitle": "Instalar e iniciar agente",
@@ -3652,7 +3692,32 @@ termux-reload-settings</div>
  "tour.s5Title": "IA et ponts de l’appareil",
  "tour.skip": "Passer",
  "tour.t1Body": "Créez de vraies mini-apps avec l’IA — puis exécutez-les sur votre téléphone.",
- "tour.t1Title": "Bienvenue dans Forge",
+  "tour.t1Title": "Bienvenue dans Forge",
+ "staging.change": "Changer l’emplacement de staging",
+ "staging.changeMsg": "Choisissez où Forge doit stocker les fichiers temporaires de staging.",
+ "staging.changeTitle": "Changer l’emplacement de staging",
+ "staging.cleanBtn": "Nettoyer les fichiers de staging",
+ "staging.cleanFail": "Impossible de nettoyer le staging : {msg}",
+ "staging.cleanMsg": "Nettoyer l’emplacement de staging actuel ?",
+ "staging.cleanOk": "Nettoyer l’emplacement de staging actuel",
+ "staging.cleanTitle": "Nettoyer les fichiers de staging",
+ "staging.cleanedMsg": "Emplacement de staging nettoyé :\n{location}\n\nOù Forge doit-il conserver les fichiers de staging maintenant ?",
+ "staging.cleanedTitle": "Staging nettoyé",
+ "staging.continue": "Continuer",
+ "staging.deletedMany": "{n} fichiers de staging supprimés.",
+ "staging.deletedOne": "1 fichier de staging supprimé.",
+ "staging.empty": "La zone de staging est déjà vide.",
+ "staging.failedMsg": "Emplacement de staging actuel :\n{location}\n\nChoisissez un emplacement que Forge doit utiliser maintenant.",
+ "staging.failedTitle": "Impossible de nettoyer le staging",
+ "staging.folder": "Choisir un dossier…",
+ "staging.folderSetFail": "Impossible de définir le dossier de staging",
+ "staging.folderWarn": "Forge créera un dossier ForgeStaging dans l’emplacement sélectionné et n’y écrira ou n’y supprimera que des fichiers.",
+ "staging.internal": "Utiliser le cache interne de Forge",
+ "staging.internalName": "Cache interne de Forge",
+ "staging.keep": "✓ Conserver {location}",
+ "staging.needApp": "Le nettoyage du staging nécessite l’app Forge.",
+ "staging.selectedFolder": "dossier sélectionné",
+ "staging.setTo": "Emplacement de staging défini sur {location}.",
  "tx.agentChecking": "Agent : vérification…",
  "tx.agentLead": "Termux de Google Play ne peut pas accepter RUN_COMMAND d’autres apps. L’agent Forge est un petit écouteur dans Termux (port 8787).",
  "tx.agentTitle": "Installer et démarrer l’agent",
@@ -4322,7 +4387,32 @@ termux-reload-settings</div>
  "tour.s5Title": "IA e pontes do dispositivo",
  "tour.skip": "Pular",
  "tour.t1Body": "Crie mini-apps de verdade com IA — e rode-as no seu telefone.",
- "tour.t1Title": "Bem-vindo ao Forge",
+  "tour.t1Title": "Bem-vindo ao Forge",
+ "staging.change": "Alterar local de staging",
+ "staging.changeMsg": "Escolha onde o Forge deve guardar os ficheiros temporários de staging.",
+ "staging.changeTitle": "Alterar local de staging",
+ "staging.cleanBtn": "Limpar ficheiros de staging",
+ "staging.cleanFail": "Não foi possível limpar o staging: {msg}",
+ "staging.cleanMsg": "Limpar o local de staging atual?",
+ "staging.cleanOk": "Limpar local de staging atual",
+ "staging.cleanTitle": "Limpar ficheiros de staging",
+ "staging.cleanedMsg": "Local de staging limpo:\n{location}\n\nOnde o Forge deve guardar os ficheiros de staging agora?",
+ "staging.cleanedTitle": "Staging limpo",
+ "staging.continue": "Continuar",
+ "staging.deletedMany": "Foram eliminados {n} ficheiros de staging.",
+ "staging.deletedOne": "Foi eliminado 1 ficheiro de staging.",
+ "staging.empty": "A área de staging já está vazia.",
+ "staging.failedMsg": "Local de staging atual:\n{location}\n\nEscolha um local que o Forge deve usar agora.",
+ "staging.failedTitle": "Não foi possível limpar o staging",
+ "staging.folder": "Escolher uma pasta…",
+ "staging.folderSetFail": "Não foi possível definir a pasta de staging",
+ "staging.folderWarn": "O Forge criará uma pasta ForgeStaging dentro do local selecionado e só escreverá ou apagará ficheiros aí.",
+ "staging.internal": "Usar cache interna do Forge",
+ "staging.internalName": "Cache interna do Forge",
+ "staging.keep": "✓ Manter {location}",
+ "staging.needApp": "Limpar staging requer a app Forge.",
+ "staging.selectedFolder": "pasta selecionada",
+ "staging.setTo": "Local de staging definido para {location}.",
  "tx.agentChecking": "Agente: verificando…",
  "tx.agentLead": "O Termux do Google Play não aceita RUN_COMMAND de outros apps. O agente do Forge é um pequeno listener no Termux (porta 8787).",
  "tx.agentTitle": "Instalar e iniciar agente",
@@ -4992,7 +5082,32 @@ termux-reload-settings</div>
  "tour.s5Title": "AI とデバイスブリッジ",
  "tour.skip": "スキップ",
  "tour.t1Body": "AI で本物のミニアプリを作り、スマホで実行できます。",
- "tour.t1Title": "Forge へようこそ",
+  "tour.t1Title": "Forge へようこそ",
+ "staging.change": "ステージング場所を変更",
+ "staging.changeMsg": "Forge が一時ステージングファイルを保存する場所を選んでください。",
+ "staging.changeTitle": "ステージング場所を変更",
+ "staging.cleanBtn": "ステージングファイルを削除",
+ "staging.cleanFail": "ステージングを削除できませんでした: {msg}",
+ "staging.cleanMsg": "現在のステージング場所を削除しますか？",
+ "staging.cleanOk": "現在のステージング場所を削除",
+ "staging.cleanTitle": "ステージングファイルを削除",
+ "staging.cleanedMsg": "削除したステージング場所:\n{location}\n\nこれから Forge はどこにステージングファイルを保存しますか？",
+ "staging.cleanedTitle": "ステージングを削除しました",
+ "staging.continue": "続ける",
+ "staging.deletedMany": "ステージングファイルを {n} 件削除しました。",
+ "staging.deletedOne": "ステージングファイルを 1 件削除しました。",
+ "staging.empty": "ステージング領域はすでに空です。",
+ "staging.failedMsg": "現在のステージング場所:\n{location}\n\nForge が使う場所を選んでください。",
+ "staging.failedTitle": "ステージングを削除できませんでした",
+ "staging.folder": "フォルダーを選択…",
+ "staging.folderSetFail": "ステージングフォルダーを設定できませんでした",
+ "staging.folderWarn": "Forge は選択した場所の中に ForgeStaging フォルダーを作り、その中のファイルだけを書き込み・削除します。",
+ "staging.internal": "Forge 内部キャッシュを使う",
+ "staging.internalName": "Forge 内部キャッシュ",
+ "staging.keep": "✓ {location} を維持",
+ "staging.needApp": "ステージングの削除には Forge アプリが必要です。",
+ "staging.selectedFolder": "選択したフォルダー",
+ "staging.setTo": "ステージング場所を {location} に設定しました。",
  "tx.agentChecking": "Agent：確認中…",
  "tx.agentLead": "Google PlayのTermuxは他アプリからのRUN_COMMANDを受け付けられません。ForgeエージェントはTermux内の小さなリスナー（ポート8787）です。",
  "tx.agentTitle": "エージェントをインストールして起動",
@@ -5662,7 +5777,32 @@ termux-reload-settings</div>
  "tour.s5Title": "AI와 기기 브리지",
  "tour.skip": "건너뛰기",
  "tour.t1Body": "AI로 실제 미니 앱을 만들고 — 폰에서 실행하세요.",
- "tour.t1Title": "Forge에 오신 것을 환영합니다",
+  "tour.t1Title": "Forge에 오신 것을 환영합니다",
+ "staging.change": "스테이징 위치 변경",
+ "staging.changeMsg": "Forge가 임시 스테이징 파일을 저장할 위치를 선택하세요.",
+ "staging.changeTitle": "스테이징 위치 변경",
+ "staging.cleanBtn": "스테이징 파일 정리",
+ "staging.cleanFail": "스테이징을 정리할 수 없습니다: {msg}",
+ "staging.cleanMsg": "현재 스테이징 위치를 정리할까요?",
+ "staging.cleanOk": "현재 스테이징 위치 정리",
+ "staging.cleanTitle": "스테이징 파일 정리",
+ "staging.cleanedMsg": "정리한 스테이징 위치:\n{location}\n\n이제 Forge가 스테이징 파일을 어디에 둘까요?",
+ "staging.cleanedTitle": "스테이징 정리됨",
+ "staging.continue": "계속",
+ "staging.deletedMany": "스테이징 파일 {n}개를 삭제했습니다.",
+ "staging.deletedOne": "스테이징 파일 1개를 삭제했습니다.",
+ "staging.empty": "스테이징 영역이 이미 비어 있습니다.",
+ "staging.failedMsg": "현재 스테이징 위치:\n{location}\n\nForge가 사용할 위치를 선택하세요.",
+ "staging.failedTitle": "스테이징을 정리할 수 없음",
+ "staging.folder": "폴더 선택…",
+ "staging.folderSetFail": "스테이징 폴더를 설정할 수 없습니다",
+ "staging.folderWarn": "Forge는 선택한 위치 안에 ForgeStaging 폴더를 만들고 그 안의 파일만 쓰거나 삭제합니다.",
+ "staging.internal": "Forge 내부 캐시 사용",
+ "staging.internalName": "Forge 내부 캐시",
+ "staging.keep": "✓ {location} 유지",
+ "staging.needApp": "스테이징 정리에는 Forge 앱이 필요합니다.",
+ "staging.selectedFolder": "선택한 폴더",
+ "staging.setTo": "스테이징 위치를 {location}(으)로 설정했습니다.",
  "tx.agentChecking": "에이전트: 확인 중…",
  "tx.agentLead": "Google Play Termux는 다른 앱에서 RUN_COMMAND를 받을 수 없습니다. Forge 에이전트는 Termux의 작은 리스너(포트 8787)입니다.",
  "tx.agentTitle": "에이전트 설치 및 시작",
@@ -25276,7 +25416,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
         wrap.className = 'tour-overlay';
         wrap.setAttribute('role', 'dialog');
         wrap.setAttribute('aria-modal', 'true');
-        wrap.innerHTML = '<div class="tour-card" style="max-width:32rem"><h2></h2><p class="field-hint" style="font-size:.95rem;line-height:1.45;white-space:pre-line"></p><div data-staging-options style="display:grid;gap:.45rem;margin-top:.75rem"></div><div class="tour-actions"><button class="btn secondary small" data-staging-cancel type="button">Cancel</button></div></div>';
+        wrap.innerHTML = '<div class="tour-card" style="max-width:32rem"><h2></h2><p class="field-hint" style="font-size:.95rem;line-height:1.45;white-space:pre-line"></p><div data-staging-options style="display:grid;gap:.45rem;margin-top:.75rem"></div><div class="tour-actions"><button class="btn secondary small" data-staging-cancel type="button"></button></div></div>';
         wrap.querySelector('h2').textContent = question.title;
         wrap.querySelector('p').textContent = question.message;
         const box = wrap.querySelector('[data-staging-options]');
@@ -25291,6 +25431,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
           button.addEventListener('click', () => finish(option.id));
           box.appendChild(button);
         }
+        wrap.querySelector('[data-staging-cancel]').textContent = t('ask.cancel');
         wrap.querySelector('[data-staging-cancel]').addEventListener('click', () => finish(null));
         wrap.addEventListener('click', (event) => { if (event.target === wrap) finish(null); });
         document.body.appendChild(wrap);
@@ -25298,19 +25439,19 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     }
 
     async function chooseStagingLocationAfterCleanup(current, opts) {
-      const currentLabel = current?.displayName || current?.internalPath || 'Forge internal cache';
+      const currentLabel = current?.displayName || current?.internalPath || t('staging.internalName');
       const failed = !!(opts && opts.failed);
       console.info('[staging] stagingChoice call before', { phase: failed ? 'recovery' : 'cleaned' });
       const choice = await stagingChoice(
         {
-          title: failed ? 'Could not clean staging' : 'Staging cleaned',
+          title: failed ? t('staging.failedTitle') : t('staging.cleanedTitle'),
           message: failed
-            ? `Current staging location:\n${currentLabel}\n\nChoose a location Forge should use now.`
-            : `Cleaned staging location:\n${currentLabel}\n\nWhere should Forge keep staging files now?`,
+            ? t('staging.failedMsg', { location: currentLabel })
+            : t('staging.cleanedMsg', { location: currentLabel }),
         },
         [
-          { id: 'keep', label: `✓ Keep ${currentLabel}` },
-          { id: 'change', label: 'Change staging location' },
+          { id: 'keep', label: t('staging.keep', { location: currentLabel }) },
+          { id: 'change', label: t('staging.change') },
         ]
       );
       console.info('[staging] stagingChoice call after', { choice });
@@ -25321,46 +25462,49 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       console.info('[staging] stagingChoice call before', { phase: 'change' });
       const next = await stagingChoice(
         {
-          title: 'Change staging location',
-          message: 'Choose where Forge should store temporary staging files.',
+          title: t('staging.changeTitle'),
+          message: t('staging.changeMsg'),
         },
         [
-          { id: 'internal', label: 'Use Forge internal cache' },
-          { id: 'folder', label: 'Choose a folder…' },
+          { id: 'internal', label: t('staging.internal') },
+          { id: 'folder', label: t('staging.folder') },
         ]
       );
       console.info('[staging] stagingChoice call after', { phase: 'change', choice: next });
       if (next === 'internal') {
         const saved = await FilesBridge.useInternalStaging();
-        const label = saved?.displayName || 'Forge internal cache';
+        const label = saved?.displayName || t('staging.internalName');
         try { localStorage.setItem('forge_staging_label_v1', label); } catch (_) {}
-        toast(`Staging location set to ${label}.`);
+        toast(t('staging.setTo', { location: label }));
       } else if (next === 'folder') {
-        const ok = confirm('Forge will create a ForgeStaging folder inside the selected location and only write or delete files there. Continue?');
-        if (!ok) return;
+        const warn = await stagingChoice(
+          { title: t('staging.changeTitle'), message: t('staging.folderWarn') },
+          [{ id: 'ok', label: t('staging.continue') }]
+        );
+        if (warn !== 'ok') return;
         const picked = await FilesBridge.pickStagingFolder();
         if (picked?.cancelled) return;
-        if (!picked?.ok) throw new Error('Could not set staging folder');
-        const label = picked.displayName || 'selected folder';
+        if (!picked?.ok) throw new Error(t('staging.folderSetFail'));
+        const label = picked.displayName || t('staging.selectedFolder');
         try { localStorage.setItem('forge_staging_label_v1', label); } catch (_) {}
-        toast(`Staging location set to ${label}.`);
+        toast(t('staging.setTo', { location: label }));
       }
     }
     el.btnCleanupStaging?.addEventListener('click', async () => {
-      if (!Capacitor.isNativePlatform()) { toast('Staging cleanup requires the Forge app.'); return; }
+      if (!Capacitor.isNativePlatform()) { toast(t('staging.needApp')); return; }
       console.info('[staging] initial stagingChoice call before');
       const initialChoice = await stagingChoice(
         {
-          title: 'Clean staging files',
-          message: 'Clean the current staging location?',
+          title: t('staging.cleanTitle'),
+          message: t('staging.cleanMsg'),
         },
         [
-          { id: 'ok', label: 'Clean current staging location' },
+          { id: 'ok', label: t('staging.cleanOk') },
         ]
       );
       console.info('[staging] initial stagingChoice call after', { choice: initialChoice });
       if (initialChoice !== 'ok') return;
-      let lastLabel = 'Forge internal cache';
+      let lastLabel = t('staging.internalName');
       try { lastLabel = localStorage.getItem('forge_staging_label_v1') || lastLabel; } catch (_) {}
       let current = { mode: 'internal', displayName: lastLabel };
       try {
@@ -25375,9 +25519,9 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       } catch (_) {}
       nativeCall(FilesBridge, 'cleanupStaging', {}).then((r) => {
         const n = Number(r?.deleted || 0);
-        toast(n ? `Deleted ${n} staging file${n === 1 ? '' : 's'}.` : 'Staging area is already empty.');
+        toast(n ? (n === 1 ? t('staging.deletedOne') : t('staging.deletedMany', { n })) : t('staging.empty'));
       }).catch((e) => {
-        toast('Could not clean staging: ' + (e?.message || e));
+        toast(t('staging.cleanFail', { msg: e?.message || e }));
       });
       await chooseStagingLocationAfterCleanup(current);
     });
