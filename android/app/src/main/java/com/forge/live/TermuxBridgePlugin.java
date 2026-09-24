@@ -3,6 +3,7 @@ package com.forge.live;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
@@ -30,6 +31,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.URLEncoder;
+import java.security.MessageDigest;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URL;
@@ -347,6 +350,77 @@ public class TermuxBridgePlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Termux exec failed: " + e.getMessage() + "\n" + noBridgeMessage(), e);
         }
+    }
+
+    @PluginMethod
+    public void streamFile(final PluginCall call) {
+        if (!isTermuxInstalled()) {
+            call.reject("Termux is not installed");
+            return;
+        }
+        this.ioPool.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String uriText = call.getString("uri", null);
+                    String destination = call.getString("destination", null);
+                    if (uriText == null || uriText.trim().isEmpty()) throw new IllegalArgumentException("uri required");
+                    if (destination == null || destination.trim().isEmpty()) throw new IllegalArgumentException("destination required");
+                    if (!agentPortOpen(DEFAULT_AGENT_PORT)) throw new Exception("forge-termux-agent is not running");
+                    Uri source = Uri.parse(uriText);
+                    ContentResolver resolver = getContext().getContentResolver();
+                    long length = -1L;
+                    try (android.content.res.AssetFileDescriptor afd = resolver.openAssetFileDescriptor(source, "r")) {
+                        if (afd != null && afd.getLength() >= 0) length = afd.getLength();
+                    } catch (Exception ignored) {}
+                    final long maxBytes = 512L * 1024L * 1024L;
+                    if (length > maxBytes) throw new Exception("file exceeds 512 MiB streaming limit");
+                    String encoded = URLEncoder.encode(destination.trim(), "UTF-8").replace("+", "%20");
+                    URL url = new URL("http://127.0.0.1:8787/files?destination=" + encoded);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setConnectTimeout(2000);
+                    conn.setReadTimeout(Math.max(call.getInt("timeoutMs", 600000), 30000));
+                    conn.setRequestMethod("PUT");
+                    conn.setDoOutput(true);
+                    conn.setRequestProperty("Content-Type", call.getString("mime", "application/octet-stream"));
+                    conn.setRequestProperty("X-Forge-Overwrite", String.valueOf(call.getBoolean("overwrite", true)));
+                    conn.setRequestProperty("X-Forge-Mkdirs", String.valueOf(call.getBoolean("mkdirs", true)));
+                    if (length >= 0) conn.setFixedLengthStreamingMode(length);
+                    else conn.setChunkedStreamingMode(65536);
+                    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                    long sent = 0L;
+                    try (InputStream in = resolver.openInputStream(source); OutputStream out = conn.getOutputStream()) {
+                        if (in == null) throw new Exception("cannot open source URI");
+                        byte[] buf = new byte[65536];
+                        int n;
+                        while ((n = in.read(buf)) != -1) {
+                            sent += n;
+                            if (sent > maxBytes) throw new Exception("file exceeds 512 MiB streaming limit");
+                            digest.update(buf, 0, n);
+                            out.write(buf, 0, n);
+                        }
+                    }
+                    String sha = toHex(digest.digest());
+                    int code = conn.getResponseCode();
+                    String body = readStream(code >= 400 ? conn.getErrorStream() : conn.getInputStream());
+                    conn.disconnect();
+                    if (code >= 400) throw new Exception("agent HTTP " + code + ": " + body);
+                    JSONObject result = new JSONObject(body == null || body.isEmpty() ? "{}" : body);
+                    if (!result.optBoolean("ok", false)) throw new Exception(result.optString("errmsg", "agent rejected file"));
+                    JSObject out = new JSObject();
+                    out.put("ok", true);
+                    out.put("bridge", "agent");
+                    out.put("path", result.optString("path", destination.trim()));
+                    out.put("bytes", result.optLong("bytes", sent));
+                    out.put("sha256", result.optString("sha256", sha));
+                    call.resolve(out);
+                } catch (IllegalArgumentException e) {
+                    call.reject(e.getMessage());
+                } catch (Exception e) {
+                    call.reject("Termux streamFile failed: " + e.getMessage(), e);
+                }
+            }
+        });
     }
 
     @PluginMethod
@@ -900,6 +974,12 @@ public class TermuxBridgePlugin extends Plugin {
     /* JADX INFO: Access modifiers changed from: private */
     public static String nz(String s) {
         return s != null ? s : "";
+    }
+
+    private static String toHex(byte[] bytes) {
+        StringBuilder out = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) out.append(String.format(java.util.Locale.US, "%02x", b & 255));
+        return out.toString();
     }
 
     private static String readStream(InputStream in) throws Exception {

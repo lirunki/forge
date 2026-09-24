@@ -3,7 +3,7 @@
 set -euo pipefail
 PORT="${FORGE_AGENT_PORT:-8787}"
 ROOT="${FORGE_BRIDGE_DIR:-/storage/emulated/0/Download/ForgeBridge}"
-VERSION="1.2.0"
+VERSION="1.3.0"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 mkdir -p "$ROOT/inbox" "$ROOT/outbox"
@@ -200,9 +200,10 @@ if ensure_single_agent; then exit 0; fi
 export FORGE_AGENT_PORT="$PORT" FORGE_BRIDGE_ROOT="$ROOT" FORGE_AGENT_VERSION="$VERSION"
 export PREFIX HOME
 exec "$PY" - "$@" <<'PY'
-import json, os, socketserver, subprocess, threading, time, traceback
+import json, os, socketserver, subprocess, threading, time, traceback, hashlib, tempfile
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse, unquote
 
 PORT = int(os.environ.get("FORGE_AGENT_PORT", "8787"))
 ROOT = Path(os.environ.get("FORGE_BRIDGE_ROOT", "/storage/emulated/0/Download/ForgeBridge"))
@@ -298,7 +299,93 @@ def run_job(job):
             "id": job.get("id"),
         }
 
+MAX_STREAM_BYTES = 512 * 1024 * 1024
+
+
+def safe_home_destination(raw):
+    value = unquote(str(raw or '').strip())
+    if not value:
+        raise ValueError('destination required')
+    if value == '$HOME':
+        value = HOME
+    elif value.startswith('$HOME/'):
+        value = str(Path(HOME) / value[6:])
+    elif value == '~':
+        value = HOME
+    elif value.startswith('~/'):
+        value = str(Path(HOME) / value[2:])
+    elif not value.startswith('/'):
+        value = str(Path(HOME) / value)
+    home = Path(HOME).expanduser().resolve()
+    target = Path(os.path.abspath(value))
+    if target == home or home not in target.parents:
+        raise ValueError('destination must be under $HOME')
+    # Check existing symlink components; nonexistent parents are safe to create
+    # only when their nearest existing ancestor remains inside $HOME.
+    probe = target.parent
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    probe_real = probe.resolve()
+    if probe_real != home and home not in probe_real.parents:
+        raise ValueError('destination must be under $HOME')
+    if target.parent.exists():
+        parent_real = target.parent.resolve()
+        if parent_real != home and home not in parent_real.parents:
+            raise ValueError('destination must be under $HOME')
+    if target.exists():
+        final = target.resolve()
+        if final == home or (final != home and home not in final.parents):
+            raise ValueError('destination must be under $HOME')
+    return target
+
+
+def read_body(handler):
+    transfer = (handler.headers.get('Transfer-Encoding') or '').lower()
+    if 'chunked' in transfer:
+        total = 0
+        while True:
+            line = handler.rfile.readline(128).decode('ascii', 'replace').strip()
+            if not line:
+                continue
+            try:
+                size = int(line.split(';', 1)[0], 16)
+            except ValueError:
+                raise ValueError('invalid chunked body')
+            if size == 0:
+                while handler.rfile.readline(4096).strip():
+                    pass
+                return
+            total += size
+            if total > MAX_STREAM_BYTES:
+                raise ValueError('file exceeds 512 MiB streaming limit')
+            remaining = size
+            while remaining:
+                data = handler.rfile.read(min(65536, remaining))
+                if not data:
+                    raise ValueError('unexpected end of request body')
+                yield data
+                remaining -= len(data)
+            if handler.rfile.read(2) != b'\r\n':
+                raise ValueError('invalid chunk terminator')
+    else:
+        try:
+            length = int(handler.headers.get('Content-Length') or 0)
+        except ValueError:
+            raise ValueError('invalid Content-Length')
+        if length < 0 or length > MAX_STREAM_BYTES:
+            raise ValueError('invalid or oversized Content-Length')
+        remaining = length
+        while remaining:
+            data = handler.rfile.read(min(65536, remaining))
+            if not data:
+                raise ValueError('unexpected end of request body')
+            yield data
+            remaining -= len(data)
+
+
 class H(BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
     def log_message(self, *a):
         pass
 
@@ -316,18 +403,58 @@ class H(BaseHTTPRequestHandler):
         else:
             self._send(404, {"ok": False, "errmsg": "not found"})
 
-    def do_POST(self):
-        n = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(n).decode("utf-8", "replace") if n else "{}"
-        try:
-            job = json.loads(raw or "{}")
-        except Exception as e:
-            self._send(400, {"ok": False, "errmsg": f"bad json: {e}"})
+    def do_PUT(self):
+        if not self.path.startswith('/files'):
+            self._send(404, {'ok': False, 'errmsg': 'not found'})
             return
-        if self.path.startswith("/exec") or self.path.startswith("/run"):
+        temp = None
+        try:
+            query = parse_qs(urlparse(self.path).query)
+            destination = safe_home_destination(query.get('destination', [''])[0])
+            parent = destination.parent
+            if (self.headers.get('X-Forge-Mkdirs') or '').lower() == 'true' and not parent.exists():
+                parent.mkdir(parents=True, exist_ok=True)
+                destination = safe_home_destination(str(destination))
+                parent = destination.parent
+            if not parent.is_dir():
+                raise ValueError('destination parent is not a directory')
+            if destination.exists() and (self.headers.get('X-Forge-Overwrite') or 'true').lower() != 'true':
+                raise FileExistsError('destination already exists')
+            expected = (self.headers.get('X-Forge-Sha256') or '').strip().lower()
+            digest = hashlib.sha256()
+            count = 0
+            with tempfile.NamedTemporaryFile(prefix='.forge-upload-', dir=str(parent), delete=False) as out:
+                temp = Path(out.name)
+                for data in read_body(self):
+                    count += len(data)
+                    digest.update(data)
+                    out.write(data)
+            actual = digest.hexdigest()
+            if expected and expected != actual:
+                raise ValueError('sha256 mismatch')
+            os.replace(str(temp), str(destination))
+            temp = None
+            self._send(200, {'ok': True, 'path': str(destination), 'bytes': count, 'sha256': actual})
+        except FileExistsError as e:
+            self._send(409, {'ok': False, 'errmsg': str(e)})
+        except Exception as e:
+            if temp:
+                try: temp.unlink()
+                except Exception: pass
+            self._send(400, {'ok': False, 'errmsg': str(e)})
+
+    def do_POST(self):
+        n = int(self.headers.get('Content-Length') or 0)
+        raw = self.rfile.read(n).decode('utf-8', 'replace') if n else '{}'
+        try:
+            job = json.loads(raw or '{}')
+        except Exception as e:
+            self._send(400, {'ok': False, 'errmsg': f'bad json: {e}'})
+            return
+        if self.path.startswith('/exec') or self.path.startswith('/run'):
             self._send(200, run_job(job))
         else:
-            self._send(404, {"ok": False, "errmsg": "not found"})
+            self._send(404, {'ok': False, 'errmsg': 'not found'})
 
 def file_worker():
     while True:

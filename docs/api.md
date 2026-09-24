@@ -318,6 +318,7 @@ await ForgeHost.fs.append / mkdir / readdir / rm / stat / rename / uri
 ```js
 await ForgeHost.termux.isAvailable()   // { installed, execSupported, bridge, flavor, agentRunning, home, prefix }
 await ForgeHost.termux.open()
+await ForgeHost.termux.streamFile(pickedFile.uri, '~/forge/apps/example/index.html', { mime: 'text/html', overwrite: true, mkdirs: true }) // streams atomically into $HOME
 await ForgeHost.termux.run({ script:'echo hi > ~/forge_out.txt' })           // fire-and-forget
 const r = await ForgeHost.termux.exec({ script:'python hello.py', timeoutMs:60000 })
 // Optional large-file transfers: Forge performs them before the script,
