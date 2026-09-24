@@ -25153,7 +25153,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     var streamed = await H().termux.streamFile(uri, destination, { mime: picked.mime || 'application/octet-stream', overwrite: true, mkdirs: true, timeoutMs: 120000 });
     var checked = await H().termux.exec({ script: 'test -s ' + shellQuote(destination) + ' && sha256sum ' + shellQuote(destination) + ' && stat -c %s ' + shellQuote(destination), timeoutMs: 15000 });
     log({ test: 'Termux streamFile', streamed: streamed, verified: checked }, 'ok');
-  }); });
+  }); };
   document.getElementById('btnTxOpen').onclick = function(){ safe(async function(){ log(await H().termux.open(), 'ok'); }); };
 
   document.getElementById('btnFsDirs').onclick = function(){ safe(async function(){ log(await H().fs.dirs(), 'ok'); }); };
