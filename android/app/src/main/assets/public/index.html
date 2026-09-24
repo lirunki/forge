@@ -24784,6 +24784,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
   <div class="row">
     <button id="btnTx">termux.isAvailable</button>
     <button class="sec" id="btnTxExec">exec echo</button>
+    <button class="sec" id="btnTxStreamValidate">validate stream API</button>
     <button class="sec" id="btnTxOpen">Open Termux</button>
   </div>
   <div class="row">
@@ -24804,6 +24805,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
   let streamTimer = null;
 
   function H(){ return window.ForgeHost || window.forge; }
+  function shellQuote(x){ return "'" + String(x).replace(/'/g, "'\\''") + "'"; }
   function fmt(x){
     if (typeof x === 'string') return x;
     try { return JSON.stringify(x, null, 2); } catch(_) { return String(x); }
@@ -25141,6 +25143,17 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
 
   document.getElementById('btnTx').onclick = function(){ safe(async function(){ log(await H().termux.isAvailable(), 'ok'); }); };
   document.getElementById('btnTxExec').onclick = function(){ safe(async function(){ log(await H().termux.exec({ command: 'echo ForgeKitchenSink && uname -a', timeoutMs: 15000 }), 'ok'); }); };
+  document.getElementById('btnTxStreamValidate').onclick = function(){ safe(async function(){
+    var picked = await H().files.pick({ accept: '*/*', multiple: false, inline: false, direct: true, maxBytes: 512 * 1024 * 1024 });
+    if (!picked || picked.cancelled) throw new Error('No file selected');
+    var uri = picked.uri || picked.contentUri;
+    if (!uri) throw new Error('Picker returned no content URI');
+    var name = String(picked.name || 'stream-validation.bin').replace(/[^A-Za-z0-9._-]/g, '_');
+    var destination = '$HOME/ForgeKitchenSink/stream-validation/' + name;
+    var streamed = await H().termux.streamFile(uri, destination, { mime: picked.mime || 'application/octet-stream', overwrite: true, mkdirs: true, timeoutMs: 120000 });
+    var checked = await H().termux.exec({ script: 'test -s ' + shellQuote(destination) + ' && sha256sum ' + shellQuote(destination) + ' && stat -c %s ' + shellQuote(destination), timeoutMs: 15000 });
+    log({ test: 'Termux streamFile', streamed: streamed, verified: checked }, 'ok');
+  }); });
   document.getElementById('btnTxOpen').onclick = function(){ safe(async function(){ log(await H().termux.open(), 'ok'); }); };
 
   document.getElementById('btnFsDirs').onclick = function(){ safe(async function(){ log(await H().fs.dirs(), 'ok'); }); };
