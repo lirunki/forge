@@ -2,8 +2,10 @@ package com.forge.live;
 
 import androidx.core.content.FileProvider;
 
+import android.app.Activity;
 import android.content.ClipData;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -11,6 +13,7 @@ import android.os.Environment;
 import android.util.Base64;
 import android.util.Log;
 import androidx.activity.result.ActivityResult;
+import androidx.documentfile.provider.DocumentFile;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -22,6 +25,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -40,6 +44,160 @@ public class FilesBridgePlugin extends Plugin {
     private boolean pendingMultiple = false;
     private long pendingMaxBytes = DEFAULT_MAX_BYTES;
     private boolean pendingAllowInline = true;
+    private static final String STAGING_PREFS = "forge_staging_v1";
+    private static final String STAGING_TREE_URI = "treeUri";
+    private static final String STAGING_DISPLAY = "displayName";
+    private static final String STAGING_INTERNAL = "internal";
+    private static final String STAGING_CHILD = "ForgeStaging";
+
+    private SharedPreferences stagingPrefs() {
+        return getContext().getApplicationContext().getSharedPreferences(STAGING_PREFS, android.content.Context.MODE_PRIVATE);
+    }
+
+    private File internalStagingDir() {
+        return new File(getContext().getCacheDir(), "forge_staging");
+    }
+
+    private File pickerCacheDir() {
+        return new File(getContext().getCacheDir(), "forge_picks");
+    }
+
+    private File legacySharedStagingDir() {
+        return new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
+    }
+
+    private boolean hasSelectedFolder() {
+        String uri = stagingPrefs().getString(STAGING_TREE_URI, null);
+        return uri != null && !uri.isEmpty();
+    }
+
+    private String internalDisplayName() {
+        try { return internalStagingDir().getCanonicalPath(); }
+        catch (Exception e) { return internalStagingDir().getAbsolutePath(); }
+    }
+
+    private String stagingDisplay() {
+        if (!hasSelectedFolder()) return internalDisplayName();
+        String saved = stagingPrefs().getString(STAGING_DISPLAY, null);
+        if (saved != null && !saved.isEmpty()) return saved;
+        DocumentFile root = DocumentFile.fromTreeUri(getContext(), Uri.parse(stagingPrefs().getString(STAGING_TREE_URI, "")));
+        String name = root == null ? null : root.getName();
+        if (name == null || name.isEmpty()) return stagingPrefs().getString(STAGING_TREE_URI, "selected folder");
+        return STAGING_CHILD.equals(name) ? name : name + "/" + STAGING_CHILD;
+    }
+
+    private JSObject stagingInfo(boolean ok) {
+        JSObject o = new JSObject();
+        if (ok) o.put("ok", true);
+        String uri = stagingPrefs().getString(STAGING_TREE_URI, null);
+        boolean folder = uri != null && !uri.isEmpty();
+        o.put("mode", folder ? "folder" : STAGING_INTERNAL);
+        o.put("displayName", stagingDisplay());
+        if (folder) o.put("uri", uri);
+        o.put("internalPath", internalDisplayName());
+        return o;
+    }
+
+    private DocumentFile managedStagingFolder(boolean create) throws Exception {
+        String uri = stagingPrefs().getString(STAGING_TREE_URI, null);
+        if (uri == null || uri.isEmpty()) return null;
+        DocumentFile root = DocumentFile.fromTreeUri(getContext(), Uri.parse(uri));
+        if (root == null || !root.exists() || !root.canRead()) throw new Exception("selected staging folder is no longer available");
+        if (create && !root.canWrite()) throw new Exception("selected staging folder is no longer available");
+        if (STAGING_CHILD.equals(root.getName())) return root;
+        DocumentFile child = root.findFile(STAGING_CHILD);
+        if (child != null && !child.isDirectory()) child = null;
+        if (child == null && create) child = root.createDirectory(STAGING_CHILD);
+        if (child == null || !child.isDirectory()) {
+            if (!create) return null;
+            throw new Exception("Could not open " + STAGING_CHILD + " inside selected folder");
+        }
+        if (create && !child.canWrite()) throw new Exception("selected staging folder is no longer available");
+        return child;
+    }
+
+    private boolean isUnder(File file, File root) {
+        if (file == null || root == null) return false;
+        try {
+            String path = file.getCanonicalPath();
+            String base = root.getCanonicalPath();
+            return path.equals(base) || path.startsWith(base + File.separator);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isAllowedStagingFile(File file) {
+        return isUnder(file, internalStagingDir())
+                || isUnder(file, pickerCacheDir())
+                || isUnder(file, legacySharedStagingDir());
+    }
+
+    @PluginMethod
+    public void stagingStatus(PluginCall call) {
+        call.resolve(stagingInfo(true));
+    }
+
+    @PluginMethod
+    public void useInternalStaging(PluginCall call) {
+        stagingPrefs().edit()
+                .remove(STAGING_TREE_URI)
+                .putString("mode", STAGING_INTERNAL)
+                .putString(STAGING_DISPLAY, internalDisplayName())
+                .apply();
+        call.resolve(stagingInfo(true));
+    }
+
+    @PluginMethod
+    public void pickStagingFolder(PluginCall call) {
+        call.setKeepAlive(true);
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+            startActivityForResult(call, intent, "stagingFolderResult");
+        } catch (Exception e) { call.reject("files.pickStagingFolder failed: " + e.getMessage(), e); }
+    }
+
+    @ActivityCallback
+    private void stagingFolderResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        try {
+            if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+                call.resolve(new JSObject().put("cancelled", true)); return;
+            }
+            Uri tree = result.getData().getData();
+            final int readWrite = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+            int flags = result.getData().getFlags() & readWrite;
+            if (flags == 0) flags = readWrite;
+            boolean persisted = false;
+            try {
+                getContext().getContentResolver().takePersistableUriPermission(tree, flags);
+                persisted = true;
+            } catch (Exception first) {
+                try {
+                    getContext().getContentResolver().takePersistableUriPermission(tree, readWrite);
+                    persisted = true;
+                } catch (Exception ignored) {
+                }
+            }
+            if (!persisted) { call.reject("Could not retain permission for selected staging folder"); return; }
+            DocumentFile picked = DocumentFile.fromTreeUri(getContext(), tree);
+            if (picked == null || !picked.canRead() || !picked.canWrite()) { call.reject("Cannot write selected staging folder"); return; }
+            DocumentFile folder = STAGING_CHILD.equals(picked.getName()) ? picked : picked.findFile(STAGING_CHILD);
+            if (folder != null && !folder.isDirectory()) folder = null;
+            if (folder == null) folder = picked.createDirectory(STAGING_CHILD);
+            if (folder == null || !folder.isDirectory() || !folder.canRead() || !folder.canWrite()) { call.reject("Could not create ForgeStaging inside selected folder"); return; }
+            String name = picked.getName();
+            String display = STAGING_CHILD.equals(name) ? name : ((name == null || name.isEmpty() ? "Selected folder" : name) + "/" + STAGING_CHILD);
+            stagingPrefs().edit()
+                    .putString(STAGING_TREE_URI, tree.toString())
+                    .putString("mode", "folder")
+                    .putString(STAGING_DISPLAY, display)
+                    .apply();
+            call.resolve(stagingInfo(true));
+        } catch (Exception e) { call.reject("files.pickStagingFolder failed: " + e.getMessage(), e); }
+    }
 
     @PluginMethod
     public void isAvailable(PluginCall call) {
@@ -101,8 +259,23 @@ public class FilesBridgePlugin extends Plugin {
             if (rawUri == null || rawUri.isEmpty()) throw new Exception("uri required");
             uri = Uri.parse(rawUri);
             String safe = (name == null ? "file" : name).replaceAll("[\\\\/:*?\\\"<>|]", "_");
-            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
-            if (!dir.exists() && !dir.mkdirs()) throw new Exception("cannot create shared Download/Forge/Staging");
+            if (hasSelectedFolder()) {
+                DocumentFile folder = managedStagingFolder(true);
+                if (folder == null || !folder.canWrite()) throw new Exception("selected staging folder is no longer available");
+                String mime = getContext().getContentResolver().getType(uri);
+                if (mime == null || mime.isEmpty()) mime = "application/octet-stream";
+                DocumentFile targetDoc = folder.createFile(mime, System.currentTimeMillis() + "_" + safe);
+                if (targetDoc == null) throw new Exception("could not create staged file");
+                try (InputStream input = getContext().getContentResolver().openInputStream(uri);
+                     OutputStream out = getContext().getContentResolver().openOutputStream(targetDoc.getUri(), "w")) {
+                    if (input == null || out == null) throw new Exception("could not open staged file");
+                    byte[] buf = new byte[32768]; int n; while ((n = input.read(buf)) >= 0) if (n > 0) out.write(buf, 0, n);
+                }
+                JSObject result = new JSObject(); result.put("ok", true); result.put("path", targetDoc.getUri().toString()); result.put("uri", targetDoc.getUri().toString()); result.put("name", safe); result.put("size", targetDoc.length());
+                call.resolve(result); return;
+            }
+            File dir = internalStagingDir();
+            if (!dir.exists() && !dir.mkdirs()) throw new Exception("cannot create internal staging cache");
             target = new File(dir, System.currentTimeMillis() + "_" + safe);
             InputStream in = getContext().getContentResolver().openInputStream(uri);
             if (in == null) throw new Exception("cannot open content URI");
@@ -127,9 +300,14 @@ public class FilesBridgePlugin extends Plugin {
     public void shareUri(PluginCall call) {
         try {
             String raw = call.getString("path", "");
-            File root = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge").getCanonicalFile();
+            if (raw != null && raw.startsWith("content://")) {
+                Uri content = Uri.parse(raw);
+                if (getContext().getContentResolver().openAssetFileDescriptor(content, "r") == null) { call.reject("file missing or unreadable"); return; }
+                JSObject result = new JSObject(); result.put("ok", true); result.put("uri", raw); result.put("size", querySize(content)); result.put("name", queryDisplayName(content));
+                call.resolve(result); return;
+            }
             File target = new File(raw).getCanonicalFile();
-            if (!target.getPath().startsWith(root.getPath() + File.separator)) { call.reject("path not allowed"); return; }
+            if (!isAllowedStagingFile(target)) { call.reject("path not allowed"); return; }
             if (!target.isFile() || target.length() <= 0) { call.reject("file missing or empty"); return; }
             Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", target);
             JSObject result = new JSObject(); result.put("ok", true); result.put("uri", uri.toString()); result.put("size", target.length()); result.put("name", target.getName());
@@ -143,22 +321,70 @@ public class FilesBridgePlugin extends Plugin {
         try {
             String raw = call.getString("path", "");
             String b64 = call.getString("base64", "");
-            File root = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging").getCanonicalFile();
-            File target = new File(raw).getCanonicalFile();
-            if (!target.getPath().startsWith(root.getPath() + File.separator)) { call.reject("path not allowed"); return; }
             byte[] data = Base64.decode(b64, Base64.DEFAULT);
             if (data.length > 32 * 1024 * 1024) { call.reject("file too large"); return; }
+            if (raw != null && raw.startsWith("content://")) {
+                Uri target = Uri.parse(raw);
+                try (OutputStream out = getContext().getContentResolver().openOutputStream(target, "w")) {
+                    if (out == null) { call.reject("selected staging file is not writable"); return; }
+                    out.write(data);
+                }
+                JSObject result = new JSObject(); result.put("ok", true); result.put("path", raw); result.put("uri", raw); result.put("size", data.length); call.resolve(result); return;
+            }
+            if ((raw == null || raw.isEmpty()) && hasSelectedFolder()) {
+                DocumentFile folder = managedStagingFolder(true);
+                String mime = call.getString("mime", "application/octet-stream");
+                DocumentFile targetDoc = folder.createFile(mime, System.currentTimeMillis() + "_staged.bin");
+                if (targetDoc == null) { call.reject("cannot create staging file"); return; }
+                try (OutputStream out = getContext().getContentResolver().openOutputStream(targetDoc.getUri(), "w")) {
+                    if (out == null) { call.reject("cannot open staging file"); return; }
+                    out.write(data);
+                }
+                JSObject result = new JSObject(); result.put("ok", true); result.put("path", targetDoc.getUri().toString()); result.put("uri", targetDoc.getUri().toString()); result.put("size", data.length); call.resolve(result); return;
+            }
+            File target = (raw == null || raw.isEmpty())
+                    ? new File(internalStagingDir(), System.currentTimeMillis() + "_staged.bin").getCanonicalFile()
+                    : new File(raw).getCanonicalFile();
+            if (!isAllowedStagingFile(target)) { call.reject("path not allowed"); return; }
             File parent = target.getParentFile(); if (parent != null) parent.mkdirs();
             try (FileOutputStream out = new FileOutputStream(target)) { out.write(data); }
             JSObject result = new JSObject(); result.put("ok", true); result.put("path", target.getAbsolutePath()); result.put("size", target.length()); call.resolve(result);
         } catch (Exception e) { call.reject("files.writeShared failed: " + e.getMessage(), e); }
     }
 
-    /** User-requested cleanup for temporary files in shared Download/Forge/Staging. */
+    /** Write an automatically named Forge-owned file into the selected staging location. */
+    @PluginMethod
+    public void writeStaging(PluginCall call) {
+        try {
+            String name = call.getString("name", "staged_file").replaceAll("[\\\\/:*?\\\"<>|]", "_");
+            String b64 = call.getString("base64", "");
+            byte[] data = Base64.decode(b64, Base64.DEFAULT);
+            if (data.length > 32 * 1024 * 1024) { call.reject("file too large"); return; }
+            if (!hasSelectedFolder()) {
+                File dir = internalStagingDir();
+                if (!dir.exists() && !dir.mkdirs()) throw new Exception("cannot create internal staging cache");
+                File target = new File(dir, System.currentTimeMillis() + "_" + name).getCanonicalFile();
+                if (!target.getPath().startsWith(dir.getCanonicalPath() + File.separator)) throw new Exception("invalid staging filename");
+                try (FileOutputStream out = new FileOutputStream(target)) { out.write(data); }
+                call.resolve(stagingInfo(true).put("path", target.getAbsolutePath()).put("size", target.length()));
+                return;
+            }
+            DocumentFile dir = managedStagingFolder(true);
+            if (dir == null || !dir.canWrite()) throw new Exception("selected staging folder is no longer available");
+            String mime = call.getString("mime", "application/octet-stream");
+            DocumentFile target = dir.createFile(mime, System.currentTimeMillis() + "_" + name);
+            if (target == null) throw new Exception("cannot create staging file");
+            try (OutputStream out = getContext().getContentResolver().openOutputStream(target.getUri(), "w")) {
+                if (out == null) throw new Exception("cannot open staging file");
+                out.write(data);
+            }
+            call.resolve(new JSObject().put("ok", true).put("path", target.getUri().toString()).put("uri", target.getUri().toString()).put("size", data.length).put("mode", "folder"));
+        } catch (Exception e) { call.reject("files.writeStaging failed: " + e.getMessage(), e); }
+    }
+
+    /** User-requested cleanup for the currently selected staging location. */
     @PluginMethod
     public void cleanupStaging(PluginCall call) {
-        File sharedDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
-        File privateDir = new File(getContext().getCacheDir(), "forge_picks");
         long olderThan = Long.MAX_VALUE;
         try {
             if (call.getData() != null && call.getData().has("olderThan")) {
@@ -168,17 +394,35 @@ public class FilesBridgePlugin extends Plugin {
         int deleted = 0;
         long bytes = 0;
         try {
-            for (File dir : new File[] { sharedDir, privateDir }) {
-                File[] files = dir.listFiles();
-                if (files == null) continue;
-                for (File f : files) {
-                    if (f == null || !f.isFile() || f.lastModified() > olderThan) continue; // never delete folders implicitly
-                    long size = f.length();
-                    if (f.delete()) { deleted++; bytes += size; }
+            if (!hasSelectedFolder()) {
+                for (File dir : new File[] { internalStagingDir(), pickerCacheDir() }) {
+                    File[] files = dir.listFiles();
+                    if (files == null) continue;
+                    for (File f : files) {
+                        if (f == null || !f.isFile() || f.lastModified() > olderThan) continue;
+                        long size = f.length();
+                        if (f.delete()) { deleted++; bytes += size; }
+                    }
+                }
+            } else {
+                DocumentFile dir = managedStagingFolder(false);
+                if (dir == null) throw new Exception("selected staging folder is no longer available");
+                if (!dir.canRead() || !dir.canWrite()) throw new Exception("selected staging folder is no longer available");
+                DocumentFile[] files = dir.listFiles();
+                if (files != null) {
+                    for (DocumentFile f : files) {
+                        if (f == null || !f.isFile()) continue;
+                        // SAF does not expose a reliable last-modified value on every provider;
+                        // cleanup with the default MAX removes all files, while age-limited cleanup
+                        // skips files whose provider timestamp is newer than the requested cutoff.
+                        long modified = f.lastModified();
+                        if (modified > 0 && modified > olderThan) continue;
+                        long size = f.length();
+                        if (f.delete()) { deleted++; bytes += size; }
+                    }
                 }
             }
-            JSObject result = new JSObject();
-            result.put("ok", true);
+            JSObject result = stagingInfo(true);
             result.put("deleted", deleted);
             result.put("bytes", bytes);
             call.resolve(result);
@@ -211,14 +455,26 @@ public class FilesBridgePlugin extends Plugin {
         call.setKeepAlive(true);
         try {
             String path = call.getString("path", "");
+            if (path != null && !path.isEmpty() && path.startsWith("content://")) {
+                Uri stagedUri = Uri.parse(path);
+                long max = 28672000;
+                try { if (call.getData() != null && call.getData().has("maxBytes")) max = (long) call.getData().getDouble("maxBytes"); } catch (Exception ignored) {}
+                byte[] bytes = readUriBytes(stagedUri, max);
+                String mime = call.getString("mime", "application/octet-stream");
+                if (mime == null || mime.isEmpty()) mime = "application/octet-stream";
+                String name = queryDisplayName(stagedUri);
+                if (name == null || name.isEmpty()) name = "staged-file";
+                String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                JSObject o = new JSObject();
+                o.put("name", name); o.put("path", path); o.put("uri", path); o.put("contentUri", path);
+                o.put("size", bytes.length); o.put("mime", mime); o.put("type", mime);
+                o.put("base64", b64); o.put("dataUrl", "data:" + mime + ";base64," + b64);
+                call.resolve(o);
+                return;
+            }
             if (path != null && !path.isEmpty()) {
                 File f = new File(path);
-                File cacheRoot = new File(getContext().getCacheDir(), "forge_picks");
-                File sharedRoot = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
-                String root = cacheRoot.getCanonicalPath();
-                String shared = sharedRoot.getCanonicalPath();
-                String target = f.getCanonicalPath();
-                if (!(target.startsWith(root + File.separator) || target.startsWith(shared + File.separator))) {
+                if (!isAllowedStagingFile(f.getCanonicalFile())) {
                     call.reject("path not allowed");
                     return;
                 }
@@ -577,7 +833,42 @@ public class FilesBridgePlugin extends Plugin {
             throw new Exception("File too large (" + declared + " bytes). Max " + maxBytes);
         }
         String safe = UUID.randomUUID().toString().replace("-", "").substring(0, 12) + "_" + name;
-        File sharedDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Forge/Staging");
+        if (hasSelectedFolder()) {
+            DocumentFile folder = managedStagingFolder(true);
+            if (folder == null || !folder.canRead() || !folder.canWrite()) throw new Exception("selected staging folder is no longer available");
+            DocumentFile staged = folder.createFile(mime, safe);
+            if (staged == null) throw new Exception("could not create staged file in selected folder");
+            long written = 0;
+            try (InputStream input = getContext().getContentResolver().openInputStream(uri);
+                 OutputStream output = getContext().getContentResolver().openOutputStream(staged.getUri(), "w")) {
+                if (input == null || output == null) throw new Exception("could not open selected staging folder");
+                byte[] buf = new byte[16384];
+                int n;
+                while ((n = input.read(buf)) >= 0) {
+                    if (n == 0) continue;
+                    written += n;
+                    if (written > maxBytes) throw new Exception("File too large while reading. Max " + maxBytes + " bytes");
+                    output.write(buf, 0, n);
+                }
+            } catch (Exception e) {
+                try { staged.delete(); } catch (Exception ignored) {}
+                throw e;
+            }
+            JSObject o = new JSObject();
+            o.put("name", name); o.put("type", mime); o.put("mime", mime); o.put("size", written);
+            o.put("path", staged.getUri().toString()); o.put("uri", uri.toString());
+            o.put("contentUri", staged.getUri().toString()); o.put("inline", false);
+            if (pendingAllowInline && written > 0 && written <= INLINE_BASE64_MAX) {
+                byte[] bytes = readUriBytes(staged.getUri(), INLINE_BASE64_MAX);
+                String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                o.put("base64", b64); o.put("dataUrl", "data:" + mime + ";base64," + b64); o.put("inline", true);
+            } else {
+                o.put("base64", (String) null); o.put("dataUrl", (String) null);
+                o.put("note", "File staged in selected folder; use path/readStaged for content");
+            }
+            return o;
+        }
+        File sharedDir = internalStagingDir();
         File privateDir = new File(getContext().getCacheDir(), "forge_picks");
         File out = null;
         long total = 0;
@@ -639,6 +930,23 @@ public class FilesBridgePlugin extends Plugin {
             o.put("note", "File staged on disk; use path/readStaged for content");
         }
         return o;
+    }
+
+    private byte[] readUriBytes(Uri uri, long max) throws Exception {
+        try (InputStream in = getContext().getContentResolver().openInputStream(uri)) {
+            if (in == null) throw new Exception("file not readable");
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[16384];
+            long total = 0;
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                if (n == 0) continue;
+                total += n;
+                if (total > max) throw new Exception("File too large");
+                out.write(buf, 0, n);
+            }
+            return out.toByteArray();
+        }
     }
 
     private static byte[] readFileBytes(File f, long max) throws Exception {

@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "updatedAt": "2026-09-24T00:34:55.412499Z",
+  "updatedAt": "2026-09-24T06:09:07.983282Z",
   "channels": {
     "debug": {
-      "version": "2.7.80",
-      "versionCode": 230,
+      "version": "2.7.93",
+      "versionCode": 243,
       "url": "https://github.com/lirunki/forge/releases"
     },
     "fdroid": {

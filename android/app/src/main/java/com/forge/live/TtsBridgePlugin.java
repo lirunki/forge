@@ -1,14 +1,17 @@
 package com.forge.live;
 
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
+import androidx.documentfile.provider.DocumentFile;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -34,6 +37,7 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
     private PluginCall synthesisCall = null;
     private File synthesisFile = null;
     private File synthesisTempFile = null;
+    private String synthesisFolderTreeUri = null;
 
     private void enqueueWhenReady(final PluginCall call, final Runnable action) {
         if (this.ready && this.tts != null) {
@@ -190,8 +194,10 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
                 synthesisCall = null;
                 File f = synthesisFile;
                 File tmp = synthesisTempFile;
+                String folderTree = synthesisFolderTreeUri;
                 synthesisFile = null;
                 synthesisTempFile = null;
+                synthesisFolderTreeUri = null;
                 if (!ok) { if (tmp != null) try { tmp.delete(); } catch (Exception ignored) {} if (c != null) c.reject(err != null ? err : "TTS synthesis failed"); return; }
                 try {
                     if (tmp == null || !tmp.isFile() || tmp.length() == 0) throw new Exception("TTS produced no audio file");
@@ -201,6 +207,23 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
                     }
                     tmp.delete();
                     if (!f.isFile() || f.length() == 0) throw new Exception("TTS destination is empty");
+                    if (folderTree != null && !folderTree.isEmpty()) {
+                        DocumentFile root = DocumentFile.fromTreeUri(getContext(), Uri.parse(folderTree));
+                        if (root == null || !root.canWrite()) throw new Exception("selected staging folder is no longer available");
+                        DocumentFile dir = "ForgeStaging".equals(root.getName()) ? root : root.findFile("ForgeStaging");
+                        if (dir != null && !dir.isDirectory()) dir = null;
+                        if (dir == null) dir = root.createDirectory("ForgeStaging");
+                        if (dir == null || !dir.canWrite()) throw new Exception("Could not open ForgeStaging inside selected folder");
+                        DocumentFile dest = dir.createFile("audio/wav", f.getName());
+                        if (dest == null) throw new Exception("cannot create TTS staging file");
+                        try (FileInputStream in = new FileInputStream(f); OutputStream out = getContext().getContentResolver().openOutputStream(dest.getUri(), "w")) {
+                            if (out == null) throw new Exception("cannot open TTS staging file");
+                            byte[] buf = new byte[32768]; int n; while ((n = in.read(buf)) >= 0) if (n > 0) out.write(buf, 0, n);
+                        }
+                        try { f.delete(); } catch (Exception ignored) {}
+                        if (c == null) return;
+                        JSObject o = new JSObject(); o.put("ok", true); o.put("path", dest.getUri().toString()); o.put("uri", dest.getUri().toString()); o.put("size", dest.length()); c.resolve(o); return;
+                    }
                 } catch (Exception e) { if (tmp != null) try { tmp.delete(); } catch (Exception ignored) {} if (c != null) c.reject("TTS file export failed: " + e.getMessage(), e); return; }
                 if (c == null) return;
                 JSObject o = new JSObject(); o.put("ok", true); o.put("path", f.getAbsolutePath()); o.put("size", f.length()); c.resolve(o);
@@ -212,12 +235,17 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
     public void synthesizeToFile(final PluginCall call) {
         final String text = call.getString("text", "");
         final String rawPath = call.getString("path", "");
-        if (text == null || text.trim().isEmpty() || rawPath == null || rawPath.isEmpty()) { call.reject("text and path are required"); return; }
+        if (text == null || text.trim().isEmpty()) { call.reject("text is required"); return; }
         try {
-            File target = new File(rawPath).getCanonicalFile();
-            File shared = new File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "Forge/Staging").getCanonicalFile();
-            File cache = new File(getContext().getCacheDir(), "forge_picks").getCanonicalFile();
-            if (!(target.getPath().startsWith(shared.getPath() + File.separator) || target.getPath().startsWith(cache.getPath() + File.separator))) { call.reject("path not allowed"); return; }
+            File cache = new File(getContext().getCacheDir(), "forge_staging").getCanonicalFile();
+            if (!cache.exists() && !cache.mkdirs()) throw new Exception("cannot create internal staging cache");
+            String treeUri = getContext().getApplicationContext().getSharedPreferences("forge_staging_v1", android.content.Context.MODE_PRIVATE).getString("treeUri", null);
+            final String exportTree = (rawPath == null || rawPath.isEmpty()) && treeUri != null && !treeUri.isEmpty() ? treeUri : null;
+            File target = rawPath == null || rawPath.isEmpty()
+                    ? new File(cache, "tts_" + System.currentTimeMillis() + ".wav").getCanonicalFile()
+                    : new File(rawPath).getCanonicalFile();
+            File legacyCache = new File(getContext().getCacheDir(), "forge_picks").getCanonicalFile();
+            if (!(target.getPath().startsWith(cache.getPath() + File.separator) || target.getPath().startsWith(legacyCache.getPath() + File.separator))) { call.reject("path not allowed"); return; }
             File parent = target.getParentFile(); if (parent != null && !parent.exists()) parent.mkdirs();
             final File tempTarget = new File(getContext().getCacheDir(), "forge_tts_" + UUID.randomUUID().toString() + ".wav");
             final String lang = call.getString("lang", null), voiceName = call.getString("voice", null);
@@ -227,10 +255,10 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
                 try {
                     if (lang != null && !lang.isEmpty()) tts.setLanguage(Locale.forLanguageTag(lang));
                     if (voiceName != null && !voiceName.isEmpty()) for (Voice v : tts.getVoices()) if (voiceName.equals(v.getName())) { tts.setVoice(v); break; }
-                    tts.setSpeechRate(rate); tts.setPitch(pitch); synthesisCall = call; synthesisFile = target; synthesisTempFile = tempTarget;
+                    tts.setSpeechRate(rate); tts.setPitch(pitch); synthesisCall = call; synthesisFile = target; synthesisTempFile = tempTarget; synthesisFolderTreeUri = exportTree;
                     Bundle b = new Bundle(); String id = UUID.randomUUID().toString();
-                    if (tts.synthesizeToFile(text, b, tempTarget, id) == -1) { synthesisCall = null; synthesisFile = null; synthesisTempFile = null; call.reject("TTS synthesis failed to start"); }
-                } catch (Exception e) { synthesisCall = null; synthesisFile = null; synthesisTempFile = null; call.reject("TTS synthesis failed: " + e.getMessage(), e); }
+                    if (tts.synthesizeToFile(text, b, tempTarget, id) == -1) { synthesisCall = null; synthesisFile = null; synthesisTempFile = null; synthesisFolderTreeUri = null; call.reject("TTS synthesis failed to start"); }
+                } catch (Exception e) { synthesisCall = null; synthesisFile = null; synthesisTempFile = null; synthesisFolderTreeUri = null; call.reject("TTS synthesis failed: " + e.getMessage(), e); }
             }});
         } catch (Exception e) { call.reject("invalid output path: " + e.getMessage(), e); }
     }

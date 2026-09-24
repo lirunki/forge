@@ -11275,6 +11275,7 @@ function setLibrary(list) {
       /** Read a file produced in shared Download storage (limited to Download). */
       readShared: (opts) => call('files.readShared', opts || {}),
       writeShared: (opts) => call('files.writeShared', opts || {}),
+      writeStaging: (opts) => call('files.writeStaging', opts || {}),
       shareUri: (opts) => call('files.shareUri', opts || {}),
     },
     // Use the host's configured AI (user's keys) — text + images/attachments (vision).
@@ -15710,6 +15711,9 @@ function setLibrary(list) {
         case 'files.writeShared':
           requireNative('files.writeShared');
           return await nativeCall(FilesBridge, 'writeShared', { path: params.path, base64: params.base64 });
+        case 'files.writeStaging':
+          requireNative('files.writeStaging');
+          return await nativeCall(FilesBridge, 'writeStaging', { name: params.name, mime: params.mime, base64: params.base64 });
         case 'files.shareUri': {
           requireNative('files.shareUri');
           return await nativeCall(FilesBridge, 'shareUri', { path: params?.path || '' });
@@ -16324,12 +16328,13 @@ function setLibrary(list) {
             const text = String(params.text || '').trim();
             if (!text) throw new Error('ai.ttsToFile requires text');
             const path = String(params.path || '');
-            if (!path) throw new Error('ai.ttsToFile requires path');
             const audio = await cloudTtsSpeak(text, {
               voice: params.voice, model: params.model || params.ttsModel,
               format: params.format || 'mp3', rate: params.rate, speed: params.speed,
             });
-            const saved = await nativeCall(FilesBridge, 'writeShared', { path, base64: audio.base64 });
+            const saved = path
+              ? await nativeCall(FilesBridge, 'writeShared', { path, base64: audio.base64 })
+              : await nativeCall(FilesBridge, 'writeStaging', { name: 'tts_' + Date.now() + '.mp3', mime: 'audio/mpeg', base64: audio.base64 });
             return Object.assign({ ok: true, via: 'cloud', engine: audio.engine }, saved || {});
           });
         }
@@ -16682,7 +16687,7 @@ function setLibrary(list) {
 
         case 'openUrl': {
           const url = params.url;
-          if (!/^https?:\/\//i.test(url || '') && !/^mailto:/i.test(url || '') && !/^tel:/i.test(url || '')) {
+          if (!/^https?:\/\//i.test(url || '') && !/^market:\/\/details\?id=[A-Za-z0-9._-]+$/i.test(url || '') && !/^mailto:/i.test(url || '') && !/^tel:/i.test(url || '')) {
             throw new Error('Invalid URL');
           }
           if (Capacitor.isNativePlatform()) {
@@ -24916,12 +24921,12 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
   }); };
   document.getElementById('btnTts').onclick = function(){ safe(async function(){ log(await H().tts.speak('Forge kitchen sink on device TTS'), 'ok'); }); };
   document.getElementById('btnTts2Fs').onclick = function(){ safe(async function(){
-    var h = H(), path = '/sdcard/Download/Forge/Staging/kitchen_sink_tts_' + Date.now() + '.mp3';
+    var h = H();
     var r = await h.ai.tts({ text: 'Forge kitchen sink TTS to file using the selected provider.', play: false, returnAudio: true, format: 'mp3' });
     var data = String(r && (r.base64 || '') || '');
     if (!data && r && r.dataUrl && String(r.dataUrl).indexOf(',') >= 0) data = String(r.dataUrl).split(',').pop();
     if (!data) throw new Error('TTS returned no audio data');
-    log(await h.files.writeShared({ path: path, base64: data }), 'ok');
+    log(await h.files.writeStaging({ name: 'kitchen_sink_tts_' + Date.now() + '.mp3', mime: 'audio/mpeg', base64: data }), 'ok');
   }); };
   document.getElementById('btnTtsStop').onclick = function(){ safe(async function(){ log(await H().tts.stop(), 'ok'); }); };
   document.getElementById('btnRouteSpk').onclick = function(){ safe(async function(){ log(await H().audio.setRoute('speaker'), 'ok'); }); };
@@ -25264,14 +25269,118 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       if (e.target === el.shareBackupOverlay) el.shareBackupOverlay.classList.add('hidden');
     });
     el.btnMergeBackup?.addEventListener('click', () => openMergeBackupSheet());
- el.btnCleanupStaging?.addEventListener('click', async () => {
-   if (!confirm('Delete temporary files in Download/Forge/Staging?')) return;
-   try {
-     const r = await FilesBridge.cleanupStaging();
-     const n = Number(r?.deleted || 0);
-     toast(n ? `Deleted ${n} staging file${n === 1 ? '' : 's'}.` : 'Staging area is already empty.');
-   } catch (e) { toast('Could not clean staging: ' + (e?.message || e)); }
- });
+    function stagingChoice(question, options) {
+      console.info('[staging] stagingChoice before', { title: question?.title, options: (options || []).map((o) => o?.id) });
+      return new Promise((resolve) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'tour-overlay';
+        wrap.setAttribute('role', 'dialog');
+        wrap.setAttribute('aria-modal', 'true');
+        wrap.innerHTML = '<div class="tour-card" style="max-width:32rem"><h2></h2><p class="field-hint" style="font-size:.95rem;line-height:1.45;white-space:pre-line"></p><div data-staging-options style="display:grid;gap:.45rem;margin-top:.75rem"></div><div class="tour-actions"><button class="btn secondary small" data-staging-cancel type="button">Cancel</button></div></div>';
+        wrap.querySelector('h2').textContent = question.title;
+        wrap.querySelector('p').textContent = question.message;
+        const box = wrap.querySelector('[data-staging-options]');
+        let done = false;
+        const finish = (value) => { if (done) return; done = true; console.info('[staging] stagingChoice after', { title: question?.title, choice: value }); wrap.remove(); resolve(value); };
+        for (const option of options) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'btn secondary small';
+          button.style.textAlign = 'left';
+          button.textContent = option.label;
+          button.addEventListener('click', () => finish(option.id));
+          box.appendChild(button);
+        }
+        wrap.querySelector('[data-staging-cancel]').addEventListener('click', () => finish(null));
+        wrap.addEventListener('click', (event) => { if (event.target === wrap) finish(null); });
+        document.body.appendChild(wrap);
+      });
+    }
+
+    async function chooseStagingLocationAfterCleanup(current, opts) {
+      const currentLabel = current?.displayName || current?.internalPath || 'Forge internal cache';
+      const failed = !!(opts && opts.failed);
+      console.info('[staging] stagingChoice call before', { phase: failed ? 'recovery' : 'cleaned' });
+      const choice = await stagingChoice(
+        {
+          title: failed ? 'Could not clean staging' : 'Staging cleaned',
+          message: failed
+            ? `Current staging location:\n${currentLabel}\n\nChoose a location Forge should use now.`
+            : `Cleaned staging location:\n${currentLabel}\n\nWhere should Forge keep staging files now?`,
+        },
+        [
+          { id: 'keep', label: `✓ Keep ${currentLabel}` },
+          { id: 'change', label: 'Change staging location' },
+        ]
+      );
+      console.info('[staging] stagingChoice call after', { choice });
+      if (choice !== 'change') {
+        if (current?.mode === 'internal') await FilesBridge.useInternalStaging();
+        return;
+      }
+      console.info('[staging] stagingChoice call before', { phase: 'change' });
+      const next = await stagingChoice(
+        {
+          title: 'Change staging location',
+          message: 'Choose where Forge should store temporary staging files.',
+        },
+        [
+          { id: 'internal', label: 'Use Forge internal cache' },
+          { id: 'folder', label: 'Choose a folder…' },
+        ]
+      );
+      console.info('[staging] stagingChoice call after', { phase: 'change', choice: next });
+      if (next === 'internal') {
+        const saved = await FilesBridge.useInternalStaging();
+        const label = saved?.displayName || 'Forge internal cache';
+        try { localStorage.setItem('forge_staging_label_v1', label); } catch (_) {}
+        toast(`Staging location set to ${label}.`);
+      } else if (next === 'folder') {
+        const ok = confirm('Forge will create a ForgeStaging folder inside the selected location and only write or delete files there. Continue?');
+        if (!ok) return;
+        const picked = await FilesBridge.pickStagingFolder();
+        if (picked?.cancelled) return;
+        if (!picked?.ok) throw new Error('Could not set staging folder');
+        const label = picked.displayName || 'selected folder';
+        try { localStorage.setItem('forge_staging_label_v1', label); } catch (_) {}
+        toast(`Staging location set to ${label}.`);
+      }
+    }
+    el.btnCleanupStaging?.addEventListener('click', async () => {
+      if (!Capacitor.isNativePlatform()) { toast('Staging cleanup requires the Forge app.'); return; }
+      console.info('[staging] initial stagingChoice call before');
+      const initialChoice = await stagingChoice(
+        {
+          title: 'Clean staging files',
+          message: 'Clean the current staging location?',
+        },
+        [
+          { id: 'ok', label: 'Clean current staging location' },
+        ]
+      );
+      console.info('[staging] initial stagingChoice call after', { choice: initialChoice });
+      if (initialChoice !== 'ok') return;
+      let lastLabel = 'Forge internal cache';
+      try { lastLabel = localStorage.getItem('forge_staging_label_v1') || lastLabel; } catch (_) {}
+      let current = { mode: 'internal', displayName: lastLabel };
+      try {
+        const status = await Promise.race([
+          nativeCall(FilesBridge, 'stagingStatus', {}),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('status timeout')), 1500)),
+        ]);
+        if (status?.displayName || status?.internalPath) {
+          current = status;
+          try { localStorage.setItem('forge_staging_label_v1', status.displayName || status.internalPath); } catch (_) {}
+        }
+      } catch (_) {}
+      nativeCall(FilesBridge, 'cleanupStaging', {}).then((r) => {
+        const n = Number(r?.deleted || 0);
+        toast(n ? `Deleted ${n} staging file${n === 1 ? '' : 's'}.` : 'Staging area is already empty.');
+      }).catch((e) => {
+        toast('Could not clean staging: ' + (e?.message || e));
+      });
+      await chooseStagingLocationAfterCleanup(current);
+    });
     el.mergeBackupFile?.addEventListener('change', () => onMergeBackupPicked());
     el.btnMergeBackupCancel?.addEventListener('click', () => { _mergeBackupData = null; el.mergeBackupOverlay?.classList.add('hidden'); });
     el.btnMergePresetAll?.addEventListener('click', () => _mergeBackupPreset('all'));
@@ -25597,7 +25706,8 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
  if (Capacitor.isNativePlatform()) {
  // Only remove stale files at startup; do not race the first media picker.
  try { FilesBridge.cleanup({ olderThan: Date.now() - 24 * 60 * 60 * 1000 }); } catch (_) {}
- try { FilesBridge.cleanupStaging({ olderThan: Date.now() - 24 * 60 * 60 * 1000 }); } catch (_) {}
+ // Do not auto-clean the user-selected staging folder: it may contain unrelated files.
+ // cleanupStaging is reserved for the explicit AI-panel action.
  }
  initSetupProviders(); // turnkey catalog: compiled-in → cache → remote git fetch
  migrateLibraryNative().then(() => renderLibrary());
