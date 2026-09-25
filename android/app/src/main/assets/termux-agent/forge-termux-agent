@@ -3,7 +3,7 @@
 set -euo pipefail
 PORT="${FORGE_AGENT_PORT:-8787}"
 ROOT="${FORGE_BRIDGE_DIR:-/storage/emulated/0/Download/ForgeBridge}"
-VERSION="1.3.0"
+VERSION="1.4.0"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 mkdir -p "$ROOT/inbox" "$ROOT/outbox"
@@ -77,6 +77,22 @@ agent_process_version() {
   tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^FORGE_AGENT_VERSION=//p' | head -1
 }
 
+# A live agent process is NOT enough: when Termux is backgrounded, Android can
+# move the daemon to a restricted cgroup that filters its network. The process
+# keeps writing heartbeats but its TCP listener becomes unreachable (SYNs are
+# dropped). Probe the port directly; callers use this to replace such zombies.
+agent_port_reachable() {
+  "$PY" - "$PORT" <<'PYEOF' 2>/dev/null
+import socket, sys
+try:
+    s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), 0.8)
+    s.close()
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+PYEOF
+}
+
 # Last-resort port lookup when agent.json is absent or stale. The returned
 # PIDs are still passed through agent_process_matches before any signal.
 port_agent_pids() {
@@ -113,8 +129,20 @@ stop_old_agent() {
   if agent_process_matches "$pid"; then
     v="$(agent_process_version "$pid")"
     if [ "$v" = "$VERSION" ]; then
-      echo "forge-termux-agent already running (pid $pid, v$v, port $PORT)"
-      return 0
+      if agent_port_reachable; then
+        echo "forge-termux-agent already running (pid $pid, v$v, port $PORT)"
+        return 0
+      fi
+      echo "forge-termux-agent pid $pid (v$v) is alive but not answering on port $PORT — replacing it" >&2
+      # Same version but network-dead (backgrounded cgroup wedge): stop it so a
+      # fresh listener starts from this healthy shell instead of no-op'ing.
+      kill "$pid" 2>/dev/null || true
+      for _ in 1 2 3 4 5 6 7 8 9 10; do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.1
+      done
+      kill -9 "$pid" 2>/dev/null || true
+      return 1
     fi
     echo "stopping old forge-termux-agent (pid $pid, v${v:-unknown})"
     kill "$pid" 2>/dev/null || true
@@ -143,10 +171,17 @@ PY
       if agent_process_matches "$recorded"; then
         v="$(agent_process_version "$recorded")"
         if [ "$v" = "$VERSION" ]; then
-          echo "forge-termux-agent already running (pid $recorded, v$v, port $PORT)"
-          return 0
+          if agent_port_reachable; then
+            echo "forge-termux-agent already running (pid $recorded, v$v, port $PORT)"
+            return 0
+          fi
+          echo "recorded agent (pid $recorded, v$v) is not answering on port $PORT — replacing" >&2
+          kill "$recorded" 2>/dev/null || true
+          sleep 0.3
+          kill -9 "$recorded" 2>/dev/null || true
+        else
+          stop_old_agent "$recorded" || true
         fi
-        stop_old_agent "$recorded" || true
       fi
     fi
   fi
@@ -158,7 +193,7 @@ PY
     [ "$pid" != "$$" ] || continue
     if agent_process_matches "$pid"; then
       v="$(agent_process_version "$pid")"
-      if [ "$v" = "$VERSION" ]; then
+      if [ "$v" = "$VERSION" ] && agent_port_reachable; then
         echo "forge-termux-agent already running (pid $pid, v$v, port $PORT)"
         return 0
       fi
@@ -172,7 +207,7 @@ PY
     [ "$pid" != "$$" ] || continue
     if agent_process_matches "$pid"; then
       v="$(agent_process_version "$pid")"
-      if [ "$v" = "$VERSION" ]; then
+      if [ "$v" = "$VERSION" ] && agent_port_reachable; then
         echo "forge-termux-agent already running (pid $pid, v$v, port $PORT)"
         return 0
       fi

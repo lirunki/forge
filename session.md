@@ -3280,3 +3280,61 @@ Smoke (on device):
 [ ] F-Droid Termux w/ RUN_COMMAND (if available) → still uses run_command
 [ ] Settings → Device bridges → Test Termux still OK
 ```
+
+## Agent network-zombie fix — reachability check at startup (2026-09-25 · agent v1.4.0)
+
+**Diagnosed live on device.** Follow-up to the EACCES fix (`0bc79fd`). The user's
+next VideoLingo error (`Stage: Processing · file not found` — from
+`files.readShared` on the never-produced `/sdcard/Download/videolingo_<ts>.mp3`)
+led to inspecting the running agent from Termux itself:
+
+### Findings
+- Agent process (v1.3.0) was **alive** — heartbeat `agent.json` written every
+  second, inbox jobs processed, outbox results written (26 files) — **but its
+  TCP listener on 8787 was unreachable**: connections **timed out** (SYNs
+  dropped), not refused, even from Termux's own shell. Verified contrast: a
+  fresh python listener on another port answered instantly; after killing the
+  agent, 8787 refused instantly.
+- Cause: when Termux is backgrounded, Android moves the nohup'd daemon into a
+  restricted cgroup (`cpu:/background`, per-pid phantom-process cgroup) that
+  filters its network. The process lives on (file I/O via /sdcard works) but
+  loopback TCP is dead.
+- `ensure_single_agent` saw a same-version live agent → "already running"
+  no-op → **every new Termux shell kept the network-dead zombie**. No
+  self-healing path existed.
+
+### Fix (agent script only, v1.3.0 → v1.4.0)
+- New `agent_port_reachable()` — 0.8 s TCP connect probe to `127.0.0.1:$PORT`.
+- All three lookup paths in `ensure_single_agent` (agent.json pid, /proc scan,
+  port-listener scan) now require **alive AND same-version AND port reachable**
+  to no-op. A same-version but unreachable agent is **stopped and replaced**
+  ("alive but not answering on port 8787 — replacing it").
+- Version bump 1.3.0 → 1.4.0 means existing installs also get the version
+  mismatch path (old stopped, new started) on first re-run.
+
+### On-device recovery performed
+- Killed the zombie (pid 30215), installed v1.4.0 to `$HOME/bin` + ForgeBridge
+  export, restarted (`--daemon`), verified `curl localhost:8787/status` →
+  ok + `POST /exec` echo test ok + idempotent re-run "already running".
+- `termux-wake-lock` enabled to reduce the background-cgroup wedge recurring.
+- Verified yt-dlp / ffmpeg / ffprobe all present in Termux (VideoLingo deps).
+- Rebuilt APK with the v1.4.0 agent asset (gate green, asset syntax checked,
+  `VERSION="1.4.0"` confirmed inside the APK).
+
+### Files
+`android/app/src/main/assets/termux-agent/forge-termux-agent` (agent v1.4.0).
+No Java/host changes.
+
+Smoke (on device):
+```text
+[ ] Reinstall Forge (or just use the live agent — already updated on-device)
+[ ] Forge → Device bridges → Test Termux → connected via agent (v1.4.0)
+[ ] VideoLingo From device → full pipeline works
+[ ] VideoLingo Video link → yt-dlp downloads to /sdcard/Download, ffmpeg
+    converts, readShared finds the mp3
+[ ] Background Termux (swipe away) for a while → agent may wedge again →
+    open Termux (any new shell; .bashrc auto-start) → v1.4.0 detects the
+    unreachable zombie and replaces it automatically
+[ ] Note: the wedge itself (Android cgroup network filtering of backgrounded
+    nohup daemons) can recur; wake-lock + shell-open self-heal mitigate
+```
