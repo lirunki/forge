@@ -3225,3 +3225,58 @@ Future investigation/fix plan (do not implement without a separate task):
 6. Test across Bluetooth A2DP, SCO/HFP, BLE headsets, Android API levels, and OEM devices.
 
 No code changes were made for this TODO. Current implementation remains best-effort.
+
+## Termux agent EACCES fix — HTTP-only exec channel (2026-09-25)
+
+**Native only** (`TermuxBridgePlugin.java`). Diagnosed from the VideoLingo
+mini-app error: `No Termux bridge available … Detail: /storage/emulated/0/
+Download/ForgeBridge/outbox/<id>.json: open failed: EACCES (Permission denied)`.
+
+### Root cause (two compounding bugs)
+1. **`agentPortOpen` probe too tight** — raw socket connect to
+   `127.0.0.1:8787` with a **400 ms** timeout. Under load (VideoLingo
+   transcoding), the agent's Python accept loop can take >400 ms → probe
+   false-negatives even though the agent is running (fresh heartbeat) →
+   `exec` routed to the file channel.
+2. **File channel fundamentally broken on scoped storage (targetSdk 36)** —
+   `agentFileExec` wrote `inbox/<id>.json` (Forge-owned, write OK in the dir
+   Forge created), the Termux agent processed it and wrote
+   `outbox/<id>.json` (**Termux-owned**), then Forge tried to read the
+   result → **EACCES**. Two apps cannot exchange files in
+   `/storage/emulated/0/...` without `MANAGE_EXTERNAL_STORAGE` (not
+   requestable on the Play flavor anyway). Loopback HTTP is the only viable
+   channel — which the agent already serves.
+
+The misleading error came from `exec` wrapping the file-channel failure in
+`noBridgeMessage()` ("install the agent") even though the agent WAS running.
+
+### Fix
+| Change | Detail |
+|---|---|
+| `agentPortOpen` | 400 → **1500 ms** connect timeout (still snappy when the agent is down) |
+| `agentHttpExec` | No longer probes then falls back to files — **tries the POST directly** (3 s connect). Connect/IO failure → clear `forge-termux-agent not reachable on port 8787 (…). Start it in Termux with: $HOME/bin/forge-termux-agent` error |
+| `exec` routing | Simplified: `run_command` (F-Droid Termux) if supported, else **agent HTTP only**. File-channel branch + misleading `noBridgeMessage() + Detail:` wrap removed |
+| `agentFileExec` | **Deleted entirely** (dead code; same drift-liability rationale as dropping `builtinAgentFile` at 2.7.75) |
+
+`run_command` path (F-Droid/GitHub Termux) unchanged; `noBridgeMessage`
+still used for run_command failures. `probeAgent`'s agent.json heartbeat
+read can EACCES but is caught by callers (worst case: status reports
+not-running; the HTTP probe at 1500 ms now does the real work).
+
+### Verified
+- `build_forge.sh` (gate + assembleDebug) green; both flavor debug APKs
+  built @ 2.7.98 (248).
+- Device install pending (no adb reachable from this Termux session) —
+  sideload `/sdcard/Download/Forge-debug-rebuilt.apk` or adb from a host.
+
+Smoke (on device):
+```text
+[ ] Install rebuilt APK → About v2.7.98 (248)
+[ ] Start forge-termux-agent in Termux → VideoLingo Processing stage proceeds
+[ ] While agent runs + heavy load (start a transcode, retry) → no EACCES /
+    "No Termux bridge" error — exec still routes over HTTP
+[ ] Kill the agent → termux.exec from a mini-app → clear "not reachable …
+    Start it in Termux with: $HOME/bin/forge-termux-agent" (no EACCES noise)
+[ ] F-Droid Termux w/ RUN_COMMAND (if available) → still uses run_command
+[ ] Settings → Device bridges → Test Termux still OK
+```

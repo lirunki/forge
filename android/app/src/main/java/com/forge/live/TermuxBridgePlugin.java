@@ -322,29 +322,23 @@ public class TermuxBridgePlugin extends Plugin {
                 }
                 final int timeoutMs = tMs;
                 String bridge = pickBridge();
-                if (!"agent".equals(bridge) && (!PluginMethod.RETURN_NONE.equals(bridge) || !agentPortOpen(DEFAULT_AGENT_PORT))) {
-                    if ("run_command".equals(bridge)) {
-                        this.mainHandler.post(new Runnable() {
-                            @Override // java.lang.Runnable
-                            public final void run() {
-                                TermuxBridgePlugin.this.lambda$exec$4(call, spec, timeoutMs);
-                            }
-                        });
-                        return;
-                    }
-                    try {
-                        JSONObject job = jobFromSpec(spec, timeoutMs, false);
-                        JSONObject result = agentFileExec(job, timeoutMs);
-                        call.resolve(jsFromAgentResult(result, "file"));
-                        return;
-                    } catch (Exception fileEx) {
-                        call.reject(noBridgeMessage() + " Detail: " + fileEx.getMessage());
-                        return;
-                    }
+                if ("run_command".equals(bridge)) {
+                    this.mainHandler.post(new Runnable() {
+                        @Override // java.lang.Runnable
+                        public final void run() {
+                            TermuxBridgePlugin.this.lambda$exec$4(call, spec, timeoutMs);
+                        }
+                    });
+                    return;
                 }
-                JSONObject job2 = jobFromSpec(spec, timeoutMs, false);
-                JSONObject result2 = agentHttpExec(job2, timeoutMs + 5000);
-                call.resolve(jsFromAgentResult(result2, "agent"));
+                // Agent HTTP is the only channel that works on scoped storage.
+                // The old inbox/outbox file channel was removed: Forge cannot
+                // read result files written by Termux in /storage/emulated/0
+                // (EACCES without MANAGE_EXTERNAL_STORAGE). agentHttpExec throws
+                // a clear "start the agent" error when it is down.
+                JSONObject job = jobFromSpec(spec, timeoutMs, false);
+                JSONObject result = agentHttpExec(job, timeoutMs + 5000);
+                call.resolve(jsFromAgentResult(result, "agent"));
             } catch (IllegalArgumentException iae) {
                 call.reject(iae.getMessage());
             }
@@ -761,10 +755,14 @@ public class TermuxBridgePlugin extends Plugin {
     }
 
     private boolean agentPortOpen(int port) {
+        // Loopback probe. Under heavy load (e.g. VideoLingo transcoding) the
+        // agent's single-threaded accept loop can take >400ms to accept, so a
+        // tight timeout false-negatives and routes to the (broken on scoped
+        // storage) file channel. 1500ms is still snappy when the agent is down.
         try {
             Socket s = new Socket();
             try {
-                s.connect(new InetSocketAddress("127.0.0.1", port), 400);
+                s.connect(new InetSocketAddress("127.0.0.1", port), 1500);
                 s.close();
                 return true;
             } finally {
@@ -775,93 +773,53 @@ public class TermuxBridgePlugin extends Plugin {
     }
 
     private JSONObject agentHttpExec(JSONObject job, int timeoutMs) throws Exception {
-        if (agentPortOpen(DEFAULT_AGENT_PORT)) {
-            URL url = new URL("http://127.0.0.1:8787/exec");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(2000);
-            conn.setReadTimeout(Math.max(timeoutMs, 5000));
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            byte[] payload = job.toString().getBytes(StandardCharsets.UTF_8);
-            conn.setFixedLengthStreamingMode(payload.length);
-            OutputStream os = conn.getOutputStream();
-            try {
-                os.write(payload);
-                if (os != null) {
-                    os.close();
-                }
-                int code = conn.getResponseCode();
-                String body = readStream(code >= 400 ? conn.getErrorStream() : conn.getInputStream());
-                conn.disconnect();
-                if (body == null || body.isEmpty()) {
-                    throw new Exception("Agent returned empty body (HTTP " + code + ")");
-                }
-                JSONObject result = new JSONObject(body);
-                if (code >= 400 && !result.has(RESULT_STDOUT)) {
-                    throw new Exception("Agent HTTP " + code + ": " + body);
-                }
-                return result;
-            } catch (Throwable th) {
-                if (os != null) {
-                    try {
-                        os.close();
-                    } catch (Throwable th2) {
-                        th.addSuppressed(th2);
-                    }
-                }
-                throw th;
-            }
-        }
-        return agentFileExec(job, timeoutMs);
-    }
-
-    private JSONObject agentFileExec(JSONObject job, int timeoutMs) throws Exception {
-        boolean alive = false;
-        File root = exportAgentFiles(false);
-        File inbox = new File(root, "inbox");
-        File outbox = new File(root, "outbox");
-        if (!inbox.exists() && !inbox.mkdirs()) {
-            throw new Exception("Cannot create inbox at " + inbox.getAbsolutePath());
-        }
-        if (!outbox.exists() && !outbox.mkdirs()) {
-            throw new Exception("Cannot create outbox at " + outbox.getAbsolutePath());
-        }
-        File hb = new File(root, "agent.json");
-        if (hb.isFile() && System.currentTimeMillis() - hb.lastModified() < 10000) {
-            alive = true;
-        }
-        if (!alive && !agentPortOpen(DEFAULT_AGENT_PORT)) {
-            throw new Exception("forge-termux-agent is not running or not reachable on port " + DEFAULT_AGENT_PORT + ". Start it in Termux with: $HOME/bin/forge-termux-agent");
-        }
-        String id = job.optString("id", UUID.randomUUID().toString());
-        job.put("id", id);
-        File inFile = new File(inbox, id + ".json");
-        File outFile = new File(outbox, id + ".json");
-        if (outFile.exists()) {
-            outFile.delete();
-        }
+        // HTTP over loopback is the ONLY channel that works on scoped storage
+        // (targetSdk 36): two apps cannot exchange files in /storage/emulated/0
+        // without MANAGE_EXTERNAL_STORAGE, so the old file-channel fallback was
+        // removed. Try the POST directly with a generous connect timeout — this
+        // also recovers from the 400ms probe false-negatives that used to route
+        // here. If the agent is genuinely down, connect() fails fast.
+        URL url = new URL("http://127.0.0.1:" + DEFAULT_AGENT_PORT + "/exec");
+        HttpURLConnection conn;
         try {
-            writeFile(inFile, job.toString());
-        } catch (Exception writeEx) {
-            if (!agentPortOpen(DEFAULT_AGENT_PORT)) {
-                throw new Exception("forge-termux-agent is not running or not reachable on port " + DEFAULT_AGENT_PORT + ". Start it in Termux with: $HOME/bin/forge-termux-agent");
-            }
-            throw writeEx;
+            conn = (HttpURLConnection) url.openConnection();
+        } catch (Exception ce) {
+            throw new Exception("forge-termux-agent not reachable on port " + DEFAULT_AGENT_PORT + ". Start it in Termux with: $HOME/bin/forge-termux-agent (or bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent)");
         }
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline) {
-            if (outFile.isFile() && outFile.length() > 0) {
-                Thread.sleep(30L);
-                String raw = readFile(outFile);
-                outFile.delete();
-                inFile.delete();
-                return new JSONObject(raw);
+        conn.setConnectTimeout(3000);
+        conn.setReadTimeout(Math.max(timeoutMs, 5000));
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        byte[] payload = job.toString().getBytes(StandardCharsets.UTF_8);
+        conn.setFixedLengthStreamingMode(payload.length);
+        OutputStream os = null;
+        try {
+            os = conn.getOutputStream();
+            os.write(payload);
+            int code = conn.getResponseCode();
+            String body = readStream(code >= 400 ? conn.getErrorStream() : conn.getInputStream());
+            conn.disconnect();
+            if (body == null || body.isEmpty()) {
+                throw new Exception("Agent returned empty body (HTTP " + code + ")");
             }
-            Thread.sleep(150L);
+            JSONObject result = new JSONObject(body);
+            if (code >= 400 && !result.has(RESULT_STDOUT)) {
+                throw new Exception("Agent HTTP " + code + ": " + body);
+            }
+            return result;
+        } catch (java.io.IOException ioe) {
+            throw new Exception("forge-termux-agent not reachable on port " + DEFAULT_AGENT_PORT + " (" + ioe.getClass().getSimpleName() + "). Start it in Termux with: $HOME/bin/forge-termux-agent");
+        } catch (Throwable th) {
+            if (os != null) {
+                try {
+                    os.close();
+                } catch (Throwable th2) {
+                    th.addSuppressed(th2);
+                }
+            }
+            throw th;
         }
-        inFile.delete();
-        throw new Exception("Timed out waiting for agent file result (" + timeoutMs + "ms)");
     }
 
     private JSObject jsFromAgentResult(JSONObject result, String bridge) {
