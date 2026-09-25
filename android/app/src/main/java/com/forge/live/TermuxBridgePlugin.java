@@ -760,7 +760,7 @@ public class TermuxBridgePlugin extends Plugin {
             alive = true;
         }
         if (!alive && !agentPortOpen(DEFAULT_AGENT_PORT)) {
-            throw new Exception("forge-termux-agent is not running (no heartbeat in " + hb.getAbsolutePath() + ")");
+            throw new Exception("forge-termux-agent is not running or not reachable on port " + DEFAULT_AGENT_PORT + ". Start it in Termux with: $HOME/bin/forge-termux-agent");
         }
         String id = job.optString("id", UUID.randomUUID().toString());
         job.put("id", id);
@@ -769,7 +769,14 @@ public class TermuxBridgePlugin extends Plugin {
         if (outFile.exists()) {
             outFile.delete();
         }
-        writeFile(inFile, job.toString());
+        try {
+            writeFile(inFile, job.toString());
+        } catch (Exception writeEx) {
+            if (!agentPortOpen(DEFAULT_AGENT_PORT)) {
+                throw new Exception("forge-termux-agent is not running or not reachable on port " + DEFAULT_AGENT_PORT + ". Start it in Termux with: $HOME/bin/forge-termux-agent");
+            }
+            throw writeEx;
+        }
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (System.currentTimeMillis() < deadline) {
             if (outFile.isFile() && outFile.length() > 0) {
