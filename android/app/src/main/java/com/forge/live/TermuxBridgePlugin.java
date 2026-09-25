@@ -23,6 +23,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import android.util.Base64;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -418,6 +419,77 @@ public class TermuxBridgePlugin extends Plugin {
                     call.reject(e.getMessage());
                 } catch (Exception e) {
                     call.reject("Termux streamFile failed: " + e.getMessage(), e);
+                }
+            }
+        });
+    }
+
+    @PluginMethod
+    public void readFile(final PluginCall call) {
+        this.ioPool.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String path = call.getString("path", null);
+                    if (path == null || path.trim().isEmpty()) throw new IllegalArgumentException("path required");
+                    if (!agentPortOpen(DEFAULT_AGENT_PORT)) throw new Exception("forge-termux-agent is not running or not reachable on port " + DEFAULT_AGENT_PORT + ". Start it in Termux with: $HOME/bin/forge-termux-agent");
+                    long maxBytes = 28672000L;
+                    try {
+                        if (call.getData() != null && call.getData().has("maxBytes")) {
+                            maxBytes = (long) call.getData().getDouble("maxBytes");
+                        }
+                    } catch (Exception ignored) {}
+                    if (maxBytes <= 0 || maxBytes > 64L * 1024L * 1024L) maxBytes = 64L * 1024L * 1024L;
+                    String encoded = URLEncoder.encode(path.trim(), "UTF-8").replace("+", "%20");
+                    String mime = call.getString("mime", "application/octet-stream");
+                    if (mime == null || mime.isEmpty()) mime = "application/octet-stream";
+                    String mimeEnc = URLEncoder.encode(mime, "UTF-8").replace("+", "%20");
+                    URL url = new URL("http://127.0.0.1:" + DEFAULT_AGENT_PORT + "/files?path=" + encoded + "&mime=" + mimeEnc + "&maxBytes=" + maxBytes);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setConnectTimeout(2000);
+                    conn.setReadTimeout(Math.max(call.getInt("timeoutMs", 60000), 10000));
+                    conn.setRequestMethod("GET");
+                    int code = conn.getResponseCode();
+                    InputStream stream = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                    java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                    if (stream != null) {
+                        byte[] chunk = new byte[65536];
+                        int n;
+                        while ((n = stream.read(chunk)) != -1) {
+                            buf.write(chunk, 0, n);
+                            if (buf.size() > maxBytes) {
+                                stream.close();
+                                conn.disconnect();
+                                throw new Exception("file too large to read (" + buf.size() + " > " + maxBytes + ")");
+                            }
+                        }
+                        stream.close();
+                    }
+                    conn.disconnect();
+                    if (code >= 400) {
+                        String body = new String(buf.toByteArray(), StandardCharsets.UTF_8);
+                        String errmsg = body;
+                        try {
+                            JSONObject j = new JSONObject(body);
+                            errmsg = j.optString("errmsg", body);
+                        } catch (Exception ignored) {}
+                        throw new Exception("agent HTTP " + code + ": " + errmsg);
+                    }
+                    byte[] bytes = buf.toByteArray();
+                    String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                    JSObject out = new JSObject();
+                    out.put("ok", true);
+                    out.put("bridge", "agent");
+                    out.put("path", path.trim());
+                    out.put("size", bytes.length);
+                    out.put("mime", mime);
+                    out.put("base64", b64);
+                    out.put("dataUrl", "data:" + mime + ";base64," + b64);
+                    call.resolve(out);
+                } catch (IllegalArgumentException e) {
+                    call.reject(e.getMessage());
+                } catch (Exception e) {
+                    call.reject("Termux readFile failed: " + e.getMessage(), e);
                 }
             }
         });

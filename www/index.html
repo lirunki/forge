@@ -11752,6 +11752,7 @@ function setLibrary(list) {
       open: () => call('termux.open'),
       installAgent: () => call('termux.installAgent'),
       streamFile: (uri, destination, opts) => call('termux.streamFile', Object.assign({ uri, destination }, opts || {})),
+      readFile: (path, opts) => call('termux.readFile', Object.assign({ path }, opts || {})),
       run: (opts) => call('termux.run', opts || {}),
       // Optional second argument: [{ file|uri, destination }]. Existing
       // exec({ script, ... }) calls remain unchanged.
@@ -17266,6 +17267,13 @@ function setLibrary(list) {
             mime: params.mime || 'application/octet-stream',
             overwrite: params.overwrite !== false,
             mkdirs: params.mkdirs !== false,
+            timeoutMs: params.timeoutMs,
+          });
+        case 'termux.readFile':
+          return await nativeCall(TermuxBridge, 'readFile', {
+            path: params.path,
+            mime: params.mime || 'application/octet-stream',
+            maxBytes: params.maxBytes,
             timeoutMs: params.timeoutMs,
           });
         case 'termux.run':
