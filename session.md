@@ -3490,3 +3490,21 @@ returned a track path that didn't exist.
 All ffmpeg command shapes verified working in Termux (gap/voice/pad/concat/aac
 tested end-to-end locally). Mini-app only — no APK rebuild; user re-imports
 `/sdcard/Download/VideoLingo.html.html`.
+
+## VideoLingo: concat entries must be relative to concat.txt (root cause of TTS mux failure)
+
+**Reproduced via agent POST /exec:** assembly voice/gap/pad steps all succeed,
+final concat fails with doubled paths —
+`Impossible to open 'videolingo_aikiball/tts/videolingo_aikiball/tts/gap_0.wav'`.
+ffmpeg's concat demuxer resolves list entries relative to the LISTING FILE's
+directory, not the process cwd, so fs-root-relative entries double and no input
+is ever found → translated_audio.m4a never created → mux "No such file or
+directory".
+
+**Fix:** concat.txt entries are now bare basenames (`file 'gap_0.wav'`) since
+every piece lives in the tts/ dir alongside the list file. Verified end-to-end:
+rebuilt translated_audio.m4a (261s) + muxed with the original video + delivered
+/sdcard/Download/videolingo_edited_1790402425.mp4 for the user's current run.
+
+Note: the user's last error was from the OLD imported copy (no set -e/prefix —
+pads existed despite a voice-level failure pattern). Re-import required.
