@@ -3401,3 +3401,34 @@ relative exec output lands in `fs/` ✅ · relative `termux.readFile` serves it 
 `~/VideoLingo.html.pre-fs.bak`; patched copy committed to `forge/samples/`.
 **User must re-import** `/sdcard/Download/VideoLingo.html.html` into the Forge
 library (replace) to run the patched version.
+
+## Host exec: stop forcing cwd=$HOME — let the agent default apply (2026-09-26 · 2.7.100/250)
+
+**User report after the VideoLingo fs migration:** `Stage: Processing · Error:
+Input file is missing or empty` — the patched app's own `[ ! -s
+videolingo_<name>/input_*.mp4 ]` check failed although streamFile had created
+the fs folder.
+
+**Root cause:** `TermuxBridgePlugin` always forced `cwd = TERMUX_HOME` into the
+agent job when the caller passed no cwd — both in spec building
+(`call.getString("cwd", TERMUX_HOME)`) and `jobFromSpec`
+(`spec.cwd != null ? spec.cwd : TERMUX_HOME`). That overrode the agent v1.5.0
+fs-root default, so every relative path in exec scripts resolved against
+Termux `$HOME` instead of `ForgeBridge/fs`.
+
+**Fix:** when the caller omits `cwd`, spec.cwd stays null and the job omits the
+key entirely → the agent applies its own default (`fs/` on v1.5.0+, `$HOME` on
+older agents — legacy behavior preserved for un-updated agents). The F-Droid
+`run_command` intent path keeps its `TERMUX_HOME` workdir fallback.
+
+**2.7.100 / versionCode 250** (docs baselines + package.json synced). User must
+install this APK — native change. VideoLingo mini-app itself unchanged from the
+fs migration (re-import already done).
+
+Smoke:
+```text
+[ ] Install Forge v2.7.100 (250) → VideoLingo From device → input streams to
+    fs/videolingo_<name>/ AND the exec check passes (no "missing or empty")
+[ ] Console/exec: relative paths land in ForgeBridge/fs/
+[ ] termux.exec with explicit cwd still honored
+```

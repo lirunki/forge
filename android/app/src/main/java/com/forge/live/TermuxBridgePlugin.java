@@ -856,7 +856,9 @@ public class TermuxBridgePlugin extends Plugin {
             args.put(a);
         }
         job.put("args", args);
-        job.put("cwd", spec.cwd != null ? spec.cwd : TERMUX_HOME);
+        if (spec.cwd != null) {
+            job.put("cwd", spec.cwd);
+        }
         job.put("timeoutMs", timeoutMs);
         job.put("background", background);
         job.put("label", spec.label);
@@ -937,13 +939,16 @@ public class TermuxBridgePlugin extends Plugin {
     private CommandSpec parseCommand(PluginCall call) {
         String script = call.getString("script", null);
         String command = call.getString("command", null);
-        String str = TERMUX_HOME;
-        String cwd = call.getString("cwd", TERMUX_HOME);
+        // No cwd from the caller → leave spec.cwd null so the AGENT applies its
+        // own default working dir (fs root on agent v1.5.0+, $HOME on older
+        // agents). Forcing TERMUX_HOME here overrode the agent fs root.
+        String str = null;
+        String cwd = call.getString("cwd", null);
         boolean background = !Boolean.FALSE.equals(call.getBoolean("background", true));
         String label = call.getString("label", "Forge");
         String description = call.getString("description", "Command from Forge");
         CommandSpec spec = new CommandSpec();
-        if (cwd != null) {
+        if (cwd != null && !cwd.trim().isEmpty()) {
             str = cwd;
         }
         spec.cwd = str;
