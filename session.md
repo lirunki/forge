@@ -3470,3 +3470,23 @@ STT fallback chain). `samples/VideoLingo.html` was already the patched fs
 version (identical to `/sdcard/Download/VideoLingo.html.html`). Demos are
 served from raw.githubusercontent (main branch), so the entry goes live on
 push — no APK rebuild needed. 31 samples total.
+
+## VideoLingo: TTS assembly exec now checked (2026-09-26)
+
+**User report:** Processing failed at the mux step with raw ffmpeg stderr
+`Error opening input file videolingo_aikiball/translated_audio.m4a: No such
+file or directory` — transcript + translation had succeeded, per-part TTS
+audio existed, but the combined gap/stretch/pad/concat assembly exec failed
+silently (exit code ignored, no set -e, stderr discarded), so the function
+returned a track path that didn't exist.
+
+**Fix (samples/VideoLingo.html makeTranslatedAudio):**
+- assembly script now starts with `set -e` (fail at first bad ffmpeg);
+- final `test -s track || TRACK_MISSING/exit 9` guard inside the script;
+- exec exit code checked → error includes exit code + stderr tail;
+- follow-up `test -s` verification exec after assembly;
+- mux step error now prefixed "Could not add the translated audio track: …".
+
+All ffmpeg command shapes verified working in Termux (gap/voice/pad/concat/aac
+tested end-to-end locally). Mini-app only — no APK rebuild; user re-imports
+`/sdcard/Download/VideoLingo.html.html`.
