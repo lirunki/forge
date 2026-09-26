@@ -3432,3 +3432,32 @@ Smoke:
 [ ] Console/exec: relative paths land in ForgeBridge/fs/
 [ ] termux.exec with explicit cwd still honored
 ```
+
+## STT fallback chain for ai.transcribe (2026-09-26 · 2.7.100/250)
+
+**User report:** VideoLingo Processing stage failed with `STT 404: <!DOCTYPE
+html>` — the pipeline worked end-to-end through ffmpeg, then the hosted STT
+fallback hit the ACTIVE provider (Cheaper Inference), whose Next.js gateway has
+no `/v1/audio/transcriptions` endpoint.
+
+**Fix (www/index.html `transcribeAudioFile`):**
+- Extracted the single-provider request into `runSttRequest()` (closure over
+  the prepared blob).
+- `sttFallbackProviderIds()`: caller-selected runtime first, then every other
+  configured provider with a SAVED key that is non-Gemini
+  (order: groq > openai > xai > custom profiles).
+- Explicit `providerId` from a mini-app is still the first attempt; the chain
+  only exists so a chat-only active gateway doesn't kill transcription.
+- Groq default model is now `whisper-large-v3` (groq rejects `whisper-1`).
+- Final error lists every provider tried + guidance to configure Groq/OpenAI/xAI.
+- Duplicated pre-flight checks (gemini/key) moved inside the per-attempt closure.
+
+Build 2.7.100/250 · 088d12f (same version — web-only change over the previous
+commit's APK; reinstall the new APK).
+
+Smoke:
+```text
+[ ] Active = Cheaper Inference + Groq key saved → VideoLingo transcript works
+[ ] Active = Groq → unchanged single-attempt path
+[ ] ai.transcribe({providerId:'openai'}) → openai tried first
+```
