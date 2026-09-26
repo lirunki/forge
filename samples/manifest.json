@@ -669,6 +669,29 @@
       "minimumForgeVersion": "2.6.0"
     },
     {
+      "id": "videolingo",
+      "title": {
+        "en": "VideoLingo",
+        "es": "VideoLingo",
+        "fr": "VideoLingo",
+        "pt": "VideoLingo",
+        "ja": "VideoLingo",
+        "ko": "VideoLingo"
+      },
+      "description": {
+        "en": "Try the VideoLingo Forge mini-app demo: AI video dubbing — transcribe, translate, and re-voice videos on-device.",
+        "es": "Prueba el demo de mini-app de Forge VideoLingo: doblaje de vídeo con IA — transcribe, traduce y revocea vídeos en el dispositivo.",
+        "fr": "Essayez la démo de mini-app Forge VideoLingo : doublage vidéo par IA — transcrire, traduire et revoicer des vidéos sur l'appareil.",
+        "pt": "Experimente o demo de mini-app Forge VideoLingo: dublagem de vídeo com IA — transcreva, traduza e redobre vídeos no dispositivo.",
+        "ja": "Forgeミニアプリのデモ「VideoLingo」を試せます：AI動画吹き替え — 端末上で動画を文字起こし・翻訳・吹き替え。",
+        "ko": "Forge 미니 앱 데모 VideoLingo을(를) 사용해 보세요: AI 영상 더빙 — 기기에서 영상을 전사·번역·더빙합니다."
+      },
+      "file": "VideoLingo.html",
+      "icon": "🎬",
+      "category": "AI & device",
+      "minimumForgeVersion": "2.7.100"
+    },
+    {
       "id": "voiceforge",
       "title": {
         "en": "VoiceForge",

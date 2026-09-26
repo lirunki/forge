@@ -3461,3 +3461,12 @@ Smoke:
 [ ] Active = Groq → unchanged single-attempt path
 [ ] ai.transcribe({providerId:'openai'}) → openai tried first
 ```
+
+## VideoLingo added as a demo mini-app (2026-09-26)
+
+`samples/manifest.json`: new entry `videolingo` (🎬, category "AI & device",
+`minimumForgeVersion: 2.7.100` — it requires the agent fs root + cwd fix +
+STT fallback chain). `samples/VideoLingo.html` was already the patched fs
+version (identical to `/sdcard/Download/VideoLingo.html.html`). Demos are
+served from raw.githubusercontent (main branch), so the entry goes live on
+push — no APK rebuild needed. 31 samples total.
