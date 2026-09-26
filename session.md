@@ -3377,3 +3377,27 @@ Smoke:
 [ ] VideoLingo From device (absolute $HOME paths) → unchanged
 [ ] ls /storage/emulated/0/Download/ForgeBridge → inbox, outbox, fs
 ```
+
+## VideoLingo mini-app: migrate to agent fs/ root (2026-09-25)
+
+**User question:** does VideoLingo leverage the new agent `fs/` root (v1.5.0)?
+**Answer was no** — it predated it: absolute `$HOME/VideoLingo_<name>` workdirs
+and `/sdcard/Download/videolingo_*` downloads, working only via the agent's
+backward-compat ($HOME paths still allowed). Patched to use it properly:
+
+| Change | Before | After |
+|---|---|---|
+| Device workdir | `/data/data/com.termux/files/home/VideoLingo_<name>` | relative `videolingo_<name>` → `ForgeBridge/fs/` |
+| Link download/convert | `/sdcard/Download/videolingo_source_<ts>.wav` + `videolingo_<ts>.mp3` | relative → `fs/` |
+| Audio readback branch | `$HOME`-regex → termux.readFile, else files.readShared | anything not `/sdcard`|`/storage` → termux.readFile (agent) |
+| Local transcript dir | `/sdcard/Download/VideoLingo` | relative `videolingo` → `fs/` |
+| Audio display path | raw audioPath | fs-root prefixed when relative |
+| Final edited video | `workDir/subtitled_translated.mp4` (Termux-home, unshareable) | agent copies to `/sdcard/Download/videolingo_edited_<ts>.mp4`; display + share from there; share() tolerates shareUri rejection (toast the path) |
+
+8 surgical string patches (each verified unique before replace), JS syntax
+checked (`node --check`), and the whole flow live-tested against agent v1.5.0:
+relative exec output lands in `fs/` ✅ · relative `termux.readFile` serves it ✅ ·
+`cp` to `/sdcard/Download` works ✅. Backup of the pre-patch HTML at
+`~/VideoLingo.html.pre-fs.bak`; patched copy committed to `forge/samples/`.
+**User must re-import** `/sdcard/Download/VideoLingo.html.html` into the Forge
+library (replace) to run the patched version.
