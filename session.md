@@ -3508,3 +3508,16 @@ rebuilt translated_audio.m4a (261s) + muxed with the original video + delivered
 
 Note: the user's last error was from the OLD imported copy (no set -e/prefix —
 pads existed despite a voice-level failure pattern). Re-import required.
+
+## VideoLingo: translated audio as MAIN track option (2026-09-26)
+
+New checkbox in the audio-track card, next to "Add translated audio as a
+second selectable audio track": "Make translated audio the main track (original
+kept as secondary)" — **on by default**. Swaps the mux map order
+(`-map 1:a:0 -map 0:a?`) so the translated track is the default playback audio;
+metadata indices (language/title on both tracks: "Translated <lang>" /
+"Original") follow the selected order. Verified on the real files: translated
+becomes audio stream 1, original stream 2.
+
+samples/VideoLingo.html synced to /sdcard; demo serves it immediately from
+GitHub main. Re-import needed for the library copy.
