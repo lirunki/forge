@@ -3,10 +3,10 @@
 set -euo pipefail
 PORT="${FORGE_AGENT_PORT:-8787}"
 ROOT="${FORGE_BRIDGE_DIR:-/storage/emulated/0/Download/ForgeBridge}"
-VERSION="1.4.0"
+VERSION="1.5.0"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
-mkdir -p "$ROOT/inbox" "$ROOT/outbox"
+mkdir -p "$ROOT/inbox" "$ROOT/outbox" "$ROOT/fs"
 
 # Precondition: Python is deliberately eager. It runs before --daemon so a
 # missing interpreter is visible to the user rather than hidden in nohup.
@@ -243,8 +243,10 @@ from urllib.parse import parse_qs, urlparse, unquote
 PORT = int(os.environ.get("FORGE_AGENT_PORT", "8787"))
 ROOT = Path(os.environ.get("FORGE_BRIDGE_ROOT", "/storage/emulated/0/Download/ForgeBridge"))
 INBOX, OUTBOX = ROOT / "inbox", ROOT / "outbox"
+FSROOT = ROOT / "fs"
 INBOX.mkdir(parents=True, exist_ok=True)
 OUTBOX.mkdir(parents=True, exist_ok=True)
+FSROOT.mkdir(parents=True, exist_ok=True)
 VERSION = os.environ.get("FORGE_AGENT_VERSION", "1.0.0")
 HOME = os.environ.get("HOME", "/data/data/com.termux/files/home")
 PREFIX = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
@@ -256,6 +258,7 @@ def status():
         "pid": PID,
         "version": VERSION,
         "home": HOME,
+        "fsRoot": str(FSROOT),
         "prefix": PREFIX,
         "port": PORT,
         "root": str(ROOT),
@@ -270,7 +273,7 @@ def write_heartbeat():
 
 def run_job(job):
     t0 = time.time()
-    cwd = job.get("cwd") or HOME
+    cwd = job.get("cwd") or str(FSROOT)
     timeout = max(1, min(int(job.get("timeoutMs") or 120000) / 1000.0, 600))
     env = os.environ.copy()
     env["HOME"] = HOME
@@ -338,11 +341,33 @@ MAX_STREAM_BYTES = 512 * 1024 * 1024
 MAX_READ_BYTES = 64 * 1024 * 1024
 
 
+# Allowed destination roots: the agent fs root (ROOT/fs, the default for
+# relative paths and downloads) and the Termux home (kept for callers that
+# pass explicit $HOME/~/ or absolute home paths).
+def _allowed_bases():
+    bases = []
+    for base in (FSROOT, Path(HOME)):
+        try:
+            bases.append(base.expanduser().resolve())
+        except Exception:
+            pass
+    return bases
+
+def _inside_any(path, bases):
+    for base in bases:
+        if path == base or base in path.parents:
+            return True
+    return False
+
 def safe_home_destination(raw):
     value = unquote(str(raw or '').strip())
     if not value:
         raise ValueError('destination required')
-    if value == '$HOME':
+    if value in ('$FS', 'fs', '.'):
+        value = str(FSROOT)
+    elif value.startswith('$FS/'):
+        value = str(FSROOT / value[4:])
+    elif value == '$HOME':
         value = HOME
     elif value.startswith('$HOME/'):
         value = str(Path(HOME) / value[6:])
@@ -351,27 +376,25 @@ def safe_home_destination(raw):
     elif value.startswith('~/'):
         value = str(Path(HOME) / value[2:])
     elif not value.startswith('/'):
-        value = str(Path(HOME) / value)
-    home = Path(HOME).expanduser().resolve()
+        # Relative paths root at the agent fs root (sibling of inbox/outbox).
+        value = str(FSROOT / value)
+    bases = _allowed_bases()
     target = Path(os.path.abspath(value))
-    if target == home or home not in target.parents:
-        raise ValueError('destination must be under $HOME')
+    if not _inside_any(target, bases):
+        raise ValueError('destination must be under the agent fs root or $HOME')
     # Check existing symlink components; nonexistent parents are safe to create
-    # only when their nearest existing ancestor remains inside $HOME.
+    # only when their nearest existing ancestor remains inside an allowed base.
     probe = target.parent
     while not probe.exists() and probe != probe.parent:
         probe = probe.parent
-    probe_real = probe.resolve()
-    if probe_real != home and home not in probe_real.parents:
-        raise ValueError('destination must be under $HOME')
+    if not _inside_any(probe.resolve(), bases):
+        raise ValueError('destination must be under the agent fs root or $HOME')
     if target.parent.exists():
-        parent_real = target.parent.resolve()
-        if parent_real != home and home not in parent_real.parents:
-            raise ValueError('destination must be under $HOME')
+        if not _inside_any(target.parent.resolve(), bases):
+            raise ValueError('destination must be under the agent fs root or $HOME')
     if target.exists():
-        final = target.resolve()
-        if final == home or (final != home and home not in final.parents):
-            raise ValueError('destination must be under $HOME')
+        if not _inside_any(target.resolve(), bases):
+            raise ValueError('destination must be under the agent fs root or $HOME')
     return target
 
 

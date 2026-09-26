@@ -3338,3 +3338,42 @@ Smoke (on device):
 [ ] Note: the wedge itself (Android cgroup network filtering of backgrounded
     nohup daemons) can recur; wake-lock + shell-open self-heal mitigate
 ```
+
+## Agent v1.5.0 — fs/ root for file exchange (2026-09-25)
+
+**User request:** the agent's filesystem root for downloading/streaming files
+should be a folder `fs` in the agent's running folder
+(`/storage/emulated/0/Download/ForgeBridge`), sibling of `inbox` and `outbox`.
+
+### What changed (agent only, v1.4.0 → v1.5.0)
+| Piece | Detail |
+|---|---|
+| `FSROOT = ROOT/fs` | created at startup (bash mkdir + python mkdir); exposed in `/status` as `fsRoot` |
+| Destination resolution | relative paths (and `$FS/`, `fs`, `.`) resolve under **`ROOT/fs`** (was `$HOME`) |
+| Backward compat | explicit `$HOME`, `~/`, and absolute Termux-home paths still resolve under `$HOME` (VideoLingo's `deviceWorkDir()` keeps working unchanged) |
+| Allowed roots | destination must be under `ROOT/fs` **or** `$HOME`; symlink-escape checks generalized to both bases |
+| `run_job` default cwd | `$HOME` → **`ROOT/fs`** — scripts that download to relative paths (`yt-dlp -o file.mp4`) now land in `fs/` |
+| Version | 1.5.0 (older agents auto-replaced at next shell open) |
+
+### Verified on device (agent running live)
+- PUT `destination=test/hello.txt` → `/storage/emulated/0/Download/ForgeBridge/fs/test/hello.txt` ✅
+- GET `path=test/hello.txt` → content served ✅
+- exec `pwd > where.txt` → `where.txt` in `fs/`, cwd = `fs` root ✅
+- GET/PUT absolute `$HOME/...` paths (VideoLingo readback contract) ✅
+- `path=/etc/passwd` → rejected (`destination must be under the agent fs root or $HOME`) ✅
+- APK rebuilt carrying agent v1.5.0 asset
+
+### Deploy note
+The on-device agent is already updated + restarted (v1.5.0, pid live, status
+verified). Older installs pick it up via: Forge → Device bridges → Install
+agent → re-run install.sh + `$HOME/bin/forge-termux-agent` (version mismatch
+auto-replaces).
+
+Smoke:
+```text
+[ ] curl localhost:8787/status → "version":"1.5.0","fsRoot":".../ForgeBridge/fs"
+[ ] termux.streamFile(uri,'videos/x.mp4') → ForgeBridge/fs/videos/x.mp4
+[ ] termux.readFile('videos/x.mp4') → served from fs root
+[ ] VideoLingo From device (absolute $HOME paths) → unchanged
+[ ] ls /storage/emulated/0/Download/ForgeBridge → inbox, outbox, fs
+```
