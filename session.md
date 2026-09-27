@@ -3625,3 +3625,11 @@ and writes it as FORGE into internal cache staging (forge_staging). Returns
 Old Download/Forge/Staging cp path removed. Verified: agent GET /files serves
 the 60MB subtitled_translated.mp4 byte-identical. Agent maxBytes query param
 overrides its 64MB default. APK rebuilt (2.7.100/250 · 1b05be0).
+
+## stageForDelivery no longer swallows errors (2026-09-26)
+
+User hit "could not be staged" — real cause hidden by a catch-all in
+stageForDelivery. Root cause: the rebuilt APK (with termux.stageFile, verified
+present in classes11.dex) had not been INSTALLED yet → "Unknown host method:
+termux.stageFile" was swallowed into a generic message. stageForDelivery now
+throws the underlying error; share()/openVideo() append install/agent hints.
