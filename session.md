@@ -3657,3 +3657,9 @@ showResultActions(hasVideo) reveals Share at every completion point and Open
 only when a video result exists. Android voices now ALWAYS dump to console on
 provider selection: raw getVoices response + "name | locale | features"
 lines + JSON — even on empty lists, so failures are visible.
+
+## VideoLingo: voices console dump removed (2026-09-27)
+
+Diagnostic logs stripped from loadTtsVoices; gender heuristics remain. The
+user was about to paste their voice list for a curated gender map but the
+paste was cut off — requested it again.
