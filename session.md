@@ -3601,3 +3601,9 @@ Android provider dropdown only.
    curated code table.
 
 APK rebuilt (2.7.100/250 · 6c090e5). Mini-app synced to /sdcard.
+
+## VideoLingo: console-log full Android voice list (2026-09-26)
+
+loadTtsVoices now logs (before language filtering) the complete Android voice
+list to the console: one "name | locale | features" line per voice plus a
+single JSON blob — so the user can paste it back for a curated gender map.
