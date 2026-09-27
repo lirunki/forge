@@ -3633,3 +3633,11 @@ stageForDelivery. Root cause: the rebuilt APK (with termux.stageFile, verified
 present in classes11.dex) had not been INSTALLED yet → "Unknown host method:
 termux.stageFile" was swallowed into a generic message. stageForDelivery now
 throws the underlying error; share()/openVideo() append install/agent hints.
+
+## stageFile calling-convention bug (2026-09-26)
+
+"path is required" from native stageFile: the JS bridge was declared
+`stageFile: (path, opts)` (positional) but VideoLingo called it with a single
+options object — path arrived as an object → empty at native. Bridge now
+normalizes (string|object); mini-app calls positionally. This also explains
+"agent tests work" while the app failed. APK 722e243.
