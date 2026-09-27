@@ -11754,7 +11754,7 @@ function setLibrary(list) {
       installAgent: () => call('termux.installAgent'),
       streamFile: (uri, destination, opts) => call('termux.streamFile', Object.assign({ uri, destination }, opts || {})),
       readFile: (path, opts) => call('termux.readFile', Object.assign({ path }, opts || {})),
-      stageFile: (path, opts) => call('termux.stageFile', Object.assign({ path }, opts || {})),
+      stageFile: (pathOrOpts, opts) => call('termux.stageFile', typeof pathOrOpts === 'string' ? Object.assign({ path: pathOrOpts }, opts || {}) : (pathOrOpts || {})),
       run: (opts) => call('termux.run', opts || {}),
       // Optional second argument: [{ file|uri, destination }]. Existing
       // exec({ script, ... }) calls remain unchanged.
