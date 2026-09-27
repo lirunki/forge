@@ -3714,3 +3714,10 @@ Two bugs in run():
    neither translation prompt uses sourceLang (only targetLang + context) —
    the guard was over-conservative. Removed it; auto-detect now works for
    translate and subtitles.
+
+## VideoLingo: restore timestamps in translate mode (2026-09-27)
+
+The translate fallback block (now reachable after the guard fix) was setting
+the Transcript tab to `original` (plain text, no timestamps). Now builds the
+timestamped `tshow` from segs (same format as transcribe mode) for the
+Transcript tab; Translation tab shows the translated text.
