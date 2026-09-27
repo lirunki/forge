@@ -3649,3 +3649,11 @@ fs root or $HOME). VideoLingo now records resultTermuxPath (the fs-relative
 `rendered` path, e.g. videolingo_<n>/subtitled_translated.mp4) and
 stageForDelivery stages THAT; /sdcard copy kept only for user visibility.
 Mini-app only — no APK change needed.
+
+## VideoLingo: hide Open/Share until done; always dump Android voices (2026-09-27)
+
+Open/Share start hidden (off) and are re-hidden on each run start;
+showResultActions(hasVideo) reveals Share at every completion point and Open
+only when a video result exists. Android voices now ALWAYS dump to console on
+provider selection: raw getVoices response + "name | locale | features"
+lines + JSON — even on empty lists, so failures are visible.
