@@ -3731,3 +3731,15 @@ burning/mux/share step is gated to subtitles mode. Translate exits after
 time-adjustment with "Your timestamped translation is ready." The old
 full-text F.ai.chat fallback (no timestamps) is removed. Time adjustment
 (subtitleStart/subtitleEnd linear remap) now applies to translate results too.
+
+## VideoLingo: fuse original (tampered) voice into translated track (2026-09-28)
+
+New checkbox next to ttsPrimary: "Fuse original track with tampered voice into
+translated audio track". When checked, after producing translated_audio.m4a:
+1. extract original audio from the (subtitled) video to 48k stereo PCM
+2. apply tampered-voice filter: stereotools mlev=0.2 + 3-band EQ cuts
+   (300Hz -6, 1kHz -14, 2.5kHz -10) per user spec
+3. amix translated (full) + tampered original (volume 0.35, no normalize)
+   -> single fused m4a, truncated to mediaDuration
+4. mux video + fused audio as ONE audio track titled "Translated X + original"
+Unchecked = previous dual-track behavior (translated + original selectable).
