@@ -245,7 +245,15 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
                     ? new File(cache, "tts_" + System.currentTimeMillis() + ".wav").getCanonicalFile()
                     : new File(rawPath).getCanonicalFile();
             File legacyCache = new File(getContext().getCacheDir(), "forge_picks").getCanonicalFile();
-            if (!(target.getPath().startsWith(cache.getPath() + File.separator) || target.getPath().startsWith(legacyCache.getPath() + File.separator))) { call.reject("path not allowed"); return; }
+            // Mirror FilesBridgePlugin.isAllowedStagingFile: also accept the legacy
+            // shared staging root (Download/Forge/Staging) so tts.synthesizeToFile
+            // behaves like files.writeShared / ai.ttsToFile for the same paths.
+            File legacyShared = new File(android.os.Environment
+                    .getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                    "Forge/Staging").getCanonicalFile();
+            if (!(target.getPath().startsWith(cache.getPath() + File.separator)
+                    || target.getPath().startsWith(legacyCache.getPath() + File.separator)
+                    || target.getPath().startsWith(legacyShared.getPath() + File.separator))) { call.reject("path not allowed"); return; }
             File parent = target.getParentFile(); if (parent != null && !parent.exists()) parent.mkdirs();
             final File tempTarget = new File(getContext().getCacheDir(), "forge_tts_" + UUID.randomUUID().toString() + ".wav");
             final String lang = call.getString("lang", null), voiceName = call.getString("voice", null);

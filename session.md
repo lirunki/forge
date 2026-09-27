@@ -3521,3 +3521,29 @@ becomes audio stream 1, original stream 2.
 
 samples/VideoLingo.html synced to /sdcard; demo serves it immediately from
 GitHub main. Re-import needed for the library copy.
+
+## Android TTS path whitelist + voice language filter (2026-09-26)
+
+**User report:** TTS provider "android" → `path not allowed` at the Processing
+stage. Cause: `TtsBridgePlugin.synthesizeToFile` (line ~248) only accepted the
+two INTERNAL cache roots, while the mini-app (correctly) stages WAVs in
+`/sdcard/Download/Forge/Staging` — the legacy shared root that
+`FilesBridgePlugin.isAllowedStagingFile` accepts and `files.writeShared`
+(writing via plain FileOutputStream) already uses successfully in production.
+
+**Fixes:**
+1. Host: `TtsBridgePlugin.synthesizeToFile` whitelist now also accepts the
+   legacy shared staging root `Download/Forge/Staging` — mirrors
+   FilesBridgePlugin semantics; internal-cache and SAF-tree paths unchanged.
+   APK rebuilt (2.7.100/250, same version — native change, reinstall needed).
+2. Mini-app `loadTtsVoices`: when provider is Android, voices are filtered to
+   those whose locale matches the selected destination language (exact or
+   `xx-YY`/`xx_YY` prefix; locale-less voices kept). Voice list also reloads
+   when the destination language changes. Cloud voice lists untouched.
+
+Smoke:
+```text
+[ ] tts provider=android, target=en → only English voices listed
+[ ] Android TTS run completes: Staging wav → cp → stretch → translated_audio
+[ ] Cloud TTS + internal-cache callers still work (writeShared unchanged)
+```
