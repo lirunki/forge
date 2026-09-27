@@ -3607,3 +3607,21 @@ APK rebuilt (2.7.100/250 · 6c090e5). Mini-app synced to /sdcard.
 loadTtsVoices now logs (before language filtering) the complete Android voice
 list to the console: one "name | locale | features" line per voice plus a
 single JSON blob — so the user can paste it back for a curated gender map.
+
+## Root cause of "not supported": Termux-created files unreadable by Forge (2026-09-26)
+
+The staged videos in Download/Forge/Staging were created by TERMUX (u0_a362,
+0660, no world-read). On scoped storage (no MANAGE_EXTERNAL_STORAGE) Forge's
+FileProvider cannot open them, so both ACTION_VIEW (Open) and the share-sheet
+stream failed in the receiving player ("not supported" / blank VLC).
+
+**Fix — new `termux.stageFile` bridge:** native TermuxBridgePlugin method that
+pulls a Termux-side file through the loopback agent (GET /files, raw bytes)
+and writes it as FORGE into internal cache staging (forge_staging). Returns
+{path, uri, size}. VideoLingo's Share/Open now stage via this channel:
+- Share: file:// + internal staged path (Capacitor wraps via FileProvider —
+  Forge-owned file, readable ✓)
+- Open: files.open({path: staged internal path}) → ACTION_VIEW ✓
+Old Download/Forge/Staging cp path removed. Verified: agent GET /files serves
+the 60MB subtitled_translated.mp4 byte-identical. Agent maxBytes query param
+overrides its 64MB default. APK rebuilt (2.7.100/250 · 1b05be0).

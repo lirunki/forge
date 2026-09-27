@@ -16,6 +16,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import androidx.core.os.EnvironmentCompat;
+import androidx.core.content.FileProvider;
 import androidx.vectordrawable.graphics.drawable.PathInterpolatorCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -1022,6 +1023,66 @@ public class TermuxBridgePlugin extends Plugin {
         StringBuilder out = new StringBuilder(bytes.length * 2);
         for (byte b : bytes) out.append(String.format(java.util.Locale.US, "%02x", b & 255));
         return out.toString();
+    }
+
+    /** Pull a Termux-side file through the agent into Forge-owned internal staging.
+     *  Termux-created files in shared storage are unreadable by Forge on scoped
+     *  storage (targetSdk 36), so a Termux `cp` into Download/Forge/Staging
+     *  cannot be served by FileProvider. This streams the bytes over the
+     *  loopback agent (GET /files) and writes them as Forge, making the copy
+     *  share/open-able. Returns { path, uri, size }. */
+    @PluginMethod
+    public void stageFile(final PluginCall call) {
+        final String path = call.getString("path", "");
+        final String name = call.getString("name", "");
+        final long maxBytes = call.getLong("maxBytes", Long.valueOf(64L * 1024 * 1024));
+        if (path == null || path.trim().isEmpty()) { call.reject("path is required"); return; }
+        HttpURLConnection conn = null;
+        try {
+            String safe = (name == null || name.trim().isEmpty() ? new File(path).getName() : name.trim())
+                    .replaceAll("[^A-Za-z0-9._-]", "_");
+            if (safe.isEmpty()) safe = "termux_file.bin";
+            File stageDir = new File(getContext().getCacheDir(), "forge_staging");
+            if (!stageDir.exists() && !stageDir.mkdirs()) throw new Exception("cannot create internal staging");
+            File out = new File(stageDir, "termux_" + System.currentTimeMillis() + "_" + safe);
+            URL url = new URL("http://127.0.0.1:" + DEFAULT_AGENT_PORT + "/files?path="
+                    + URLEncoder.encode(path, "UTF-8") + "&maxBytes=" + maxBytes);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(3000);
+            conn.setReadTimeout(300000);
+            int code = conn.getResponseCode();
+            if (code != 200) {
+                String body = readStream(conn.getErrorStream());
+                String msg = body == null ? "" : body.trim();
+                if (msg.length() > 300) msg = msg.substring(0, 300);
+                call.reject("agent file fetch failed (HTTP " + code + ")" + (msg.isEmpty() ? "" : ": " + msg));
+                return;
+            }
+            InputStream in = conn.getInputStream();
+            FileOutputStream fos = new FileOutputStream(out);
+            byte[] buf = new byte[65536];
+            int n; long total = 0;
+            try {
+                while ((n = in.read(buf)) >= 0) {
+                    if (n > 0) { fos.write(buf, 0, n); total += n; }
+                }
+            } finally {
+                try { fos.close(); } catch (Exception ignored) {}
+                try { in.close(); } catch (Exception ignored) {}
+            }
+            if (total <= 0) { out.delete(); call.reject("file missing or empty"); return; }
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", out);
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("path", out.getAbsolutePath());
+            ret.put("uri", uri.toString());
+            ret.put("size", total);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("termux.stageFile failed: " + e.getMessage(), e);
+        } finally {
+            if (conn != null) try { conn.disconnect(); } catch (Exception ignored) {}
+        }
     }
 
     private static String readStream(InputStream in) throws Exception {

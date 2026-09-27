@@ -11754,6 +11754,7 @@ function setLibrary(list) {
       installAgent: () => call('termux.installAgent'),
       streamFile: (uri, destination, opts) => call('termux.streamFile', Object.assign({ uri, destination }, opts || {})),
       readFile: (path, opts) => call('termux.readFile', Object.assign({ path }, opts || {})),
+      stageFile: (path, opts) => call('termux.stageFile', Object.assign({ path }, opts || {})),
       run: (opts) => call('termux.run', opts || {}),
       // Optional second argument: [{ file|uri, destination }]. Existing
       // exec({ script, ... }) calls remain unchanged.
@@ -17345,6 +17346,13 @@ function setLibrary(list) {
             description: params.description,
             timeoutMs: params.timeoutMs,
           });
+        case 'termux.stageFile': {
+          return await nativeCall(TermuxBridge, 'stageFile', {
+            path: params?.path || '',
+            name: params?.name || '',
+            maxBytes: params?.maxBytes != null ? Number(params.maxBytes) : undefined,
+          });
+        }
 
         default:
           throw new Error('Unknown host method: ' + method);
