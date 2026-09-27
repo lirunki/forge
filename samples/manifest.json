@@ -679,12 +679,12 @@
         "ko": "VideoLingo"
       },
       "description": {
-        "en": "Try the VideoLingo Forge mini-app demo: AI video dubbing — transcribe, translate, and re-voice videos on-device.",
-        "es": "Prueba el demo de mini-app de Forge VideoLingo: doblaje de vídeo con IA — transcribe, traduce y revocea vídeos en el dispositivo.",
-        "fr": "Essayez la démo de mini-app Forge VideoLingo : doublage vidéo par IA — transcrire, traduire et revoicer des vidéos sur l'appareil.",
-        "pt": "Experimente o demo de mini-app Forge VideoLingo: dublagem de vídeo com IA — transcreva, traduza e redobre vídeos no dispositivo.",
-        "ja": "Forgeミニアプリのデモ「VideoLingo」を試せます：AI動画吹き替え — 端末上で動画を文字起こし・翻訳・吹き替え。",
-        "ko": "Forge 미니 앱 데모 VideoLingo을(를) 사용해 보세요: AI 영상 더빙 — 기기에서 영상을 전사·번역·더빙합니다."
+        "en": "Try the VideoLingo Forge mini-app demo: AI video dubbing — transcribe, translate (incl. Chinese), re-voice, and optionally fuse a tampered original voice under the translation. On-device with Termux.",
+        "es": "Prueba el demo de mini-app de Forge VideoLingo: doblaje de vídeo con IA — transcribe, traduce (incl. chino), revocea y, opcionalmente, fusiona una voz original alterada bajo la traducción. En el dispositivo con Termux.",
+        "fr": "Essayez la démo de mini-app Forge VideoLingo : doublage vidéo par IA — transcrire, traduire (y compris chinois), revoicer et, optionnellement, fusionner une voix originale altérée sous la traduction. Sur l'appareil avec Termux.",
+        "pt": "Experimente o demo de mini-app Forge VideoLingo: dublagem de vídeo com IA — transcreva, traduza (incl. chinês), redobre e, opcionalmente, funda uma voz original alterada sob a tradução. No dispositivo com Termux.",
+        "ja": "Forgeミニアプリのデモ「VideoLingo」を試せます：AI動画吹き替え — 文字起こし・翻訳（中国語対応）・吹き替え、さらに翻訳の下に加工した元の音声を融合するオプションも。Termuxでオンデバイス。",
+        "ko": "Forge 미니 앱 데모 VideoLingo을(를) 사용해 보세요: AI 영상 더빙 — 전사·번역(중국어 포함)·더빙, 그리고 번역 아래에 변조된 원본 음성을 융합하는 옵션까지. Termux로 기기에서."
       },
       "file": "VideoLingo.html",
       "icon": "🎬",
