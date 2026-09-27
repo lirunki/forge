@@ -3701,3 +3701,16 @@ Clean cache button in the header (next to ⚙) that runs `rm -rf videolingo_*`
 in the agent fs root (clears transcripts/translations/TTS/rendered videos)
 and drops the cached gender-map entries from localStorage. Toast reports
 folders-remaining count.
+
+## VideoLingo: translate mode + auto-detect fixed (2026-09-27)
+
+Two bugs in run():
+1. Early-return guard was `if(mode!=="subtitles")` — caught translate mode
+   too, so translate showed the transcript and returned before reaching the
+   (fallback) translation block. Changed to `if(mode==="transcribe")` so
+   transcribe still short-circuits, translate falls through to the F.ai.chat
+   translation block, subtitles enters its segment block.
+2. Auto-detect source language was rejected for subtitles with an error, but
+   neither translation prompt uses sourceLang (only targetLang + context) —
+   the guard was over-conservative. Removed it; auto-detect now works for
+   translate and subtitles.
