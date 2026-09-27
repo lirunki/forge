@@ -895,6 +895,18 @@ public class PhoneBridgePlugin extends Plugin {
         try {
             Intent intent = new Intent("android.intent.action.VIEW", Uri.parse(url));
             intent.addFlags(268435456);
+            // For market:// Play Store URIs, force the Play Store app to handle it
+            // instead of a browser or throwing ActivityNotFoundException.
+            if (url != null && url.startsWith("market:")) {
+                intent.setPackage("com.android.vending");
+                if (getContext().getPackageManager().resolveActivity(intent, 0) == null) {
+                    // Play Store app not installed — fall back to the https web URL.
+                    intent = new Intent("android.intent.action.VIEW",
+                            Uri.parse("https://play.google.com/store/apps/details?id=" +
+                                    Uri.parse(url).getQueryParameter("id")));
+                    intent.addFlags(268435456);
+                }
+            }
             getContext().startActivity(intent);
             JSObject ret = new JSObject();
             ret.put("opened", true);

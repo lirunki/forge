@@ -3743,3 +3743,12 @@ translated audio track". When checked, after producing translated_audio.m4a:
    -> single fused m4a, truncated to mediaDuration
 4. mux video + fused audio as ONE audio track titled "Translated X + original"
 Unchecked = previous dual-track behavior (translated + original selectable).
+
+## Install Termux button -> Play Store app + install.sh calls termux-setup-storage (2026-09-28)
+
+Native: PhoneBridgePlugin.openUrl now targets com.android.vending package for
+market:// URIs so the Play Store app (not a browser) handles the Termux
+install; falls back to https web URL if Play Store app absent. Install script:
+calls termux-setup-storage early (before using /storage/emulated/0) so shared
+storage symlinks + permission are in place. APK reinstall required for the
+openUrl fix; install.sh change benefits users who rerun install.sh.
