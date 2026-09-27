@@ -3558,3 +3558,13 @@ files.shareUri(staging copy) → FileProvider content URI → F.share opens the
 Android share sheet with the video attached (players, WhatsApp, etc.).
 Works for fs-relative and absolute result paths; toast fallback kept. Pure
 mini-app change — no host/APK change; demo serves from GitHub on push.
+
+## VideoLingo: Share fix #2 — file:// URI for Capacitor Share (2026-09-26)
+
+First attempt passed the content:// URI from files.shareUri into F.share →
+Capacitor Share plugin rejects anything but file:// URLs ("only file urls are
+supported", SharePlugin.java:163) since it wraps files via its own
+FileProvider. Fix: drop the shareUri round-trip entirely — after the staging
+cp, share `file:///storage/emulated/0/Download/Forge/Staging/<name>` directly.
+Verified: staging is under the external-path FileProvider root and the
+authority (com.forge.live.fileprovider) matches the plugin's expectations.
