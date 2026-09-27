@@ -3673,3 +3673,14 @@ LoforBusiness/Philosophize, QuipuTalk es map) + support for the newer inline
 "#male_N/#female_N" name format. ~5 rare codes (thd/end/bnd/urc/mlc) and
 "-language" placeholder voices stay unlabeled. Heuristic retained as fallback.
 Sources cached in ~/.cache/tts_gender_final.json.
+
+## VideoLingo: runtime gender lookup w/ local caching (2026-09-27)
+
+Static 147-code GENDER_MAP removed. ensureGenderMap now fetches at runtime:
+(1) readium/speech json/{lang}.json per language present in the device voice
+list (codes harvested from name+altNames+nativeID, 161 codes; 7-day
+localStorage cache per lang) — primary source per user choice; (2) ptsbook
+annotated list (single 4KB fetch, cached) fills gaps; (3) 5 inline by-ear
+en-GB exceptions. #male/#female inline format + keyword heuristic remain as
+fallbacks. Verified with mocked fetch: correct labels, cache writes, second
+call does 0 fetches.
