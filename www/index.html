@@ -11417,6 +11417,7 @@ function setLibrary(list) {
       writeShared: (opts) => call('files.writeShared', opts || {}),
       writeStaging: (opts) => call('files.writeStaging', opts || {}),
       shareUri: (opts) => call('files.shareUri', opts || {}),
+      open: (opts) => call('files.open', opts || {}),
     },
     // Use the host's configured AI (user's keys) — text + images/attachments (vision).
     // Provider menu: listProviders / setProvider pick among host-configured brains (no keys exposed).

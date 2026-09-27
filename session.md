@@ -3568,3 +3568,22 @@ FileProvider. Fix: drop the shareUri round-trip entirely — after the staging
 cp, share `file:///storage/emulated/0/Download/Forge/Staging/<name>` directly.
 Verified: staging is under the external-path FileProvider root and the
 authority (com.forge.live.fileprovider) matches the plugin's expectations.
+
+## files.open (ACTION_VIEW) + VideoLingo Open button + voice gender labels (2026-09-26)
+
+**VLC share issue:** Capacitor Share sends ACTION_SEND + EXTRA_STREAM; some
+players (VLC) open from the chooser but fail to load the content URI. Added a
+proper open path instead of fighting the share intent:
+
+- Host: new `FilesBridgePlugin.open` — ACTION_VIEW + FileProvider URI +
+  FLAG_GRANT_READ_URI_PERMISSION (+NEW_TASK); accepts staging-root paths
+  (same whitelist as shareUri) or content:// URIs; optional mime. JS bridge
+  `F.files.open({path,mime})`. APK rebuilt.
+- Mini-app: "Open" button next to Share in the result header — stages the
+  video on demand (same cp exec) and opens it directly in the preferred
+  player.
+
+**Voice gender labels:** Android TTS API exposes no gender, so Android voices
+are labeled (F)/(M) via name heuristics (female/woman/_f_/-f- before
+male/man/_m_/-m-); unlabeled when the engine gives no hint. Applies to the
+Android provider dropdown only.

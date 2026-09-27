@@ -316,6 +316,37 @@ public class FilesBridgePlugin extends Plugin {
         } catch (Exception e) { call.reject("files.shareUri failed: " + e.getMessage(), e); }
     }
 
+    /** Open a staged/shared file directly in the default viewer (ACTION_VIEW). */
+    @PluginMethod
+    public void open(PluginCall call) {
+        try {
+            String raw = call.getString("path", "");
+            if (raw == null || raw.isEmpty()) { call.reject("path is required"); return; }
+            Uri uri;
+            String mime = call.getString("mime", "");
+            if (raw.startsWith("content://")) {
+                uri = Uri.parse(raw);
+                if (mime == null || mime.isEmpty()) mime = getContext().getContentResolver().getType(uri);
+            } else {
+                File target = new File(raw).getCanonicalFile();
+                if (!isAllowedStagingFile(target)) { call.reject("path not allowed"); return; }
+                if (!target.isFile() || target.length() <= 0) { call.reject("file missing or empty"); return; }
+                uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", target);
+            }
+            if (mime == null || mime.isEmpty()) mime = "*/*";
+            Intent view = new Intent(Intent.ACTION_VIEW);
+            view.setDataAndType(uri, mime);
+            view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                getContext().startActivity(view);
+            } catch (android.content.ActivityNotFoundException e) {
+                call.reject("no app can open this file type"); return;
+            }
+            JSObject result = new JSObject(); result.put("ok", true); result.put("uri", uri.toString());
+            call.resolve(result);
+        } catch (Exception e) { call.reject("files.open failed: " + e.getMessage(), e); }
+    }
+
     /** Write a small generated binary into shared staging (for TTS/audio chunks). */
     @PluginMethod
     public void writeShared(PluginCall call) {
