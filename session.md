@@ -3693,3 +3693,11 @@ Forge-play-release.aab (5.87MB) + Forge-full-release.apk (6.43MB), both
 stamped sha=7579b13, verified via bundle forge-build.json; copied to
 /sdcard/Download. Note: release_forge.sh must be invoked as its own bash
 command — chained after && it silently no-ops.
+
+## VideoLingo: Chinese option + clean-cache button (2026-09-27)
+
+Added Chinese (zh) to both source and target language dropdowns. Added a 🧹
+Clean cache button in the header (next to ⚙) that runs `rm -rf videolingo_*`
+in the agent fs root (clears transcripts/translations/TTS/rendered videos)
+and drops the cached gender-map entries from localStorage. Toast reports
+folders-remaining count.
