@@ -3663,3 +3663,13 @@ lines + JSON — even on empty lists, so failures are visible.
 Diagnostic logs stripped from loadTtsVoices; gender heuristics remain. The
 user was about to paste their voice list for a curated gender map but the
 paste was cut off — requested it again.
+
+## VideoLingo: curated Google-voice gender map (2026-09-27)
+
+Replaced the keyword heuristic with a 147-entry curated map of Google Speech
+Services voice codes -> M/F, harvested from public datasets (chialab/speaker
+Android lines, seenuvasan1947 ptsbook annotated list, by-ear en-GB notes from
+LoforBusiness/Philosophize, QuipuTalk es map) + support for the newer inline
+"#male_N/#female_N" name format. ~5 rare codes (thd/end/bnd/urc/mlc) and
+"-language" placeholder voices stay unlabeled. Heuristic retained as fallback.
+Sources cached in ~/.cache/tts_gender_final.json.
