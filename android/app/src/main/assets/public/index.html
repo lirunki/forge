@@ -15863,6 +15863,10 @@ function setLibrary(list) {
           requireNative('files.shareUri');
           return await nativeCall(FilesBridge, 'shareUri', { path: params?.path || '' });
         }
+        case 'files.open': {
+          requireNative('files.open');
+          return await nativeCall(FilesBridge, 'open', { path: params?.path || '', mime: params?.mime || '' });
+        }
         case 'files.readShared': {
           requireNative('files.readShared');
           return await nativeCall(FilesBridge, 'readShared', {

@@ -398,6 +398,14 @@ public class TtsBridgePlugin extends Plugin implements TextToSpeech.OnInitListen
                         o.put("quality", v.getQuality());
                         o.put("latency", v.getLatency());
                         o.put("networkConnectionRequired", v.isNetworkConnectionRequired());
+                        try {
+                            java.util.Set<String> feats = v.getFeatures();
+                            if (feats != null) {
+                                JSArray f = new JSArray();
+                                for (String s : feats) if (s != null) f.put(s);
+                                o.put("features", (Object) f);
+                            }
+                        } catch (Exception ignored) {}
                         voices.put(o);
                     }
                 }

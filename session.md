@@ -3587,3 +3587,17 @@ proper open path instead of fighting the share intent:
 are labeled (F)/(M) via name heuristics (female/woman/_f_/-f- before
 male/man/_m_/-m-); unlabeled when the engine gives no hint. Applies to the
 Android provider dropdown only.
+
+## Fix files.open routing + voice features (2026-09-26)
+
+1. `files.open` failed with "Unknown host method" — the JS bridge object had
+   it but the RPC dispatcher switch didn't. Added `case 'files.open'` →
+   nativeCall(FilesBridge,'open',{path,mime}).
+2. Voice gender labels showed nothing on Google Speech Services (opaque
+   codes like en-us-x-iom-local). Host getVoices now also returns
+   Voice.getFeatures(); the mini-app scans features (plus name heuristics)
+   for gender tokens. Engines that report gender get exact (F)/(M); Google's
+   engine may still expose nothing — if so the only honest option is a
+   curated code table.
+
+APK rebuilt (2.7.100/250 · 6c090e5). Mini-app synced to /sdcard.
