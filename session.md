@@ -3547,3 +3547,14 @@ Smoke:
 [ ] Android TTS run completes: Staging wav → cp → stretch → translated_audio
 [ ] Cloud TTS + internal-cache callers still work (writeShared unchanged)
 ```
+
+## VideoLingo: Share opens the actual video (2026-09-26)
+
+share() previously tried files.shareUri on the /sdcard/Download output —
+rejected (non-staging) → fell back to a "Saved to Download" toast. Now on
+shareUri rejection it stages the video on demand: Termux exec
+`mkdir -p /sdcard/Download/Forge/Staging; cp (if missing); test -s` →
+files.shareUri(staging copy) → FileProvider content URI → F.share opens the
+Android share sheet with the video attached (players, WhatsApp, etc.).
+Works for fs-relative and absolute result paths; toast fallback kept. Pure
+mini-app change — no host/APK change; demo serves from GitHub on push.
