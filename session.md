@@ -3641,3 +3641,11 @@ throws the underlying error; share()/openVideo() append install/agent hints.
 options object — path arrived as an object → empty at native. Bridge now
 normalizes (string|object); mini-app calls positionally. This also explains
 "agent tests work" while the app failed. APK 722e243.
+
+## stageFile: use fs-relative source, not the /sdcard copy (2026-09-26)
+
+Agent rejected "/sdcard/Download/videolingo_edited_*.mp4" (400: must be under
+fs root or $HOME). VideoLingo now records resultTermuxPath (the fs-relative
+`rendered` path, e.g. videolingo_<n>/subtitled_translated.mp4) and
+stageForDelivery stages THAT; /sdcard copy kept only for user visibility.
+Mini-app only — no APK change needed.
