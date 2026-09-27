@@ -3721,3 +3721,13 @@ The translate fallback block (now reachable after the guard fix) was setting
 the Transcript tab to `original` (plain text, no timestamps). Now builds the
 timestamped `tshow` from segs (same format as transcribe mode) for the
 Transcript tab; Translation tab shows the translated text.
+
+## VideoLingo: timestamped translation + time-adjustment for translate mode (2026-09-27)
+
+Translate mode now runs the SAME per-segment timestamped translation block as
+subtitles mode (minute-sized chunks, JSON array preserved-index translation,
+cached translation.json resume, time-adjustment remap) — only the subtitle
+burning/mux/share step is gated to subtitles mode. Translate exits after
+time-adjustment with "Your timestamped translation is ready." The old
+full-text F.ai.chat fallback (no timestamps) is removed. Time adjustment
+(subtitleStart/subtitleEnd linear remap) now applies to translate results too.
