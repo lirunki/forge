@@ -3684,3 +3684,12 @@ annotated list (single 4KB fetch, cached) fills gaps; (3) 5 inline by-ear
 en-GB exceptions. #male/#female inline format + keyword heuristic remain as
 fallbacks. Verified with mocked fetch: correct labels, cache writes, second
 call does 0 fetches.
+
+## Release 2.7.101 (251) built (2026-09-27)
+
+Commits 8271077..7579b13 pushed (runtime gender lookup, stageFile www-side
+bridge normalization, version bump 250->251). release_forge.sh produced
+Forge-play-release.aab (5.87MB) + Forge-full-release.apk (6.43MB), both
+stamped sha=7579b13, verified via bundle forge-build.json; copied to
+/sdcard/Download. Note: release_forge.sh must be invoked as its own bash
+command — chained after && it silently no-ops.
