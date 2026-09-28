@@ -20727,8 +20727,8 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
     function wireTermuxSetupWizard() {
       const g = (id) => document.getElementById(id);
       g('btnTxInstallPlay')?.addEventListener('click', async () => {
-        try { await ForgeHost.openUrl('market://details?id=com.termux'); }
-        catch (_) { try { await ForgeHost.openUrl('https://play.google.com/store/apps/details?id=com.termux'); } catch (e) { setTermuxStatus(e?.message || String(e), 'err'); } }
+        try { await phoneCall('openUrl', { url: 'market://details?id=com.termux' }); }
+        catch (_) { try { await phoneCall('openUrl', { url: 'https://play.google.com/store/apps/details?id=com.termux' }); } catch (e) { setTermuxStatus(e?.message || String(e), 'err'); } }
       });
       g('btnTxSetupStart')?.addEventListener('click', async () => {
         const info = await probeTermux();
