@@ -20190,7 +20190,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
     }
 
     const TERMUX_AGENT_CMD =
-      'bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent --daemon';
+      '[ -e "$HOME/storage" ] || { command -v termux-setup-storage >/dev/null 2>&1 && termux-setup-storage; }; bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent --daemon';
     const TERMUX_FDROID_CMD =
       "mkdir -p ~/.termux\ngrep -q 'allow-external-apps' ~/.termux/termux.properties 2>/dev/null || echo 'allow-external-apps = true' >> ~/.termux/termux.properties\ntermux-reload-settings";
 

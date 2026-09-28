@@ -236,8 +236,8 @@ public class TermuxBridgePlugin extends Plugin {
             o.put("agentPath", new File(dir, "forge-termux-agent").getAbsolutePath());
             o.put("installPath", new File(dir, "install.sh").getAbsolutePath());
             o.put("port", DEFAULT_AGENT_PORT);
-            o.put("command", "bash \"/storage/emulated/0/Download/ForgeBridge/install.sh\" && $HOME/bin/forge-termux-agent");
-            o.put("note", "In Termux run the command above (needs termux-setup-storage once). Keep the agent running. Re-running install.sh is safe — it just updates the files.");
+            o.put("command", "[ -e \"$HOME/storage\" ] || { command -v termux-setup-storage >/dev/null 2>&1 && termux-setup-storage; }; bash \"/storage/emulated/0/Download/ForgeBridge/install.sh\" && $HOME/bin/forge-termux-agent");
+            o.put("note", "In Termux run the command above. If shared storage isn't set up yet it runs termux-setup-storage first. Keep the agent running. Re-running install.sh is safe — it just updates the files.");
             call.resolve(o);
         } catch (Exception e) {
             call.reject("installAgent failed: " + e.getMessage(), e);
@@ -648,7 +648,7 @@ public class TermuxBridgePlugin extends Plugin {
             note = "Termux found but no bridge. Enable allow-external-apps=true (F-Droid Termux) OR run $HOME/bin/forge-termux-agent. Settings → Device bridges → Install agent.";
         }
         o.put("note", note);
-        o.put("setupCommand", "bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent");
+        o.put("setupCommand", "[ -e \"$HOME/storage\" ] || { command -v termux-setup-storage >/dev/null 2>&1 && termux-setup-storage; }; bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent");
         return o;
     }
 

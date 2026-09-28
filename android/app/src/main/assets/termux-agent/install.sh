@@ -7,13 +7,6 @@ SRC_DIR="/storage/emulated/0/Download/ForgeBridge"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 AGENT_NAME="forge-termux-agent"
 
-# Ensure Termux has shared-storage access (creates ~/storage symlinks, prompts once).
-# Safe to run repeatedly; a no-op if the permission was already granted.
-if command -v termux-setup-storage >/dev/null 2>&1; then
-  echo "Ensuring shared-storage access…"
-  termux-setup-storage 2>/dev/null || true
-fi
-
 mkdir -p "$BIN" "$SRC_DIR/inbox" "$SRC_DIR/outbox"
 
 SRC=""
