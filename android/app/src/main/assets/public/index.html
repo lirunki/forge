@@ -20456,11 +20456,11 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
     }
 
     function detectTermuxPath(info) {
+      // Unified path: the Forge agent (localhost:8787) works on every Termux flavor
+      // (Play / F-Droid / GitHub), captures stdout, and supports stageFile. The old
+      // RUN_COMMAND path could not capture stdout (so the test always failed) and
+      // only worked on F-Droid/GitHub. One path for all installs.
       if (!info || !info.installed) return 'missing';
-      if (info.execSupported && info.bridge && info.bridge !== 'none') return info.bridge === 'run_command' ? 'run_command' : 'agent';
-      if (info.runCommandSupported) return 'run_command';
-      if (info.flavor === 'googleplay' || info.runCommandSupported === false) return 'agent';
-      // unknown github build without resolved service — offer both, prefer agent (works everywhere)
       return 'agent';
     }
 
@@ -20756,13 +20756,10 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
           showTxPanel('test');
           return;
         }
-        if (txSetupPath === 'run_command' && info?.runCommandSupported) {
-          showTxPanel('fdroid');
-        } else {
-          showTxPanel('agent');
-          const s = txEls();
-          if (s.cmdBox) s.cmdBox.textContent = TERMUX_AGENT_CMD;
-        }
+        // Unified agent path — works on all Termux flavors
+        showTxPanel('agent');
+        const s = txEls();
+        if (s.cmdBox) s.cmdBox.textContent = TERMUX_AGENT_CMD;
       });
       g('btnTxBackPath')?.addEventListener('click', () => showTxPanel('path'));
       g('btnTxBackPath2')?.addEventListener('click', () => showTxPanel('path'));
@@ -20801,8 +20798,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
       g('btnTxFdroidTest')?.addEventListener('click', () => showTxPanel('test'));
       g('btnTxRetest')?.addEventListener('click', () => runTermuxSmokeTest({ fromWizard: true }));
       g('btnTxBackFromTest')?.addEventListener('click', () => {
-        if (txSetupPath === 'run_command') showTxPanel('fdroid');
-        else showTxPanel('agent');
+        showTxPanel('agent');
       });
       g('btnTxFinish')?.addEventListener('click', () => showTxPanel('done'));
       g('btnTxClose')?.addEventListener('click', () => closeTermuxSetupWizard());

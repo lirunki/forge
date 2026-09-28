@@ -3752,3 +3752,21 @@ install; falls back to https web URL if Play Store app absent. Install script:
 calls termux-setup-storage early (before using /storage/emulated/0) so shared
 storage symlinks + permission are in place. APK reinstall required for the
 openUrl fix; install.sh change benefits users who rerun install.sh.
+
+## Unify Termux path: always use the agent (2026-09-28)
+
+The F-Droid RUN_COMMAND path was broken: pickBridge() preferred RUN_COMMAND
+on F-Droid/GitHub Termux, but RUN_COMMAND cannot capture stdout, so the smoke
+test (which greps stdout for FORGE_TERMUX_OK) ALWAYS failed with "marker:
+missing" — even when RUN_COMMAND worked. The agent path (localhost:8787)
+works on ALL flavors (Play/F-Droid/GitHub), captures stdout, and supports
+stageFile (the fs file-copy architecture).
+
+Changes:
+- pickBridge(): agent-first, RUN_COMMAND only as legacy fallback (when agent
+  not yet installed). After setup, exec+test+stageFile all use the agent →
+  test passes on all flavors, fs file-copy works on F-Droid too.
+- detectTermuxPath(): always 'agent' (or 'missing'). One path in the wizard.
+- Removed the F-Droid panel branch from the wizard flow (always → agent).
+- Error/no-bridge messages: consistently point to the agent, no longer
+  suggest "enable allow-external-apps=true" as a primary path.

@@ -645,7 +645,7 @@ public class TermuxBridgePlugin extends Plugin {
         } else if ("googleplay".equals(flavor)) {
             note = "Google Play Termux has NO RUN_COMMAND API. Install and run the Forge agent in Termux: bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent";
         } else {
-            note = "Termux found but no bridge. Enable allow-external-apps=true (F-Droid Termux) OR run $HOME/bin/forge-termux-agent. Settings → Device bridges → Install agent.";
+            note = "Termux found but the Forge agent is not running. In Termux run:\n bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent\nLeave it running, then retry. Settings → Device bridges → Install agent.";
         }
         o.put("note", note);
         o.put("setupCommand", "[ -e \"$HOME/storage\" ] || { command -v termux-setup-storage >/dev/null 2>&1 && termux-setup-storage; }; bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent");
@@ -654,11 +654,15 @@ public class TermuxBridgePlugin extends Plugin {
 
 
     private String pickBridge() {
-        if (isRunCommandSupported()) {
-            return "run_command";
-        }
+        // Prefer the agent when running: it captures stdout (RUN_COMMAND cannot),
+        // supports stageFile (HTTP file transfer), and works on every Termux flavor
+        // (Play / F-Droid / GitHub). RUN_COMMAND is only a legacy fallback for when
+        // the agent has not been installed yet.
         if (agentPortOpen(DEFAULT_AGENT_PORT)) {
             return "agent";
+        }
+        if (isRunCommandSupported()) {
+            return "run_command";
         }
         try {
             JSObject a = probeAgent();
@@ -671,7 +675,7 @@ public class TermuxBridgePlugin extends Plugin {
     }
 
     private String noBridgeMessage() {
-        return "No Termux bridge available. This device has Google Play Termux (no RUN_COMMAND). In Termux run:\n  bash /storage/emulated/0/Download/ForgeBridge/install.sh\n  $HOME/bin/forge-termux-agent\nLeave the agent running, then retry. Or install F-Droid/GitHub Termux which supports RUN_COMMAND + allow-external-apps=true.";
+        return "No Termux bridge available. The Forge agent is not running. In Termux run:\n bash /storage/emulated/0/Download/ForgeBridge/install.sh && $HOME/bin/forge-termux-agent\nLeave the agent running, then retry. (Works on Play / F-Droid / GitHub Termux.)";
     }
 
     private boolean isTermuxInstalled() {
