@@ -3783,3 +3783,13 @@ images and calls `ForgeHost.ai.chat` page-by-page; it has no Termux dependency.
 Demo catalog changes are served from GitHub raw `main` by Forge, so no APK
 rebuild is needed. Validation: manifest parses, sample file exists and title
 matches, standalone app JavaScript passes `node --check`.
+
+## PageTranslate refreshed — collation workflow (2026-10-08)
+
+Synced the user's newer `~/downloads/PageTranslate.html.html` over
+`samples/PageTranslate.html` and refreshed its localized manifest descriptions.
+The update adds an optional second AI pass to collate all page translations
+into a coherent document, with a separate share action; it also includes
+provider selection and a Stop control. Exact source-copy verification and
+standalone JavaScript syntax check passed. No APK rebuild is needed; the
+updated demo is served from GitHub after push.

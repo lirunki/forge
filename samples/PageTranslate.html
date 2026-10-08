@@ -85,6 +85,10 @@ textarea{resize:vertical;min-height:84px;line-height:1.45}
 .notice{color:#5053b9;background:#f0f1ff;border:1px solid #d7d9ff;border-radius:12px;padding:12px;font-size:13px;line-height:1.45;margin-bottom:15px;display:none}
 .notice.show{display:block}
 .footer-note{text-align:center;color:#9aa3b5;font-size:11px;margin:18px 0 0}
+.collate-wrap{margin-top:14px;display:none}
+.collate-wrap.show{display:block}
+.collate-hint{font-size:12px;color:var(--muted);line-height:1.4;margin:8px 1px 0;text-align:center}
+.collated-meta{font-size:12px;color:var(--muted);margin:8px 0 0}
 @media(max-width:420px){.grid{grid-template-columns:1fr}.card{padding:15px}}
 </style>
 </head>
@@ -166,6 +170,18 @@ textarea{resize:vertical;min-height:84px;line-height:1.45}
 <div class="results-head"><h2>Page results</h2><button class="secondary" id="share" style="display:none">Share</button></div>
 <div class="empty" id="empty">Your translated pages will appear here.</div>
 <div id="results"></div>
+<div class="collate-wrap" id="collateWrap">
+<button class="primary" id="collate" type="button">Collate all pages for coherence</button>
+<div class="collate-hint">Sends every translated page plus your context to the LLM. It rewrites the whole document with maximal fidelity, improving flow across page breaks.</div>
+</div>
+</section>
+
+<section class="card" id="collatedCard" style="display:none">
+<div class="results-head"><h2>Collated document</h2><button class="secondary" id="shareCollated" type="button">Share</button></div>
+<p class="collated-meta">Rewritten for coherence across pages, keeping the original meaning</p>
+<div class="page" style="margin-top:12px">
+<div class="page-body" id="collatedBody"></div>
+</div>
 </section>
 
 <div class="footer-note">Pages are rendered to small grayscale images and analyzed only to complete this translation.</div>
@@ -178,9 +194,11 @@ textarea{resize:vertical;min-height:84px;line-height:1.45}
 var host = window.ForgeHost || window.forge;
 var pdf = null;
 var output = "";
+var collated = "";
 var quality = "low";
 var busy = false;
 var abortRequested = false;
+var allPagesComplete = false;
 
 var PDFJS_CDN = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174";
 var pdfjsPromise = null;
@@ -203,6 +221,12 @@ function isStopped(e){
  return !!(e && (e.code==="STOPPED" || e.message==="STOPPED"));
 }
 
+function chatContent(r){
+ var content=r&&r.content;
+ if(Array.isArray(content)) content=content.map(function(x){return x.text||"";}).join("");
+ return String(content||"").trim();
+}
+
 function setBusyUI(on){
  busy=on;
  $("translate").disabled = on || !pdf;
@@ -212,6 +236,9 @@ function setBusyUI(on){
  $("stop").textContent = "Stop";
  $("provider").disabled = on;
  $("refreshProviders").disabled = on;
+ $("collate").disabled = on;
+ if(on) $("collateWrap").classList.remove("show");
+ else if(allPagesComplete) $("collateWrap").classList.add("show");
  if(!on) abortRequested=false;
 }
 
@@ -231,6 +258,14 @@ function setProgress(p){
  var bar=$("progressBar");
  bar.style.width=Math.round(p*100)+"%";
  $("progress").classList.toggle("show", p>0 && p<1);
+}
+
+function resetCollated(){
+ collated="";
+ allPagesComplete=false;
+ $("collateWrap").classList.remove("show");
+ $("collatedCard").style.display="none";
+ $("collatedBody").textContent="";
 }
 
 var QUALITY = {
@@ -480,6 +515,17 @@ function requestStop(){
  toast("Stopping…");
 }
 
+async function ensureProvider(){
+ var provider=$("provider").value;
+ if(provider){
+ try{ await host.ai.setProvider(provider); }catch(e){
+ throw new Error("Could not use the selected LLM. Pick another provider or check Forge AI settings.");
+ }
+ }else{
+ throw new Error("Select an LLM / provider first. Add one in Forge AI settings if the list is empty.");
+ }
+}
+
 async function translate(){
  if(!pdf||busy) return;
  if(!host||!host.ai||!host.ai.chat){
@@ -495,15 +541,9 @@ async function translate(){
  $("empty").style.display="block";
  $("share").style.display="none";
  output="";
+ resetCollated();
  try{
- var provider=$("provider").value;
- if(provider){
- try{ await host.ai.setProvider(provider); }catch(e){
- throw new Error("Could not use the selected LLM. Pick another provider or check Forge AI settings.");
- }
- }else{
- throw new Error("Select an LLM / provider first. Add one in Forge AI settings if the list is empty.");
- }
+ await ensureProvider();
  setStatus(true,"Rendering PDF pages to grayscale images…");
  await yieldUI();
  throwIfAborted();
@@ -551,15 +591,15 @@ async function translate(){
  ]
  }]
  });
- var content=r&&r.content;
- if(Array.isArray(content)) content=content.map(function(x){return x.text||"";}).join("");
+ var content=chatContent(r);
  if(!content) content="[No readable text]";
- var item={n:p.n,text:String(content).trim()};
+ var item={n:p.n,text:content};
  appendPage(item,p.dataUrl);
  output+=(output?"\n\n":"")+"PAGE "+item.n+"\n"+item.text;
  prevText=item.text;
  await yieldUI();
  }
+ allPagesComplete=true;
  setStatus(false);
  setProgress(0);
  toast("Translation complete");
@@ -582,9 +622,72 @@ async function translate(){
  }
 }
 
+async function collate(){
+ if(!allPagesComplete||!output||busy) return;
+ if(!host||!host.ai||!host.ai.chat){
+ setError("AI is not available. Check your Forge AI provider settings.");
+ return;
+ }
+ abortRequested=false;
+ setBusyUI(true);
+ setError("");
+ setNotice("");
+ setProgress(0.15);
+ try{
+ await ensureProvider();
+ throwIfAborted();
+ setStatus(true,"Collating all pages for coherence…");
+ await yieldUI();
+ var target=$("target").value;
+ var context=$("context").value.trim();
+ var prompt=
+ "You are a careful document editor. Below is a complete page-by-page translation of a document. "+
+ "Rewrite it as one coherent document with maximal fidelity to the given translation. "+
+ "Improve flow, continuity, pronouns, and coherence across page boundaries. "+
+ "Do not add information that is not present. Do not omit content. Do not summarize. "+
+ "Preserve meaning, names, numbers, terminology, lists, paragraph structure, and important formatting. "+
+ "Smooth awkward joins caused by page breaks. Keep the target language as "+target+". "+
+ "Return ONLY the rewritten document, with no introduction, no page headers unless they belong in the original text, and no markdown fences.";
+ if(context) prompt+="\n\nUser context (honor this while rewriting):\n"+context;
+ prompt+="\n\n--- PAGE-BY-PAGE TRANSLATION ---\n"+output;
+ throwIfAborted();
+ setProgress(0.45);
+ var r=await host.ai.chat({
+ messages:[{role:"user",content:[{type:"text",text:prompt}]}]
+ });
+ throwIfAborted();
+ var text=chatContent(r);
+ if(!text) throw new Error("The model returned an empty collation.");
+ collated=text;
+ $("collatedBody").textContent=collated;
+ $("collatedCard").style.display="block";
+ setStatus(false);
+ setProgress(0);
+ toast("Collation complete");
+ try{ $("collatedCard").scrollIntoView({behavior:"smooth",block:"start"}); }catch(e){}
+ }catch(e){
+ setStatus(false);
+ setProgress(0);
+ if(isStopped(e)){
+ setNotice("Stopped before collation finished. Page translations are unchanged.");
+ toast("Stopped");
+ }else{
+ setError(e.message||"Collation failed. Please check your AI provider settings and try again.");
+ }
+ }finally{
+ setBusyUI(false);
+ }
+}
+
 async function share(){
  if(!output) return;
  try{ await host.share({title:"PageTranslate results",text:output}); }
+ catch(e){ toast("Sharing was not available"); }
+}
+
+async function shareCollated(){
+ if(!collated) return;
+ try{ await host.share({title:"PageTranslate collated document",text:collated}); }
  catch(e){ toast("Sharing was not available"); }
 }
 
@@ -593,6 +696,8 @@ $("drop").addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key==="
 $("translate").addEventListener("click", translate);
 $("stop").addEventListener("click", requestStop);
 $("share").addEventListener("click", share);
+$("collate").addEventListener("click", collate);
+$("shareCollated").addEventListener("click", shareCollated);
 $("provider").addEventListener("change", applyProvider);
 $("refreshProviders").addEventListener("click", function(){
  setError("");
