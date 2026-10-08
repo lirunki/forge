@@ -3770,3 +3770,16 @@ Changes:
 - Removed the F-Droid panel branch from the wizard flow (always → agent).
 - Error/no-bridge messages: consistently point to the agent, no longer
   suggest "enable allow-external-apps=true" as a primary path.
+
+## PageTranslate added to GitHub demo catalog (2026-10-01)
+
+Copied the user's updated `~/downloads/PageTranslate.html.html` to
+`samples/PageTranslate.html` and added `page-translate` to
+`samples/manifest.json` (now 32 demos). The catalog entry includes localized
+names/descriptions in en/es/fr/pt/ja/ko, icon 📄, category `AI & documents`,
+and minimum Forge version 2.6.0. The mini-app renders PDF pages to grayscale
+images and calls `ForgeHost.ai.chat` page-by-page; it has no Termux dependency.
+
+Demo catalog changes are served from GitHub raw `main` by Forge, so no APK
+rebuild is needed. Validation: manifest parses, sample file exists and title
+matches, standalone app JavaScript passes `node --check`.

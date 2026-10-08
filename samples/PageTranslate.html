@@ -1,0 +1,653 @@
+<!-- AAForge:mini-app-v1 app_nmavsp62muyyj1q9 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PageTranslate</title>
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--ink:#172033;--muted:#748097;--line:#e6eaf1;--primary:#5b5ce2;--primary2:#7b61ff;--soft:#eeefff;--danger:#b83248;--shadow:0 12px 32px rgba(29,39,74,.08)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:720px;margin:auto;padding:calc(22px + env(safe-area-inset-top)) 18px calc(34px + env(safe-area-inset-bottom))}
+.brand{display:flex;align-items:center;gap:12px;margin:5px 0 25px}
+.logo{width:45px;height:45px;border-radius:15px;background:linear-gradient(135deg,var(--primary),var(--primary2));display:grid;place-items:center;color:white;font-size:23px;box-shadow:0 8px 18px #5b5ce244;flex-shrink:0}
+.brand h1{font-size:24px;margin:0;letter-spacing:-.6px}
+.brand p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;box-shadow:var(--shadow);margin-bottom:15px}
+.upload{border:1.5px dashed #bfc5ee;background:#fafaff;min-height:155px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;transition:.2s;border-radius:22px}
+.upload:active{transform:scale(.99);background:#f0f1ff}
+.upload.ready{border-style:solid;border-color:#8b8deb;background:#f4f4ff}
+.upload-icon{font-size:35px;margin-bottom:8px}
+.upload strong{display:block;font-size:16px}
+.upload small{display:block;color:var(--muted);margin-top:5px;font-size:12px}
+.file-row{display:flex;align-items:center;gap:12px;text-align:left;width:100%}
+.file-icon{width:44px;height:52px;border-radius:10px;background:#ffe9ed;color:#cc3852;display:grid;place-items:center;font-weight:800;font-size:12px;flex-shrink:0}
+.file-info{flex:1;min-width:0}
+.file-info strong{display:block;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-info small{margin-top:4px;display:block}
+.section-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#69748a;margin:3px 0 13px}
+label{display:block;font-size:13px;font-weight:700;color:#4f5b72;margin:0 0 7px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{margin-bottom:15px}
+select,textarea{width:100%;border:1px solid var(--line);background:#fbfcfe;border-radius:12px;padding:13px;color:var(--ink);font:inherit;font-size:14px;outline:none;-webkit-appearance:none;-moz-appearance:none;appearance:none}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23748097' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px #5b5ce21c}
+textarea{resize:vertical;min-height:84px;line-height:1.45}
+.hint{font-size:12px;color:var(--muted);line-height:1.4;margin:9px 1px 0}
+.row-flex{display:flex;gap:8px;align-items:stretch}
+.row-flex select{flex:1;min-width:0}
+.row-flex .secondary{flex-shrink:0;align-self:stretch}
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fbfcfe}
+.seg-btn{flex:1;border:0;background:transparent;padding:11px 6px;font:inherit;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s;-webkit-tap-highlight-color:transparent}
+.seg-btn:not(:last-child){border-right:1px solid var(--line)}
+.seg-btn.active{background:linear-gradient(100deg,var(--primary),var(--primary2));color:#fff}
+.toggle-row{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#fafaff;border:1px solid var(--line);border-radius:14px}
+.toggle-copy{flex:1;min-width:0}
+.toggle-copy strong{display:block;font-size:14px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.toggle-copy span{display:block;font-size:12px;color:var(--muted);line-height:1.4;font-weight:400}
+.switch{position:relative;width:50px;height:30px;flex-shrink:0;margin-top:1px}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.slider{position:absolute;inset:0;background:#d5dae6;border-radius:30px;transition:.2s;cursor:pointer}
+.slider:before{content:"";position:absolute;height:24px;width:24px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(23,32,51,.2)}
+.switch input:checked + .slider{background:linear-gradient(100deg,var(--primary),var(--primary2))}
+.switch input:checked + .slider:before{transform:translateX(20px)}
+.switch input:focus-visible + .slider{box-shadow:0 0 0 3px #5b5ce21c}
+.primary{width:100%;border:0;border-radius:14px;padding:15px 18px;background:linear-gradient(100deg,var(--primary),var(--primary2));color:#fff;font-weight:800;font-size:15px;box-shadow:0 8px 17px #5b5ce233;cursor:pointer;transition:transform .1s}
+.primary:active{transform:scale(.98)}
+.primary:disabled{opacity:.55;cursor:default;box-shadow:none;transform:none}
+.stop{width:100%;border:1px solid #ffd4db;border-radius:14px;padding:15px 18px;background:#fff1f3;color:var(--danger);font-weight:800;font-size:15px;cursor:pointer;margin-top:10px;display:none;transition:transform .1s}
+.stop.show{display:block}
+.stop:active{transform:scale(.98)}
+.stop:disabled{opacity:.55;cursor:default;transform:none}
+.secondary{border:1px solid var(--line);background:white;border-radius:11px;padding:10px 13px;color:#555f76;font-weight:700;cursor:pointer;transition:transform .1s}
+.secondary:active{transform:scale(.97)}
+.status{display:none;align-items:center;gap:10px;padding:13px 14px;background:#f0f1ff;color:#5053b9;border-radius:13px;font-size:13px;margin-bottom:15px}
+.status.show{display:flex}
+.spinner{width:17px;height:17px;border:2px solid #c7c9ff;border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress{height:6px;background:#e6eaf1;border-radius:6px;overflow:hidden;margin-bottom:15px;display:none}
+.progress.show{display:block}
+.progress-bar{height:100%;width:0;background:linear-gradient(100deg,var(--primary),var(--primary2));transition:width .3s ease;border-radius:6px}
+.results-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.results-head h2{font-size:18px;margin:0}
+.results-count{font-size:12px;color:var(--muted)}
+.page{border:1px solid var(--line);border-radius:15px;margin-top:12px;overflow:hidden;background:#fff;animation:fadeIn .35s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.page-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#fafbfe;border-bottom:1px solid var(--line)}
+.page-head strong{font-size:14px}
+.page-body{padding:14px;font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.page-preview{display:flex;gap:12px;align-items:flex-start;padding:0 14px 14px}
+.page-thumb{width:90px;height:auto;border-radius:8px;border:1px solid var(--line);flex-shrink:0;background:#f5f7fb}
+.empty{text-align:center;color:var(--muted);padding:28px 12px;font-size:14px}
+.error{color:var(--danger);background:#fff1f3;border:1px solid #ffd4db;border-radius:12px;padding:12px;font-size:13px;line-height:1.45;margin-bottom:15px;display:none}
+.error.show{display:block}
+.notice{color:#5053b9;background:#f0f1ff;border:1px solid #d7d9ff;border-radius:12px;padding:12px;font-size:13px;line-height:1.45;margin-bottom:15px;display:none}
+.notice.show{display:block}
+.footer-note{text-align:center;color:#9aa3b5;font-size:11px;margin:18px 0 0}
+@media(max-width:420px){.grid{grid-template-columns:1fr}.card{padding:15px}}
+</style>
+</head>
+<body>
+<main>
+<header class="brand"><div class="logo">文</div><div><h1>PageTranslate</h1><p>Translate visual text, page by page</p></div></header>
+
+<section class="card upload" id="drop" role="button" tabindex="0">
+<div id="uploadContent">
+<div class="upload-icon">📄</div>
+<strong>Choose a PDF</strong>
+<small>We'll render each page as a small grayscale image and translate the visible text</small>
+</div>
+</section>
+
+<section class="card">
+<div class="section-title">Translation setup</div>
+<div class="field">
+<label for="provider">LLM / provider</label>
+<div class="row-flex">
+<select id="provider" aria-label="LLM provider">
+<option value="">Loading providers…</option>
+</select>
+<button class="secondary" id="refreshProviders" type="button">Refresh</button>
+</div>
+<div class="hint">Uses the AI providers configured in Forge. The selected model translates each page image.</div>
+</div>
+<div class="grid">
+<div class="field"><label for="source">From</label>
+<select id="source" data-forge-persist>
+<option>Auto-detect</option><option>Arabic</option><option>Chinese</option><option>English</option><option>French</option><option>German</option><option>Hindi</option><option>Italian</option><option>Japanese</option><option>Korean</option><option>Portuguese</option><option>Russian</option><option>Spanish</option><option>Turkish</option>
+</select></div>
+<div class="field"><label for="target">Translate to</label>
+<select id="target" data-forge-persist>
+<option>English</option><option>Arabic</option><option>Chinese</option><option>French</option><option>German</option><option>Hindi</option><option>Italian</option><option>Japanese</option><option>Korean</option><option>Portuguese</option><option>Russian</option><option>Spanish</option><option>Turkish</option>
+</select></div>
+</div>
+<div class="field">
+<label for="context">Context for the translator <span style="font-weight:400;color:#8b95a8">(optional)</span></label>
+<textarea id="context" data-forge-persist placeholder="For example: This is a museum brochure. Keep proper names and product codes unchanged."></textarea>
+<div class="hint">Context helps preserve terminology, tone, names, and meaning.</div>
+</div>
+
+<div class="field">
+<label>Image quality for AI</label>
+<div class="seg" id="qualitySeg">
+<button type="button" class="seg-btn active" data-q="low">Small · fast</button>
+<button type="button" class="seg-btn" data-q="med">Balanced</button>
+<button type="button" class="seg-btn" data-q="high">Detailed</button>
+</div>
+<div class="hint" id="qualityHint">Max 700px wide, 8-bit grayscale JPEG. Smallest images = fastest translation.</div>
+</div>
+
+<div class="field">
+<div class="toggle-row">
+<label class="switch" for="usePrev">
+<input type="checkbox" id="usePrev" data-forge-persist>
+<span class="slider"></span>
+</label>
+<div class="toggle-copy">
+<strong>Previous page as context</strong>
+<span>Send the last page’s translation with each new page so names, tone, and continuity stay consistent.</span>
+</div>
+</div>
+</div>
+
+<button class="primary" id="translate" disabled>Translate PDF</button>
+<button class="stop" id="stop" type="button">Stop</button>
+</section>
+
+<div class="status" id="status"><span class="spinner"></span><span id="statusText">Reading your PDF…</span></div>
+<div class="progress" id="progress">
+<div class="progress-bar" id="progressBar"></div>
+</div>
+<div class="notice" id="notice"></div>
+<div class="error" id="error"></div>
+
+<section class="card" id="resultsCard">
+<div class="results-head"><h2>Page results</h2><button class="secondary" id="share" style="display:none">Share</button></div>
+<div class="empty" id="empty">Your translated pages will appear here.</div>
+<div id="results"></div>
+</section>
+
+<div class="footer-note">Pages are rendered to small grayscale images and analyzed only to complete this translation.</div>
+</main>
+
+<script>
+(function(){
+"use strict";
+
+var host = window.ForgeHost || window.forge;
+var pdf = null;
+var output = "";
+var quality = "low";
+var busy = false;
+var abortRequested = false;
+
+var PDFJS_CDN = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174";
+var pdfjsPromise = null;
+var PREV_MAX = 6000;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function toast(m){ try{ if(host&&host.toast) host.toast(m); }catch(e){} }
+function yieldUI(){ return new Promise(function(r){ setTimeout(r,0); }); }
+
+function stoppedError(){
+ var e=new Error("STOPPED");
+ e.code="STOPPED";
+ return e;
+}
+function throwIfAborted(){
+ if(abortRequested) throw stoppedError();
+}
+function isStopped(e){
+ return !!(e && (e.code==="STOPPED" || e.message==="STOPPED"));
+}
+
+function setBusyUI(on){
+ busy=on;
+ $("translate").disabled = on || !pdf;
+ $("translate").style.display = on ? "none" : "block";
+ $("stop").classList.toggle("show", on);
+ $("stop").disabled = !on;
+ $("stop").textContent = "Stop";
+ $("provider").disabled = on;
+ $("refreshProviders").disabled = on;
+ if(!on) abortRequested=false;
+}
+
+function setStatus(show,text){
+ $("status").classList.toggle("show",show);
+ if(text) $("statusText").textContent=text;
+}
+function setError(text){
+ $("error").textContent=text||"";
+ $("error").classList.toggle("show",!!text);
+}
+function setNotice(text){
+ $("notice").textContent=text||"";
+ $("notice").classList.toggle("show",!!text);
+}
+function setProgress(p){
+ var bar=$("progressBar");
+ bar.style.width=Math.round(p*100)+"%";
+ $("progress").classList.toggle("show", p>0 && p<1);
+}
+
+var QUALITY = {
+ low: { maxWidth:700, quality:0.55, scale:1.3, label:"Max 700px wide, 8-bit grayscale JPEG. Smallest images = fastest translation." },
+ med: { maxWidth:1200, quality:0.65, scale:1.8, label:"Max 1200px wide, 8-bit grayscale JPEG. Good balance of clarity and speed." },
+ high: { maxWidth:1500, quality:0.72, scale:2.2, label:"Max 1500px wide, 8-bit grayscale JPEG. Best for dense or small text." }
+};
+
+function loadScript(src){
+ return new Promise(function(resolve,reject){
+ var s=document.createElement("script");
+ s.src=src;
+ s.async=true;
+ s.onload=function(){ resolve(); };
+ s.onerror=function(){ reject(new Error("Failed to load "+src)); };
+ document.head.appendChild(s);
+ });
+}
+
+function ensurePdfjs(){
+ if(pdfjsPromise) return pdfjsPromise;
+ pdfjsPromise = (async function(){
+ await loadScript(PDFJS_CDN+"/build/pdf.min.js");
+ if(window.pdfjsLib){
+ window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_CDN+"/build/pdf.worker.min.js";
+ } else {
+ throw new Error("PDF library did not initialize.");
+ }
+ })();
+ return pdfjsPromise;
+}
+
+function pageToGrayscaleJpeg(canvas, maxW, jpegQuality){
+ var w0=canvas.width, h0=canvas.height;
+ var w=w0, h=h0;
+ if(w>maxW){ h=Math.round(h0*maxW/w0); w=maxW; }
+ var tmp=document.createElement("canvas");
+ tmp.width=w; tmp.height=h;
+ var tctx=tmp.getContext("2d",{willReadFrequently:true});
+ tctx.drawImage(canvas,0,0,w,h);
+ var img=tctx.getImageData(0,0,w,h);
+ var d=img.data;
+ for(var i=0;i<d.length;i+=4){
+ var g=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])|0;
+ d[i]=d[i+1]=d[i+2]=g;
+ }
+ tctx.putImageData(img,0,0);
+ var url=tmp.toDataURL("image/jpeg",jpegQuality);
+ tmp.width=0; tmp.height=0;
+ return url;
+}
+
+async function renderPages(dataUrl, opts, onProgress){
+ await ensurePdfjs();
+ throwIfAborted();
+ var loadingTask=window.pdfjsLib.getDocument(dataUrl);
+ var pdfDoc=await loadingTask.promise;
+ throwIfAborted();
+ var total=pdfDoc.numPages;
+ var pages=[];
+ for(var i=1;i<=total;i++){
+ throwIfAborted();
+ var page=await pdfDoc.getPage(i);
+ var viewport=page.getViewport({scale:opts.scale});
+ var canvas=document.createElement("canvas");
+ canvas.width=Math.floor(viewport.width);
+ canvas.height=Math.floor(viewport.height);
+ var ctx=canvas.getContext("2d");
+ ctx.fillStyle="#ffffff";
+ ctx.fillRect(0,0,canvas.width,canvas.height);
+ await page.render({canvasContext:ctx,viewport:viewport}).promise;
+ throwIfAborted();
+ var jpeg=pageToGrayscaleJpeg(canvas, opts.maxWidth, opts.quality);
+ pages.push({n:i, dataUrl:jpeg});
+ if(onProgress) onProgress(i,total);
+ try{ page.cleanup(); }catch(e){}
+ canvas.width=0; canvas.height=0;
+ await yieldUI();
+ }
+ try{ await pdfDoc.destroy(); }catch(e){}
+ return pages;
+}
+
+function clipPrev(text){
+ var t=String(text||"").trim();
+ if(t.length<=PREV_MAX) return t;
+ return t.slice(0,PREV_MAX)+"\n…[truncated for length]";
+}
+
+function providerIdOf(p){
+ if(p==null) return "";
+ if(typeof p==="string") return p;
+ return String(p.id || p.provider || p.name || p.key || p.value || "");
+}
+function providerLabelOf(p){
+ if(p==null) return "";
+ if(typeof p==="string") return p;
+ var label = p.label || p.displayName || p.name || p.id || p.provider || "";
+ var model = p.model || p.modelId || "";
+ if(model && String(label).indexOf(model)<0) label = (label?label+" · ":"")+model;
+ return String(label||providerIdOf(p));
+}
+function normalizeProviders(menu){
+ var out=[];
+ function push(p){
+ if(p==null) return;
+ if(typeof p==="string"){ out.push({id:p,label:p}); return; }
+ var id=providerIdOf(p);
+ var label=providerLabelOf(p);
+ if(id) out.push({id:id,label:label||id});
+ var nested=p.models||p.providers||p.children||p.items;
+ if(Array.isArray(nested)) nested.forEach(push);
+ }
+ if(Array.isArray(menu)) menu.forEach(push);
+ else if(menu && typeof menu==="object"){
+ if(Array.isArray(menu.providers)) menu.providers.forEach(push);
+ else if(Array.isArray(menu.models)) menu.models.forEach(push);
+ else if(Array.isArray(menu.items)) menu.items.forEach(push);
+ else if(Array.isArray(menu.list)) menu.list.forEach(push);
+ else if(Array.isArray(menu.menu)) menu.menu.forEach(push);
+ else {
+ Object.keys(menu).forEach(function(k){
+ if(k==="current"||k==="ok"||k==="provider") return;
+ var v=menu[k];
+ if(Array.isArray(v)) v.forEach(push);
+ });
+ }
+ }
+ var seen={};
+ return out.filter(function(p){
+ if(!p.id || seen[p.id]) return false;
+ seen[p.id]=true;
+ return true;
+ });
+}
+function currentProviderId(current, menu){
+ var id=providerIdOf(current);
+ if(id) return id;
+ if(menu && typeof menu==="object" && !Array.isArray(menu)){
+ if(menu.current) return providerIdOf(menu.current);
+ if(menu.provider) return providerIdOf(menu.provider);
+ if(menu.selected) return providerIdOf(menu.selected);
+ }
+ return "";
+}
+
+async function loadProviders(opts){
+ var sel=$("provider");
+ var keep = opts && opts.keep;
+ var previous = sel.value;
+ if(!host||!host.ai||!host.ai.listProviders){
+ sel.innerHTML='<option value="">AI not available</option>';
+ return;
+ }
+ try{
+ if(!keep) sel.innerHTML='<option value="">Loading providers…</option>';
+ var menu=await host.ai.listProviders();
+ var current=null;
+ try{ current=await host.ai.getProvider(); }catch(e){}
+ var list=normalizeProviders(menu);
+ var currentId=currentProviderId(current, menu);
+ var saved="";
+ try{
+ if(host.state){
+ var d=await host.state.get("provider");
+ if(typeof d==="string") saved=d;
+ else if(d && d.value) saved=d.value;
+ }
+ }catch(e){}
+ if(!list.length){
+ sel.innerHTML='<option value="">No providers configured</option>';
+ setNotice("Add an AI provider in Forge settings, then tap Refresh.");
+ return;
+ }
+ sel.innerHTML=list.map(function(p){
+ return '<option value="'+esc(p.id)+'">'+esc(p.label)+'</option>';
+ }).join("");
+ var pick = previous || saved || currentId || list[0].id;
+ var ids=list.map(function(p){return p.id;});
+ if(ids.indexOf(pick)<0) pick=currentId && ids.indexOf(currentId)>=0 ? currentId : list[0].id;
+ sel.value=pick;
+ if(pick && pick!==currentId){
+ try{ await host.ai.setProvider(pick); }catch(e){}
+ }
+ }catch(e){
+ sel.innerHTML='<option value="">Could not load providers</option>';
+ if(!keep) setError(e.message||"Could not load AI providers.");
+ }
+}
+
+async function applyProvider(){
+ var id=$("provider").value;
+ if(!id || !host || !host.ai || !host.ai.setProvider) return;
+ try{
+ await host.ai.setProvider(id);
+ if(host.state) await host.state.set("provider", id);
+ }catch(e){
+ setError(e.message||"Could not switch AI provider.");
+ }
+}
+
+async function selectPdf(){
+ if(busy) return;
+ if(!host||!host.files||!host.files.pick){
+ setError("File picking is not available in this host.");
+ return;
+ }
+ try{
+ setError("");
+ setNotice("");
+ var f=await host.files.pick({accept:"application/pdf",multiple:false});
+ if(!f) return;
+ if(!f.dataUrl && !f.base64) throw new Error("The selected PDF could not be read.");
+ pdf=f;
+ $("drop").classList.add("ready");
+ var kb=f.base64?Math.round(f.base64.length*0.75/1024):0;
+ $("uploadContent").innerHTML=
+ '<div class="file-row"><div class="file-icon">PDF</div><div class="file-info">'+
+ '<strong>'+esc(f.name||"Selected PDF")+'</strong>'+
+ '<small>'+(kb?kb+" KB · ":"")+"Ready to translate</small></div></div>";
+ $("translate").disabled=false;
+ toast("PDF ready");
+ }catch(e){
+ setError(e.message||"Could not choose that PDF.");
+ }
+}
+
+function appendPage(item, thumbUrl){
+ $("empty").style.display="none";
+ $("share").style.display="block";
+ var div=document.createElement("article");
+ div.className="page";
+ div.id="page-"+item.n;
+ var thumb=thumbUrl?'<img class="page-thumb" src="'+thumbUrl+'" alt="Page '+esc(item.n)+' preview">':"";
+ var preview=thumb?'<div class="page-preview">'+thumb+'<div class="page-body" style="padding:0;flex:1">'+esc(item.text)+'</div></div>':'<div class="page-body">'+esc(item.text)+'</div>';
+ div.innerHTML='<div class="page-head"><strong>Page '+esc(item.n)+'</strong><span class="results-count">Translated text</span></div>'+preview;
+ $("results").appendChild(div);
+ try{ div.scrollIntoView({behavior:"smooth",block:"end"}); }catch(e){}
+}
+
+function requestStop(){
+ if(!busy || abortRequested) return;
+ abortRequested=true;
+ $("stop").disabled=true;
+ $("stop").textContent="Stopping…";
+ setStatus(true,"Stopping after the current step…");
+ toast("Stopping…");
+}
+
+async function translate(){
+ if(!pdf||busy) return;
+ if(!host||!host.ai||!host.ai.chat){
+ setError("AI is not available. Check your Forge AI provider settings.");
+ return;
+ }
+ abortRequested=false;
+ setBusyUI(true);
+ setError("");
+ setNotice("");
+ setProgress(0);
+ $("results").innerHTML="";
+ $("empty").style.display="block";
+ $("share").style.display="none";
+ output="";
+ try{
+ var provider=$("provider").value;
+ if(provider){
+ try{ await host.ai.setProvider(provider); }catch(e){
+ throw new Error("Could not use the selected LLM. Pick another provider or check Forge AI settings.");
+ }
+ }else{
+ throw new Error("Select an LLM / provider first. Add one in Forge AI settings if the list is empty.");
+ }
+ setStatus(true,"Rendering PDF pages to grayscale images…");
+ await yieldUI();
+ throwIfAborted();
+ var dataUrl=pdf.dataUrl||("data:"+(pdf.mime||"application/pdf")+";base64,"+pdf.base64);
+ var q=QUALITY[quality]||QUALITY.low;
+ var pages=await renderPages(dataUrl,q,function(n,total){
+ setStatus(true, abortRequested ? "Stopping…" : ("Rendering page "+n+" of "+total+" (grayscale)…"));
+ setProgress(n/total*0.4);
+ });
+ throwIfAborted();
+ if(!pages.length) throw new Error("No pages found in the PDF.");
+ var source=$("source").value;
+ var target=$("target").value;
+ var context=$("context").value.trim();
+ var usePrev=!!$("usePrev").checked;
+ var basePrompt=
+ "You are a careful document vision translator. The attached image is a single page rendered in 8-bit grayscale from a PDF. "+
+ "Inspect it for all readable text, including text embedded in photographs, scans, diagrams, screenshots, labels, and illustrations. "+
+ "Translate all readable source-language text into "+target+". "+
+ "The requested source language is "+source+". "+
+ "Return ONLY the translated text for this page, with no introduction, no \"PAGE N\" header, and no markdown fences. "+
+ "Preserve paragraph breaks, lists, and important formatting. "+
+ "If the page has no readable text, return exactly: [No readable text]. "+
+ "Do not invent text. "+
+ (context?"Translator context: "+context:"");
+ var prevText="";
+ for(var i=0;i<pages.length;i++){
+ throwIfAborted();
+ var p=pages[i];
+ var statusMsg="Translating page "+p.n+" of "+pages.length+"…";
+ if(usePrev && prevText) statusMsg="Translating page "+p.n+" of "+pages.length+" (with previous page context)…";
+ setStatus(true,statusMsg);
+ setProgress(0.4+(i/pages.length)*0.6);
+ await yieldUI();
+ var prompt=basePrompt;
+ if(usePrev && prevText){
+ prompt+="\n\nThe previous page (page "+(p.n-1)+") was translated as follows. Use it only as extra context for continuity, names, pronouns, and terminology. Do not repeat that previous translation unless the same text also appears on this page:\n---\n"+clipPrev(prevText)+"\n---";
+ }
+ var r=await host.ai.chat({
+ messages:[{
+ role:"user",
+ content:[
+ {type:"text",text:prompt},
+ {type:"image_url",image_url:{url:p.dataUrl}}
+ ]
+ }]
+ });
+ var content=r&&r.content;
+ if(Array.isArray(content)) content=content.map(function(x){return x.text||"";}).join("");
+ if(!content) content="[No readable text]";
+ var item={n:p.n,text:String(content).trim()};
+ appendPage(item,p.dataUrl);
+ output+=(output?"\n\n":"")+"PAGE "+item.n+"\n"+item.text;
+ prevText=item.text;
+ await yieldUI();
+ }
+ setStatus(false);
+ setProgress(0);
+ toast("Translation complete");
+ }catch(e){
+ setStatus(false);
+ setProgress(0);
+ if(isStopped(e)){
+ if(output){
+ setNotice("Stopped. Showing pages translated so far.");
+ toast("Stopped");
+ }else{
+ setNotice("Stopped before any pages were translated.");
+ toast("Stopped");
+ }
+ }else{
+ setError(e.message||"Translation failed. Please check your AI provider settings and try again.");
+ }
+ }finally{
+ setBusyUI(false);
+ }
+}
+
+async function share(){
+ if(!output) return;
+ try{ await host.share({title:"PageTranslate results",text:output}); }
+ catch(e){ toast("Sharing was not available"); }
+}
+
+$("drop").addEventListener("click", selectPdf);
+$("drop").addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); selectPdf(); } });
+$("translate").addEventListener("click", translate);
+$("stop").addEventListener("click", requestStop);
+$("share").addEventListener("click", share);
+$("provider").addEventListener("change", applyProvider);
+$("refreshProviders").addEventListener("click", function(){
+ setError("");
+ setNotice("");
+ loadProviders();
+});
+
+document.querySelectorAll(".seg-btn").forEach(function(btn){
+ btn.addEventListener("click", function(){
+ document.querySelectorAll(".seg-btn").forEach(function(b){b.classList.remove("active");});
+ btn.classList.add("active");
+ quality=btn.dataset.q;
+ var q=QUALITY[quality];
+ if(q) $("qualityHint").textContent=q.label;
+ try{ if(host&&host.state) host.state.set("quality",quality); }catch(e){}
+ });
+});
+
+$("usePrev").addEventListener("change", async function(){
+ try{ if(host&&host.state) await host.state.set("usePrev", $("usePrev").checked ? "1" : "0"); }catch(e){}
+});
+
+(async function(){
+ try{
+ if(host&&host.state){
+ var d=await host.state.getAll();
+ if(d){
+ if(d.source) $("source").value=d.source;
+ if(d.target) $("target").value=d.target;
+ if(d.context) $("context").value=d.context;
+ if(d.quality&&QUALITY[d.quality]){
+ quality=d.quality;
+ document.querySelectorAll(".seg-btn").forEach(function(b){
+ b.classList.toggle("active",b.dataset.q===quality);
+ });
+ $("qualityHint").textContent=QUALITY[quality].label;
+ }
+ if(d.usePrev==="1" || d.usePrev===true) $("usePrev").checked=true;
+ }
+ }
+ }catch(e){}
+ ["source","target","context"].forEach(function(id){
+ $(id).addEventListener("change", async function(){
+ try{ if(host&&host.state) await host.state.set(id,$(id).value); }catch(e){}
+ });
+ });
+ await loadProviders();
+ try{
+ if(host&&host.on){
+ host.on("resume", function(){ loadProviders({keep:true}); });
+ }
+ }catch(e){}
+})();
+
+})();
+</script>
+</body>
+</html>

@@ -1723,6 +1723,21 @@ termux-reload-settings</div>
         </div>
 
         <div class="card">
+          <h2 data-i18n="ux.title">User experience</h2>
+          <p class="field-hint" style="margin-top:0;" data-i18n="ux.hint">Control optional background checks and demo suggestions.</p>
+          <div class="check" style="margin-top:0.55rem;">
+            <input type="checkbox" id="suggestDemos" checked />
+            <label for="suggestDemos" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ux.suggestDemos">Suggest new demos</label>
+          </div>
+          <p class="field-hint" style="margin:0.15rem 0 0 1.8rem;" data-i18n="ux.suggestDemosHint">Once a day, Forge may suggest a new demo from GitHub.</p>
+          <div class="check" style="margin-top:0.65rem;">
+            <input type="checkbox" id="autoCheckUpdates" checked />
+            <label for="autoCheckUpdates" style="margin:0;color:var(--text);font-weight:500;" data-i18n="ux.autoUpdates">Check for new Forge versions automatically</label>
+          </div>
+          <p class="field-hint" style="margin:0.15rem 0 0 1.8rem;" data-i18n="ux.autoUpdatesHint">Checks GitHub for a newer version and lets you choose whether to open its download page.</p>
+        </div>
+
+        <div class="card">
           <h2 data-i18n="bridges.title">Device bridges</h2>
           <p class="field-hint" style="margin-top:0;" data-i18n-html="bridges.hint">
             Phone, mic, camera, files — plus optional <b>Termux</b> for real shell power.
@@ -1816,6 +1831,12 @@ termux-reload-settings</div>
  "about.lang": "Language",
  "about.langRestart": "Saved — restart Forge to apply.",
  "about.title": "About Forge",
+ "ux.title": "User experience",
+ "ux.hint": "Control optional background checks and demo suggestions.",
+ "ux.suggestDemos": "Suggest new demos",
+ "ux.suggestDemosHint": "Once a day, Forge may suggest a new demo from GitHub.",
+ "ux.autoUpdates": "Check for new Forge versions automatically",
+ "ux.autoUpdatesHint": "Checks GitHub for a newer version and lets you choose whether to open its download page.",
  "ai.activeBrain": "Active brain",
  "ai.addOai": "+ Add OpenAI provider",
  "ai.advanced": "Advanced: provider, model, endpoint",
@@ -1989,6 +2010,11 @@ termux-reload-settings</div>
  "common.save": "Save",
  "common.shareCancelled": "Share cancelled",
  "common.test": "Test",
+ "demoSuggest.title": "A new demo for you",
+ "demoSuggest.body": "Hey there — there’s a new demo you may want to test:\n\n{name}\n{description}\n\nDownload it?",
+ "demoSuggest.download": "Download",
+ "demoSuggest.no": "No thanks",
+ "demoSuggest.downloaded": "Downloaded “{name}”.",
  "console.empty": "No output yet. Run a mini-app, then open Console.",
  "console.lead": "Newest at bottom. Mini-app console, uncaught errors, failed host calls.",
  "console.title": "Mini-app console",
@@ -2440,6 +2466,12 @@ termux-reload-settings</div>
  "about.lang": "Idioma",
  "about.langRestart": "Guardado: reinicia Forge para aplicarlo.",
  "about.title": "Acerca de Forge",
+ "ux.title": "Experiencia de usuario",
+ "ux.hint": "Controla las comprobaciones opcionales y las sugerencias de demos.",
+ "ux.suggestDemos": "Sugerir demos nuevas",
+ "ux.suggestDemosHint": "Una vez al día, Forge puede sugerir un demo nuevo de GitHub.",
+ "ux.autoUpdates": "Buscar nuevas versiones de Forge automáticamente",
+ "ux.autoUpdatesHint": "Comprueba GitHub para encontrar una versión nueva y te deja elegir si abrir su página de descarga.",
  "ai.activeBrain": "Cerebro activo",
  "ai.addOai": "+ Añadir proveedor OpenAI",
  "ai.advanced": "Avanzado: proveedor, modelo, endpoint",
@@ -2615,6 +2647,11 @@ termux-reload-settings</div>
  "common.save": "Guardar",
  "common.shareCancelled": "Compartir cancelado",
  "common.test": "Probar",
+ "demoSuggest.title": "Un nuevo demo para ti",
+ "demoSuggest.body": "Hola — hay un demo nuevo que quizá quieras probar:\n\n{name}\n{description}\n\n¿Descargarlo?",
+ "demoSuggest.download": "Descargar",
+ "demoSuggest.no": "No, gracias",
+ "demoSuggest.downloaded": "Se descargó “{name}”.",
  "console.empty": "Aún no hay salida. Ejecuta una mini-app y luego abre Consola.",
  "console.lead": "Lo más reciente abajo. Consola de mini-app, errores no capturados, llamadas fallidas al host.",
  "console.title": "Consola de mini-app",
@@ -3135,6 +3172,12 @@ termux-reload-settings</div>
  "about.lang": "Langue",
  "about.langRestart": "Enregistré — redémarrez Forge pour l’appliquer.",
  "about.title": "À propos de Forge",
+ "ux.title": "Expérience utilisateur",
+ "ux.hint": "Contrôlez les vérifications et suggestions facultatives.",
+ "ux.suggestDemos": "Suggérer de nouvelles démos",
+ "ux.suggestDemosHint": "Une fois par jour, Forge peut suggérer une nouvelle démo GitHub.",
+ "ux.autoUpdates": "Rechercher automatiquement les nouvelles versions de Forge",
+ "ux.autoUpdatesHint": "Consulte GitHub et vous laisse choisir d’ouvrir la page de téléchargement.",
  "ai.activeBrain": "Modèle actif",
  "ai.addOai": "+ Ajouter un fournisseur OpenAI",
  "ai.advanced": "Avancé : fournisseur, modèle, endpoint",
@@ -3310,6 +3353,11 @@ termux-reload-settings</div>
  "common.save": "Enregistrer",
  "common.shareCancelled": "Partage annulé",
  "common.test": "Tester",
+ "demoSuggest.title": "Une nouvelle démo pour vous",
+ "demoSuggest.body": "Bonjour — une nouvelle démo pourrait vous intéresser :\n\n{name}\n{description}\n\nLa télécharger ?",
+ "demoSuggest.download": "Télécharger",
+ "demoSuggest.no": "Non merci",
+ "demoSuggest.downloaded": "« {name} » téléchargé.",
  "console.empty": "Aucune sortie pour l’instant. Exécutez une mini-app puis ouvrez la Console.",
  "console.lead": "Plus récent en bas. Console de mini-app, erreurs non interceptées, appels host échoués.",
  "console.title": "Console de mini-app",
@@ -3830,6 +3878,12 @@ termux-reload-settings</div>
  "about.lang": "Idioma",
  "about.langRestart": "Salvo — reinicie o Forge para aplicar.",
  "about.title": "Sobre o Forge",
+ "ux.title": "Experiência do usuário",
+ "ux.hint": "Controle verificações e sugestões opcionais.",
+ "ux.suggestDemos": "Sugerir novos demos",
+ "ux.suggestDemosHint": "Uma vez por dia, o Forge pode sugerir um novo demo do GitHub.",
+ "ux.autoUpdates": "Verificar novas versões do Forge automaticamente",
+ "ux.autoUpdatesHint": "Consulta o GitHub e permite escolher se deseja abrir a página de download.",
  "ai.activeBrain": "Cérebro ativo",
  "ai.addOai": "+ Adicionar provedor OpenAI",
  "ai.advanced": "Avançado: provedor, modelo, endpoint",
@@ -4005,6 +4059,11 @@ termux-reload-settings</div>
  "common.save": "Salvar",
  "common.shareCancelled": "Compartilhamento cancelado",
  "common.test": "Testar",
+ "demoSuggest.title": "Um novo demo para você",
+ "demoSuggest.body": "Olá — há um novo demo que talvez queira testar:\n\n{name}\n{description}\n\nBaixar?",
+ "demoSuggest.download": "Baixar",
+ "demoSuggest.no": "Não, obrigado",
+ "demoSuggest.downloaded": "“{name}” baixado.",
  "console.empty": "Sem saída ainda. Rode uma mini-app e depois abra o Console.",
  "console.lead": "Mais recente embaixo. Console da mini-app, erros não capturados, chamadas do host que falharam.",
  "console.title": "Console da mini-app",
@@ -4525,6 +4584,12 @@ termux-reload-settings</div>
  "about.lang": "言語",
  "about.langRestart": "保存しました。Forgeを再起動すると適用されます。",
  "about.title": "Forge について",
+ "ux.title": "ユーザー体験",
+ "ux.hint": "任意のチェックとデモの提案を管理します。",
+ "ux.suggestDemos": "新しいデモを提案する",
+ "ux.suggestDemosHint": "1日1回、ForgeがGitHubの新しいデモを提案します。",
+ "ux.autoUpdates": "Forgeの新しいバージョンを自動確認",
+ "ux.autoUpdatesHint": "GitHubを確認し、ダウンロードページを開くか選べます。",
  "ai.activeBrain": "現在のモデル",
  "ai.addOai": "+ OpenAI プロバイダーを追加",
  "ai.advanced": "詳細：プロバイダー、モデル、エンドポイント",
@@ -4700,6 +4765,11 @@ termux-reload-settings</div>
  "common.save": "保存",
  "common.shareCancelled": "共有をキャンセルしました",
  "common.test": "テスト",
+ "demoSuggest.title": "おすすめの新しいデモ",
+ "demoSuggest.body": "新しく試してみたいデモがあります:\n\n{name}\n{description}\n\nダウンロードしますか？",
+ "demoSuggest.download": "ダウンロード",
+ "demoSuggest.no": "結構です",
+ "demoSuggest.downloaded": "「{name}」をダウンロードしました。",
  "console.empty": "まだ出力はありません。ミニアプリを実行してからコンソールを開いてください。",
  "console.lead": "新しいものは下へ。ミニアプリのコンソール、捕捉されないエラー、失敗したホスト呼び出し。",
  "console.title": "ミニアプリコンソール",
@@ -5220,6 +5290,12 @@ termux-reload-settings</div>
  "about.lang": "언어",
  "about.langRestart": "저장됨 — 적용하려면 Forge를 다시 시작하세요.",
  "about.title": "Forge 정보",
+ "ux.title": "사용자 경험",
+ "ux.hint": "선택적 확인 및 데모 제안을 관리합니다.",
+ "ux.suggestDemos": "새 데모 제안",
+ "ux.suggestDemosHint": "하루에 한 번 Forge가 GitHub의 새 데모를 제안할 수 있습니다.",
+ "ux.autoUpdates": "Forge 새 버전 자동 확인",
+ "ux.autoUpdatesHint": "GitHub를 확인하고 다운로드 페이지를 열지 선택할 수 있습니다.",
  "ai.activeBrain": "활성 모델",
  "ai.addOai": "+ OpenAI 제공자 추가",
  "ai.advanced": "고급: 제공자, 모델, 엔드포인트",
@@ -5395,6 +5471,11 @@ termux-reload-settings</div>
  "common.save": "저장",
  "common.shareCancelled": "공유 취소됨",
  "common.test": "테스트",
+ "demoSuggest.title": "새 데모를 추천합니다",
+ "demoSuggest.body": "새로 테스트해 볼 만한 데모가 있습니다:\n\n{name}\n{description}\n\n다운로드할까요?",
+ "demoSuggest.download": "다운로드",
+ "demoSuggest.no": "괜찮습니다",
+ "demoSuggest.downloaded": "“{name}”을(를) 다운로드했습니다.",
  "console.empty": "아직 출력 없음. 미니 앱을 실행한 뒤 콘솔을 여세요.",
  "console.lead": "아래가 최신. 미니 앱 콘솔, 잡히지 않은 오류, 실패한 호스트 호출.",
  "console.title": "미니 앱 콘솔",
@@ -6262,8 +6343,12 @@ termux-reload-settings</div>
        forge_check.sh asserts this assignment exists. Exposed as window.__FORGE_BUILD
        and surfaced in Settings → About Forge. */
     window.__FORGE_BUILD = window.__FORGE_BUILD || { version: '', versionCode: 0, sha: 'dev', builtAt: 0 };
+    function isAutoCheckUpdatesEnabled() {
+      try { return localStorage.getItem(LS.autoCheckUpdates) !== '0'; } catch (_) { return true; }
+    }
     async function checkHostedForgeUpdate() {
       try {
+        if (!isAutoCheckUpdatesEnabled()) return;
         if (window.__FORGE_UPDATE_CHECKED) return;
         window.__FORGE_UPDATE_CHECKED = true;
         const flavor = String(window.__FORGE_BUILD.flavor || '').toLowerCase();
@@ -6365,6 +6450,10 @@ termux-reload-settings</div>
       setupDone: 'forge_setup_done_v1',
       setupProvider: 'forge_setup_provider_v1',
       modelCatalogCache: 'forge_model_catalog_cache_v1',
+      suggestDemos: 'forge_suggest_demos_v1',
+      demoSuggestionDay: 'forge_demo_suggestion_day_v1',
+      demoSuggestionDismissed: 'forge_demo_suggestion_dismissed_v1',
+      autoCheckUpdates: 'forge_auto_check_updates_v1',
       termuxSetupDone: 'forge_termux_setup_done_v1',
       genTimeout: 'forge_gen_timeout_v1',
       genMaxTokens: 'forge_gen_max_tokens_v1',
@@ -6922,6 +7011,8 @@ termux-reload-settings</div>
       btnForgetKey: document.getElementById('btnForgetKey'),
       btnTestAi: document.getElementById('btnTestAi'),
       btnDonate: document.getElementById('btnDonate'),
+      suggestDemos: document.getElementById('suggestDemos'),
+      autoCheckUpdates: document.getElementById('autoCheckUpdates'),
       btnLangManage: document.getElementById('btnLangManage'),
       btnAaLink: document.getElementById('btnAaLink'),
       btnMiniConsole: document.getElementById('btnMiniConsole'),
@@ -9124,6 +9215,8 @@ termux-reload-settings</div>
       try {
         migrateLegacyPrefs();
         el.rememberKey.checked = localStorage.getItem(LS.remember) !== '0';
+        if (el.suggestDemos) el.suggestDemos.checked = localStorage.getItem(LS.suggestDemos) !== '0';
+        if (el.autoCheckUpdates) el.autoCheckUpdates.checked = localStorage.getItem(LS.autoCheckUpdates) !== '0';
         activeProviderId = localStorage.getItem(LS.provider) || DEFAULT_PROVIDER;
         if (!getProviderMap()[activeProviderId]) activeProviderId = DEFAULT_PROVIDER;
         seedVaultFromProfiles();
@@ -24641,6 +24734,54 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     function compareForgeVersions(a, b) { const pa=String(a||'0').replace(/^v/i,'').split('.').map(x=>parseInt(x,10)||0), pb=String(b||'0').replace(/^v/i,'').split('.').map(x=>parseInt(x,10)||0); for(let i=0;i<3;i++){if((pa[i]||0)!==(pb[i]||0))return(pa[i]||0)-(pb[i]||0);} return 0; }
     function demoLocalizedText(sample, field) { const value = sample && sample[field]; if (value && typeof value === 'object' && !Array.isArray(value)) return String(value[FORGE_LANG] || value.en || Object.values(value)[0] || ''); return String(value || ''); }
     function demoTitleForInstall(title, list) { const base=String(title||t('lib.demoUntitled')).trim()||t('lib.demoUntitled'); let c=base,n=2,names=new Set(list.map(x=>String(x.title||'').toLowerCase())); while(names.has(c.toLowerCase())) c=base+' ('+n++ +')'; return c; }
+    async function suggestNewDemoOnceDaily() {
+      try {
+        if (localStorage.getItem(LS.suggestDemos) === '0') return;
+        const day = new Date().toISOString().slice(0, 10);
+        if (localStorage.getItem(LS.demoSuggestionDay) === day) return;
+        const setup = document.getElementById('setupOverlay');
+        if (setup && !setup.classList.contains('hidden')) { setTimeout(suggestNewDemoOnceDaily, 2500); return; }
+        const r = await fetch(DEMO_MANIFEST_URL, { cache: 'no-store' });
+        if (!r.ok) return;
+        const manifest = await r.json();
+        const samples = Array.isArray(manifest?.samples) ? manifest.samples : [];
+        const installed = getLibrary();
+        const dismissed = (() => { try { return new Set(JSON.parse(localStorage.getItem(LS.demoSuggestionDismissed) || '[]')); } catch (_) { return new Set(); } })();
+        const current = String(window.__FORGE_BUILD?.version || '0');
+        const candidate = samples.find(s => s && s.id && !installed.some(a => a.sampleId === s.id) && !dismissed.has(String(s.id)) && compareForgeVersions(current, s.minimumForgeVersion || '0') >= 0);
+        localStorage.setItem(LS.demoSuggestionDay, day);
+        if (!candidate) return;
+        const name = demoLocalizedText(candidate, 'title') || t('lib.demoUntitled');
+        const description = demoLocalizedText(candidate, 'description');
+        const ok = await forgeConfirmDialog({
+          title: t('demoSuggest.title'),
+          body: t('demoSuggest.body', { name, description }),
+          okLabel: t('demoSuggest.download'),
+          cancelLabel: t('demoSuggest.no'),
+          okClass: 'btn small',
+        });
+        if (!ok) {
+          dismissed.add(String(candidate.id));
+          localStorage.setItem(LS.demoSuggestionDismissed, JSON.stringify([...dismissed].slice(-100)));
+          return;
+        }
+        try {
+          const hr = await fetch(DEMO_SAMPLES_BASE + encodeURIComponent(String(candidate.file || '')), { cache: 'no-store' });
+          if (!hr.ok) throw new Error('HTTP ' + hr.status);
+          const html = await hr.text();
+          if (!/<html[\s>]/i.test(html) || html.length > 8 * 1024 * 1024) throw new Error('Invalid demo HTML');
+          const now = Date.now();
+          const list = getLibrary();
+          list.push({ id: 'sample_' + String(candidate.id).replace(/[^a-z0-9_-]/gi, '_') + '_' + now.toString(36), sampleId: String(candidate.id), sampleVersion: String(candidate.version || manifest.updatedAt || ''), source: 'forge-github-demos', title: demoTitleForInstall(name, list), summary: description, html, iconEmoji: candidate.icon || '🧩', iconColor: '#6D28D9', createdAt: now, updatedAt: now });
+          setLibrary(list);
+          renderLibrary();
+          setLibStatus(t('demoSuggest.downloaded', { name }), 'ok');
+        } catch (e) {
+          setLibStatus(t('lib.demosFailedOne', { name, msg: e?.message || 'error' }), 'err');
+        }
+      } catch (_) {}
+    }
+
     async function downloadDemos() {
       setLibStatus(t('lib.demosLoading'), '');
       try { const r=await fetch(DEMO_MANIFEST_URL,{cache:'no-store'}); if(!r.ok)throw new Error('HTTP '+r.status); const manifest=await r.json(); const samples=Array.isArray(manifest?.samples)?manifest.samples:[]; if(!samples.length){setLibStatus(t('lib.demosEmpty'),'err');return;}
@@ -25709,6 +25850,12 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
         if (el.importFile) el.importFile.value = '';
       }
     });
+    el.suggestDemos?.addEventListener('change', () => {
+      try { localStorage.setItem(LS.suggestDemos, el.suggestDemos.checked ? '1' : '0'); } catch (_) {}
+    });
+    el.autoCheckUpdates?.addEventListener('change', () => {
+      try { localStorage.setItem(LS.autoCheckUpdates, el.autoCheckUpdates.checked ? '1' : '0'); } catch (_) {}
+    });
     el.btnDonate?.addEventListener('click', () => {
       // External browser via anchor/_blank (system browser on Capacitor). No in-app
       // purchase, no gating — donation link only (Play/F-Droid compliant).
@@ -25973,6 +26120,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     refreshQuickSetupVisibility();
     consumeShortcutLaunch();
     wireOpenHtmlBridge();
+    setTimeout(() => suggestNewDemoOnceDaily(), 1800);
 
     // First-run / missing key → easy setup (free providers)
     try {
