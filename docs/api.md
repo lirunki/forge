@@ -134,6 +134,8 @@ const taskPromise = ForgeHost.ai.runTask({
   id: taskId,                    // supply an id to cancel while the call is pending
   task: 'Compare these products',
   instructions: 'Compare price, battery life, and warranty.',
+  profile: 'auto',                 // auto | tiny | normal | advanced | large (alias)
+  skills: ['web-research', 'report-writing'],
   context: { products: ['A', 'B'] }, // optional JSON-serializable context
   attachments,                   // optional; same contract as ai.agent
   tools,                          // same tools[] accepted by ai.agent; omit for host catalog
@@ -145,10 +147,14 @@ const taskPromise = ForgeHost.ai.runTask({
 // While taskPromise is pending (e.g. Stop button), call:
 // ForgeHost.ai.cancel(taskId)
 const taskResult = await taskPromise; // ai.agent result fields + taskId
-// Artifacts/workspace are not part of this API yet. Input (task + instructions
-// + context) is capped at 12,000 characters total. Context objects must be
-// JSON-serializable. skills, profile, and workspace options are reserved and
-// currently rejected.
+// Result adds taskId, resolved profile, selected skills, and guidanceVersion.
+// `auto` uses Forge's saved per-provider/model prompt profile (recommendation or
+// normal default if unset). Live tools remain the only source of tool schemas.
+// Bundled guidance v1 combines AGENT.md, profile markdown, and optional skills:
+// web-research, document-analysis, and report-writing. Workspace/artifacts are
+// not part of this API yet.
+// Input (task + instructions + context) is capped at 12,000 chars total; context
+// objects must be JSON-serializable. Unknown profiles/skills reject clearly.
 ```
 
 ### Tool calling

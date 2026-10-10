@@ -70,8 +70,12 @@ echo "  stamped forge-build.json"
 # Ensure www/index.html parity with assets (guarantee before build).
 cp -f "$WWW/index.html" "$ASSETS/index.html"
 # Builder protocol and on-demand API docs ship as assets.
-for f in LOOP.md CODEMODE.md API.md; do
+for f in LOOP.md CODEMODE.md API.md AGENT.md AGENT_TINY.md AGENT_NORMAL.md AGENT_ADVANCED.md; do
   [ -f "$WWW/$f" ] && cp -f "$WWW/$f" "$ASSETS/$f"
+done
+mkdir -p "$ASSETS/agent-skills"
+for f in "$WWW"/agent-skills/*.md; do
+  [ -f "$f" ] && cp -f "$f" "$ASSETS/agent-skills/"
 done
 # Turn-key config ships as an asset (host fetches it locally + remote git URL).
 [ -f "$WWW/turnkey-config.json" ] && cp -f "$WWW/turnkey-config.json" "$ASSETS/turnkey-config.json"
