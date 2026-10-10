@@ -20,14 +20,39 @@ const { hint } = await ForgeHost.tools.hint({ riskMax:'confirm' })  // system-pr
 
 ## Risk tiers
 
-| Tier | Meaning | Default in `tools.list` |
+| Tier | Meaning | Availability |
 |------|---------|--------------------------|
-| `safe` | Read-only, no PII, no side effects | included |
-| `sensitive` | Reads personal data (contacts/SMS/location/clipboard) | included |
-| `confirm` | Side effect the user sees (launch app, compose, open URL, write clipboard, notify) | included |
-| `danger` | Silent irreversible action (sms_send, phone_call) | excluded unless `riskMax:'danger'` |
+| `safe` | Read-only, no PII, no side effects | included by the safe default |
+| `sensitive` | Reads personal data (contacts/SMS/location/clipboard) | agent schemas need a per-run host grant; execution still needs platform permission |
+| `confirm` | Side effect the user sees (launch app, compose, open URL, write clipboard, notify) | explicitly requested schemas still get host confirmation per call |
+| `danger` | Silent irreversible action (sms_send, phone_call) | agent schemas need a per-run host grant and each call gets host confirmation |
 
-Filter: `tools.list({ riskMax:'confirm' })` returns everything up to and including `confirm`.
+`tools.list()` and `tools.run()` default to `riskMax:'safe'`. Explicitly request a
+higher tier; host-side authorization and permissions still apply. `riskMax` is a
+ceiling, not a grant or a way to suppress host confirmation.
+
+## Task-agent tool selection and safety
+
+`ForgeHost.ai.agent()` and `ForgeHost.ai.runTask()` build OpenAI-shaped schemas
+from the live `HOST_TOOL_REGISTRY` and current app-registered tools. Caller-supplied
+schemas are reduced to tool names and replaced with canonical host definitions;
+unknown names/groups are rejected. Task runs default to `tools:{preset:'safe'}`
+(and `riskMax:'safe'`). Supported presets are `safe`, `web-research`, `selected`,
+and `all`. `selected` accepts `names` and/or `groups`; if both are provided they
+intersect. Capability-unavailable tools are omitted. If the app has an existing
+per-app “Always allow” setting for a tool, Forge honors it; otherwise sensitive and
+danger tools require an explicit host-owned per-run opt-in before their schemas
+are exposed. Confirm/danger calls still go through the host risk sheet, and native
+permission prompts remain in force. A mini-app's `onToolCall` can veto but cannot
+grant tools or raise the risk ceiling. In an agent run, `bridge_call` blocks every
+non-safe nested method; mapped safe methods also require the corresponding
+registered tool to be selected. Use the specialized registered tool for any
+sensitive or side-effecting operation.
+
+Agent model-facing tool results are bounded (56,000 JSON characters). Sensitive
+and danger tool arguments/results are redacted from mini-app event/history payloads;
+the model receives the bounded result needed to finish the task. Cancellation also
+closes a pending host tool-access prompt.
 
 ## Task-agent virtual workspace tools
 
@@ -154,16 +179,21 @@ termux.isAvailable/open`
 
 ## Mini-app contract
 
+Prefer the existing host-managed loop rather than creating another runtime:
+
 ```js
-const { tools } = await ForgeHost.tools.list({ riskMax: settings.allowDangerousTools ? 'danger' : 'confirm' })
-const r = await ForgeHost.ai.chat({ messages, tools })
-if (r.tool_calls?.length) {
-  for (const tc of r.tool_calls) {
-    const args = JSON.parse(tc.function.arguments || '{}')
-    const out = await ForgeHost.tools.run({ name: tc.function.name, args, riskMax })
-    messages.push({ role:'tool', tool_call_id: tc.id, name: tc.function.name, content: JSON.stringify(out) })
-  }
-  const r2 = await ForgeHost.ai.chat({ messages, tools })
-}
+const result = await ForgeHost.ai.runTask({
+  task: 'Research this topic',
+  tools: { preset: 'web-research' },
+  riskMax: 'safe',
+  onToken: delta => render(delta),
+})
 ```
-Or use the host loop: `ForgeHost.ai.agent({ messages, tools, riskMax, onToolCall, onToken })`.
+
+For a custom interaction, `ForgeHost.ai.agent()` accepts the same presets, or
+`{preset:'selected', names:[...], groups:[...]}`. Omit `tools` for safe-only
+access. If an app intentionally uses a manual `ai.chat` tool loop, it must still
+obtain schemas from `ForgeHost.tools.list({riskMax})` and execute through
+`ForgeHost.tools.run({name, args, riskMax})`; never execute model-provided
+function schemas. Direct `tools.run` calls default to safe and retain the host
+risk sheet and native permission checks regardless of app UI.

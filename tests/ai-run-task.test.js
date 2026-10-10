@@ -65,7 +65,8 @@ test('forwards agent controls, callbacks, attachments, and a cancellation id', (
   assert.equal(request.taskId, 'task-123');
   assert.equal(forwarded.id, 'task-123');
   assert.equal(forwarded.attachments[0], attachment);
-  assert.equal(forwarded.tools[0], tool);
+  assert.equal(forwarded.__forgeTaskToolSelection[0], tool);
+  assert.equal('tools' in forwarded, false, 'runTask must not pass caller-authored schemas directly to the agent');
   assert.equal(forwarded.riskMax, 'confirm');
   assert.equal(forwarded.maxRounds, 4);
   assert.equal(forwarded.providerId, 'gemini');
@@ -111,6 +112,7 @@ test('runTask delegates once and resolves guidance inside the cancellable host l
   assert.match(method, /__forgeTaskProfile\s*=\s*request\.profile/);
   assert.match(method, /__forgeTaskSkills\s*=\s*request\.skills/);
   assert.match(method, /if \(request\.workspace\) request\.agentOptions\.__forgeTaskWorkspace = request\.workspace/);
+  assert.match(html, /agentOptions\.__forgeTaskToolSelection = toolSelection/);
   assert.match(method, /window\.ForgeHost\.ai\.agent\(request\.agentOptions\)/);
   assert.match(method, /taskId:\s*result\.id\s*\|\|\s*request\.taskId/);
   assert.match(html, /if \(params\.__forgeTaskProfile != null\) \{[\s\S]*?getAgentGuidance\(/);

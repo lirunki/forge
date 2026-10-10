@@ -108,15 +108,14 @@ await ForgeHost.ai.chatStream({
 // r.id is the stream id (use it to cancel if you did not pass one)
 await ForgeHost.ai.cancel(r.id)   // aborts a running stream / agent / task
 
-// Agent loop (2.6.52): host runs chat + tool-call loop + risk sheet
-// onToolCall veto (2.6.54): returning false (or a Promise resolving to false)
-//   denies that tool call and the loop continues (a denied `role:'tool'` row is pushed).
-//   This is IN ADDITION to the host risk sheet; either gate can deny.
+// Agent loop: schemas come from Forge's live registry, never caller-authored.
+// Safe-only is the default. Presets: safe, web-research, selected, all.
 const r = await ForgeHost.ai.agent({
-  messages, tools,           // or omit tools to auto-load via tools.list
+  messages,
+  tools: { preset: 'safe' }, // selected may name tools/groups; all is still risk-gated
   attachments,               // optional; same format/normalization as ai.chat
   maxRounds: 6,
-  riskMax: 'confirm',        // safe|sensitive|confirm|danger
+  riskMax: 'safe',            // sensitive/danger require host opt-in; confirmation stays host-owned
   id: 'my-agent',            // optional; cancellable via ai.cancel(id)
   onToken: t => render(t),   // optional (uses chatStream when provided)
   onToolCall: ({name,args}) => true,  // return false to veto this tool call
@@ -139,8 +138,8 @@ const taskPromise = ForgeHost.ai.runTask({
   workspace: { id: 'comparison' }, // optional; omit id to have Forge mint one
   context: { products: ['A', 'B'] }, // optional JSON-serializable context
   attachments,                   // optional; same contract as ai.agent
-  tools,                          // same tools[] accepted by ai.agent; omit for host catalog
-  riskMax: 'confirm',
+  tools: { preset: 'web-research' }, // or {preset:'selected', names:[...], groups:[...]} / {preset:'all'}
+  riskMax: 'safe',               // default safe; sensitive/danger require host opt-in
   maxRounds: 8,
   onToken: delta => render(delta),
   onToolResult: ({name, result}) => showToolStatus(name, result),
@@ -148,11 +147,20 @@ const taskPromise = ForgeHost.ai.runTask({
 // While taskPromise is pending (e.g. Stop button), call:
 // ForgeHost.ai.cancel(taskId)
 const taskResult = await taskPromise; // ai.agent result fields + taskId
-// Result adds taskId, resolved profile, selected skills, and guidanceVersion.
+// Result adds taskId, resolved profile, selected skills, guidanceVersion, and toolAccess.
 // `auto` uses Forge's saved per-provider/model prompt profile (recommendation or
 // normal default if unset). Live tools remain the only source of tool schemas.
 // Bundled guidance v1 combines AGENT.md, profile markdown, and optional skills:
-// web-research, document-analysis, and report-writing. If workspace is enabled,
+// web-research, document-analysis, and report-writing. `tools` is a registry-backed
+// selection, never arbitrary caller-authored schemas. Presets: safe (default),
+// web-research, selected, all. `selected` accepts names/groups; when both are set
+// they intersect. Unknown names/groups reject. Schemas are filtered against live
+// Forge capabilities and risk policy. Sensitive/danger access requires a host-owned
+// per-run opt-in (prior per-app Always grants are honored); confirm/danger actions
+// still use the host risk sheet, and native permission prompts remain authoritative.
+// onToolCall can veto only; it cannot add tools or raise risk. Model-facing results
+// are capped at 56,000 JSON characters; sensitive/danger results are redacted from
+// mini-app event/history payloads. If workspace is enabled,
 // the result also includes workspaceId, artifacts (path/mime/bytes/updatedAt),
 // and artifactCount. `ai.workspace.list/read/clear` are scoped to this mini-app;
 // workspace.read supports offset + limit up to 50,000 chars per call.
@@ -401,16 +409,15 @@ await ForgeHost.audio.stop()
 ## Host LLM tools registry
 See [`tools.md`](tools.md) for the full catalog. Summary:
 ```js
-const { tools, catalog } = await ForgeHost.tools.list({ riskMax:'confirm', names?: string[] })
+const { tools, catalog } = await ForgeHost.tools.list({ riskMax:'confirm' }) // safe by default when omitted
 await ForgeHost.tools.run('web_search', { query:'…', limit:5 })
 await ForgeHost.tools.run('web_fetch', { url, maxChars:12000 })
-await ForgeHost.tools.run('get_location')
+await ForgeHost.tools.run('get_location', {}, { riskMax:'sensitive' }) // host consent + native permission still apply
 await ForgeHost.tools.call('apps.list', { query:'maps' })   // allowlisted bridge methods
 const { hint } = await ForgeHost.tools.hint({ riskMax:'confirm' })  // system-prompt text
 // aliases: ForgeHost.ai.tools.* · ForgeHost.web.search/fetch
 ```
-Chat/agent mini-apps MUST use `tools.list/run` (not a hardcoded `APP_TOOLS`).
-Include Settings: enable tools, riskMax, confirm side effects, optional tool multi-select; persist via `ForgeHost.storage`. Danger tools (`sms_send`, `phone_call`) only if user enables danger risk and explicitly asks.
+Prefer `ForgeHost.ai.agent/runTask` for model-driven tool loops; schemas are selected from the live host registry. Presets are safe (default), web-research, selected names/groups, and all. Host capability filters, sensitive/danger opt-in, per-action confirmation, and native permissions remain authoritative. Use `tools.list/run` for explicit app-controlled calls; they also default to safe and cannot bypass host policy.
 
 ## Permission UX rules
 - Request before sensitive APIs; on deny, show UI + button calling `device.openSettings()`.
