@@ -11567,12 +11567,14 @@ function setLibrary(list) {
        * for confirm/danger tools. Resolves to { content, rounds, tools, provider, ... }.
        * Events (ai.agent.event): round | chat | token | toolCall | toolResult | toolDenied | maxrounds.
        *   const r = await ForgeHost.ai.agent({
-       *     messages, tools,           // omit tools to auto-load via tools.list
+       *     messages, tools, attachments?, // attachments use the same contract as ai.chat
        *     maxRounds: 6, riskMax: 'confirm',
        *     onToken: t => render(t),
        *     onToolCall: ({name,args}) => true,
        *     onRound: ({round, toolCalls}) => {},
        *   })
+       * Attachments bind to the latest user message and remain in the agent's
+       * multimodal conversation through tool-call follow-up rounds.
        */
       agent: (opts) => {
         const o = Object.assign({}, opts || {});
@@ -16084,7 +16086,7 @@ function setLibrary(list) {
               tools = Array.isArray(listed.tools) ? listed.tools : [];
             }
             const maxRounds = Math.min(Math.max(Number(params.maxRounds) || 6, 1), 12);
-            const messages = Array.isArray(params.messages) ? params.messages.map(m => Object.assign({}, m)) : [];
+            let messages = Array.isArray(params.messages) ? params.messages.map(m => Object.assign({}, m)) : [];
             if (params.prompt && !messages.some(m => m.role === 'user')) {
               messages.push({ role: 'user', content: String(params.prompt) });
             }
@@ -16095,10 +16097,20 @@ function setLibrary(list) {
             if (!messages.length) throw new Error('ai.agent requires messages or prompt');
             if (!messages.some(m => m.role === 'user')) messages.push({ role: 'user', content: 'Please continue.' });
 
+            // Share the exact multimodal normalization used by ai.chat/chatStream.
+            // Attachments are merged onto the latest user message once and then stay
+            // in this working transcript for every model round/tool follow-up.
+            const built = buildMiniAppAiMessages({
+              messages,
+              attachments: params.attachments || params.files || params.images,
+            }, { ensureSystem: false });
+            messages = built.messages;
+
             const toolChoice = params.tool_choice != null ? params.tool_choice : (params.toolChoice != null ? params.toolChoice : 'auto');
             const wantStream = !!params.__wantStream;
             const backend = backendForRuntime(rt);
             const fileMetaA = { transcribed: 0, inputFiles: 0, inputAudio: 0, fallbacks: 0 };
+            const oaiContentCache = new WeakMap();
 
             async function agentChatRound() {
               const chatOpts = { tools, tool_choice: toolChoice, fullResponse: true };
@@ -16112,7 +16124,13 @@ function setLibrary(list) {
               const oai = [];
               for (const m of messages) {
                 if (m.role === 'system' || m.role === 'assistant' || m.role === 'tool') { oai.push(m); continue; }
-                const cp = await materializeContentForRichOAI(m.content, fileMetaA);
+                let cp;
+                if (oaiContentCache.has(m)) {
+                  cp = oaiContentCache.get(m);
+                } else {
+                  cp = await materializeContentForRichOAI(m.content, fileMetaA);
+                  oaiContentCache.set(m, cp);
+                }
                 oai.push({ role: m.role || 'user', content: cp });
               }
               if (wantStream) return await chatCompletionsStream(oai, sig, { ...chatOpts, onDelta });
@@ -16193,6 +16211,14 @@ function setLibrary(list) {
               backend,
               riskMax,
               maxRounds,
+              richAttachments: true,
+              multimodal: built.stats.images > 0 || built.stats.files > 0 || fileMetaA.inputFiles > 0 || fileMetaA.transcribed > 0,
+              attachments: built.stats.attachments,
+              images: built.stats.images,
+              files: built.stats.files,
+              transcribed: fileMetaA.transcribed,
+              inputFiles: fileMetaA.inputFiles,
+              stats: Object.assign({}, built.stats, fileMetaA),
               cancelled: agentCancelFlag.cancelled,
             };
           });
@@ -19488,7 +19514,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
      * Build provider messages for ForgeHost.ai.chat.
      * Supports: prompt, messages (string or multimodal content), attachments[].
      */
-    function buildMiniAppAiMessages(params) {
+    function buildMiniAppAiMessages(params, options = {}) {
       const stats = { images: 0, files: 0, attachments: 0, textParts: 0 };
       let messages = params.messages;
 
@@ -19588,7 +19614,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
           content: systems.map(s => String(s.content || '')).filter(Boolean).join('\n'),
         }, ...rest];
       }
-      if (!messages.some(m => m.role === 'system')) {
+      if (options.ensureSystem !== false && !messages.some(m => m.role === 'system')) {
         messages = [{
           role: 'system',
           content: 'You are a helpful assistant inside a Forge mini-app on the user\'s phone. Be concise and practical. If images are attached, describe and use them to answer.',

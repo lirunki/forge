@@ -88,14 +88,13 @@ await ForgeHost.ai.chat({
 })
 
 // Attachments helper — pass pick/camera results through; host classifies by MIME:
-await ForgeHost.ai.chat({
-  prompt:'Describe these',
-  attachments:[
-    { type:'image', dataUrl: shot.dataUrl, mime:'image/jpeg' },
-    { type:'file', name:'notes.txt', mime:'text/plain', base64: f.base64, dataUrl: f.dataUrl },
-    f,  // full files.pick / camera result is OK
-  ],
-})
+const attachments = [
+  { type:'image', dataUrl: shot.dataUrl, mime:'image/jpeg' },
+  { type:'file', name:'notes.txt', mime:'text/plain', base64: f.base64, dataUrl: f.dataUrl },
+  f,  // full files.pick / camera result is OK
+]
+await ForgeHost.ai.chat({ prompt:'Describe these', attachments })
+// ai.chatStream accepts the same attachments option.
 
 // Token streaming (2.6.52): resolves to the full ai.chat result; onToken fires per delta
 // Cancellable (2.6.54): pass an `id` and call ForgeHost.ai.cancel(id) to abort.
@@ -115,6 +114,7 @@ await ForgeHost.ai.cancel(r.id)   // aborts a running stream / agent
 //   This is IN ADDITION to the host risk sheet; either gate can deny.
 const r = await ForgeHost.ai.agent({
   messages, tools,           // or omit tools to auto-load via tools.list
+  attachments,               // optional; same format/normalization as ai.chat
   maxRounds: 6,
   riskMax: 'confirm',        // safe|sensitive|confirm|danger
   id: 'my-agent',            // optional; cancellable via ai.cancel(id)
@@ -122,6 +122,11 @@ const r = await ForgeHost.ai.agent({
   onToolCall: ({name,args}) => true,  // return false to veto this tool call
   onRound: ({round, toolCalls}) => {},
 })
+// Attachments are associated with the latest user message in the agent's
+// internal transcript and retained for tool-call follow-up rounds. The host
+// does not append duplicate user messages; mini-apps need not resend them.
+// Result also reports richAttachments, multimodal, attachments, images, files,
+// and provider materialization stats.
 ```
 
 ### Tool calling
