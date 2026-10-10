@@ -111,7 +111,7 @@ await ForgeHost.ai.chatStream({
   providerId, model,
 })
 // r.id is the stream id (use it to cancel if you did not pass one)
-await ForgeHost.ai.cancel(r.id)   // aborts a running stream / agent
+await ForgeHost.ai.cancel(r.id)   // aborts a running stream / agent / task
 
 // Agent loop (2.6.52): host runs chat + tool-call loop + risk sheet
 // onToolCall veto (2.6.54): returning false (or a Promise resolving to false)
@@ -119,6 +119,7 @@ await ForgeHost.ai.cancel(r.id)   // aborts a running stream / agent
 //   This is IN ADDITION to the host risk sheet; either gate can deny.
 const r = await ForgeHost.ai.agent({
   messages, tools,           // or omit tools to auto-load via tools.list
+  attachments,               // optional; same format/normalization as ai.chat
   maxRounds: 6,
   riskMax: 'confirm',        // safe|sensitive|confirm|danger
   id: 'my-agent',            // optional; cancellable via ai.cancel(id)
@@ -126,6 +127,29 @@ const r = await ForgeHost.ai.agent({
   onToolCall: ({name,args}) => true,  // return false to veto this tool call
   onRound: ({round, toolCalls}) => {},
 })
+// Attachments bind to the latest user message and stay available through agent
+// tool-call follow-ups without the mini-app resending them.
+
+// Task-oriented convenience wrapper over the SAME agent loop (no separate loop).
+const taskId = 'research-' + Date.now();
+const taskPromise = ForgeHost.ai.runTask({
+  id: taskId,                    // supply an id to cancel while pending
+  task: 'Compare these products',
+  instructions: 'Compare price, battery life, and warranty.',
+  context: { products: ['A', 'B'] }, // optional JSON-serializable context
+  attachments,                   // optional; same contract as ai.agent
+  tools,                          // same tools[] as ai.agent; omit for host catalog
+  riskMax: 'confirm',
+  maxRounds: 8,
+  onToken: delta => render(delta),
+  onToolResult: ({name, result}) => showToolStatus(name, result),
+});
+// While taskPromise is pending (e.g. in a Stop handler), call:
+// ForgeHost.ai.cancel(taskId)
+const taskResult = await taskPromise; // ai.agent result fields + taskId
+// task + instructions + context: 12,000 chars total. Context objects must be
+// JSON-serializable. skills, profile, and workspace options are reserved and
+// currently rejected.
 ```
 
 ### Tool calling

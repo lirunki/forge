@@ -106,7 +106,7 @@ await ForgeHost.ai.chatStream({
   providerId, model,
 })
 // r.id is the stream id (use it to cancel if you did not pass one)
-await ForgeHost.ai.cancel(r.id)   // aborts a running stream / agent
+await ForgeHost.ai.cancel(r.id)   // aborts a running stream / agent / task
 
 // Agent loop (2.6.52): host runs chat + tool-call loop + risk sheet
 // onToolCall veto (2.6.54): returning false (or a Promise resolving to false)
@@ -127,6 +127,28 @@ const r = await ForgeHost.ai.agent({
 // does not append duplicate user messages; mini-apps need not resend them.
 // Result also reports richAttachments, multimodal, attachments, images, files,
 // and provider materialization stats.
+
+// Task-oriented convenience wrapper over the SAME agent loop (no separate loop).
+const taskId = 'research-' + Date.now();
+const taskPromise = ForgeHost.ai.runTask({
+  id: taskId,                    // supply an id to cancel while the call is pending
+  task: 'Compare these products',
+  instructions: 'Compare price, battery life, and warranty.',
+  context: { products: ['A', 'B'] }, // optional JSON-serializable context
+  attachments,                   // optional; same contract as ai.agent
+  tools,                          // same tools[] accepted by ai.agent; omit for host catalog
+  riskMax: 'confirm',
+  maxRounds: 8,
+  onToken: delta => render(delta),
+  onToolResult: ({name, result}) => showToolStatus(name, result),
+});
+// While taskPromise is pending (e.g. Stop button), call:
+// ForgeHost.ai.cancel(taskId)
+const taskResult = await taskPromise; // ai.agent result fields + taskId
+// Artifacts/workspace are not part of this API yet. Input (task + instructions
+// + context) is capped at 12,000 characters total. Context objects must be
+// JSON-serializable. skills, profile, and workspace options are reserved and
+// currently rejected.
 ```
 
 ### Tool calling
