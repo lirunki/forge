@@ -14,12 +14,13 @@ assert.notEqual(start, -1, 'runTask request builder not found');
 assert.notEqual(end, -1, 'runTask request builder boundary not found');
 const sandbox = {};
 vm.runInNewContext(
-  html.slice(start, end) + '\nthis.__buildTaskAgentRequest = buildTaskAgentRequest; this.__normalizeAgentTaskGuidance = normalizeAgentTaskGuidance;',
+  html.slice(start, end) + '\nthis.__buildTaskAgentRequest = buildTaskAgentRequest; this.__normalizeAgentTaskGuidance = normalizeAgentTaskGuidance; this.__normalizeTaskWorkspaceRequest = normalizeTaskWorkspaceRequest;',
   sandbox,
   { filename: 'www/index.html' },
 );
 const buildRequest = sandbox.__buildTaskAgentRequest;
 const normalizeGuidance = sandbox.__normalizeAgentTaskGuidance;
+const normalizeWorkspaceRequest = sandbox.__normalizeTaskWorkspaceRequest;
 let passed = 0;
 function test(name, fn) {
   fn();
@@ -84,7 +85,14 @@ test('normalizes profile aliases and validates selected built-in skills', () => 
   assert.throws(() => normalizeGuidance('huge', []), /profile must be/);
   assert.throws(() => normalizeGuidance('auto', 'web-research'), /skills must be an array/);
   assert.throws(() => normalizeGuidance('auto', ['device-root']), /unknown skill/);
-  assert.throws(() => buildRequest({ task: 'Do work', workspace: {} }), /workspace is not available yet/);
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizeWorkspaceRequest(undefined))), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizeWorkspaceRequest({}))), { id: null });
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizeWorkspaceRequest({ id: 'comparison-1' }))), { id: 'comparison-1' });
+  assert.throws(() => normalizeWorkspaceRequest('../outside'), /workspace must be an object/);
+  assert.throws(() => normalizeWorkspaceRequest({ id: '../outside' }), /workspace id must be/);
+  assert.throws(() => normalizeWorkspaceRequest({ id: 'ok', durable: true }), /option durable is not supported/);
+  const workspaceRequest = buildRequest({ task: 'Do work', workspace: { id: 'comparison-1' } });
+  assert.equal(workspaceRequest.workspace.id, 'comparison-1');
 });
 
 test('rejects context that cannot be serialized and prompts over 12000 characters', () => {
@@ -102,12 +110,15 @@ test('runTask delegates once and resolves guidance inside the cancellable host l
   assert.match(method, /buildTaskAgentRequest\(opts\)/);
   assert.match(method, /__forgeTaskProfile\s*=\s*request\.profile/);
   assert.match(method, /__forgeTaskSkills\s*=\s*request\.skills/);
+  assert.match(method, /if \(request\.workspace\) request\.agentOptions\.__forgeTaskWorkspace = request\.workspace/);
   assert.match(method, /window\.ForgeHost\.ai\.agent\(request\.agentOptions\)/);
   assert.match(method, /taskId:\s*result\.id\s*\|\|\s*request\.taskId/);
   assert.match(html, /if \(params\.__forgeTaskProfile != null\) \{[\s\S]*?getAgentGuidance\(/);
   assert.match(html, /agentResult\.profile = taskGuidanceInfo\.profile/);
   assert.match(html, /agentResult\.skills = taskGuidanceInfo\.skills/);
   assert.match(html, /agentResult\.guidanceVersion = taskGuidanceInfo\.version \|\| 1/);
+  assert.match(html, /agentResult\.workspaceId = taskWorkspaceId/);
+  assert.match(html, /agentResult\.artifacts = workspaceSnapshot\.ok \? workspaceSnapshot\.files : \[\]/);
   assert.doesNotMatch(method, /for\s*\(|while\s*\(/, 'runTask must not implement another agent loop');
   const agentStart = html.indexOf("case 'ai.agent': {");
   const cancelRegistered = html.indexOf('agentCancelFlags.set(agentCallId, agentCancelFlag)', agentStart);

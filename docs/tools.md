@@ -29,6 +29,24 @@ const { hint } = await ForgeHost.tools.hint({ riskMax:'confirm' })  // system-pr
 
 Filter: `tools.list({ riskMax:'confirm' })` returns everything up to and including `confirm`.
 
+## Task-agent virtual workspace tools
+
+These are not device capabilities and are not added to `HOST_TOOL_REGISTRY` or
+`ForgeHost.tools.list()`. They are injected only into the existing `ai.agent`
+loop when a mini-app explicitly opts in with `ForgeHost.ai.runTask({ workspace })`:
+
+- `task_workspace_list`, `task_workspace_read`, `task_workspace_write`,
+  `task_workspace_edit`, and `task_workspace_delete`.
+- Paths are relative to an in-memory workspace scoped by the host to the current
+  mini-app ID and workspace ID. Absolute paths and `..` traversal are rejected;
+  no arbitrary device path is exposed.
+- Workspace tools are virtual/local and low risk, but the mini-app's existing
+  `onToolCall` callback can still veto them. Host tool/risk controls remain
+  authoritative for all registered device tools in the same agent run.
+- Limits: 200 files, 10 MiB/file, 64 MiB/workspace; session cap 32 workspaces /
+  128 MiB. Tool reads are chunked (≤50,000 characters). Data is in-memory only
+  and is lost when the Forge process exits; apps can explicitly clear a workspace.
+
 ## Tools
 
 ### web

@@ -136,6 +136,7 @@ const taskPromise = ForgeHost.ai.runTask({
   instructions: 'Compare price, battery life, and warranty.',
   profile: 'auto',                 // auto | tiny | normal | advanced | large (alias)
   skills: ['web-research', 'report-writing'],
+  workspace: { id: 'comparison' }, // optional; omit id to have Forge mint one
   context: { products: ['A', 'B'] }, // optional JSON-serializable context
   attachments,                   // optional; same contract as ai.agent
   tools,                          // same tools[] accepted by ai.agent; omit for host catalog
@@ -151,8 +152,16 @@ const taskResult = await taskPromise; // ai.agent result fields + taskId
 // `auto` uses Forge's saved per-provider/model prompt profile (recommendation or
 // normal default if unset). Live tools remain the only source of tool schemas.
 // Bundled guidance v1 combines AGENT.md, profile markdown, and optional skills:
-// web-research, document-analysis, and report-writing. Workspace/artifacts are
-// not part of this API yet.
+// web-research, document-analysis, and report-writing. If workspace is enabled,
+// the result also includes workspaceId, artifacts (path/mime/bytes/updatedAt),
+// and artifactCount. `ai.workspace.list/read/clear` are scoped to this mini-app;
+// workspace.read supports offset + limit up to 50,000 chars per call.
+// Workspaces are virtual, in-memory for this host session, and never expose
+// device paths. Limits: 200 files, 10 MiB/file, 64 MiB/workspace; the host session
+// caps at 32 workspaces / 128 MiB. Process death clears all task workspaces.
+const listing = await ForgeHost.ai.workspace.list({ workspaceId: taskResult.workspaceId });
+const artifact = await ForgeHost.ai.workspace.read({ workspaceId: taskResult.workspaceId, path: 'report.md' });
+await ForgeHost.ai.workspace.clear({ workspaceId: taskResult.workspaceId }); // explicit cleanup
 // Input (task + instructions + context) is capped at 12,000 chars total; context
 // objects must be JSON-serializable. Unknown profiles/skills reject clearly.
 ```

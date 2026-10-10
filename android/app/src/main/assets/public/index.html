@@ -11401,14 +11401,25 @@ function setLibrary(list) {
     }
     return { profile, skills };
   }
+  function normalizeTaskWorkspaceRequest(input) {
+    if (input == null) return null;
+    if (typeof input !== 'object' || Array.isArray(input)) throw new Error('ai.runTask workspace must be an object with an optional id');
+    for (const key of Object.keys(input)) {
+      if (key !== 'id') throw new Error('ai.runTask workspace option ' + key + ' is not supported');
+    }
+    const rawId = input.id == null ? '' : String(input.id).trim();
+    if (!rawId) return { id: null };
+    if (rawId.length > 80 || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(rawId)) {
+      throw new Error('ai.runTask workspace id must be 1–80 letters, numbers, dots, underscores, or hyphens');
+    }
+    return { id: rawId };
+  }
   function buildTaskAgentRequest(input) {
     const opts = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
     const task = typeof opts.task === 'string' ? opts.task.trim() : '';
     if (!task) throw new Error('ai.runTask requires a non-empty task string');
 
-    if (opts.workspace !== undefined && opts.workspace !== null) {
-      throw new Error('ai.runTask option workspace is not available yet');
-    }
+    const workspace = normalizeTaskWorkspaceRequest(opts.workspace);
     const guidanceOptions = normalizeAgentTaskGuidance(opts.profile, opts.skills);
 
     const blocks = [];
@@ -11442,7 +11453,7 @@ function setLibrary(list) {
     for (const key of forwarded) {
       if (opts[key] !== undefined) agentOptions[key] = opts[key];
     }
-    return { agentOptions, taskId, profile: guidanceOptions.profile, skills: guidanceOptions.skills };
+    return { agentOptions, taskId, profile: guidanceOptions.profile, skills: guidanceOptions.skills, workspace };
   }
   window.ForgeHost = {
     getAppInfo: () => call('getAppInfo'),
@@ -11678,17 +11689,24 @@ function setLibrary(list) {
        * Run one task through the host-managed agent/tool loop.
        * Provide id to cancel while pending with ai.cancel(id). Optional instructions
        * and JSON context are included with the task as one user turn. Stock profile
-       * guidance and selected built-in skills are prepended as a host system message.
-       * Attachments, tools, risk settings, model options, and callbacks follow ai.agent.
-       * Workspace support is reserved for a later API addition.
+       * guidance and selected built-in skills are prepended as host system context.
+       * Opt in to a scoped in-memory workspace with workspace:{id?}; artifacts are
+       * returned in the result. Attachments, tools, and callbacks follow ai.agent.
        */
       runTask: async (opts) => {
         const request = buildTaskAgentRequest(opts);
         request.agentOptions.__forgeTaskProfile = request.profile;
         request.agentOptions.__forgeTaskSkills = request.skills;
+        if (request.workspace) request.agentOptions.__forgeTaskWorkspace = request.workspace;
         const result = await window.ForgeHost.ai.agent(request.agentOptions);
         if (!result || typeof result !== 'object') return result;
         return Object.assign({}, result, { taskId: result.id || request.taskId || null });
+      },
+      /** Read/list/clear files inside this mini-app's task-scoped virtual workspaces. */
+      workspace: {
+        list: (opts) => call('ai.workspace.list', opts || {}),
+        read: (opts) => call('ai.workspace.read', opts || {}),
+        clear: (opts) => call('ai.workspace.clear', opts || {}),
       },
       /** Cancel a running ai.chatStream / ai.agent / ai.runTask by id. */
       cancel: (id) => call('ai.cancel', { id: String(id || '') }),
@@ -15493,6 +15511,176 @@ function setLibrary(list) {
       };
     }
 
+    // Task-scoped, host-managed virtual workspaces (isolated from activeBuilderFs).
+    const TASK_WORKSPACE_LIMITS = Object.freeze({ maxWorkspaces: 32, maxFiles: 200, maxFileBytes: 10 * 1024 * 1024, maxTotalBytes: 64 * 1024 * 1024, maxSessionBytes: 128 * 1024 * 1024, maxReadChars: 50000 });
+    function normalizeTaskWorkspaceId(value) {
+      const id = String(value == null ? '' : value).trim();
+      if (!id || id.length > 80 || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)) {
+        throw new Error('workspace id must be 1–80 letters, numbers, dots, underscores, or hyphens and start with a letter or number');
+      }
+      return id;
+    }
+    function normalizeTaskWorkspacePath(value) {
+      const raw = String(value == null ? '' : value);
+      if (!raw || raw.length > 512 || raw.indexOf('\0') >= 0) throw new Error('workspace path is empty, too long, or contains a NUL');
+      const path = raw.replace(/\\/g, '/');
+      if (path.startsWith('/') || /^[A-Za-z]:/.test(path)) throw new Error('workspace paths must be relative');
+      const parts = [];
+      for (const segment of path.split('/')) {
+        if (!segment || segment === '.') continue;
+        if (segment === '..') throw new Error('workspace path traversal is not allowed');
+        if (segment.length > 120 || /[\x00-\x1f\x7f]/.test(segment)) throw new Error('workspace path contains an invalid segment');
+        parts.push(segment);
+      }
+      if (!parts.length || parts.length > 32) throw new Error('workspace path must contain 1–32 valid segments');
+      return parts.join('/');
+    }
+    function taskWorkspaceUtf8Bytes(text) {
+      if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(text).length;
+      if (typeof Blob !== 'undefined') return new Blob([text]).size;
+      return unescape(encodeURIComponent(text)).length;
+    }
+    function createTaskWorkspaceManager(overrides) {
+      const cfg = Object.assign({}, TASK_WORKSPACE_LIMITS, overrides || {});
+      const stores = new Map();
+      const workspaceKey = (appId, workspaceId) => JSON.stringify([String(appId || 'draft'), normalizeTaskWorkspaceId(workspaceId)]);
+      function getStore(appId, workspaceId, create) {
+        const key = workspaceKey(appId, workspaceId);
+        let store = stores.get(key);
+        if (!store && create) {
+          if (stores.size >= cfg.maxWorkspaces) throw new Error('session workspace-count limit reached (' + cfg.maxWorkspaces + ')');
+          store = { appId: String(appId || 'draft'), id: normalizeTaskWorkspaceId(workspaceId), files: new Map(), createdAt: Date.now() };
+          stores.set(key, store);
+        }
+        return store || null;
+      }
+      function totalBytes(store) {
+        let total = 0;
+        for (const file of store.files.values()) total += file.bytes;
+        return total;
+      }
+      function totalSessionBytes() {
+        let total = 0;
+        for (const store of stores.values()) total += totalBytes(store);
+        return total;
+      }
+      function fail(error, extra) { return Object.assign({ ok: false, error: String(error) }, extra || {}); }
+      function list(appId, workspaceId, opts) {
+        let store, prefix = '';
+        try {
+          store = getStore(appId, workspaceId, false);
+          if (opts && opts.prefix) prefix = normalizeTaskWorkspacePath(opts.prefix);
+        } catch (e) { return fail(e && e.message || e); }
+        const files = store ? [...store.files.values()] : [];
+        const selected = files.filter(f => !prefix || f.path === prefix || f.path.startsWith(prefix + '/'))
+          .map(f => ({ path: f.path, mime: f.mime, bytes: f.bytes, updatedAt: f.updatedAt }))
+          .sort((a, b) => a.path.localeCompare(b.path));
+        return { ok: true, workspaceId: normalizeTaskWorkspaceId(workspaceId), files: selected, count: selected.length, totalFiles: files.length, totalBytes: store ? totalBytes(store) : 0 };
+      }
+      function read(appId, workspaceId, path, opts) {
+        let store, normalized;
+        try { store = getStore(appId, workspaceId, false); normalized = normalizeTaskWorkspacePath(path); }
+        catch (e) { return fail(e && e.message || e); }
+        const file = store && store.files.get(normalized);
+        if (!file) return fail('no such workspace file: ' + normalized, { path: normalized });
+        opts = opts || {};
+        const offset = Math.max(0, Math.min(file.content.length, Math.floor(Number(opts.offset) || 0)));
+        const requested = Math.floor(Number(opts.limit) || 20000);
+        const limit = Math.max(1, Math.min(Number.isFinite(requested) ? requested : 20000, cfg.maxReadChars));
+        const content = file.content.slice(offset, offset + limit);
+        return { ok: true, workspaceId: store.id, path: normalized, mime: file.mime, bytes: file.bytes, totalChars: file.content.length, offset, content, truncated: offset + content.length < file.content.length };
+      }
+      function write(appId, workspaceId, path, content, mime) {
+        let store, normalized, id;
+        try { normalized = normalizeTaskWorkspacePath(path); id = normalizeTaskWorkspaceId(workspaceId); }
+        catch (e) { return fail(e && e.message || e); }
+        if (typeof content !== 'string') return fail('workspace content must be a string', { path: normalized });
+        const bytes = taskWorkspaceUtf8Bytes(content);
+        if (bytes > cfg.maxFileBytes) return fail('workspace file limit exceeded (' + bytes + ' > ' + cfg.maxFileBytes + ' bytes)', { path: normalized });
+        const type = mime == null || mime === '' ? 'text/plain' : String(mime);
+        if (type.length > 120 || /[\r\n]/.test(type)) return fail('invalid workspace MIME type', { path: normalized });
+        try { store = getStore(appId, id, false); }
+        catch (e) { return fail(e && e.message || e); }
+        if (!store) {
+          if (stores.size >= cfg.maxWorkspaces) return fail('session workspace-count limit reached (' + cfg.maxWorkspaces + ')', { path: normalized });
+          if (bytes > cfg.maxTotalBytes) return fail('workspace total-size limit reached (' + cfg.maxTotalBytes + ' bytes)', { path: normalized });
+          if (totalSessionBytes() + bytes > cfg.maxSessionBytes) return fail('session workspace total-size limit reached (' + cfg.maxSessionBytes + ' bytes)', { path: normalized });
+          try { store = getStore(appId, id, true); }
+          catch (e) { return fail(e && e.message || e); }
+        }
+        const previous = store.files.get(normalized);
+        if (!previous && store.files.size >= cfg.maxFiles) return fail('workspace file-count limit reached (' + cfg.maxFiles + ')', { path: normalized });
+        if (totalBytes(store) - (previous ? previous.bytes : 0) + bytes > cfg.maxTotalBytes) return fail('workspace total-size limit reached (' + cfg.maxTotalBytes + ' bytes)', { path: normalized });
+        if (totalSessionBytes() - (previous ? previous.bytes : 0) + bytes > cfg.maxSessionBytes) return fail('session workspace total-size limit reached (' + cfg.maxSessionBytes + ' bytes)', { path: normalized });
+        store.files.set(normalized, { path: normalized, content, mime: type, bytes, updatedAt: Date.now() });
+        return { ok: true, workspaceId: store.id, path: normalized, mime: type, bytes, replaced: !!previous };
+      }
+      function edit(appId, workspaceId, path, find, replace, replaceAll) {
+        let store, normalized;
+        try { store = getStore(appId, workspaceId, false); normalized = normalizeTaskWorkspacePath(path); }
+        catch (e) { return fail(e && e.message || e); }
+        const file = store && store.files.get(normalized);
+        if (!file) return fail('no such workspace file: ' + normalized, { path: normalized });
+        if (typeof find !== 'string' || !find.length || typeof replace !== 'string') return fail('edit requires a non-empty find string and a string replacement', { path: normalized });
+        const first = file.content.indexOf(find);
+        if (first < 0) return fail('edit target not found', { path: normalized });
+        let next;
+        let replacements = 1;
+        if (replaceAll) {
+          replacements = file.content.split(find).length - 1;
+          next = file.content.split(find).join(replace);
+        } else {
+          next = file.content.slice(0, first) + replace + file.content.slice(first + find.length);
+        }
+        const bytes = taskWorkspaceUtf8Bytes(next);
+        if (bytes > cfg.maxFileBytes) return fail('workspace file limit exceeded after edit (' + bytes + ' > ' + cfg.maxFileBytes + ' bytes)', { path: normalized });
+        if (totalBytes(store) - file.bytes + bytes > cfg.maxTotalBytes) return fail('workspace total-size limit reached after edit', { path: normalized });
+        if (totalSessionBytes() - file.bytes + bytes > cfg.maxSessionBytes) return fail('session workspace total-size limit reached after edit', { path: normalized });
+        store.files.set(normalized, { path: normalized, content: next, mime: file.mime, bytes, updatedAt: Date.now() });
+        return { ok: true, workspaceId: store.id, path: normalized, bytes, replacements };
+      }
+      function remove(appId, workspaceId, path) {
+        let store, normalized;
+        try { store = getStore(appId, workspaceId, false); normalized = normalizeTaskWorkspacePath(path); }
+        catch (e) { return fail(e && e.message || e); }
+        if (!store || !store.files.delete(normalized)) return fail('no such workspace file: ' + normalized, { path: normalized });
+        return { ok: true, workspaceId: store.id, deleted: normalized };
+      }
+      function clear(appId, workspaceId) {
+        let key, id;
+        try { id = normalizeTaskWorkspaceId(workspaceId); key = workspaceKey(appId, id); }
+        catch (e) { return fail(e && e.message || e); }
+        const store = stores.get(key);
+        const filesDeleted = store ? store.files.size : 0;
+        const bytesFreed = store ? totalBytes(store) : 0;
+        stores.delete(key);
+        return { ok: true, workspaceId: id, filesDeleted, bytesFreed };
+      }
+      return { list, read, write, edit, deleteFile: remove, clear };
+    }
+    const taskWorkspaceManager = createTaskWorkspaceManager();
+    let taskWorkspaceAutoSeq = 0;
+    function newTaskWorkspaceId() { return 'task-' + Date.now().toString(36) + '-' + (++taskWorkspaceAutoSeq).toString(36); }
+    const TASK_WORKSPACE_TOOL_SCHEMAS = [
+      { type: 'function', function: { name: 'task_workspace_list', description: 'List files in this task-scoped virtual workspace; never use device paths.', parameters: { type: 'object', properties: { prefix: { type: 'string', description: 'Optional relative folder prefix.' } } } } },
+      { type: 'function', function: { name: 'task_workspace_read', description: 'Read a text file from this task-scoped virtual workspace. Large files are returned in bounded chunks.', parameters: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 50000 } }, required: ['path'] } } },
+      { type: 'function', function: { name: 'task_workspace_write', description: 'Write or replace a UTF-8 text file in this task-scoped virtual workspace. Paths must be relative.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' }, mime: { type: 'string' } }, required: ['path', 'content'] } } },
+      { type: 'function', function: { name: 'task_workspace_edit', description: 'Replace text in an existing workspace file. Use read first; replaceAll is optional.', parameters: { type: 'object', properties: { path: { type: 'string' }, find: { type: 'string' }, replace: { type: 'string' }, replaceAll: { type: 'boolean' } }, required: ['path', 'find', 'replace'] } } },
+      { type: 'function', function: { name: 'task_workspace_delete', description: 'Delete one file from this task-scoped virtual workspace.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } } },
+    ];
+    const TASK_WORKSPACE_TOOL_NAMES = new Set(TASK_WORKSPACE_TOOL_SCHEMAS.map(t => t.function.name));
+    function runTaskWorkspaceTool(appId, workspaceId, name, args) {
+      args = args && typeof args === 'object' ? args : {};
+      switch (name) {
+        case 'task_workspace_list': return taskWorkspaceManager.list(appId, workspaceId, args);
+        case 'task_workspace_read': return taskWorkspaceManager.read(appId, workspaceId, args.path, args);
+        case 'task_workspace_write': return taskWorkspaceManager.write(appId, workspaceId, args.path, args.content, args.mime);
+        case 'task_workspace_edit': return taskWorkspaceManager.edit(appId, workspaceId, args.path, args.find, args.replace, args.replaceAll);
+        case 'task_workspace_delete': return taskWorkspaceManager.deleteFile(appId, workspaceId, args.path);
+        default: return { ok: false, error: 'unknown task workspace tool' };
+      }
+    }
+
     // ——— Agent risk sheet (2.6.51) ————————————————————————————
     // Host-level confirmation for confirm/danger tools invoked via ai.agent.
     // safe/sensitive run automatically (sensitive already gated by caller riskMax).
@@ -16076,6 +16264,15 @@ function setLibrary(list) {
             isSelected: true,
           });
         }
+        case 'ai.workspace.list': {
+          return taskWorkspaceManager.list(currentApp?.id || 'draft', params && params.workspaceId, params || {});
+        }
+        case 'ai.workspace.read': {
+          return taskWorkspaceManager.read(currentApp?.id || 'draft', params && params.workspaceId, params && params.path, params || {});
+        }
+        case 'ai.workspace.clear': {
+          return taskWorkspaceManager.clear(currentApp?.id || 'draft', params && params.workspaceId);
+        }
         case 'ai.setProvider': {
           const appId = currentApp?.id || 'draft';
           const want = params.providerId || params.provider || params.id || null;
@@ -16145,6 +16342,9 @@ function setLibrary(list) {
           };
           const providerIdA = resolveMiniAppProviderId(params);
           const modelOverrideA = params.model != null ? params.model : null;
+          let taskWorkspaceId = null;
+          let taskWorkspaceAuto = false;
+          const taskWorkspaceAppId = String(currentApp?.id || 'draft');
           // Register cancellation before any asynchronous runtime or guidance setup.
           const agentCancelFlag = { cancelled: false };
           agentCancelFlags.set(agentCallId, agentCancelFlag);
@@ -16165,6 +16365,23 @@ function setLibrary(list) {
             if (!tools) {
               const listed = toolsList({ riskMax: riskMax });
               tools = Array.isArray(listed.tools) ? listed.tools : [];
+            }
+            if (params.__forgeTaskWorkspace != null) {
+              const workspaceRequest = params.__forgeTaskWorkspace;
+              if (!workspaceRequest || typeof workspaceRequest !== 'object' || Array.isArray(workspaceRequest)) {
+                throw new Error('Invalid task workspace request');
+              }
+              for (const key of Object.keys(workspaceRequest)) {
+                if (key !== 'id') throw new Error('Unsupported task workspace option: ' + key);
+              }
+              taskWorkspaceAuto = !workspaceRequest.id;
+              taskWorkspaceId = workspaceRequest.id ? normalizeTaskWorkspaceId(workspaceRequest.id) : newTaskWorkspaceId();
+              const hostCollision = HOST_TOOL_REGISTRY.find(entry => TASK_WORKSPACE_TOOL_NAMES.has(entry.name));
+              if (hostCollision) throw new Error('Host tool name conflicts with reserved task workspace tool: ' + hostCollision.name);
+              const existingNames = new Set(tools.map(t => t && t.function && t.function.name).filter(Boolean));
+              const collision = TASK_WORKSPACE_TOOL_SCHEMAS.find(t => existingNames.has(t.function.name));
+              if (collision) throw new Error('Tool name conflicts with reserved task workspace tool: ' + collision.function.name);
+              tools = tools.concat(TASK_WORKSPACE_TOOL_SCHEMAS);
             }
             const maxRounds = Math.min(Math.max(Number(params.maxRounds) || 6, 1), 12);
             let messages = Array.isArray(params.messages) ? params.messages.map(m => Object.assign({}, m)) : [];
@@ -16250,8 +16467,9 @@ function setLibrary(list) {
                   const tname = String((tc.function && tc.function.name) || tc.name || '');
                   let targs = {}; try { targs = JSON.parse((tc.function && tc.function.arguments) || '{}'); } catch (_) {}
                   agentEmit('toolCall', { round, name: tname, args: targs });
+                  const isTaskWorkspaceTool = !!taskWorkspaceId && TASK_WORKSPACE_TOOL_NAMES.has(tname);
                   const entry = HOST_TOOL_REGISTRY.find(e => e.name === tname);
-                  const risk = entry ? entry.risk : 'confirm';
+                  const risk = isTaskWorkspaceTool ? 'safe' : (entry ? entry.risk : 'confirm');
                   // Gate 1: host-level risk sheet (Allow / Always / Deny).
                   let allowed = true;
                   try {
@@ -16275,7 +16493,9 @@ function setLibrary(list) {
                   }
                   let out;
                   try {
-                    out = await toolsRun({ name: tname, args: targs, riskMax });
+                    out = isTaskWorkspaceTool
+                      ? runTaskWorkspaceTool(taskWorkspaceAppId, taskWorkspaceId, tname, targs)
+                      : await toolsRun({ name: tname, args: targs, riskMax });
                   } catch (e) {
                     out = { ok: false, error: e && e.message ? e.message : String(e), tool: tname };
                   }
@@ -16309,8 +16529,17 @@ function setLibrary(list) {
               agentResult.skills = taskGuidanceInfo.skills;
               agentResult.guidanceVersion = taskGuidanceInfo.version || 1;
             }
+            if (taskWorkspaceId) {
+              const workspaceSnapshot = taskWorkspaceManager.list(taskWorkspaceAppId, taskWorkspaceId);
+              agentResult.workspaceId = taskWorkspaceId;
+              agentResult.artifacts = workspaceSnapshot.ok ? workspaceSnapshot.files : [];
+              agentResult.artifactCount = agentResult.artifacts.length;
+            }
             return agentResult;
           });
+          } catch (e) {
+            if (taskWorkspaceAuto && taskWorkspaceId) taskWorkspaceManager.clear(taskWorkspaceAppId, taskWorkspaceId);
+            throw e;
           } finally {
             agentCancelFlags.delete(agentCallId);
             streamAbortControllers.delete(agentCallId);
@@ -17821,7 +18050,8 @@ Host AI (uses user's Forge-configured providers/keys — NEVER embed API keys in
   await ForgeHost.ai.chat({ messages:[{role,content:[{type:'text',text},{type:'image_url',image_url:{url:dataUrl}}]}] })  // multimodal
   const menu = await ForgeHost.ai.listProviders(); await ForgeHost.ai.setProvider('xai'); await ForgeHost.ai.getProvider()
   // Host-managed loops: ForgeHost.ai.agent({messages,tools?,attachments?,maxRounds,onToken,onToolCall})
-  // Task shortcut: ForgeHost.ai.runTask({task,instructions?,context?,profile?,skills?,attachments?,tools?,riskMax?,maxRounds?,id?,onToken})
+  // Task shortcut: ForgeHost.ai.runTask({task,instructions?,context?,profile?,skills?,workspace?,attachments?,tools?,riskMax?,maxRounds?,id?,onToken})
+  // Task artifacts: ForgeHost.ai.workspace.list/read/clear({workspaceId,...})
   // Tool calling: pass tools[] to ai.chat; if r.tool_calls, run them, push role:'tool', call ai.chat again
   await ForgeHost.ai.tts({ text, voice, mode:'auto'|'cloud'|'native', play:true })  // cloud via host key
   await ForgeHost.ai.transcribe({ dataUrl, language })  // STT (OpenAI/Groq/xAI; not Gemini)
@@ -21171,7 +21401,7 @@ if (!part.dataUrl && part.base64) part.dataUrl = 'data:' + part.mime + ';base64,
 - ForgeHost.ai.chat({ messages, providerId?, temperature?, tools?, tool_choice?, attachments? })
 - ForgeHost.ai.listProviders() for provider picker — NO API keys in HTML.
 - Attachments: [{ type:'image', dataUrl, base64?, mime, name }]
-- For a host-managed tool loop use ForgeHost.ai.agent({messages,tools?,attachments?,maxRounds,onToken,onToolCall}) or ForgeHost.ai.runTask({task,instructions?,context?,profile?,skills?,attachments?,tools?,riskMax?,maxRounds?,id?,onToken}). runTask stock guidance supports profile auto|tiny|normal|advanced|large and skills web-research|document-analysis|report-writing.
+- For a host-managed tool loop use ForgeHost.ai.agent({messages,tools?,attachments?,maxRounds,onToken,onToolCall}) or ForgeHost.ai.runTask({task,instructions?,context?,profile?,skills?,workspace?,attachments?,tools?,riskMax?,maxRounds?,id?,onToken}). runTask stock guidance supports profile auto|tiny|normal|advanced|large and skills web-research|document-analysis|report-writing. Opt-in task workspaces expose ForgeHost.ai.workspace.list/read/clear({workspaceId,...}) and model tools only within that agent run.
 - Only when calling ai.chat directly is the tool loop mini-app-owned; parse tool_calls defensively (arguments may be JSON strings).
 - **Device tools:** ForgeHost.tools.list / run / hint / call (NOT a hardcoded TOOLS constant). See LLM TOOLS section.
 - ForgeHost.web.search / web.fetch shortcuts are available.
