@@ -135,8 +135,8 @@ test('tool outputs are bounded and sensitive arguments/results are redacted from
   assert.equal(JSON.stringify(publicResult).includes('secret text'), false);
   const calls = agentPublicToolCalls([{ id: 'c1', function: { name: 'sms_send', arguments: JSON.stringify(secretArgs) } }]);
   assert.equal(JSON.stringify(calls).includes('+15551234567'), false);
-  assert.match(html, /const modelOut = agentBoundToolResult\(out, 56000\)/);
-  assert.match(html, /const publicOut = agentPublicToolResult\(tname, modelOut, risk\)/);
+  assert.match(html, /const modelOut = agentModelToolResult\(tname, out, 56000\)/);
+  assert.match(html, /const publicOut = agentPublicToolResult\(tname, out, risk\)/);
 });
 
 console.log(`\n${passed} agent tool-policy tests passed.`);

@@ -138,7 +138,7 @@ loop when a mini-app explicitly opts in with `ForgeHost.ai.runTask({ workspace }
 | name | risk | description |
 |------|------|-------------|
 | `tts_speak` | confirm | Speak text with on-device TTS. `text` (req), `lang`, `rate`, `route`. |
-| `image_generate` | confirm | Generate an image from a text prompt, optionally seeded with reference images. Uses the xAI Grok image model (requires an xAI API key). `prompt` (req), `images` (optional array of data URLs/base64/URLs for image-to-image), `n` (1-4), `model` (default `grok-2-image`). Returns `{ ok, images:[{url, revised_prompt}], count, model, backend }`. |
+| `image_generate` | confirm | Generate an image from a text prompt, optionally seeded with reference images. Uses the selected AI provider when it supports image generation, then the configured xAI provider as fallback. `prompt` (req), `images` (optional array of data URLs/base64/URLs for image-to-image), `n` (1-4), `model` (optional requested model). Agent runs may set `imageGeneration.models` to an ordered, validated model fallback list. Returns `{ ok, images:[{url, revised_prompt}], count, model, backend }`. |
 
 ### meta
 | name | risk | description |

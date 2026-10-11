@@ -128,7 +128,7 @@ test('runTask delegates once and resolves guidance inside the cancellable host l
   assert.ok(agentStart >= 0 && cancelRegistered > agentStart && guidanceResolved > cancelRegistered,
     'cancellation must be registered before asynchronous guidance loading');
   assert.match(html, /requested === 'auto' \? getPromptProfile\(providerId, rt\.model\)/);
-  assert.match(html, /taskGuidanceInfo \|\| !messages\.some\(m => m\.role === 'system'\)/);
+  assert.match(html, /if \(taskGuidanceInfo\.content\) messages\.unshift\(\{ role: 'system', content: taskGuidanceInfo\.content \}\)/);
 });
 
 test('versioned guidance and all three skills are bundled as assets', () => {

@@ -121,9 +121,11 @@ const r = await ForgeHost.ai.agent({
   attachments,               // optional; same format/normalization as ai.chat
   maxRounds: 6,
   riskMax: 'safe',            // sensitive/danger require host opt-in; confirmation stays host-owned
+  imageGeneration: { models: ['grok-imagine-image-2.0', 'grok-2-image'] }, // optional image_generate model fallback order
   id: 'my-agent',            // optional; cancellable via ai.cancel(id)
   onToken: t => render(t),   // optional (uses chatStream when provided)
   onToolCall: ({name,args}) => true,  // return false to veto this tool call
+  onToolResult: ({name,result}) => {}, // optional result notification
   onRound: ({round, toolCalls}) => {},
 })
 // Attachments bind to the latest user message and stay available through agent

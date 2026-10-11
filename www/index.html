@@ -11447,7 +11447,7 @@ function setLibrary(list) {
     const taskId = opts.id == null || String(opts.id).trim() === '' ? null : String(opts.id);
     if (taskId) agentOptions.id = taskId;
     const forwarded = [
-      'attachments', 'tool_choice', 'toolChoice', 'maxRounds', 'providerId', 'model',
+      'attachments', 'tool_choice', 'toolChoice', 'maxRounds', 'providerId', 'model', 'imageGeneration',
       'systemHint', 'onToken', 'onToolCall', 'onRound', 'onChat', 'onToolResult',
     ];
     for (const key of forwarded) {
@@ -15202,7 +15202,7 @@ function setLibrary(list) {
           },
           required: ['prompt'],
         },
-        run: async (a) => generateImage(a || {}),
+        run: async (a, opts) => generateImage(a || {}, opts || {}),
       },
 
       // —— Generic bridge escape hatch (allowlisted host call methods) ——
@@ -15417,17 +15417,33 @@ function setLibrary(list) {
       return { ok: true, result };
     }
 
-    // ——— Image generation (xAI Grok image model) ———
-    // xAI exposes an OpenAI-compatible /v1/images/generations endpoint. The
-    // xAI image generation uses the current image model (grok-imagine-image).
-    // Seed images are passed using the API image_url field. Only the xAI backend
-    // is supported; other providers error out with a clear message.
-    async function generateImage(args) {
+    function normalizeAgentImageGenerationConfig(value) {
+      if (value == null) return null;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('imageGeneration must be an object with a models array');
+      for (const key of Object.keys(value)) if (key !== 'models') throw new Error('unsupported imageGeneration option: ' + key);
+      if (!Array.isArray(value.models) || value.models.length > 8) throw new Error('imageGeneration.models must contain at most 8 model ids');
+      const models = [];
+      for (const item of value.models) {
+        if (typeof item !== 'string') throw new Error('imageGeneration model ids must be strings');
+        const model = item.trim();
+        if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model)) throw new Error('invalid imageGeneration model id');
+        if (!models.includes(model)) models.push(model);
+      }
+      if (!models.length) throw new Error('imageGeneration.models must not be empty');
+      return { models };
+    }
+
+    // Image generation retries the app-selected model list on the selected
+    // provider, then the configured xAI provider. This stays inside the host
+    // tool and retains its ordinary host confirmation and result policy.
+    async function generateImage(args, runOpts) {
       const prompt = String(args?.prompt || '').trim();
       if (!prompt) throw new Error('image_generate: prompt is required');
       const n = Math.max(1, Math.min(4, parseInt(args?.n, 10) || 1));
       const seedImages = Array.isArray(args?.images) ? args.images.filter(Boolean) : [];
-      const model = String(args?.model || 'grok-imagine-image').trim();
+      const policy = runOpts && runOpts[AGENT_RUN_POLICY];
+      const configuredModels = policy && policy.imageGeneration && policy.imageGeneration.models;
+      const models = configuredModels || [String(args?.model || 'grok-imagine-image').trim()];
 
       const rt = getAiRuntime();
       const candidates = [];
@@ -15438,7 +15454,6 @@ function setLibrary(list) {
         const endpoint = /\/images\/generations\/?$/i.test(b) ? b : (/\/v1$/i.test(b) ? b + '/images/generations' : b + '/images/generations');
         if (!candidates.some(c => c.endpoint === endpoint && c.key === String(r.key).trim())) candidates.push({ endpoint, key: String(r.key).trim(), providerId: r.providerId, label: r.provider?.label || r.providerId });
       };
-      // Prefer the currently selected provider, then fall back to configured xAI.
       addCandidate(rt);
       if (String(rt.providerId || '').toLowerCase() !== 'xai') {
         try {
@@ -15447,57 +15462,54 @@ function setLibrary(list) {
         } catch (_) {}
       }
       if (!candidates.length) throw new Error('image_generate: no configured provider has an image-generation endpoint/key. Configure the current provider or xAI in AI settings.');
-      const key = candidates[0].key;
-      let base = candidates[0].endpoint;
-      const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key };
 
-      // Normalize seed images to image_url entries (data URLs or http URLs).
       const imageUrls = seedImages.map((img) => {
         const s = String(img || '').trim();
         if (!s) return null;
         if (/^data:/i.test(s) || /^https?:\/\//i.test(s)) return s;
-        // bare base64 -> data URL
         return 'data:image/png;base64,' + s.replace(/^data:image\/[a-z]+;base64,/i, '');
       }).filter(Boolean);
 
-      const body = { model, prompt, n };
-      // xAI image-to-image: pass seed images as image_url objects.
-      if (imageUrls.length) body.image_url = imageUrls.map((url) => ({ url }));
-
       const fgs = aiFgsAcquire('Generating image…');
       try {
-        let res;
-        let lastError = null;
-        for (let ci = 0; ci < candidates.length; ci++) {
-          const candidate = candidates[ci];
-          try {
-            const h = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + candidate.key };
-            if (Capacitor.isNativePlatform()) {
-              res = await nativeHttpPost({ url: candidate.endpoint, headers: h, data: body, connectTimeout: 60000, readTimeout: 300000 });
-              if (res.status < 200 || res.status >= 300) throw new Error('image API ' + res.status + ': ' + (typeof res.data === 'string' ? res.data : JSON.stringify(res.data)));
-              res.data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-            } else {
-              const response = await fetch(candidate.endpoint, { method: 'POST', headers: h, body: JSON.stringify(body) });
-              if (!response.ok) throw new Error('image API ' + response.status + ': ' + await response.text());
-              res = { data: await response.json() };
+        const errors = [];
+        let successful = null;
+        for (const model of models) {
+          for (const candidate of candidates) {
+            const body = { model, prompt, n };
+            if (imageUrls.length) body.image_url = imageUrls.map((url) => ({ url }));
+            try {
+              const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + candidate.key };
+              let res;
+              if (Capacitor.isNativePlatform()) {
+                res = await nativeHttpPost({ url: candidate.endpoint, headers, data: body, connectTimeout: 60000, readTimeout: 300000 });
+                if (res.status < 200 || res.status >= 300) throw new Error('image API ' + res.status + ': ' + (typeof res.data === 'string' ? res.data : JSON.stringify(res.data)));
+                res.data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+              } else {
+                const response = await fetch(candidate.endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+                if (!response.ok) throw new Error('image API ' + response.status + ': ' + await response.text());
+                res = { data: await response.json() };
+              }
+              const rawImages = Array.isArray(res.data?.data) ? res.data.data : [];
+              if (!rawImages.length) throw new Error('provider returned no image');
+              const images = rawImages.map((im) => {
+                const url = im.url || im.image_url || (im.b64_json ? 'data:image/png;base64,' + im.b64_json : '');
+                return { url, revised_prompt: im.revised_prompt || '' };
+              }).filter((im) => im.url);
+              if (!images.length) throw new Error('provider returned no usable image');
+              successful = { images, model, candidate };
+              break;
+            } catch (e) {
+              errors.push(model + ' [' + (candidate.providerId || candidate.label || 'provider') + ']: ' + String(e && e.message ? e.message : e).slice(0, 500));
             }
-            const imgs0 = Array.isArray(res.data?.data) ? res.data.data : [];
-            if (!imgs0.length) throw new Error('provider returned no image');
-            base = candidate.endpoint;
-            break;
-          } catch (e) {
-            lastError = e;
-            res = null;
-            if (ci + 1 < candidates.length) continue;
           }
+          if (successful) break;
         }
-        if (!res) throw lastError || new Error('all image providers failed');
-        const imgs = Array.isArray(res.data?.data) ? res.data.data : [];
-        const out = imgs.map((im) => {
-          const url = im.url || im.image_url || (im.b64_json ? 'data:image/png;base64,' + im.b64_json : '');
-          return { url, revised_prompt: im.revised_prompt || '' };
-        }).filter((im) => im.url);
-        return { ok: true, images: out, count: out.length, model, backend: candidates[0].providerId || 'current-provider' };
+        if (!successful) throw new Error('image_generate failed for configured models/providers: ' + errors.join(' | '));
+        return {
+          ok: true, images: successful.images, count: successful.images.length,
+          model: successful.model, backend: successful.candidate.providerId || successful.candidate.label || 'current-provider',
+        };
       } finally {
         fgs();
       }
@@ -15917,10 +15929,47 @@ function setLibrary(list) {
       }
       return agentBoundToolResult(args || {}, maxChars || 3000);
     }
+    const AGENT_IMAGE_EVENT_MAX_CHARS = 2000000;
+    function agentPublicImageResult(result) {
+      if (!result || typeof result !== 'object' || !Array.isArray(result.images)) return agentBoundToolResult(result, 6000);
+      let dataChars = 0;
+      let omitted = false;
+      const images = result.images.slice(0, 4).map((image) => {
+        const url = String((image && (image.url || image.dataUrl)) || '');
+        const revisedPrompt = String((image && (image.revised_prompt || image.revisedPrompt)) || '').slice(0, 1000);
+        if (/^https?:\/\//i.test(url) && url.length <= 4096) return { url, revised_prompt: revisedPrompt };
+        if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(url) && dataChars + url.length <= AGENT_IMAGE_EVENT_MAX_CHARS - 10000) {
+          dataChars += url.length;
+          return { url, revised_prompt: revisedPrompt, inlined: true };
+        }
+        omitted = true;
+        return { omitted: true, revised_prompt: revisedPrompt, note: 'Image payload exceeded the bounded mini-app event size.' };
+      });
+      return {
+        ok: result.ok !== false, count: Number(result.count) || images.length,
+        model: String(result.model || '').slice(0, 128), backend: String(result.backend || '').slice(0, 128),
+        images, imagePayloadOmitted: omitted,
+      };
+    }
+    function agentModelToolResult(name, result, maxChars) {
+      if (name === 'image_generate' && result && typeof result === 'object' && Array.isArray(result.images)) {
+        const images = result.images.slice(0, 4).map((image) => {
+          const url = String((image && (image.url || image.dataUrl)) || '');
+          const isRemote = /^https?:\/\//i.test(url) && url.length <= 4096;
+          return {
+            url: isRemote ? url : '[Generated image is available to the mini-app UI; binary data omitted.]',
+            revised_prompt: String((image && (image.revised_prompt || image.revisedPrompt)) || '').slice(0, 1000),
+          };
+        });
+        return agentBoundToolResult({ ok: result.ok !== false, count: Number(result.count) || images.length, model: result.model, backend: result.backend, images }, maxChars || 56000);
+      }
+      return agentBoundToolResult(result, maxChars || 56000);
+    }
     function agentPublicToolResult(name, result, risk, maxChars) {
       if (risk === 'sensitive' || risk === 'danger') {
         return { redacted: true, tool: name, risk, note: 'Sensitive result was supplied to the agent and withheld from mini-app event/history payloads.' };
       }
+      if (name === 'image_generate') return agentPublicImageResult(result);
       return agentBoundToolResult(result, maxChars || 6000);
     }
     function agentPublicToolCalls(calls) {
@@ -16610,6 +16659,7 @@ function setLibrary(list) {
               : (params.tools !== undefined ? params.tools : params.functions);
             const toolSelection = normalizeAgentToolSelection(rawToolSelection, params.riskMax || params.maxRisk);
             const riskMax = toolSelection.riskMax;
+            const agentImageGeneration = normalizeAgentImageGenerationConfig(params.imageGeneration);
             const appToolId = String(currentApp?.id || 'draft');
             const allRegisteredTools = toolsFilterEntries({ riskMax: 'danger', appId: appToolId });
             if (toolSelection.names) {
@@ -16633,7 +16683,7 @@ function setLibrary(list) {
             const allowedToolEntries = candidateToolEntries.filter(entry => allowedToolNames.has(entry.name));
             const allowedRiskSet = new Set(allowedToolEntries.map(entry => String(entry.risk || 'safe')));
             allowedRiskSet.add('safe');
-            const agentToolPolicy = { callId: agentCallId, riskMax, allowedToolNames, allowedRiskSet, allowedNames: allowedToolNames };
+            const agentToolPolicy = { callId: agentCallId, riskMax, allowedToolNames, allowedRiskSet, allowedNames: allowedToolNames, imageGeneration: agentImageGeneration };
             let tools = allowedToolEntries.map(toolsToOpenAI);
             if (params.__forgeTaskWorkspace != null) {
               const workspaceRequest = params.__forgeTaskWorkspace;
@@ -16671,7 +16721,7 @@ function setLibrary(list) {
               });
               if (taskGuidanceInfo.content) messages.unshift({ role: 'system', content: taskGuidanceInfo.content });
             }
-            if (params.systemHint !== false && tools.length && (taskGuidanceInfo || !messages.some(m => m.role === 'system'))) {
+            if (params.systemHint !== false && tools.length) {
               try { messages.unshift({ role: 'system', content: toolsSystemHint({ riskMax: riskMax }, allowedToolEntries) }); } catch (_) {}
             }
             if (!messages.length) throw new Error('ai.agent requires messages or prompt');
@@ -16777,9 +16827,9 @@ function setLibrary(list) {
                   } catch (e) {
                     out = { ok: false, error: e && e.message ? e.message : String(e), tool: tname };
                   }
-                  const modelOut = agentBoundToolResult(out, 56000);
+                  const modelOut = agentModelToolResult(tname, out, 56000);
                   const publicArgs = agentPublicToolArgs(tname, targs, risk);
-                  const publicOut = agentPublicToolResult(tname, modelOut, risk);
+                  const publicOut = agentPublicToolResult(tname, out, risk);
                   history.push({ round, name: tname, args: publicArgs, result: publicOut, risk });
                   agentEmit('toolResult', { round, name: tname, result: publicOut });
                   let toolContent;

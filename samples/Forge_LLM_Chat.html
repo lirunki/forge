@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Forge AI Chat v8.1</title>
+<title>Forge AI Chat v8.2</title>
 <style>* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
  font-family: system-ui, -apple-system, sans-serif;
@@ -401,31 +401,6 @@ body {
  background: rgba(255,255,255,0.15);
  text-transform: uppercase;
 }
-.confirm-overlay {
- display: none;
- position: fixed;
- inset: 0;
- background: rgba(15,23,42,0.85);
- z-index: 200;
- align-items: center;
- justify-content: center;
- padding: 24px;
-}
-.confirm-overlay.show { display: flex; }
-.confirm-box {
- background: #1e2937;
- border-radius: 16px;
- padding: 20px;
- width: 100%;
- max-width: 340px;
- border: 1px solid #334155;
-}
-.confirm-box p {
- margin-bottom: 16px;
- line-height: 1.5;
- font-size: 15px;
-}
-.confirm-box .modal-buttons { margin-top: 0; }
 .hint {
  font-size: 12px;
  color: #94a3b8;
@@ -438,6 +413,7 @@ body {
 <div class="header">
  <h2>🤖 MultiForge AI</h2>
  <div class="header-actions">
+ <button class="btn btn-secondary btn-small" id="btnStop" type="button" hidden>■ Stop</button>
  <button class="btn btn-secondary btn-small" id="btnNewChat" type="button">➕</button>
  <button class="btn btn-secondary btn-small" id="btnSettings" type="button">⚙️</button>
  </div>
@@ -487,14 +463,13 @@ body {
  <option value="grok-2-image-1212">grok-2-image-1212</option>
  <option value="grok-2-image-latest">grok-2-image-latest</option>
  </select>
- <p class="hint">Image model id for the selected provider. Default is grok-imagine-image-2.0 on xAI. Do not use chat-only models (e.g. grok-4) here.</p>
+ <p class="hint">The host tries this image model first, then the remaining listed image models, on your selected AI provider with the configured xAI fallback.</p>
  </div>
  <div class="form-group">
  <label>Streaming</label>
  <select id="streamMode">
- <option value="auto" selected>Auto (stream + fallback)</option>
- <option value="stream">Stream only</option>
- <option value="sync">Standard chat (no stream)</option>
+ <option value="auto" selected>Host streaming (built-in fallback)</option>
+ <option value="sync">No token streaming</option>
  </select>
  </div>
  <div class="section-divider">
@@ -506,16 +481,13 @@ body {
  <div class="form-group">
  <label>Max risk level</label>
  <select id="maxRisk">
- <option value="safe">safe</option>
+ <option value="safe" selected>safe</option>
  <option value="sensitive">sensitive</option>
- <option value="confirm" selected>confirm</option>
+ <option value="confirm">confirm</option>
  <option value="danger">danger</option>
  </select>
  </div>
- <div class="checkbox-row">
- <input type="checkbox" id="confirmSideEffects" checked>
- <label for="confirmSideEffects">Confirm side effects</label>
- </div>
+ <p class="hint">Forge handles confirmation prompts and permissions. Mini-app settings cannot disable host safety checks.</p>
  <div class="form-group">
  <label>Enabled tools</label>
  <div id="toolChips" class="tool-chips"></div>
@@ -528,21 +500,11 @@ body {
  </div>
 </div>
 
-<div id="confirmOverlay" class="confirm-overlay">
- <div class="confirm-box">
- <p id="confirmText">Allow this action?</p>
- <div class="modal-buttons">
- <button class="cancel-btn" type="button" id="confirmNo">Deny</button>
- <button class="save-btn" type="button" id="confirmYes">Allow</button>
- </div>
- </div>
-</div>
-
 <script >
 (function () {
  'use strict';
 
- var APP_VERSION = 'v8.1';
+ var APP_VERSION = 'v8.2';
 
  function host() {
  try {
@@ -566,19 +528,18 @@ body {
  imageModel: 'grok-imagine-image-2.0',
  chatFontSize: 16
  };
- var toolSettings = { enabled: true, riskMax: 'confirm', confirmSideEffects: true, enabledTools: null };
+ var toolSettings = { enabled: true, riskMax: 'safe', enabledTools: null };
  var attachedFiles = [];
  var conversationHistory = [];
  var isLoading = false;
+ var activeAgentRun = null;
+ var agentRunSeq = 0;
  var aiProviders = [];
  var _objectUrls = [];
- var APP_TOOLS = [];
  var toolCatalog = [];
- var toolsHint = '';
  var DEFAULT_TOOL_NAMES = ['web_search','web_fetch','get_time','device_info','clipboard_read','clipboard_write','toast','open_url','notify','get_location','open_maps','sms_list','sms_compose','phone_dial','list_contacts','find_contact','list_apps','list_activities','launch_app','radio_status','radio_set','radio_open_settings','tts_speak','get_capabilities','image_generate'];
  var IMAGE_MODEL_CANDIDATES = ['grok-imagine-image-2.0', 'grok-2-image', 'grok-2-image-1212', 'grok-2-image-latest'];
  var _htmlBlockSeq = 0;
- var _confirmResolver = null;
  var _inlineCache = {};
  var _lastBubble = null;
 
@@ -588,44 +549,16 @@ body {
  document.documentElement.style.setProperty('--chat-font-size', size + 'px');
  }
 
- function uiConfirm(message) {
- return new Promise(function (resolve) {
- var overlay = document.getElementById('confirmOverlay');
- var text = document.getElementById('confirmText');
- text.textContent = message || 'Allow this action?';
- overlay.classList.add('show');
- _confirmResolver = function (ok) {
- overlay.classList.remove('show');
- _confirmResolver = null;
- resolve(!!ok);
- };
- });
- }
-
- document.getElementById('confirmYes').onclick = function () {
- if (_confirmResolver) _confirmResolver(true);
- };
- document.getElementById('confirmNo').onclick = function () {
- if (_confirmResolver) _confirmResolver(false);
- };
-
  async function refreshHostTools() {
- APP_TOOLS = [];
- toolsHint = '';
+ toolCatalog = [];
  var h = host();
  if (!h || !h.tools || typeof h.tools.list !== 'function') return;
  try {
- var names = toolSettings.enabledTools && toolSettings.enabledTools.length ? toolSettings.enabledTools : DEFAULT_TOOL_NAMES;
- var listed = await h.tools.list({ riskMax: toolSettings.riskMax, names: names });
- APP_TOOLS = (listed && listed.tools) || [];
+ var names = Array.isArray(toolSettings.enabledTools) ? toolSettings.enabledTools : DEFAULT_TOOL_NAMES;
+ var listed = await h.tools.list({ riskMax: 'danger', names: names });
  toolCatalog = (listed && listed.catalog) || [];
- if (typeof h.tools.hint === 'function') {
- var hintResp = await h.tools.hint({ riskMax: toolSettings.riskMax, names: names });
- toolsHint = (hintResp && hintResp.hint) || '';
- }
  } catch (e) {
- APP_TOOLS = [];
- toolsHint = '';
+ toolCatalog = [];
  }
  }
 
@@ -645,22 +578,6 @@ body {
  return [pref].concat(IMAGE_MODEL_CANDIDATES.filter(function (m) { return m !== pref; }));
  }
  return IMAGE_MODEL_CANDIDATES.slice();
- }
-
- /** Resolve the mini-app chat provider id so image gen uses the same one. Default: xai */
- async function resolveChatProviderId() {
- if (settings.aiProvider && settings.aiProvider !== 'default') {
- return settings.aiProvider;
- }
- try {
- var h = host();
- if (h && h.ai && typeof h.ai.getProvider === 'function') {
- var current = await h.ai.getProvider();
- if (current && typeof current === 'object' && current.id) return current.id;
- if (typeof current === 'string' && current) return current;
- }
- } catch (e) {}
- return 'xai';
  }
 
  function extractImagesFromToolResult(result) {
@@ -776,128 +693,6 @@ body {
  } catch (e) {}
  if (!bubble._genImages) bubble._genImages = [];
  images.forEach(function (im) { bubble._genImages.push(im); });
- }
-
- async function runImageGenerate(args) {
- var h = host();
- if (!h || !h.tools || typeof h.tools.run !== 'function') {
- return { ok: false, error: 'Tools API unavailable' };
- }
- args = args || {};
- var prompt = args.prompt || args.text || '';
- if (!prompt) return { ok: false, error: 'Missing prompt for image_generate' };
-
- // Always use the same provider selected for chat in this mini-app (default xai)
- var providerId = await resolveChatProviderId();
- if (!providerId) providerId = 'xai';
-
- // Ensure host AI provider matches chat selection before image tool runs
- if (providerId) {
- try {
- if (h.ai && typeof h.ai.setProvider === 'function') {
- await h.ai.setProvider(providerId);
- }
- } catch (e) {}
- }
-
- var reqModel = args.model;
- if (isChatOnlyModelName(reqModel)) {
- reqModel = null;
- }
- if (settings.imageModel && settings.imageModel !== 'auto' && !reqModel) {
- reqModel = settings.imageModel;
- }
- if (!reqModel) reqModel = 'grok-imagine-image-2.0';
-
- var models = pickImageModelsToTry(reqModel);
- var errors = [];
- var last = null;
-
- for (var i = 0; i < models.length; i++) {
- var model = models[i];
- var payload = {
- prompt: prompt,
- n: args.n || 1
- };
- if (model) payload.model = model;
- if (args.images) payload.images = args.images;
- if (args.image) payload.images = [args.image];
- // Pass the chat provider so image generation never switches providers
- if (providerId) {
- payload.provider = providerId;
- payload.providerId = providerId;
- }
-
- setStatus(APP_VERSION + ' • image_generate' + (providerId ? ' [' + providerId + ']' : '') + (model ? ' (' + model + ')' : '') + '…');
- try {
- var r = await h.tools.run('image_generate', payload);
- last = r;
- var imgs = extractImagesFromToolResult(r);
- var errMsg = '';
- if (r && typeof r === 'object') {
- errMsg = String(r.error || r.message || (r.result && r.result.error) || '');
- }
- var failed =
- !imgs.length ||
- (r && r.ok === false) ||
- /model not found|not available|no access|invalid model|does not exist|404/i.test(errMsg);
-
- if (!failed && imgs.length) {
- var enriched = await enrichImageToolResult(r);
- enriched.result._displayImages = enriched.images;
- if (providerId) enriched.result.providerId = providerId;
- return enriched.result;
- }
- errors.push((model || 'default') + ': ' + (errMsg || 'no images'));
- } catch (e) {
- errors.push((model || 'default') + ': ' + ((e && e.message) || String(e)));
- }
- }
-
- return {
- ok: false,
- error: 'Image generation failed on the selected chat provider' + (providerId ? ' (' + providerId + ')' : '') + '. The provider must support image generation (e.g. xAI with an image model).',
- attempts: errors,
- providerId: providerId || null,
- hint: 'Image gen defaults to xai + grok-imagine-image-2.0. Change AI Provider / Image model in Settings if needed.',
- last: last
- };
- }
-
- async function executeTool(name, args) {
- var h = host();
- try {
- if (toolSettings.confirmSideEffects) {
- var cat = null;
- for (var i = 0; i < toolCatalog.length; i++) {
- if (toolCatalog[i].name === name) { cat = toolCatalog[i]; break; }
- }
- var risk = (cat && cat.risk) || 'safe';
- if (risk === 'confirm' || risk === 'danger') {
- var ok = await uiConfirm('Tool "' + name + '" wants to perform an action. Allow?');
- if (!ok) return { error: 'User denied tool execution' };
- }
- }
- if (!h || !h.tools || typeof h.tools.run !== 'function') {
- return { error: 'Tools API unavailable' };
- }
-
- if (name === 'image_generate') {
- return await runImageGenerate(args || {});
- }
-
- var result = await h.tools.run(name, args || {});
-
- var maybeImgs = extractImagesFromToolResult(result);
- if (maybeImgs.length) {
- var en = await enrichImageToolResult(result);
- en.result._displayImages = en.images;
- return en.result;
- }
- return result;
- } catch (e) {
- return { error: (e && e.message) || String(e) };
- }
  }
 
  async function saveChat() {
@@ -1477,7 +1272,7 @@ body {
  };
  }
  var streamSel = document.getElementById('streamMode');
- if (streamSel) streamSel.value = settings.streamMode || 'auto';
+ if (streamSel) streamSel.value = settings.streamMode === 'sync' ? 'sync' : 'auto';
  var imgModel = document.getElementById('imageModel');
  if (imgModel) {
  var wantModel = settings.imageModel || 'grok-imagine-image-2.0';
@@ -1491,8 +1286,7 @@ body {
  }
  }
  document.getElementById('toolsEnabled').checked = !!toolSettings.enabled;
- document.getElementById('maxRisk').value = toolSettings.riskMax || 'confirm';
- document.getElementById('confirmSideEffects').checked = !!toolSettings.confirmSideEffects;
+ document.getElementById('maxRisk').value = toolSettings.riskMax || 'safe';
  await loadAIProviders();
  await renderToolChips();
  }
@@ -1509,7 +1303,7 @@ body {
  }
  var listed = await h.tools.list({ riskMax: 'danger', names: DEFAULT_TOOL_NAMES });
  toolCatalog = (listed && listed.catalog) || [];
- var enabledSet = toolSettings.enabledTools && toolSettings.enabledTools.length
+ var enabledSet = Array.isArray(toolSettings.enabledTools)
  ? new Set(toolSettings.enabledTools)
  : new Set(DEFAULT_TOOL_NAMES);
  (toolCatalog || []).forEach(function (cat) {
@@ -1548,7 +1342,6 @@ body {
  }
  toolSettings.enabled = document.getElementById('toolsEnabled').checked;
  toolSettings.riskMax = document.getElementById('maxRisk').value;
- toolSettings.confirmSideEffects = document.getElementById('confirmSideEffects').checked;
  try {
  var h2 = host();
  if (h2 && h2.storage) {
@@ -1590,7 +1383,43 @@ body {
  return wrap;
  }
 
+ function setAgentBusy(busy) {
+ isLoading = !!busy;
+ var send = document.getElementById('sendBtn');
+ var stop = document.getElementById('btnStop');
+ if (send) send.disabled = !!busy;
+ if (stop) stop.hidden = !busy;
+ }
+
+ function isCurrentAgentRun(run) {
+ return !!run && activeAgentRun === run && !run.cancelled;
+ }
+
+ function cancelActiveAgent(options) {
+ options = options || {};
+ var run = activeAgentRun;
+ if (!run) return;
+ run.cancelled = true;
+ activeAgentRun = null;
+ var partial = run.bubble ? run.bubble.stop() : '';
+ if (options.preservePartial && partial.trim()) {
+ var saved = { role: 'assistant', content: partial };
+ if (run.displayImages && run.displayImages.length) {
+ saved._displayImages = run.displayImages.map(function (im) { return { url: im.url, revised_prompt: im.revised_prompt || null }; });
+ }
+ conversationHistory.push(saved);
+ saveChat();
+ }
+ setAgentBusy(false);
+ try {
+ var h = host();
+ if (h && h.ai && typeof h.ai.cancel === 'function') Promise.resolve(h.ai.cancel(run.id)).catch(function () {});
+ } catch (e) {}
+ if (!options.silent) setStatus(APP_VERSION + ' • Stopped');
+ }
+
  function newChat() {
+ cancelActiveAgent({ silent: true });
  conversationHistory = [];
  attachedFiles = [];
  revokeObjectUrls();
@@ -1911,7 +1740,8 @@ body {
  },
  finish: function (finalText, modeLabel) {
  if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
- doRender(finalText || '', false);
+ pendingText = finalText || '';
+ doRender(pendingText, false);
  var blocks = body.querySelectorAll('.html-block');
  for (var i = 0; i < blocks.length; i++) {
  if (typeof blocks[i].finalize === 'function') blocks[i].finalize();
@@ -1920,6 +1750,20 @@ body {
  var cur = aiMsg.querySelector('.stream-cursor');
  if (cur) cur.remove();
  if (tag) tag.textContent = modeLabel || 'Forge AI';
+ },
+ getText: function () { return pendingText || ''; },
+ stop: function () {
+ if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
+ doRender(pendingText, false);
+ var blocks = body.querySelectorAll('.html-block');
+ for (var i = 0; i < blocks.length; i++) {
+ if (typeof blocks[i].finalize === 'function') blocks[i].finalize();
+ }
+ aiMsg.classList.remove('streaming');
+ var cur = aiMsg.querySelector('.stream-cursor');
+ if (cur) cur.remove();
+ if (tag) tag.textContent = 'Forge AI · stopped';
+ return pendingText || '';
  },
  setError: function (msg) {
  if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
@@ -1946,315 +1790,186 @@ body {
  }
 
  function buildSystemPrompt() {
- var base = 'You are a helpful assistant with access to Android apps and vision. Describe attached images when present. Stream concise, clear answers.';
+ var imageModels = pickImageModelsToTry(settings.imageModel);
+ var base = 'You are a helpful assistant with access to Forge tools and vision. Describe attached images when present. Stream concise, clear answers.';
  base += ' When you produce a small UI, component, diagram-as-HTML, card, or visual demo, put the markup in a fenced block starting with ```html and ending with ``` so the client can render it in an iframe.';
  base += ' IMAGE RULE for HTML blocks: You MAY use normal public https image URLs in <img src="https://...">, CSS url(https://...), or hrefs that point at image files. Prefer direct image links. The client automatically downloads each image, encodes it as base64, and rewrites those URLs to data: URLs before rendering.';
- base += ' IMAGE GENERATION: Use the image_generate tool when the user asks to draw/generate/create an image. IMPORTANT: Do NOT pass chat model names (grok-4, grok-4.5, gpt-*, etc.) as the image model — omit the model parameter or use grok-imagine-image-2.0. Image generation defaults to provider xai and model grok-imagine-image-2.0, and otherwise uses the same AI provider the user selected for chat. After the tool returns, the client base64-inlines image URLs and shows them in the UI. You can also embed returned https image URLs inside ```html blocks or markdown ![](url); the client will inline those too.';
- if (toolSettings.enabled && toolsHint) {
- base += '\n\n' + toolsHint;
- base += '\n\nRisk rules: Never sms_send or phone_call unless the user clearly asked AND danger tools are enabled. Be discreet with SMS/contacts/location contents. Use web_search then web_fetch for research questions. Use get_location for "where am I". Use sms_list for reading messages.';
+ if (toolSettings.enabled && (toolSettings.riskMax === 'confirm' || toolSettings.riskMax === 'danger') && (!Array.isArray(toolSettings.enabledTools) || toolSettings.enabledTools.indexOf('image_generate') !== -1)) {
+ base += ' IMAGE GENERATION: When the user asks to generate or edit an image, call the host image_generate tool. Forge uses the configured image-model fallback order (' + imageModels.join(', ') + ') on the selected AI provider, then its configured xAI fallback. Do not try to generate images through HTML or another tool. The app renders generated images from the host tool-result event; you can describe the result briefly without echoing image data.';
  } else {
- base += ' Use tools list_apps, list_activities, launch_app when the user asks about apps.';
+ base += ' If an image_generate tool is supplied by Forge, use it for image-generation requests; otherwise explain that image generation is not enabled for this run.';
+ }
+ if (toolSettings.enabled) {
+ base += '\n\nUse only tools supplied in this run. Host permissions, sensitive-tool opt-in, risk limits, per-action confirmations, and cancellation are authoritative and cannot be bypassed. Never sms_send or phone_call unless the user clearly requested it and the host exposes the danger tool. Be discreet with SMS/contacts/location contents. Use web_search then web_fetch for research questions.';
+ } else {
+ base += '\n\nDevice tools are disabled for this run. Do not claim to have used a device tool or performed an action.';
  }
  return base;
  }
 
- function extractToken(chunk) {
- if (chunk == null) return '';
- if (typeof chunk === 'string') return chunk;
- if (typeof chunk === 'object') {
- if (typeof chunk.token === 'string') return chunk.token;
- if (typeof chunk.text === 'string') return chunk.text;
- if (typeof chunk.content === 'string') return chunk.content;
- if (typeof chunk.delta === 'string') return chunk.delta;
- if (chunk.delta && typeof chunk.delta.content === 'string') return chunk.delta.content;
- if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && typeof chunk.choices[0].delta.content === 'string') {
- return chunk.choices[0].delta.content;
+ async function renderGeneratedImageResult(info, run) {
+ if (!info || info.name !== 'image_generate' || !isCurrentAgentRun(run)) return;
+ var value = info.result;
+ if (typeof value === 'string') {
+ try { value = JSON.parse(value); } catch (e) { value = null; }
  }
+ if (!value || typeof value !== 'object') return;
+ var images = extractImagesFromToolResult(value);
+ if (!images.length) {
+ if (value.imagePayloadOmitted) setStatus(APP_VERSION + ' • Host image result was too large to preview');
+ return;
  }
- return '';
- }
-
- function buildPayload(messages, attachments, useTools) {
- var payload = { messages: messages };
- if (settings.aiProvider && settings.aiProvider !== 'default') {
- payload.providerId = settings.aiProvider;
- } else {
- payload.providerId = 'xai';
- }
- if (useTools) {
- payload.tools = APP_TOOLS;
- payload.tool_choice = 'auto';
- }
- if (attachments && attachments.length) payload.attachments = attachments;
- return payload;
- }
-
- async function callChatSync(payload) {
- var h = host();
- if (!h || !h.ai || typeof h.ai.chat !== 'function') {
- throw new Error('AI chat API unavailable');
- }
- var r = await h.ai.chat(payload);
- var content = '';
- var toolCalls = [];
- if (r && typeof r === 'object') {
- content = r.content || '';
- if (Array.isArray(r.tool_calls)) toolCalls = r.tool_calls;
- } else if (typeof r === 'string') {
- content = r;
- }
- return { content: content || '', tool_calls: toolCalls || [] };
- }
-
- async function callChatStream(payload, bubble) {
- var h = host();
- if (!h || !h.ai || typeof h.ai.chatStream !== 'function') {
- throw new Error('chatStream unavailable');
- }
-
- var assembled = '';
- var toolCalls = [];
-
- function handleChunk(chunk) {
- try {
- var t = extractToken(chunk);
- if (t) {
- assembled += t;
- bubble.setText(assembled);
- }
- if (chunk && typeof chunk === 'object') {
- if (Array.isArray(chunk.tool_calls) && chunk.tool_calls.length) {
- toolCalls = chunk.tool_calls;
- }
- if (typeof chunk.content === 'string' && chunk.content.length > assembled.length) {
- assembled = chunk.content;
- bubble.setText(assembled);
- }
- }
- } catch (e) {}
- }
-
- var streamOpts = {};
- for (var k in payload) {
- if (Object.prototype.hasOwnProperty.call(payload, k)) streamOpts[k] = payload[k];
- }
- streamOpts.onToken = handleChunk;
-
- var result = await h.ai.chatStream(streamOpts);
-
- var finalContent = assembled;
- if (result && typeof result === 'object') {
- if (typeof result.content === 'string' && result.content) finalContent = result.content;
- if (Array.isArray(result.tool_calls) && result.tool_calls.length) toolCalls = result.tool_calls;
- } else if (typeof result === 'string' && result) {
- finalContent = result;
- }
-
- if (finalContent && finalContent !== assembled) bubble.setText(finalContent);
- return { content: finalContent || '', tool_calls: toolCalls || [] };
- }
-
- async function runModelOnce(payload, bubble) {
- var mode = settings.streamMode || 'auto';
-
- if (mode === 'sync') {
- setStatus(APP_VERSION + ' • Chat…');
- var syncResult = await callChatSync(payload);
- bubble.setText(syncResult.content || '');
- return { content: syncResult.content || '', tool_calls: syncResult.tool_calls || [], label: 'Forge AI' };
- }
-
- if (mode === 'stream') {
- setStatus(APP_VERSION + ' • Streaming…');
- var s = await callChatStream(payload, bubble);
- return { content: s.content || '', tool_calls: s.tool_calls || [], label: 'Forge AI · live' };
- }
-
- try {
- setStatus(APP_VERSION + ' • Streaming…');
- var live = await callChatStream(payload, bubble);
- return { content: live.content || '', tool_calls: live.tool_calls || [], label: 'Forge AI · live' };
- } catch (streamErr) {
- var sm = (streamErr && streamErr.message) || String(streamErr);
- setStatus(APP_VERSION + ' • Stream failed, using chat…');
- try {
- var fb = await callChatSync(payload);
- bubble.setText(fb.content || '');
- return {
- content: fb.content || '',
- tool_calls: fb.tool_calls || [],
- label: 'Forge AI',
- note: sm
- };
- } catch (syncErr) {
- var both = 'Stream: ' + sm + ' | Chat: ' + ((syncErr && syncErr.message) || String(syncErr));
- throw new Error(both);
- }
- }
- }
-
- function toolResultForModel(toolResult) {
- try {
- var copy = JSON.parse(JSON.stringify(toolResult));
- if (copy && copy._displayImages) delete copy._displayImages;
- if (copy && copy._client && Array.isArray(copy._client.images)) {
- copy._client.images = copy._client.images.map(function (im) {
- return {
- index: im.index,
- inlined: im.inlined,
- url: im.url,
- originalUrl: im.originalUrl,
- revised_prompt: im.revised_prompt
- };
+ var wanted = images.filter(function (im) {
+ var key = String(im.originalUrl || im.url || '');
+ if (!key || run.displayImageKeys.has(key)) return false;
+ run.displayImageKeys.add(key);
+ return true;
  });
+ if (!wanted.length) return;
+ var imageResult = Object.assign({}, value, { images: wanted });
+ var enriched = await enrichImageToolResult(imageResult);
+ if (!isCurrentAgentRun(run) || !enriched.images.length) return;
+ var fresh = enriched.images;
+ fresh.forEach(function (im) { run.displayImages.push(im); });
+ if (fresh.length) appendGeneratedImages(run.bubble, fresh, 'Generated image');
  }
- if (copy && Array.isArray(copy.images)) {
- copy.images = copy.images.map(function (im) {
- var u = im && im.url ? String(im.url) : '';
- if (u.indexOf('data:') === 0 && u.length > 4000) {
- return {
- url: '[client-inlined data URL, length=' + u.length + ' — already shown in UI]',
- revised_prompt: im.revised_prompt || null,
- inlined: true
- };
- }
- return im;
+
+ function queueGeneratedImageResult(info, run) {
+ if (!info || info.name !== 'image_generate') return;
+ var work = renderGeneratedImageResult(info, run).catch(function (error) {
+ if (isCurrentAgentRun(run)) setStatus(APP_VERSION + ' • Image preview failed: ' + ((error && error.message) || String(error)));
  });
+ run.pendingImageWork.push(work);
  }
- var s = JSON.stringify(copy);
- if (s.length > 120000) {
- return JSON.stringify({
- ok: copy.ok,
- count: copy.count || (copy.images && copy.images.length) || 0,
- note: 'Images generated and displayed in the client UI (base64-inlined). Payload truncated for the model.',
- images: (copy.images || []).map(function (im, idx) {
- return { index: idx, revised_prompt: im.revised_prompt || null, inlined: true };
- }),
- error: copy.error || undefined,
- attempts: copy.attempts || undefined,
- hint: copy.hint || undefined
- });
- }
- return s;
- } catch (e) {
- return JSON.stringify({ ok: false, error: 'Failed to serialize tool result' });
+
+ async function waitForGeneratedImages(run) {
+ var consumed = 0;
+ while (consumed < run.pendingImageWork.length) {
+ var pending = run.pendingImageWork.slice(consumed);
+ consumed = run.pendingImageWork.length;
+ await Promise.all(pending);
  }
  }
 
  async function sendMessage() {
- if (isLoading) return;
+ if (activeAgentRun || isLoading) return;
  var input = document.getElementById('messageInput');
  var text = input.value.trim();
  if (!text && attachedFiles.length === 0) return;
 
  var filesSnapshot = attachedFiles.slice();
  var attachments = buildOutgoingAttachments(filesSnapshot);
-
  appendUserBubble(text, filesSnapshot);
-
  if (conversationHistory.length === 0) {
  conversationHistory.push({ role: 'system', content: buildSystemPrompt() });
  } else if (conversationHistory[0] && conversationHistory[0].role === 'system') {
  conversationHistory[0].content = buildSystemPrompt();
  }
- conversationHistory.push({
- role: 'user',
- content: text || (attachments.length ? '[Attachment(s)]' : '')
- });
-
+ conversationHistory.push({ role: 'user', content: text || (attachments.length ? '[Attachment(s)]' : '') });
  input.value = '';
  input.style.height = 'auto';
  attachedFiles = [];
  renderFilePreviews();
 
- isLoading = true;
- document.getElementById('sendBtn').disabled = true;
-
  var bubble = createStreamingBubble();
- var collectedDisplayImages = [];
-
- try {
- var currentMessages = conversationHistory.slice();
- var finalResponse = null;
- var pendingAtts = attachments.slice();
- var useTools = toolSettings.enabled && APP_TOOLS.length > 0;
- var modeLabel = 'Forge AI';
-
- for (var round = 0; round < 5; round++) {
- var payload = buildPayload(
- currentMessages,
- round === 0 ? pendingAtts : null,
- useTools
- );
-
- if (round > 0) bubble.prepareNextRound();
-
- var result = await runModelOnce(payload, bubble);
- var content = result.content || '';
- var toolCalls = result.tool_calls || [];
- modeLabel = result.label || modeLabel;
-
- if (toolCalls.length) {
- currentMessages.push({
- role: 'assistant',
- tool_calls: toolCalls,
- content: content || null
- });
- bubble.setText(content ? (content + '\n\n⚙ Running tools…') : '⚙ Running tools…');
- for (var ti = 0; ti < toolCalls.length; ti++) {
- var tc = toolCalls[ti];
- var args = {};
- try {
- args = JSON.parse((tc.function && tc.function.arguments) || tc.arguments || '{}');
- } catch (_) {}
- var name = (tc.function && tc.function.name) || tc.name;
- setStatus(APP_VERSION + ' • Running ' + name + '…');
- var toolResult = await executeTool(name, args);
-
- if (toolResult && toolResult._displayImages && toolResult._displayImages.length) {
- appendGeneratedImages(bubble, toolResult._displayImages, name === 'image_generate' ? 'Generated image' : 'Image');
- toolResult._displayImages.forEach(function (im) { collectedDisplayImages.push(im); });
- }
-
- currentMessages.push({
- role: 'tool',
- tool_call_id: tc.id,
- name: name,
- content: toolResultForModel(toolResult)
- });
- }
- continue;
- }
-
- finalResponse = content;
- break;
- }
-
- bubble.finish(finalResponse || '(empty)', modeLabel);
- var assistantMsg = {
- role: 'assistant',
- content: finalResponse || ''
+ var run = {
+ id: 'forgechat-' + Date.now().toString(36) + '-' + (++agentRunSeq).toString(36),
+ bubble: bubble,
+ cancelled: false,
+ displayImages: [],
+ displayImageKeys: new Set(),
+ pendingImageWork: [],
  };
- if (collectedDisplayImages.length) {
- assistantMsg._displayImages = collectedDisplayImages.map(function (im) {
+ activeAgentRun = run;
+ setAgentBusy(true);
+ setStatus(APP_VERSION + ' • Starting host agent…');
+ var h = host();
+ var roundText = '';
+
+ try {
+ if (!h || !h.ai || typeof h.ai.agent !== 'function') throw new Error('ForgeHost.ai.agent is unavailable. Update Forge and reopen the mini-app.');
+ var toolNames = toolSettings.enabled
+ ? (Array.isArray(toolSettings.enabledTools) ? toolSettings.enabledTools.slice() : DEFAULT_TOOL_NAMES.slice())
+ : [];
+ var options = {
+ id: run.id,
+ messages: conversationHistory.slice(),
+ providerId: settings.aiProvider || 'xai',
+ tools: { preset: 'selected', names: toolNames },
+ riskMax: toolSettings.riskMax || 'safe',
+ maxRounds: 5,
+ attachments: attachments,
+ imageGeneration: { models: pickImageModelsToTry(settings.imageModel) },
+ onRound: function (info) {
+ if (!isCurrentAgentRun(run)) return;
+ if (info && Number(info.round) > 1) {
+ roundText = '';
+ bubble.prepareNextRound();
+ }
+ setStatus(APP_VERSION + ' • Agent round ' + ((info && info.round) || '?'));
+ },
+ onChat: function (info) {
+ if (!isCurrentAgentRun(run) || settings.streamMode !== 'sync') return;
+ if (info && info.content && !(info.tool_calls && info.tool_calls.length)) bubble.setText(info.content);
+ },
+ onToolCall: function (info) {
+ if (!isCurrentAgentRun(run)) return false;
+ setStatus(APP_VERSION + ' • Forge is requesting ' + ((info && info.name) || 'a tool') + '…');
+ return true; // Veto-only callback; the host performs all authorization/confirmation.
+ },
+ onToolResult: function (info) {
+ if (!isCurrentAgentRun(run)) return;
+ setStatus(APP_VERSION + ' • Completed ' + ((info && info.name) || 'tool'));
+ queueGeneratedImageResult(info, run);
+ },
+ };
+ if (settings.streamMode !== 'sync') {
+ options.onToken = function (delta) {
+ if (!isCurrentAgentRun(run)) return;
+ roundText += String(delta || '');
+ bubble.setText(roundText);
+ };
+ }
+
+ var result = await h.ai.agent(options);
+ if (!isCurrentAgentRun(run)) return;
+ if (result && result.cancelled) {
+ bubble.stop();
+ setStatus(APP_VERSION + ' • Cancelled by Forge');
+ await saveChat();
+ return;
+ }
+ // Event callbacks normally deliver these before the result; the result history
+ // is a fallback for image previews if an event was delayed or missed.
+ if (result && Array.isArray(result.tools)) result.tools.forEach(function (entry) { queueGeneratedImageResult(entry, run); });
+ await waitForGeneratedImages(run);
+ if (!isCurrentAgentRun(run)) return;
+ var finalResponse = typeof result === 'string' ? result : String((result && result.content) || '');
+ bubble.finish(finalResponse || '(empty)', settings.streamMode === 'sync' ? 'Forge AI · agent' : 'Forge AI · live agent');
+ var assistantMsg = { role: 'assistant', content: finalResponse || '' };
+ if (run.displayImages.length) {
+ assistantMsg._displayImages = run.displayImages.map(function (im) {
  return { url: im.url, revised_prompt: im.revised_prompt || null };
  });
  }
  conversationHistory.push(assistantMsg);
  await saveChat();
- setStatus(APP_VERSION + ' • Ready');
+ if (isCurrentAgentRun(run)) setStatus(APP_VERSION + ' • Ready');
  } catch (error) {
+ if (!isCurrentAgentRun(run)) return;
  var em = (error && error.message) || String(error);
  bubble.setError(em);
  setStatus(APP_VERSION + ' • Error');
  } finally {
- isLoading = false;
- document.getElementById('sendBtn').disabled = false;
+ if (activeAgentRun === run) {
+ activeAgentRun = null;
+ setAgentBusy(false);
+ }
  }
  }
 
  document.getElementById('btnNewChat').onclick = function () { newChat(); };
+ document.getElementById('btnStop').onclick = function () { cancelActiveAgent({ preservePartial: true }); };
  document.getElementById('btnSettings').onclick = function () { showSettings(); };
  document.getElementById('btnCloseSettings').onclick = function () { closeSettings(); };
  document.getElementById('btnSaveSettings').onclick = function () { saveSettings(); };
