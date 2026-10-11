@@ -359,6 +359,47 @@
       width: 40px; height: 40px; min-width: 40px;
       flex: 0 0 auto; font-size: 1.1rem; line-height: 1; padding: 0;
     }
+    .standalone-export-overlay {
+      position: fixed; inset: 0; z-index: 2147483647;
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem; padding-bottom: max(1rem, env(safe-area-inset-bottom));
+      background: rgba(0,0,0,.76); backdrop-filter: blur(5px);
+    }
+    .standalone-export-panel {
+      box-sizing: border-box; width: min(620px, 100%); max-height: 90vh;
+      overflow: auto; overscroll-behavior: contain;
+      padding: 1.15rem; border: 1px solid var(--border); border-radius: 18px;
+      background: var(--panel); color: var(--text); box-shadow: var(--shadow);
+    }
+    .standalone-export-panel h2 { margin: 0 0 .4rem; font-size: 1.12rem; }
+    .standalone-export-copy { color: var(--muted); margin: 0 0 .75rem; line-height: 1.45; }
+    .standalone-export-warning {
+      padding: .75rem; margin: .65rem 0; border: 1px solid rgba(245,158,11,.55);
+      border-radius: 12px; background: rgba(120,53,15,.28); line-height: 1.45;
+    }
+    .standalone-export-warning strong { color: #fbbf24; }
+    .standalone-export-key-choices { display: grid; gap: .3rem; margin: .65rem 0; }
+    .standalone-export-key-row {
+      display: grid; grid-template-columns: auto minmax(0,1fr) minmax(130px, .8fr);
+      gap: .55rem; align-items: center; padding: .55rem 0;
+      border-top: 1px solid var(--border);
+    }
+    .standalone-export-key-row select {
+      min-width: 0; padding: .5rem; border-radius: 9px;
+      color: var(--text); background: var(--bg); border: 1px solid var(--border);
+    }
+    .standalone-export-ack { display: flex; gap: .55rem; align-items: flex-start; margin: .75rem 0; color: var(--muted); }
+    .standalone-export-ack input { margin-top: .2rem; accent-color: var(--accent); }
+    .standalone-export-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+    .standalone-export-actions .export-cancel { margin-right: auto; }
+    .standalone-export-actions .export-embed { background: #991b1b; border: 1px solid #b91c1c; }
+    @media (max-width: 480px) {
+      .standalone-export-panel { padding: .9rem; max-height: 92vh; }
+      .standalone-export-key-row { grid-template-columns: auto minmax(0,1fr); }
+      .standalone-export-key-row select { grid-column: 2; width: 100%; }
+      .standalone-export-actions { display: grid; grid-template-columns: 1fr; }
+      .standalone-export-actions .export-cancel { margin-right: 0; }
+    }
     .preview-title {
       flex: 1;
       min-width: 120px;
@@ -1424,6 +1465,7 @@ termux-reload-settings</div>
           <button class="icon-btn" id="btnReload" type="button" title="Reload app" aria-label="Reload app" data-i18n-title="preview.reloadTitle" data-i18n-aria="preview.reloadTitle">🔄</button>
           <button class="icon-btn hidden" id="btnDiscardReforge" type="button" title="Discard reforge" aria-label="Discard reforge" data-i18n-title="preview.discardTitle" data-i18n-aria="preview.discardTitle">↩️</button>
           <button class="icon-btn" id="btnSave" type="button" title="Save to library" aria-label="Save to library" data-i18n-title="preview.saveTitle" data-i18n-aria="preview.saveTitle">💾</button>
+          <button class="icon-btn" id="btnExport" type="button" title="Export standalone HTML" aria-label="Export standalone HTML" data-i18n-title="preview.exportStandalone" data-i18n-aria="preview.exportStandalone">⬇️</button>
         </div>
         <div class="preview-frame-wrap">
           <div class="preview-empty" id="previewEmpty" data-i18n-html="preview.empty">Describe an app in Chat and tap <b>Forge it</b>.</div>
@@ -2215,6 +2257,7 @@ termux-reload-settings</div>
  "pin.unsupported": "This launcher does not support pinned shortcuts",
  "preview.discardTitle": "Discard reforge",
  "preview.empty": "Describe an app in Chat and tap <b>Forge it</b>.",
+ "preview.exportStandalone": "Export standalone HTML",
  "preview.liveReady": "Live preview ready",
  "preview.none": "No app yet",
  "preview.reloadTitle": "Reload app",
@@ -2852,6 +2895,7 @@ termux-reload-settings</div>
  "pin.unsupported": "Este launcher no soporta accesos directos anclados",
  "preview.discardTitle": "Descartar reforjado",
  "preview.empty": "Describe una app en Chat y toca <b>Crear</b>.",
+ "preview.exportStandalone": "Exportar HTML independiente",
  "preview.liveReady": "Vista previa en vivo lista",
  "preview.none": "Sin app aún",
  "preview.reloadTitle": "Recargar app",
@@ -3558,6 +3602,7 @@ termux-reload-settings</div>
  "pin.unsupported": "Ce lanceur ne prend pas en charge les raccourcis épinglés",
  "preview.discardTitle": "Annuler le reforgeage",
  "preview.empty": "Décrivez une app dans Chat et touchez <b>Créer</b>.",
+ "preview.exportStandalone": "Exporter un HTML autonome",
  "preview.liveReady": "Aperçu en direct prêt",
  "preview.none": "Pas encore d’app",
  "preview.reloadTitle": "Recharger l’app",
@@ -4264,6 +4309,7 @@ termux-reload-settings</div>
  "pin.unsupported": "Este launcher não suporta atalhos fixados",
  "preview.discardTitle": "Descartar reforjado",
  "preview.empty": "Descreva um app no Chat e toque em <b>Criar</b>.",
+ "preview.exportStandalone": "Exportar HTML independente",
  "preview.liveReady": "Prévia ao vivo pronta",
  "preview.none": "Sem app ainda",
  "preview.reloadTitle": "Recarregar app",
@@ -4970,6 +5016,7 @@ termux-reload-settings</div>
  "pin.unsupported": "このランチャーはピン留めショートカットに対応していません",
  "preview.discardTitle": "リフォージを破棄",
  "preview.empty": "チャットでアプリを表現して <b>作る</b> をタップ。",
+ "preview.exportStandalone": "スタンドアロンHTMLをエクスポート",
  "preview.liveReady": "ライブプレビュー準備完了",
  "preview.none": "まだアプリがありません",
  "preview.reloadTitle": "アプリを再読み込み",
@@ -5676,6 +5723,7 @@ termux-reload-settings</div>
  "pin.unsupported": "이 런처는 고정 바로가기를 지원하지 않습니다",
  "preview.discardTitle": "다시 만들기 폐기",
  "preview.empty": "채팅에서 앱을 설명하고 <b>만들기</b>를 누르세요.",
+ "preview.exportStandalone": "독립 실행형 HTML 내보내기",
  "preview.liveReady": "실시간 미리보기 준비됨",
  "preview.none": "아직 앱 없음",
  "preview.reloadTitle": "앱 다시 불러오기",
@@ -24800,6 +24848,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
                 { id: 'move', label: t('lib.move') },
                 { id: 'pin', label: t('lib.pin') },
                 { id: 'share', label: t('lib.share'), hint: aaReadyTitle(fresh) },
+                { id: 'export', label: t('lib.export'), hint: 'Standalone browser HTML' },
                 { id: 'reforge', label: t('lib.reforge') },
                 { id: 'aareforge', label: 'AAReforge — generate car manifest' },
                 { id: 'delete', label: t('lib.delete'), danger: true },
@@ -24811,6 +24860,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
             else if (choice === 'move') moveItemFlow({ kind: 'app', app: fresh });
             else if (choice === 'pin') pinAppToLauncher(fresh);
             else if (choice === 'share') shareAppToAaforge(fresh);
+            else if (choice === 'export') exportApp(fresh, { source: 'library' });
             else if (choice === 'reforge') reforgeLibraryApp(fresh);
             else if (choice === 'aareforge') aaReforgeLibraryApp(fresh);
             else if (choice === 'delete') {
@@ -25385,15 +25435,361 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       }
     }
 
-    /** Export mini-app as a single .html file (share sheet on Android, download on web). */
+    /** Minimal browser-side ForgeHost runtime included only in standalone exports. */
+    function standaloneRuntimeBootstrap(config) {
+      'use strict';
+      config = config && typeof config === 'object' ? config : {};
+      var appId = String(config.appId || 'standalone-app');
+      var providers = Array.isArray(config.providers) ? config.providers : [];
+      var appTitle = String(config.title || 'Standalone mini-app');
+      var sessionKeys = Object.create(null);
+      providers.forEach(function(p){ if (p && p.id && p.key) sessionKeys[p.id] = String(p.key); });
+      var embeddedProviderId = (providers.find(function(p){return p && p.id && sessionKeys[p.id];}) || {}).id || '';
+      var selectedId = String(config.selectedProvider || embeddedProviderId || (providers[0] && providers[0].id) || '');
+      function hasStandaloneCredential(id) { var p=providers.find(function(item){return item && item.id===id;}); return !!(sessionKeys[id] || (p && p.allowEmptyKey)); }
+      if (embeddedProviderId && !hasStandaloneCredential(selectedId)) selectedId = embeddedProviderId;
+      var prefix = 'forge_standalone_' + appId.replace(/[^a-z0-9_.-]/gi, '_') + '_';
+      function storageGet(key, fallback) {
+        try { var raw = localStorage.getItem(prefix + key); return raw == null ? fallback : JSON.parse(raw); }
+        catch (_) { return fallback; }
+      }
+      function storageSet(key, value) {
+        try { localStorage.setItem(prefix + key, JSON.stringify(value)); return { ok: true }; }
+        catch (e) { throw new Error('Browser storage unavailable: ' + (e && e.message || e)); }
+      }
+      function findProvider(id) {
+        for (var i = 0; i < providers.length; i++) if (providers[i] && providers[i].id === id) return providers[i];
+        return null;
+      }
+      var savedProviderId = storageGet('provider', '');
+      if (findProvider(savedProviderId) && (hasStandaloneCredential(savedProviderId) || !embeddedProviderId)) selectedId = String(savedProviderId);
+      else if (embeddedProviderId) selectedId = embeddedProviderId;
+      function activeProvider(opts) {
+        var id = opts && (opts.providerId || opts.provider) || selectedId || storageGet('provider', '');
+        return findProvider(String(id)) || providers[0] || null;
+      }
+      function unsupported(name) {
+        return Promise.reject(new Error('ForgeHost.' + name + ' requires Forge or a browser API; it is not available in this standalone export.'));
+      }
+      function getKey(p) {
+        if (!p) throw new Error('No standalone AI provider was exported.');
+        if (sessionKeys[p.id]) return sessionKeys[p.id];
+        if (p.allowEmptyKey) return '';
+        var key = '';
+        try { key = window.prompt('Enter an API key for ' + (p.label || p.id) + '. It will be kept in memory for this tab only:') || ''; } catch (_) {}
+        key = String(key).trim();
+        if (!key) throw new Error('No API key configured for ' + (p.label || p.id) + '. Re-export with a selected key or enter one when prompted.');
+        sessionKeys[p.id] = key;
+        return key;
+      }
+      function toMessages(opts) {
+        if (Array.isArray(opts.messages)) return opts.messages;
+        if (Array.isArray(opts.prompt)) return opts.prompt;
+        return [{ role: 'user', content: String(opts.prompt == null ? '' : opts.prompt) }];
+      }
+      function messageText(content) {
+        if (typeof content === 'string') return content;
+        if (!Array.isArray(content)) return String(content == null ? '' : content);
+        return content.map(function(part){ return part && (part.text || part.content) || ''; }).join('\n');
+      }
+      function normalizeBase(base) { return String(base || '').replace(/\/+$/, ''); }
+      async function chat(input) {
+        var opts = typeof input === 'string' ? { prompt: input } : (input || {});
+        var p = activeProvider(opts);
+        if (!p) throw new Error('No provider is available in this standalone export.');
+        if (opts.attachments && opts.attachments.length) throw new Error('Standalone runtime does not normalize Forge file attachments yet. Pass browser-supported image_url content parts where supported.');
+        var key = getKey(p);
+        var messages = toMessages(opts);
+        var model = String(opts.model || p.model || '');
+        if (p.kind === 'gemini') {
+          var url = normalizeBase(p.base) + '/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
+          var contents = messages.filter(function(m){ return m && m.role !== 'system'; }).map(function(m){
+            var role = m.role === 'assistant' || m.role === 'model' ? 'model' : 'user';
+            return { role: role, parts: [{ text: messageText(m.content) }] };
+          });
+          var system = messages.filter(function(m){ return m && m.role === 'system'; }).map(function(m){ return messageText(m.content); }).join('\n');
+          var body = { contents: contents, generationConfig: {} };
+          if (system) body.systemInstruction = { parts: [{ text: system }] };
+          if (opts.temperature != null) body.generationConfig.temperature = opts.temperature;
+          var gr;
+          try { gr = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+          catch (e) { throw new Error('Browser could not reach ' + (p.label || p.id) + '. This is usually a provider CORS/network restriction (common when opened as file://). Try serving the HTML from localhost/HTTPS and use a provider that allows browser-origin requests. Details: ' + (e && e.message || e)); }
+          var gj = await gr.json().catch(function(){ return {}; });
+          if (!gr.ok) throw new Error(gj.error && gj.error.message || ('Gemini HTTP ' + gr.status));
+          var gc = gj.candidates && gj.candidates[0] && gj.candidates[0].content && gj.candidates[0].content.parts || [];
+          var gt = gc.map(function(x){ return x.text || ''; }).join('');
+          return { ok: true, content: gt, text: gt, provider: p.label || p.id, providerId: p.id, model: model, raw: gj };
+        }
+        var base = normalizeBase(p.base);
+        if (!p.azure && !base) throw new Error('Provider ' + (p.label || p.id) + ' has no HTTP API base URL.');
+        var headers = { 'Content-Type': 'application/json' };
+        var auth = p.azure ? (p.azureAuth || p.auth) : p.auth;
+        if (key) {
+          if (auth === 'api-key') headers['api-key'] = key;
+          else if (auth === 'x-api-key') { headers['x-api-key'] = key; headers['anthropic-version'] = '2023-06-01'; }
+          else if (auth !== 'none') headers.Authorization = 'Bearer ' + key;
+        }
+        var endpoint;
+        if (p.azure) {
+          var resource = String(p.azureResource || '').trim();
+          if (!/^[A-Za-z0-9-]+$/.test(resource)) throw new Error('Azure resource name is missing or invalid in the standalone export.');
+          endpoint = 'https://' + resource + '.openai.azure.com/openai/deployments/' + encodeURIComponent(p.deployment || model) + '/chat/completions?api-version=' + encodeURIComponent(p.apiVersion || '2024-06-01');
+        } else endpoint = /\/chat\/completions\/?$/i.test(base) ? base.replace(/\/$/, '') : base + '/chat/completions';
+        var request = { model: model, messages: messages, temperature: opts.temperature == null ? 0.4 : opts.temperature };
+        if (opts.max_tokens != null) request.max_tokens = opts.max_tokens;
+        if (opts.response_format) request.response_format = opts.response_format;
+        var response;
+        try { response = await fetch(endpoint, { method: 'POST', headers: headers, body: JSON.stringify(request) }); }
+        catch (e) { throw new Error('Browser could not reach ' + (p.label || p.id) + '. This is usually a provider CORS/network restriction (common when opened as file://). Try serving the HTML from localhost/HTTPS and use a provider that allows browser-origin requests. Details: ' + (e && e.message || e)); }
+        var result = await response.json().catch(function(){ return {}; });
+        if (!response.ok) throw new Error(result.error && (result.error.message || result.error) || ('Provider HTTP ' + response.status));
+        var choice = result.choices && result.choices[0];
+        var content = choice && choice.message && choice.message.content;
+        if (Array.isArray(content)) content = content.map(function(x){ return x.text || ''; }).join('');
+        content = String(content == null ? '' : content);
+        return { ok: true, content: content, text: content, provider: p.label || p.id, providerId: p.id, model: result.model || model, usage: result.usage || null, raw: result };
+      }
+      async function generateImage(args) {
+        args = args || {};
+        var prompt = String(args.prompt || '').trim();
+        if (!prompt) throw new Error('image_generate: prompt is required.');
+        var requestedProvider = String(args.providerId || args.provider || selectedId || '');
+        var primary = findProvider(requestedProvider);
+        var candidates = [];
+        function addImageCandidate(p, promptForKey) {
+          if (!p || p.kind === 'gemini' || p.azure || !p.base) return;
+          var key = sessionKeys[p.id] || p.key || '';
+          if (!key && promptForKey) key = getKey(p);
+          if (!key) return;
+          var base = normalizeBase(p.base);
+          var endpoint = /\/images\/generations\/?$/i.test(base) ? base : base + '/images/generations';
+          if (!candidates.some(function(c){ return c.endpoint===endpoint && c.key===key; })) candidates.push({endpoint:endpoint,key:String(key),providerId:p.id,label:p.label||p.id});
+        }
+        addImageCandidate(primary, false);
+        var xai = findProvider('xai');
+        if (xai && xai !== primary) addImageCandidate(xai, false);
+        providers.forEach(function(p){ if (p !== primary && p !== xai && (p.key || sessionKeys[p.id])) addImageCandidate(p, false); });
+        if (!candidates.length) addImageCandidate(primary, true);
+        if (!candidates.length) throw new Error('No exported/browser-compatible provider key is available for image generation. Select a compatible provider key during export or enter one for the selected provider.');
+        if (typeof window.confirm === 'function' && !window.confirm('Generate an image using the selected provider? This sends the prompt to that provider and may incur charges.')) return {ok:false,cancelled:true,images:[],count:0};
+        var models = Array.isArray(args.models) ? args.models.map(function(x){return String(x||'').trim();}).filter(Boolean).slice(0,8) : [];
+        if (!models.length) models = [String(args.model || 'grok-imagine-image').trim()];
+        var n = Math.max(1,Math.min(4,parseInt(args.n,10)||1));
+        var imageUrls = (Array.isArray(args.images)?args.images:[]).map(function(image){
+          var s=String(image||'').trim();
+          if(!s)return '';
+          if(/^data:/i.test(s)||/^https?:\/\//i.test(s))return s;
+          return 'data:image/png;base64,'+s.replace(/^data:image\/[a-z]+;base64,/i,'');
+        }).filter(Boolean);
+        var errors=[], networkFailure=false;
+        for(var mi=0;mi<models.length;mi++){
+          for(var ci=0;ci<candidates.length;ci++){
+            var candidate=candidates[ci];
+            var body={model:models[mi],prompt:prompt,n:n};
+            if(imageUrls.length)body.image_url=imageUrls.map(function(url){return {url:url};});
+            try{
+              var response;
+              try{response=await fetch(candidate.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+candidate.key},body:JSON.stringify(body)});}
+              catch(fetchError){networkFailure=true;throw fetchError;}
+              var result=await response.json().catch(function(){return {};});
+              if(!response.ok)throw new Error('image API '+response.status+': '+(result.error&&(result.error.message||result.error)||JSON.stringify(result)));
+              var raw=Array.isArray(result.data)?result.data:[];
+              var images=raw.map(function(image){return {url:image.url||image.image_url||(image.b64_json?'data:image/png;base64,'+image.b64_json:''),revised_prompt:image.revised_prompt||''};}).filter(function(image){return image.url;});
+              if(!images.length)throw new Error('provider returned no usable images');
+              return {ok:true,images:images,count:images.length,model:models[mi],backend:candidate.providerId};
+            }catch(e){errors.push(models[mi]+' ['+candidate.providerId+']: '+String(e&&e.message||e).slice(0,240));}
+          }
+        }
+        var advice=networkFailure?' Browser CORS/network rules blocked the request; try a local HTTPS server and a provider that permits browser-origin requests.':' Check the selected provider, model, and account access.';
+        throw new Error('image_generate failed: '+errors.join(' | ')+advice);
+      }
+      var tools = {
+        run: async function(nameOrOpts, args){
+          var name=nameOrOpts, callArgs=args||{};
+          if(nameOrOpts&&typeof nameOrOpts==='object'){name=nameOrOpts.name||nameOrOpts.tool||nameOrOpts.id;callArgs=nameOrOpts.arguments!=null?nameOrOpts.arguments:(nameOrOpts.args||nameOrOpts.params||{});}
+          if(typeof callArgs==='string'){try{callArgs=JSON.parse(callArgs||'{}');}catch(_){callArgs={};}}
+          if(String(name||'')==='image_generate')return generateImage(callArgs);
+          throw new Error('Standalone browser runtime supports only ForgeHost.tools.run("image_generate", args); tool "'+String(name||'')+'" requires Forge.');
+        },
+        execute: function(nameOrOpts,args){return tools.run(nameOrOpts,args);},
+        list: async function(){return {ok:true,count:1,tools:[{type:'function',function:{name:'image_generate',description:'Generate an image through a selected browser-accessible provider; asks for confirmation before sending.',parameters:{type:'object',properties:{prompt:{type:'string'},images:{type:'array',items:{type:'string'}},n:{type:'integer',minimum:1,maximum:4},model:{type:'string'}},required:['prompt']}}}],catalog:[{name:'image_generate',group:'media',risk:'confirm',permissions:[],description:'Generate an image through a selected browser-accessible provider; asks for confirmation before sending.'}],bridgeMethods:[],riskMax:'safe'};},
+        catalog: async function(){var r=await tools.list();return {ok:true,catalog:r.catalog,bridgeMethods:[]};},
+        registry: async function(){return tools.list();},
+        groups: async function(){return ['media'];},
+      };
+      async function pickFiles(opts) {
+        opts = opts || {};
+        return new Promise(function(resolve, reject){
+          var input = document.createElement('input');
+          input.type = 'file'; input.accept = opts.accept || '*/*'; input.multiple = !!opts.multiple;
+          input.onchange = function(){
+            var files = Array.prototype.slice.call(input.files || []);
+            Promise.all(files.map(function(file){ return new Promise(function(done, fail){
+              var reader = new FileReader();
+              reader.onload = function(){ var dataUrl = String(reader.result || ''); done({ name: file.name, mime: file.type || 'application/octet-stream', type: file.type || 'application/octet-stream', size: file.size, dataUrl: dataUrl, base64: dataUrl.split(',')[1] || '' }); };
+              reader.onerror = function(){ fail(reader.error || new Error('Could not read selected file')); };
+              reader.readAsDataURL(file);
+            }); })).then(function(list){ resolve(opts.multiple ? list : (list[0] || null)); }, reject);
+          };
+          input.oncancel = function(){ resolve(opts.multiple ? [] : null); };
+          input.click();
+        });
+      }
+      var state = {
+        get: async function(key){ return storageGet('state_' + key, null); },
+        set: async function(key, value){ if (key && typeof key === 'object') { Object.keys(key).forEach(function(k){ storageSet('state_' + k, key[k]); }); } else storageSet('state_' + key, value); return { ok: true }; },
+        remove: async function(key){ localStorage.removeItem(prefix + 'state_' + key); return { ok: true }; },
+        clear: async function(){ Object.keys(localStorage).filter(function(k){ return k.indexOf(prefix + 'state_') === 0; }).forEach(function(k){ localStorage.removeItem(k); }); return { ok: true }; },
+        getAll: async function(){ var out = {}; Object.keys(localStorage).filter(function(k){ return k.indexOf(prefix + 'state_') === 0; }).forEach(function(k){ out[k.slice((prefix + 'state_').length)] = storageGet(k.slice(prefix.length), null); }); return out; },
+        save: async function(){ return { ok: true }; }, restore: async function(){ return { ok: true }; },
+      };
+      var ai = {
+        isAvailable: async function(){ return { available: providers.some(function(p){return !!(p.base&&p.model);}), providers: providers.map(function(p){ return { id:p.id, label:p.label, model:p.model, available:!!(p.base&&p.model), needsKey:!(p.key||sessionKeys[p.id]||p.allowEmptyKey) }; }), providerId: selectedId }; },
+        listProviders: async function(){ return { providers: providers.map(function(p){ return { id:p.id, label:p.label, model:p.model, available:!!(p.base&&p.model), needsKey:!(p.key||sessionKeys[p.id]||p.allowEmptyKey), isSelected:p.id===selectedId }; }), selectedId:selectedId, defaultId:selectedId }; },
+        menu: async function(){ return this.listProviders(); },
+        getProvider: async function(){ return { providerId:selectedId, id:selectedId }; },
+        setProvider: async function(id){ if (!findProvider(id)) throw new Error('Provider was not included in this standalone export: ' + id); selectedId=String(id); storageSet('provider', selectedId); return { ok:true, providerId:selectedId }; },
+        chat: chat,
+        chatStream: async function(opts){ opts=opts||{}; var result=await chat(opts); if (typeof opts.onToken==='function') opts.onToken(result.content,{done:true}); if (typeof opts.onDelta==='function') opts.onDelta(result.content,{done:true}); return result; },
+        configure: async function(opts){ opts=opts||{}; var id=String(opts.providerId||selectedId); if (!findProvider(id)) throw new Error('Unknown exported provider: '+id); sessionKeys[id]=String(opts.apiKey||opts.key||''); if(opts.model){findProvider(id).model=String(opts.model);} return {ok:true,providerId:id}; },
+        agent: function(){ return unsupported('ai.agent (host-managed tools are Forge-only)'); },
+        runTask: function(){ return unsupported('ai.runTask (host-managed agent loop is Forge-only)'); },
+        cancel: async function(){ return {ok:true,cancelled:false}; },
+        tts: function(){ return unsupported('ai.tts'); },
+        transcribe: function(){ return unsupported('ai.transcribe'); },
+        liveTranslate: new Proxy({}, { get:function(_,method){ return function(){return unsupported('ai.liveTranslate.'+String(method));}; } }),
+      };
+      var host = {
+        getAppInfo: async function(){ return { id: appId, title: appTitle, standalone:true }; },
+        getCapabilities: async function(){ return { native:false, browser:true, ai:providers.length>0, files:true, share:!!navigator.share, storage:true, camera:false, mic:false, location:false, smsCompose:false, contacts:false, termux:false, jobs:false, notify:false }; },
+        ai: ai,
+        tools: tools,
+        state: state,
+        storage: { get:async function(k){return storageGet('storage_'+k,null);}, set:async function(k,v){storageSet('storage_'+k,v);return {ok:true};}, remove:async function(k){localStorage.removeItem(prefix+'storage_'+k);return {ok:true};}, list:async function(){return Object.keys(localStorage).filter(function(k){return k.indexOf(prefix+'storage_')===0;}).map(function(k){return k.slice((prefix+'storage_').length);});}, clear:async function(){Object.keys(localStorage).filter(function(k){return k.indexOf(prefix+'storage_')===0;}).forEach(function(k){localStorage.removeItem(k);});return {ok:true};} },
+        files: { isAvailable:async function(){return {available:true};}, pick:pickFiles },
+        share: async function(opts){opts=opts||{}; if(navigator.share){await navigator.share({title:opts.title||appTitle,text:opts.text||'',url:opts.url});return {ok:true};} if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(opts.text||opts.url||'');return {ok:true,shared:'clipboard'};} throw new Error('Browser sharing is unavailable.'); },
+        http: { get:async function(url,opts){var r=await fetch(url,opts||{});return {ok:r.ok,status:r.status,text:await r.text()};}, post:async function(url,body,headers){var r=await fetch(url,{method:'POST',headers:headers||{'Content-Type':'application/json'},body:typeof body==='string'?body:JSON.stringify(body)});return {ok:r.ok,status:r.status,text:await r.text()};} },
+        toast: async function(message){console.info(message);return {ok:true};},
+        permissions: { get:async function(){return {};}, request:async function(){return {granted:false,unsupported:true};}, requestPack:async function(){return {granted:false,unsupported:true};} },
+        on: function(){return function(){};}, off: function(){},
+      };
+      ['camera','mic','contacts','location','sms','phone','apps','termux','radio','notifications','notify','jobs','device','clipboard','qr','tts','audio','fs','keepAwake','secrets'].forEach(function(name){
+        host[name] = new Proxy({}, { get:function(_,method){ return function(){return unsupported(name+'.'+String(method));}; } });
+      });
+      window.ForgeHost = window.ForgeHost || host;
+      window.forge = window.forge || window.ForgeHost;
+      if (config.keysEmbedded) {
+        function showKeyNotice(){
+          if (!document.body || document.getElementById('forge-standalone-key-notice')) return;
+          var bar=document.createElement('div'); bar.id='forge-standalone-key-notice';
+          bar.textContent='Standalone export contains embedded API credentials. Anyone with this HTML can extract and use them. Tap to dismiss.';
+          bar.style.cssText='position:fixed;z-index:2147483647;top:0;left:0;right:0;padding:10px 14px;background:#7f1d1d;color:white;font:14px/1.4 system-ui;text-align:center;box-shadow:0 2px 12px #0008';
+          bar.onclick=function(){bar.remove();}; document.body.appendChild(bar);
+        }
+        if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',showKeyNotice,{once:true});else showKeyNotice();
+      }
+    }
+
+    function standaloneProviderData() {
+      const map = getProviderMap();
+      const profiles = getProfiles();
+      const vault = getKnownKeys();
+      const selected = [];
+      const runtimeProviders = [];
+      for (const id of Object.keys(map)) {
+        const p = map[id];
+        const profile = profiles[id] || {};
+        const current = id === currentProviderId();
+        const azureResource = String((current ? el.azureResource?.value : '') || profile.azureResource || '').trim();
+        let base = String((current ? el.apiBase?.value : '') || profile.base || p.base || '').trim();
+        if (p.azure) base = azureResource ? 'https://' + azureResource + '.openai.azure.com' : '';
+        try { const u = new URL(base); if (!/^https?:$/.test(u.protocol)) base = ''; else { u.username=''; u.password=''; u.search=''; u.hash=''; base=u.href.replace(/\/$/, ''); } } catch (_) { base=''; }
+        const deployment = String((current ? el.azureDeployment?.value : '') || profile.azureDeployment || '').trim();
+        const model = String((current ? el.model?.value : '') || (p.azure ? deployment : '') || profile.model || p.defaultModel || '').trim();
+        const auth = p.azure ? String((current ? el.azureAuth?.value : '') || profile.azureAuth || p.auth || 'api-key') : (p.auth||'bearer');
+        const runtime = { id:id, label:String(p.label||id), base:base, model:model, auth:auth, kind:p.gemini?'gemini':'openai', azure:!!p.azure, azureResource:azureResource, deployment:deployment, apiVersion:(current ? el.azureApiVersion?.value : '') || profile.azureApiVersion || '2024-06-01', allowEmptyKey:!!profile.allowEmptyKey || /(?:127\.0\.0\.1|localhost)/i.test(base), key:'' };
+        runtimeProviders.push(runtime);
+        const candidates = [];
+        function addKey(key, label) { key=String(key||'').trim(); if(key && !candidates.some(x=>x.key===key)) candidates.push({key:key,label:label||maskKey(key)}); }
+        addKey(profile.key, 'Saved profile · '+maskKey(profile.key));
+        if (id === currentProviderId()) addKey(el.apiKey?.value, 'Current unsaved key · '+maskKey(el.apiKey?.value));
+        vault.filter(x=>Array.isArray(x.usedBy)&&x.usedBy.includes(id)).forEach((x,i)=>addKey(x.key, 'Saved key '+(i+1)+' · '+maskKey(x.key)));
+        if (candidates.length) selected.push({id:id,label:runtime.label,model:model,candidates:candidates});
+      }
+      return { providers:runtimeProviders, choices:selected, selectedProvider:currentProviderId() };
+    }
+
+    function buildStandaloneRuntimeSource(app, providerData, selectedKeys) {
+      const selected = new Map((selectedKeys||[]).map(x=>[x.id,x.key]));
+      const providers = providerData.providers.map(p=>Object.assign({},p,{key:selected.get(p.id)||''}));
+      let selectedProvider = providerData.selectedProvider;
+      const configured = providers.find(p=>p.id===selectedProvider);
+      if (selected.size && !selected.has(selectedProvider) && !(configured && configured.allowEmptyKey)) selectedProvider = selectedKeys[0].id;
+      const config = { appId:String(app.id||'standalone'), title:String(app.title||'Standalone mini-app'), providers:providers, selectedProvider:selectedProvider, keysEmbedded:selected.size>0 };
+      const safeConfig = JSON.stringify(config).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
+      return '('+standaloneRuntimeBootstrap.toString()+')('+safeConfig+');';
+    }
+
+    function injectStandaloneRuntime(app, source) {
+      const html = String(app.html||'');
+      const script = '<scr'+'ipt>'+source+'</scr'+'ipt>';
+      if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, function(m){return m+script;});
+      if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i,function(m){return m+'<head>'+script+'</head>';});
+      return '<!doctype html><html><head><meta charset="utf-8">'+script+'</head><body>'+html+'</body></html>';
+    }
+
+    function chooseStandaloneExport(app) {
+      const data = standaloneProviderData();
+      return new Promise(resolve=>{
+        const overlay=document.createElement('div');
+        overlay.className='standalone-export-overlay';
+        const panel=document.createElement('section');
+        panel.className='standalone-export-panel';
+        panel.setAttribute('role','dialog'); panel.setAttribute('aria-modal','true'); panel.setAttribute('aria-labelledby','standalone-export-title');
+        panel.innerHTML='<h2 id="standalone-export-title">Export standalone HTML</h2><p class="standalone-export-copy">Create one HTML file for a regular browser. Forge-only device APIs and host-managed agents are unavailable in standalone mode; unsupported calls will return an explanatory error.</p><div class="standalone-export-warning"><strong>No Forge-saved LLM keys are included by default.</strong> This does not remove secrets already hard-coded in the mini-app. If you choose keys below, they will be readable in the HTML source and browser memory. Anyone receiving the file can copy/use them and may incur provider charges. Do not publish or send a key-embedded export to an untrusted person.</div><div id="standalone-key-choices" class="standalone-export-key-choices"></div><label class="standalone-export-ack"><input id="standalone-ack" type="checkbox"><span>I understand embedded keys are recoverable by anyone with the exported HTML and accept the associated account/cost risk.</span></label><div class="standalone-export-actions"><button class="btn secondary export-cancel" data-action="cancel">Cancel</button><button class="btn" data-action="plain">Export standalone · no keys</button><button class="btn danger export-embed" data-action="embed">Embed selected keys &amp; export</button></div></section>';
+        overlay.appendChild(panel); document.body.appendChild(overlay);
+        const choices=panel.querySelector('#standalone-key-choices');
+        if (!data.choices.length) choices.textContent='No saved provider keys are available to embed. Standalone AI can still prompt the recipient for their own key.';
+        else {
+          const title=document.createElement('p'); title.textContent='Select provider keys to include (none selected by default):'; choices.appendChild(title);
+          data.choices.forEach(function(entry){
+            const row=document.createElement('label'); row.className='standalone-export-key-row';
+            const check=document.createElement('input'); check.type='checkbox'; check.dataset.provider=entry.id;
+            const name=document.createElement('span'); name.textContent=entry.label+' · '+entry.model;
+            const select=document.createElement('select'); select.dataset.provider=entry.id;
+            entry.candidates.forEach(function(c,i){const o=document.createElement('option');o.value=String(i);o.textContent=c.label;select.appendChild(o);});
+            row.appendChild(check);row.appendChild(name);row.appendChild(select);choices.appendChild(row);
+          });
+        }
+        function onDialogKey(e){if(e.key==='Escape'){e.preventDefault();close(null);}}
+        function close(value){document.removeEventListener('keydown',onDialogKey);overlay.remove();resolve(value);}
+        document.addEventListener('keydown',onDialogKey);
+        panel.querySelector('[data-action="cancel"]').focus();
+        panel.querySelector('[data-action="cancel"]').onclick=()=>close(null);
+        panel.querySelector('[data-action="plain"]').onclick=()=>close({mode:'standalone',keys:[]});
+        panel.querySelector('[data-action="embed"]').onclick=()=>{
+          if(!panel.querySelector('#standalone-ack').checked){window.alert('Please acknowledge the API-key exposure warning before embedding keys.');return;}
+          const keys=[];
+          panel.querySelectorAll('input[data-provider]').forEach(function(c){if(c.checked){const id=c.dataset.provider;const item=data.choices.find(x=>x.id===id);const sel=Array.from(panel.querySelectorAll('select[data-provider]')).find(x=>x.dataset.provider===id);const candidate=item&&sel&&item.candidates[Number(sel.value)];if(candidate)keys.push({id:id,key:candidate.key});}});
+          if(!keys.length){window.alert('Select at least one provider key to embed.');return;}
+          close({mode:'standalone',keys:keys});
+        };
+        overlay.addEventListener('click',e=>{if(e.target===overlay)close(null);});
+      });
+    }
+
+    /** Export mini-app as standalone browser HTML (no keys unless explicitly selected). */
     async function exportApp(app, opts = {}) {
       const source = opts.source || 'preview';
       if (!app?.html) {
         reportExport(t('export.nothing'), 'err', source);
         return;
       }
+      const choice = await chooseStandaloneExport(app);
+      if (!choice) return;
       const filename = safeExportName(app.title);
-      const html = String(app.html);
+      const providerData = standaloneProviderData();
+      const html = injectStandaloneRuntime(app, buildStandaloneRuntimeSource(app, providerData, choice.keys));
 
       if (Capacitor.isNativePlatform()) {
         try {
