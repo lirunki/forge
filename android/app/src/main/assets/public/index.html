@@ -26327,7 +26327,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     var tools = { preset: preset };
     if (preset === 'selected') tools.names = ['web_search', 'get_time'];
     agSet('', '');
-    agAppend('▶ runTask ' + thisId + '\nprofile=' + document.getElementById('agProfile').value + ' preset=' + preset + ' risk=' + document.getElementById('agRisk').value + '\n\n');
+    agAppend('▶ runTask ' + thisId + '\\nprofile=' + document.getElementById('agProfile').value + ' preset=' + preset + ' risk=' + document.getElementById('agRisk').value + '\\n\\n');
     agBusy(true);
     try {
       var r = await H().ai.runTask({
@@ -26342,13 +26342,13 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
         workspace: { id: agWorkspaceId() },
         attachments: agPicked ? [agPicked] : [],
         onToken: function(d){ agAppend(d); },
-        onRound: function(e){ agAppend('\n— round ' + e.round + ' —\n'); },
-        onToolCall: function(e){ agAppend('[tool call] ' + (e.name || '') + (e.nested ? ' (nested)' : '') + '\n'); return true; },
-        onToolResult: function(e){ agAppend('[tool result] ' + (e.name || '') + ': ' + agSafeJson(e.result, 160) + '\n'); },
+        onRound: function(e){ agAppend('\\n— round ' + e.round + ' —\\n'); },
+        onToolCall: function(e){ agAppend('[tool call] ' + (e.name || '') + (e.nested ? ' (nested)' : '') + '\\n'); return true; },
+        onToolResult: function(e){ agAppend('[tool result] ' + (e.name || '') + ': ' + agSafeJson(e.result, 160) + '\\n'); },
       });
       if (thisId !== agActiveId) return;
-      agAppend('\n\n— done — rounds=' + r.rounds + ' cancelled=' + !!r.cancelled + (r.workspaceId ? ' workspace=' + r.workspaceId + ' artifacts=' + (r.artifactCount||0) : '') + '\n');
-      agAppend('\n' + (r.content || '(no text returned)'));
+      agAppend('\\n\\n— done — rounds=' + r.rounds + ' cancelled=' + !!r.cancelled + (r.workspaceId ? ' workspace=' + r.workspaceId + ' artifacts=' + (r.artifactCount||0) : '') + '\\n');
+      agAppend('\\n' + (r.content || '(no text returned)'));
       agOut.className = r.cancelled ? 'muted' : 'ok';
     } finally { if (thisId === agActiveId) agActiveId = ''; agBusy(false); }
   }); };
@@ -26358,7 +26358,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     agActiveId = 'ks-script-' + Date.now().toString(36);
     var thisId = agActiveId;
     agSet('', '');
-    agAppend('▶ task_run_script exerciser ' + thisId + '\n');
+    agAppend('▶ task_run_script exerciser ' + thisId + '\\n');
     agBusy(true);
     try {
       var r = await H().ai.runTask({
@@ -26371,18 +26371,18 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
         maxRounds: 6,
         workspace: { id: agWorkspaceId() },
         onToken: function(d){ agAppend(d); },
-        onRound: function(e){ agAppend('\n— round ' + e.round + ' —\n'); },
-        onToolCall: function(e){ agAppend('[tool call] ' + (e.name || '') + (e.nested ? ' (nested)' : '') + '\n'); return true; },
-        onToolResult: function(e){ agAppend('[tool result] ' + (e.name || '') + ': ' + agSafeJson(e.result, 160) + '\n'); },
+        onRound: function(e){ agAppend('\\n— round ' + e.round + ' —\\n'); },
+        onToolCall: function(e){ agAppend('[tool call] ' + (e.name || '') + (e.nested ? ' (nested)' : '') + '\\n'); return true; },
+        onToolResult: function(e){ agAppend('[tool result] ' + (e.name || '') + ': ' + agSafeJson(e.result, 160) + '\\n'); },
       });
       if (thisId !== agActiveId) return;
-      agAppend('\n\n— done — rounds=' + r.rounds + ' artifacts=' + (r.artifactCount||0) + '\n\n' + (r.content || '(no text)'));
+      agAppend('\\n\\n— done — rounds=' + r.rounds + ' artifacts=' + (r.artifactCount||0) + '\\n\\n' + (r.content || '(no text)'));
       agOut.className = 'ok';
     } finally { if (thisId === agActiveId) agActiveId = ''; agBusy(false); }
   }); };
 
   document.getElementById('agStop').onclick = function(){ safe(async function(){
-    if (!agActiveId) return; log('Cancelling ' + agActiveId, 'muted'); agAppend('\n[cancelling…]\n');
+    if (!agActiveId) return; log('Cancelling ' + agActiveId, 'muted'); agAppend('\\n[cancelling…]\\n');
     try { log(await H().ai.cancel(agActiveId), 'ok'); } catch(e){ log('cancel failed: ' + (e.message||e), 'err'); }
   }); };
 

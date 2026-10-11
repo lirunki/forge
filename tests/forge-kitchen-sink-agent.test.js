@@ -94,4 +94,15 @@ test('the kitchen sink script still parses as valid JS', () => {
   assert.doesNotThrow(() => new Function(m[1]), 'kitchen sink script must be syntactically valid');
 });
 
+test('evaluated kitchenSinkHtml() script parses (template-literal \\n must stay escaped)', () => {
+  // kitchenSinkHtml is itself a JS template literal. A raw \\n in its source becomes a
+  // real newline in the iframe script and breaks quoted strings — which is exactly
+  // how the Agent tab previously froze the whole sink (Host status only, dead clicks).
+  const fn = new Function(ks + '\nreturn kitchenSinkHtml();');
+  const out = fn();
+  const m = String(out).match(/<script>([\s\S]*?)<\/script>/);
+  assert.ok(m, 'evaluated HTML must contain a script block');
+  assert.doesNotThrow(() => new Function(m[1]), 'evaluated kitchen-sink script must be syntactically valid');
+});
+
 console.log('\n' + passed + ' tests passed.');
