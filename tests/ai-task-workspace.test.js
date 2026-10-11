@@ -130,7 +130,7 @@ test('advertises only scoped task workspace tools and wires them into host resul
   assert.match(agentSource, /agentCancelFlags\.delete\(agentCallId\)/);
   const names = TASK_WORKSPACE_TOOL_SCHEMAS.map(tool => tool.function.name).sort();
   assert.deepEqual(JSON.parse(JSON.stringify(names)), [
-    'task_workspace_delete', 'task_workspace_edit', 'task_workspace_list', 'task_workspace_read', 'task_workspace_write',
+    'task_run_script', 'task_workspace_delete', 'task_workspace_edit', 'task_workspace_list', 'task_workspace_read', 'task_workspace_write',
   ]);
   for (const name of names) assert.match(html, new RegExp(name));
   assert.match(html, /tools = tools\.concat\(TASK_WORKSPACE_TOOL_SCHEMAS\)/);

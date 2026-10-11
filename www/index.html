@@ -15814,6 +15814,7 @@ function setLibrary(list) {
       { type: 'function', function: { name: 'task_workspace_write', description: 'Write or replace a UTF-8 text file in this task-scoped virtual workspace. Paths must be relative.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' }, mime: { type: 'string' } }, required: ['path', 'content'] } } },
       { type: 'function', function: { name: 'task_workspace_edit', description: 'Replace text in an existing workspace file. Use read first; replaceAll is optional.', parameters: { type: 'object', properties: { path: { type: 'string' }, find: { type: 'string' }, replace: { type: 'string' }, replaceAll: { type: 'boolean' } }, required: ['path', 'find', 'replace'] } } },
       { type: 'function', function: { name: 'task_workspace_delete', description: 'Delete one file from this task-scoped virtual workspace.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } } },
+      { type: 'function', function: { name: 'task_run_script', description: 'Run a JS script that orchestrates task workspace tools and authorized host tools deterministically (no LLM inside the script). Use it to batch many tool calls in one turn — e.g. loop over search results, compute/validate workspace data, branch on a tool result — then forge.finish(result) with a compact JSON value. The script runs in a sandboxed Worker (no DOM/fetch/XHR/WebSocket) with the API: forge.tools.run(name, args) to call any task workspace tool (task_workspace_*) or authorized host tool (web_search, get_location, etc. — see forge.tools.list()), forge.tools.list(), forge.sleep(ms), forge.print(...), forge.finish(result) to end the script and return its value to you. Each forge.tools.run dispatches through the same host-enforced risk/permission/confirmation policy as a direct tool call; task workspace tools are safe. The script cannot call task_run_script (no nesting). Limits per script: wall-clock, tool-call count, concurrency, output size (see AI settings).', parameters: { type: 'object', properties: { code: { type: 'string', description: 'Plain async JS; top-level await allowed. Call forge.tools.run(name, args) for tool calls, then forge.finish(result) with a compact JSON-serializable value.' }, description: { type: 'string', description: 'One-line description of what the script does (for the log).' } }, required: ['code'] } } },
     ];
     const TASK_WORKSPACE_TOOL_NAMES = new Set(TASK_WORKSPACE_TOOL_SCHEMAS.map(t => t.function.name));
     function runTaskWorkspaceTool(appId, workspaceId, name, args) {
@@ -15826,6 +15827,66 @@ function setLibrary(list) {
         case 'task_workspace_delete': return taskWorkspaceManager.deleteFile(appId, workspaceId, args.path);
         default: return { ok: false, error: 'unknown task workspace tool' };
       }
+    }
+
+    // ——— task_run_script: sandboxed JS orchestrator for task agents ————————
+    // Mirrors the builder's run_program: a Web Worker runs user JS that calls
+    // forge.tools.run(name, args) to batch task-workspace tools and authorized
+    // host tools deterministically (no LLM in the middle). Host risk policy,
+    // confirmations, and native permissions stay authoritative for every nested
+    // host-tool call. The script cannot nest task_run_script.
+    async function runTaskScript(args, ctx) {
+      const code = String((args && args.code) || '');
+      const desc = String((args && args.description) || '');
+      if (!code) return { ok: false, error: 'task_run_script: code is required' };
+      if (code.length > BUILDER_JS_MAX_CODE_BYTES) return { ok: false, error: 'task_run_script: code too large (>' + BUILDER_JS_MAX_CODE_BYTES + ' bytes)' };
+      const appId = ctx.appId;
+      const workspaceId = ctx.workspaceId;
+      const policy = ctx.agentPolicy || null;
+      const riskMax = ctx.riskMax || 'safe';
+      const limits = getCodeModeLimits();
+      const onToolCall = typeof ctx.onToolCall === 'function' ? ctx.onToolCall : null;
+      const onPrint = typeof ctx.onPrint === 'function' ? ctx.onPrint : null;
+      const toolRunner = async (name, callArgs) => {
+        if (name === 'task_run_script') return { ok: false, error: 'task_run_script cannot be nested — call forge.tools.run with another tool' };
+        if (name === '__list__') {
+          const wsNames = TASK_WORKSPACE_TOOL_SCHEMAS.map(t => t.function.name).filter(n => n !== 'task_run_script');
+          const hostNames = policy ? [...policy.allowedToolNames].filter(n => !TASK_WORKSPACE_TOOL_NAMES.has(n)) : HOST_TOOL_REGISTRY.map(e => e.name);
+          return { tools: wsNames.concat(hostNames) };
+        }
+        const a = callArgs && typeof callArgs === 'object' ? callArgs : {};
+        if (TASK_WORKSPACE_TOOL_NAMES.has(name) && name !== 'task_run_script') {
+          try { return runTaskWorkspaceTool(appId, workspaceId, name, a); }
+          catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+        }
+        // Host registry tool — enforce the same policy + confirmation as a
+        // direct agent tool call. toolsRun re-checks the policy; agentConfirmTool
+        // supplies the host modal for confirm/danger tiers (safe returns true).
+        const entry = HOST_TOOL_REGISTRY.find(e => e.name === name);
+        if (!entry) return { ok: false, error: 'unknown tool: ' + name };
+        if (policy && !policy.allowedToolNames.has(name)) return { ok: false, error: 'Tool ' + name + ' was not enabled for this agent run' };
+        if (policy && !policy.allowedRiskSet.has(String(entry.risk || 'safe'))) return { ok: false, error: 'Tool ' + name + ' risk tier was not approved for this agent run' };
+        try {
+          const allowed = await agentConfirmTool(name, a, entry.risk || 'safe', { agentPolicy: policy });
+          if (!allowed) return { ok: false, error: 'Tool ' + name + ' denied by user' };
+        } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+        const runOptions = { name, args: a, riskMax };
+        if (policy) runOptions[AGENT_RUN_POLICY] = policy;
+        try { return await toolsRun(runOptions); }
+        catch (e) { return { ok: false, error: String((e && e.message) || e), tool: name }; }
+      };
+      const r = await runCodeModeProgram(code, {
+        signal: ctx.signal || null,
+        limits,
+        toolRunner,
+        onToolCall: onToolCall || undefined,
+        onPrint: onPrint || undefined,
+      });
+      if (!r.ok) return { ok: false, error: 'task_run_script failed: ' + String(r.error || 'unknown') };
+      let rStr; try { rStr = JSON.stringify(r.result); } catch (e) { return { ok: false, error: 'task_run_script result not JSON-serializable: ' + (e && e.message) }; }
+      const maxRes = 60000;
+      if (rStr.length > maxRes) return { ok: false, error: 'task_run_script result too large (' + rStr.length + ' chars > ' + maxRes + '); return a smaller value or write files to the workspace instead' };
+      return { ok: true, result: r.result, description: desc };
     }
 
     // ——— Agent risk sheet (2.6.51) ————————————————————————————
@@ -16818,8 +16879,21 @@ function setLibrary(list) {
                   }
                   let out;
                   try {
-                    if (isTaskWorkspaceTool) out = runTaskWorkspaceTool(taskWorkspaceAppId, taskWorkspaceId, tname, targs);
-                    else {
+                    if (isTaskWorkspaceTool) {
+                      if (tname === 'task_run_script') {
+                        out = await runTaskScript(targs, {
+                          appId: taskWorkspaceAppId,
+                          workspaceId: taskWorkspaceId,
+                          signal: agentAbortController ? agentAbortController.signal : null,
+                          agentPolicy: agentToolPolicy,
+                          riskMax,
+                          onToolCall: (n) => { try { agentEmit('toolCall', { round, name: String(n), nested: true }); } catch (_) {} },
+                          onPrint: (vals) => { try { agentEmit('scriptPrint', { round, values: (vals || []).map(v => String(v)).slice(0, 20) }); } catch (_) {} },
+                        });
+                      } else {
+                        out = runTaskWorkspaceTool(taskWorkspaceAppId, taskWorkspaceId, tname, targs);
+                      }
+                    } else {
                       const runOptions = { name: tname, args: targs, riskMax };
                       runOptions[AGENT_RUN_POLICY] = agentToolPolicy;
                       out = await toolsRun(runOptions);

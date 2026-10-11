@@ -155,8 +155,12 @@ const taskResult = await taskPromise; // ai.agent result fields + taskId
 // `auto` uses Forge's saved per-provider/model prompt profile (recommendation or
 // normal default if unset). Live tools remain the only source of tool schemas.
 // Bundled guidance v1 combines AGENT.md, profile markdown, and optional skills:
-// web-research, document-analysis, and report-writing. A workspace-enabled
-// result adds workspaceId, artifacts (path/mime/bytes/updatedAt), and artifactCount.
+// web-research, document-analysis, and report-writing. A workspace-enabled run
+// also receives `task_run_script` — a sandboxed JS orchestrator (like the Forge-it
+// builder's run_program) that batches task workspace + host tools via
+// forge.tools.run and returns a value via forge.finish; nested host-tool calls
+// keep host policy/confirmation/permissions. A workspace-enabled result adds
+// workspaceId, artifacts (path/mime/bytes/updatedAt), and artifactCount.
 // ForgeHost.ai.workspace.list/read/clear are scoped to this mini-app and cannot
 // access device paths. Workspaces are in-memory per host session: 200 files,
 // 10 MiB/file, 64 MiB/workspace, and 32 workspaces/128 MiB/session. Reads cap at

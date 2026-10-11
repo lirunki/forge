@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Agent Task Lab — delegate complex work to Forge's host-managed agent with stock guidance, skills, workspaces, tools, and safety.">
+<title>Agent Task Lab</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0a0a12;
+  --panel: #131320;
+  --panel2: #1a1a2e;
+  --line: #2a2a40;
+  --text: #f0f0f5;
+  --muted: #9090a8;
+  --accent: #8b5cf6;
+  --accent2: #22d3ee;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --err: #f43f5e;
+  --radius: 14px;
+  --safe-t: max(0.75rem, env(safe-area-inset-top));
+  --safe-b: max(0.75rem, env(safe-area-inset-bottom));
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(800px 400px at 10% -10%, rgba(139,92,246,.15), transparent 50%),
+    radial-gradient(600px 300px at 100% 0%, rgba(34,211,238,.10), transparent 45%),
+    var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+  -webkit-overflow-scrolling: touch;
+}
+.app {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--safe-t) 1rem var(--safe-b);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 100%;
+}
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.3rem;
+}
+.brand h1 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #fff, #c4b5fd 60%, #67e8f9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand p { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); border-radius: 99px;
+  padding: 4px 9px; font-size: 0.72rem; color: var(--muted);
+  white-space: nowrap;
+}
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.badge.ok .dot { background: var(--ok); }
+.badge.err .dot { background: var(--err); }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.85rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+}
+.panel h2 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+input[type=text], textarea, select {
+  width: 100%; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 9px; color: var(--text); padding: 9px 11px; font: inherit; font-size: 0.88rem;
+}
+input:focus, textarea:focus, select:focus { outline: 2px solid rgba(139,92,246,.4); border-color: var(--accent); }
+textarea { min-height: 80px; resize: vertical; }
+select { cursor: pointer; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+@media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+.skills { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.skill {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px;
+  font-size: 0.8rem; cursor: pointer; user-select: none;
+}
+.skill input { accent-color: var(--accent); margin: 0; }
+.skill:has(input:checked) { border-color: var(--accent); background: rgba(139,92,246,.12); }
+.hint { font-size: 0.74rem; color: var(--muted); margin: 6px 0; line-height: 1.4; }
+.checkline { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; margin: 8px 0; }
+.checkline input { accent-color: var(--accent); }
+.scenarios { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.scenario {
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+  font-size: 0.76rem; color: var(--muted); cursor: pointer; background: transparent;
+  font: inherit; font-size: 0.76rem;
+}
+.scenario:hover { border-color: var(--accent); color: var(--text); }
+.composer { display: flex; gap: 0.5rem; align-items: flex-end; margin-top: 0.5rem; }
+.composer textarea { flex: 1; min-height: 48px; max-height: 120px; }
+.btn {
+  border: 0; border-radius: 10px; min-height: 44px; padding: 10px 16px;
+  font: 600 0.86rem/1.2 inherit; cursor: pointer;
+  background: linear-gradient(135deg, var(--accent), #6d28d9); color: #fff;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.alt { background: var(--panel2); border: 1px solid var(--line); color: var(--text); }
+.btn.stop { background: var(--panel2); border: 1px solid var(--err); color: var(--err); }
+.btn.small { min-height: 36px; padding: 7px 12px; font-size: 0.8rem; }
+.attach-strip { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px;
+  font-size: 0.76rem; color: var(--muted);
+}
+.attach-chip button {
+  border: 0; background: transparent; color: var(--err); cursor: pointer;
+  font: inherit; font-size: 0.76rem; padding: 0;
+}
+.status {
+  font-size: 0.8rem; color: var(--accent2); min-height: 20px;
+  padding: 4px 0; font-weight: 600;
+}
+.stream {
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 9px;
+  padding: 10px; max-height: 320px; overflow: auto;
+  font-size: 0.86rem; line-height: 1.5;
+}
+.stream:empty::before { content: 'Task output appears here.'; color: var(--muted); font-style: italic; }
+.meta {
+  font: 0.76rem/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  color: var(--ok); overflow-wrap: anywhere; margin-top: 8px;
+  white-space: pre-wrap;
+}
+.events {
+  max-height: 180px; overflow: auto; display: flex; flex-direction: column-reverse;
+  gap: 2px; font: 0.74rem/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+.event { color: #b0b0c8; border-bottom: 1px solid rgba(255,255,255,.05); padding: 3px 0; overflow-wrap: anywhere; }
+.event time { color: #686880; margin-right: 7px; }
+.event .ek { color: var(--accent2); }
+.event.err .ek { color: var(--err); }
+.event.ok .ek { color: var(--ok); }
+.files { display: grid; gap: 5px; margin-top: 6px; }
+.file {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 0.78rem;
+}
+.file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file button { min-height: 30px; padding: 5px 10px; font-size: 0.74rem; }
+.readout {
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 9px;
+  padding: 10px; max-height: 200px; overflow: auto;
+  font: 0.8rem/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+.readout:empty::before { content: 'Artifact content appears here.'; color: var(--muted); font-style: italic; }
+.empty { color: var(--muted); font-size: 0.8rem; font-style: italic; padding: 8px 0; }
+footer { text-align: center; color: var(--muted); font-size: 0.72rem; padding: 8px 0 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1>Agent Task Lab</h1>
+      <p>Delegate complex work to Forge's host-managed agent · stock guidance · skills · workspace · tools</p>
+    </div>
+    <div class="badges">
+      <span id="bridge" class="badge"><i class="dot"></i><span>checking…</span></span>
+      <span id="provider" class="badge">provider: …</span>
+    </div>
+  </header>
+
+  <section class="panel">
+    <h2>1 · Task</h2>
+    <div class="scenarios">
+      <button class="scenario" data-scenario="workspace">Workspace lifecycle</button>
+      <button class="scenario" data-scenario="script">Script orchestration</button>
+      <button class="scenario" data-scenario="research">Web research</button>
+      <button class="scenario" data-scenario="report">Report writing</button>
+      <button class="scenario" data-scenario="attachment">Analyze attachment</button>
+      <button class="scenario" data-scenario="smoke">Smoke test</button>
+    </div>
+    <textarea id="task" placeholder="Describe the task for the agent…">Use the task workspace to write a file at report.md with a short heading, read it back, then list the workspace. Summarize the final file path and content.</textarea>
+    <div class="hint">The agent runs through <code>ForgeHost.ai.runTask()</code> — Forge's existing cancellable agent loop. It receives stock guidance, your selected skills, an optional workspace, and a tool allowlist. With a workspace it also gets <code>task_run_script</code>: a sandboxed JS orchestrator (like the builder's <code>run_program</code>) that batches tool calls via <code>forge.tools.run</code> and returns a value via <code>forge.finish</code>. Host risk checks, confirmations, and native permissions remain authoritative for every nested call.</div>
+  </section>
+
+  <section class="panel">
+    <h2>2 · Configuration</h2>
+    <div class="row">
+      <div>
+        <label for="profile">Prompt profile</label>
+        <select id="profile">
+          <option value="auto">Auto · saved Forge profile</option>
+          <option value="tiny">Tiny</option>
+          <option value="normal">Normal</option>
+          <option value="advanced">Advanced</option>
+          <option value="large">Large (→ Advanced)</option>
+        </select>
+      </div>
+      <div>
+        <label for="maxRounds">Max rounds</label>
+        <select id="maxRounds">
+          <option value="4">4</option>
+          <option value="6" selected>6</option>
+          <option value="8">8</option>
+          <option value="12">12</option>
+        </select>
+      </div>
+    </div>
+    <label style="margin-top:8px">Stock skills (optional)</label>
+    <div class="skills">
+      <label class="skill"><input type="checkbox" name="skill" value="web-research"><span>Web research</span></label>
+      <label class="skill"><input type="checkbox" name="skill" value="document-analysis"><span>Document analysis</span></label>
+      <label class="skill"><input type="checkbox" name="skill" value="report-writing" checked><span>Report writing</span></label>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label for="toolPreset">Tool preset</label>
+        <select id="toolPreset">
+          <option value="safe">Safe (default)</option>
+          <option value="web-research">Web research</option>
+          <option value="selected">Selected</option>
+          <option value="all">All (still gated)</option>
+        </select>
+      </div>
+      <div>
+        <label for="riskMax">Risk ceiling</label>
+        <select id="riskMax">
+          <option value="safe" selected>Safe</option>
+          <option value="sensitive">Sensitive</option>
+          <option value="confirm">Confirm</option>
+          <option value="danger">Danger</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <div>
+        <label for="toolNames">Tool names (comma-sep, optional)</label>
+        <input id="toolNames" type="text" placeholder="web_search, get_time" autocapitalize="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="toolGroups">Tool groups (comma-sep, optional)</label>
+        <input id="toolGroups" type="text" placeholder="web, device" autocapitalize="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="hint">Names and groups intersect when both are set. Sensitive/danger schemas require a separate host opt-in. <code>riskMax</code> is a ceiling — it does not suppress host confirmation or native permissions.</p>
+    <label class="checkline"><input id="useWorkspace" type="checkbox" checked> Use virtual workspace (in-memory, scoped to this app)</label>
+    <div class="row">
+      <div>
+        <label for="workspaceId">Workspace ID</label>
+        <input id="workspaceId" type="text" value="task-lab" maxlength="80" autocapitalize="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="instructions">Instructions (optional)</label>
+        <input id="instructions" type="text" placeholder="e.g. cite sources; be concise" autocapitalize="off" spellcheck="false">
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>3 · Attachment (optional)</h2>
+    <div class="buttons" style="display:flex;gap:6px;flex-wrap:wrap">
+      <button id="pick" class="btn alt small">Pick image / PDF / text</button>
+      <button id="clearAttachment" class="btn alt small">Clear</button>
+    </div>
+    <div id="attachmentStatus" class="hint">No attachment selected.</div>
+  </section>
+
+  <section class="panel">
+    <h2>4 · Run</h2>
+    <div class="status" id="status">Idle.</div>
+    <div class="stream" id="stream"></div>
+    <div class="meta" id="resultMeta"></div>
+    <div class="composer">
+      <button id="run" class="btn" style="flex:1">Run task</button>
+      <button id="stop" class="btn stop" hidden>Stop</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>5 · Workspace artifacts</h2>
+    <div class="buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <button id="listWorkspace" class="btn alt small">List</button>
+      <button id="clearWorkspace" class="btn alt small">Clear workspace</button>
+    </div>
+    <div id="files" class="files"><span class="empty">No listing yet.</span></div>
+    <label for="readPath" style="margin-top:10px">Read path</label>
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <input id="readPath" type="text" value="report.md" spellcheck="false" style="flex:1">
+      <button id="readWorkspace" class="btn alt small">Read</button>
+    </div>
+    <pre id="readout" class="readout" style="margin-top:8px"></pre>
+  </section>
+
+  <section class="panel">
+    <h2>6 · Event log</h2>
+    <div id="events" class="events"><div class="event">No events yet.</div></div>
+    <button id="clearLog" class="btn alt small" style="margin-top:8px">Clear log</button>
+  </section>
+
+  <footer>Agent Task Lab · uses <code>ForgeHost.ai.runTask()</code> · no API keys embedded · Forge uses your configured provider</footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var F = window.ForgeHost || window.forge;
+  var picked = [];
+  var activeId = '';
+  var lastWorkspaceId = '';
+  var seq = 0;
+
+  function $(id) { return document.getElementById(id); }
+  function setStatus(s) { $('status').textContent = s; }
+  function safeJson(x, n) { try { return (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, n || 220); } catch (_) { return String(x).slice(0, n || 220); } }
+  function log(kind, detail, cls) {
+    var row = document.createElement('div');
+    row.className = 'event' + (cls ? ' ' + cls : '');
+    var time = document.createElement('time');
+    time.textContent = new Date().toLocaleTimeString();
+    var span = document.createElement('span');
+    span.innerHTML = '<span class="ek">' + kind + '</span>' + (detail ? ' · ' + detail : '');
+    row.appendChild(time);
+    row.appendChild(span);
+    var box = $('events');
+    if (box.firstChild && box.firstChild.textContent === 'No events yet.') box.textContent = '';
+    box.prepend(row);
+  }
+  function selectedSkills() {
+    return Array.prototype.slice.call(document.querySelectorAll('input[name="skill"]:checked')).map(function (x) { return x.value; });
+  }
+  function csv(id) { return $(id).value.split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
+  function newTaskId() { return 'tasklab-' + Date.now().toString(36) + '-' + (++seq).toString(36); }
+  function getWorkspaceId() { return $('workspaceId').value.trim() || lastWorkspaceId; }
+
+  function setBusy(busy) {
+    $('run').disabled = busy;
+    $('stop').hidden = !busy;
+    $('pick').disabled = busy;
+  }
+
+  function renderAttachment() {
+    var box = $('attachmentStatus');
+    if (!picked.length) { box.textContent = 'No attachment selected.'; return; }
+    box.textContent = picked.map(function (f) {
+      return (f.name || 'file') + ' · ' + (f.mime || f.type || 'file') + ' · ' + (f.size || 0) + ' bytes';
+    }).join('\n');
+  }
+
+  function renderFiles(files) {
+    var box = $('files');
+    box.textContent = '';
+    if (!files || !files.length) { box.innerHTML = '<span class="empty">Workspace has no artifacts.</span>'; return; }
+    files.forEach(function (file) {
+      var row = document.createElement('div');
+      row.className = 'file';
+      var label = document.createElement('span');
+      label.textContent = file.path + ' · ' + file.bytes + ' bytes';
+      var button = document.createElement('button');
+      button.className = 'btn alt small';
+      button.textContent = 'Read';
+      button.addEventListener('click', function () { $('readPath').value = file.path; readArtifact(); });
+      row.appendChild(label);
+      row.appendChild(button);
+      box.appendChild(row);
+    });
+  }
+
+  function buildTools() {
+    var preset = $('toolPreset').value;
+    var tools = { preset: preset };
+    var names = csv('toolNames');
+    var groups = csv('toolGroups');
+    if (preset === 'selected') {
+      if (!names.length && !groups.length) throw new Error('Selected preset requires at least one tool name or group.');
+      if (names.length) tools.names = names;
+      if (groups.length) tools.groups = groups;
+    } else if (preset === 'all') {
+      if (names.length) tools.names = names;
+      if (groups.length) tools.groups = groups;
+    } else if (preset === 'web-research' && names.length) {
+      tools.names = names;
+    }
+    return tools;
+  }
+
+  var SCENARIOS = {
+    workspace: 'Use the task workspace to write a file at report.md with a short heading, read it back, then list the workspace. Summarize the final file path and content.',
+    research: 'Use an available safe web search tool to find one current authoritative source about the latest Android stable release. Return its URL and publication date. If no safe web tool is available, say so; do not guess.',
+    script: 'Use task_run_script to write a script that calls forge.tools.run("task_workspace_write", { path: "stats.json", content: JSON.stringify({ generated: true, items: 3, ts: Date.now() }, null, 2) }) then forge.tools.run("task_workspace_read", { path: "stats.json" }) and forge.finish({ written: "stats.json", verified: true }). After the script finishes, list the workspace and summarize what the script produced.',
+    report: 'Write a concise one-page report about renewable energy trends. Save it to the workspace at report.md, then summarize the key points.',
+    attachment: 'Read the attached document and summarize its main subject in two bullet points. Cite a page or section if available. If you cannot access the attachment, say so; do not guess.',
+    smoke: 'Reply with exactly “Task Lab runTask path OK”. Do not call tools.',
+  };
+
+  document.querySelectorAll('.scenario').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      $('task').value = SCENARIOS[btn.dataset.scenario] || '';
+      if (btn.dataset.scenario === 'research') {
+        document.querySelector('input[name="skill"][value="web-research"]').checked = true;
+        document.querySelector('input[name="skill"][value="report-writing"]').checked = true;
+      }
+      if (btn.dataset.scenario === 'attachment') {
+        document.querySelector('input[name="skill"][value="document-analysis"]').checked = true;
+      }
+      if (btn.dataset.scenario === 'report') {
+        document.querySelector('input[name="skill"][value="report-writing"]').checked = true;
+        $('useWorkspace').checked = true;
+      }
+    });
+  });
+
+  async function runTask() {
+    if (!F || !F.ai || typeof F.ai.runTask !== 'function') {
+      setStatus('ai.runTask unavailable. Update Forge and reopen this mini-app.');
+      return;
+    }
+    var task = $('task').value.trim();
+    if (!task) { setStatus('Enter a task first.'); return; }
+    var tools;
+    try { tools = buildTools(); } catch (e) { setStatus(e.message || String(e)); return; }
+
+    activeId = newTaskId();
+    var thisId = activeId;
+    var ws = $('workspaceId').value.trim();
+    var instructions = $('instructions').value.trim();
+    var request = {
+      id: thisId,
+      task: task,
+      profile: $('profile').value,
+      skills: selectedSkills(),
+      tools: tools,
+      riskMax: $('riskMax').value,
+      maxRounds: parseInt($('maxRounds').value, 10) || 6,
+      attachments: picked.slice(),
+      context: { miniApp: 'Agent Task Lab', attachments: picked.map(function (f) { return f.name || 'attachment'; }) },
+      onToken: function (delta) {
+        $('stream').textContent += String(delta || '');
+        $('stream').scrollTop = $('stream').scrollHeight;
+      },
+      onRound: function (e) { log('round', String(e.round)); },
+      onToolCall: function (e) { log('tool call', e.name || 'unknown'); return true; },
+      onToolResult: function (e) { log('tool result', (e.name || 'tool') + ': ' + safeJson(e.result, 180), 'ok'); },
+    };
+    if (instructions) request.instructions = instructions;
+    if ($('useWorkspace').checked) request.workspace = ws ? { id: ws } : {};
+
+    $('stream').textContent = '';
+    $('resultMeta').textContent = '';
+    $('events').textContent = '';
+    setBusy(true);
+    setStatus('Starting host agent · ' + thisId);
+    log('start', 'profile=' + $('profile').value + ' · preset=' + tools.preset + ' · riskMax=' + $('riskMax').value + ' · workspace=' + ($('useWorkspace').checked ? (ws || '(host-minted)') : 'off'));
+
+    try {
+      var result = await F.ai.runTask(request);
+      if (result.workspaceId) { lastWorkspaceId = result.workspaceId; if (!$('workspaceId').value.trim()) $('workspaceId').value = result.workspaceId; }
+      var ta = result.toolAccess || {};
+      $('resultMeta').textContent = [
+        'taskId=' + (result.taskId || thisId),
+        'profile=' + (result.profile || '?'),
+        'guidance v' + (result.guidanceVersion || '?'),
+        'skills=' + ((result.skills || []).join(', ') || '(none)'),
+        'tools=' + (ta.tools ? ta.tools.length : 0),
+        'sensitive=' + !!ta.grantedSensitive,
+        'danger=' + !!ta.grantedDanger,
+        'rounds=' + result.rounds,
+        'cancelled=' + !!result.cancelled,
+        result.workspaceId ? 'workspace=' + result.workspaceId + ' · artifacts=' + (result.artifactCount || 0) : '',
+      ].filter(Boolean).join('\n');
+      $('stream').textContent = String(result.content || $('stream').textContent || '(No text returned)');
+      if (result.artifacts) renderFiles(result.artifacts);
+      log(result.cancelled ? 'cancelled' : 'complete', 'rounds=' + result.rounds, result.cancelled ? 'err' : 'ok');
+      setStatus(result.cancelled ? 'Task cancelled.' : 'Task completed.');
+    } catch (e) {
+      setStatus('Task failed: ' + (e && e.message ? e.message : String(e)));
+      log('error', e && e.message ? e.message : String(e), 'err');
+      if (!$('stream').textContent) $('stream').textContent = 'No streamed answer; see status and event log.';
+    } finally {
+      if (activeId === thisId) activeId = '';
+      setBusy(false);
+    }
+  }
+
+  async function listWorkspace() {
+    var id = getWorkspaceId();
+    if (!id) { setStatus('Enter a workspace ID or run a task first.'); return; }
+    try {
+      var r = await F.ai.workspace.list({ workspaceId: id });
+      if (!r.ok) throw new Error(r.error || 'list failed');
+      lastWorkspaceId = r.workspaceId;
+      renderFiles(r.files);
+      setStatus('Workspace ' + id + ': ' + r.totalFiles + ' files · ' + r.totalBytes + ' bytes');
+      log('workspace list', id + ' · ' + r.totalFiles + ' files', 'ok');
+    } catch (e) { setStatus('List failed: ' + (e.message || e)); log('workspace list error', e.message || e, 'err'); }
+  }
+
+  async function readArtifact() {
+    var id = getWorkspaceId();
+    var path = $('readPath').value.trim();
+    if (!id || !path) { setStatus('Workspace ID and path are required.'); return; }
+    try {
+      var r = await F.ai.workspace.read({ workspaceId: id, path: path, offset: 0, limit: 50000 });
+      if (!r.ok) throw new Error(r.error || 'read failed');
+      $('readout').textContent = r.content;
+      setStatus('Read ' + r.path + ' · ' + r.bytes + ' bytes' + (r.truncated ? ' · truncated' : ''));
+      log('artifact read', r.path + ' · ' + r.bytes + ' bytes', 'ok');
+    } catch (e) { $('readout').textContent = 'Read failed: ' + (e.message || e); setStatus('Read failed.'); }
+  }
+
+  async function clearWorkspace() {
+    var id = getWorkspaceId();
+    if (!id) { setStatus('Enter a workspace ID first.'); return; }
+    try {
+      var r = await F.ai.workspace.clear({ workspaceId: id });
+      if (!r.ok) throw new Error(r.error || 'clear failed');
+      renderFiles([]);
+      $('readout').textContent = '';
+      setStatus('Cleared ' + r.filesDeleted + ' file(s), freed ' + r.bytesFreed + ' bytes.');
+      log('workspace clear', id + ' · ' + r.filesDeleted + ' files', 'ok');
+    } catch (e) { setStatus('Clear failed: ' + (e.message || e)); }
+  }
+
+  $('run').addEventListener('click', runTask);
+  $('stop').addEventListener('click', async function () {
+    if (!activeId || !F || !F.ai || !F.ai.cancel) return;
+    var id = activeId;
+    $('stop').disabled = true;
+    setStatus('Cancelling ' + id);
+    log('cancel request', id);
+    try { log('cancel response', safeJson(await F.ai.cancel(id), 160)); } catch (e) { log('cancel error', e.message || e, 'err'); }
+  });
+  $('pick').addEventListener('click', async function () {
+    if (!F || !F.files || !F.files.pick) { setStatus('File picker unavailable.'); return; }
+    try {
+      var r = await F.files.pick({ accept: 'image/*,application/pdf,text/*', multiple: false });
+      if (r) { picked = Array.isArray(r) ? r.filter(Boolean) : [r]; renderAttachment(); if (picked.length) log('attachment', picked[0].name || 'file', 'ok'); }
+    } catch (e) { setStatus('Picker failed: ' + (e.message || e)); }
+  });
+  $('clearAttachment').addEventListener('click', function () { picked = []; renderAttachment(); });
+  $('listWorkspace').addEventListener('click', listWorkspace);
+  $('readWorkspace').addEventListener('click', readArtifact);
+  $('clearWorkspace').addEventListener('click', clearWorkspace);
+  $('clearLog').addEventListener('click', function () { $('events').textContent = ''; log('log cleared', ''); });
+
+  $('toolPreset').addEventListener('change', function () {
+    $('riskMax').disabled = ['safe', 'web-research'].indexOf(this.value) >= 0;
+  });
+  $('riskMax').disabled = true;
+
+  // Bridge readiness
+  if (F && F.ai && typeof F.ai.runTask === 'function' && F.ai.workspace) {
+    $('bridge').className = 'badge ok';
+    $('bridge').querySelector('span').textContent = 'runTask + workspace ready';
+  } else {
+    $('bridge').className = 'badge err';
+    $('bridge').querySelector('span').textContent = 'needs Forge 2.7.107+';
+  }
+
+  // Provider info
+  if (F && F.ai && F.ai.getProvider) {
+    F.ai.getProvider().then(function (p) {
+      $('provider').textContent = 'provider: ' + ((p && (p.label || p.id)) || 'unknown') + ' / ' + ((p && p.model) || 'unknown');
+    }).catch(function () { $('provider').textContent = 'provider unavailable'; });
+  } else { $('provider').textContent = 'provider unavailable'; }
+
+  renderAttachment();
+})();
+</script>
+</body>
+</html>

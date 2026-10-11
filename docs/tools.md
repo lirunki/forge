@@ -2,7 +2,7 @@
 
 > Canonical source: `HOST_TOOL_REGISTRY` + `HOST_BRIDGE_ALLOW` in `forge/www/index.html`.
 > This file is a human-readable mirror — regenerate when the registry changes.
-> Version baseline: `2.7.107 / versionCode 257` (28 host tools + app-registered tools).
+> Version baseline: `2.7.108 / versionCode 258` (28 host tools + app-registered tools).
 
 The host exposes a tool catalog over `ForgeHost` bridges so chat/agent mini-apps
 gain power as the host grows. Mini-apps call `ForgeHost.tools.list()` to get
@@ -62,12 +62,29 @@ loop when a mini-app explicitly opts in with `ForgeHost.ai.runTask({ workspace }
 
 - `task_workspace_list`, `task_workspace_read`, `task_workspace_write`,
   `task_workspace_edit`, and `task_workspace_delete`.
+- `task_run_script` — a sandboxed JS orchestrator (mirrors the Forge-it
+  builder's `run_program`). The model writes a script that batches task
+  workspace tools and authorized host tools deterministically, with no LLM in
+  the middle: `forge.tools.run(name, args)` dispatches to any task workspace
+  tool or host-registry tool approved for the run; `forge.tools.list()` returns
+  the available names; `forge.sleep(ms)`, `forge.print(...)`, and
+  `forge.finish(result)` end the script and return a compact JSON value as the
+  `task_run_script` tool result. The script runs in a throwaway Web Worker
+  (no DOM, no `fetch`/`XHR`/`WebSocket`) and cannot call `task_run_script`
+  (no nesting). Every nested `forge.tools.run` to a host tool is gated by the
+  same host-enforced policy, confirmation modal, and native permissions as a
+  direct agent tool call; task workspace tools are safe. Limits (wall-clock,
+  tool-call count, concurrency, output size) come from the Forge code-mode
+  settings and the `finish` result is capped (default 60 KB) to protect the
+  transcript — write large data to the workspace and `forge.finish` a small
+  summary instead.
 - Paths are relative to an in-memory workspace scoped by the host to the current
   mini-app ID and workspace ID. Absolute paths and `..` traversal are rejected;
   no arbitrary device path is exposed.
 - Workspace tools are virtual/local and low risk, but the mini-app's existing
   `onToolCall` callback can still veto them. Host tool/risk controls remain
-  authoritative for all registered device tools in the same agent run.
+  authoritative for all registered device tools in the same agent run —
+  including host tools invoked from inside a `task_run_script`.
 - Limits: 200 files, 10 MiB/file, 64 MiB/workspace; session cap 32 workspaces /
   128 MiB. Tool reads are chunked (≤50,000 characters). Data is in-memory only
   and is lost when the Forge process exits; apps can explicitly clear a workspace.

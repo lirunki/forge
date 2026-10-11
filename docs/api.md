@@ -2,7 +2,7 @@
 
 > Canonical source: `forge/www/index.html` (the `SYSTEM_PROMPT` + `ForgeHost` bridge).
 > This file is a human-readable mirror — regenerate from the host when the bridge changes.
-> Version baseline: `2.7.107 / versionCode 257`.
+> Version baseline: `2.7.108 / versionCode 258`.
 
 `window.ForgeHost` (alias `window.forge`) is injected into every mini-app
 iframe by the host before `ready`. **All host APIs are async (Promises).
@@ -162,10 +162,14 @@ const taskResult = await taskPromise; // ai.agent result fields + taskId
 // still use the host risk sheet, and native permission prompts remain authoritative.
 // onToolCall can veto only; it cannot add tools or raise risk. Model-facing results
 // are capped at 56,000 JSON characters; sensitive/danger results are redacted from
-// mini-app event/history payloads. If workspace is enabled,
-// the result also includes workspaceId, artifacts (path/mime/bytes/updatedAt),
-// and artifactCount. `ai.workspace.list/read/clear` are scoped to this mini-app;
-// workspace.read supports offset + limit up to 50,000 chars per call.
+// mini-app event/history payloads. If workspace is enabled, the run also receives
+// `task_run_script` — a sandboxed JS orchestrator (like the Forge-it builder's
+// run_program) that batches task workspace + host tools via forge.tools.run and
+// returns a value via forge.finish; nested host-tool calls keep host policy/
+// confirmation/permissions. The result also includes workspaceId, artifacts
+// (path/mime/bytes/updatedAt), and artifactCount. `ai.workspace.list/read/clear`
+// are scoped to this mini-app; workspace.read supports offset + limit up to
+// 50,000 chars per call.
 // Workspaces are virtual, in-memory for this host session, and never expose
 // device paths. Limits: 200 files, 10 MiB/file, 64 MiB/workspace; the host session
 // caps at 32 workspaces / 128 MiB. Process death clears all task workspaces.
