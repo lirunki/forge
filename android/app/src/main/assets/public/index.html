@@ -16837,6 +16837,32 @@ function setLibrary(list) {
                   messages.push({ role: 'tool', tool_call_id: tc.id, name: tname, content: toolContent });
                 }
               }
+            // If the loop ended on a tool-call turn (no final text for the user),
+            // force one summarization round without tools so the caller gets an
+            // answer instead of an empty string. This is separate from maxRounds
+            // and does not grant any additional tool calls.
+            if (!String(lastContent || '').trim() && !agentCancelFlag.cancelled && history.length) {
+              try {
+                const sumSig = agentAbortController ? agentAbortController.signal : null;
+                const sumOpts = { tools: [], tool_choice: 'none', fullResponse: true };
+                let sumR;
+                if (backend === 'gemini') {
+                  sumR = await geminiGenerateContent(messages, sumSig, sumOpts);
+                } else {
+                  const sumOai = [];
+                  for (const m of messages) {
+                    if (m.role === 'system' || m.role === 'assistant' || m.role === 'tool') { sumOai.push(m); continue; }
+                    let cp;
+                    if (oaiContentCache.has(m)) cp = oaiContentCache.get(m);
+                    else { cp = await materializeContentForRichOAI(m.content, fileMetaA); oaiContentCache.set(m, cp); }
+                    sumOai.push({ role: m.role || 'user', content: cp });
+                  }
+                  sumR = await chatCompletionsWithFiles(sumOai, sumSig, sumOpts);
+                }
+                lastContent = (sumR && typeof sumR === 'object' && !Array.isArray(sumR)) ? String(sumR.content || '') : String(sumR ?? '');
+                agentEmit('chat', { round, content: lastContent, tool_calls: [] });
+              } catch (_) { /* summarization failed; keep empty content */ }
+            }
             const agentResult = {
               content: lastContent,
               rounds: Math.min(round, maxRounds),

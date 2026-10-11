@@ -131,6 +131,12 @@ test('runTask delegates once and resolves guidance inside the cancellable host l
   assert.match(html, /if \(taskGuidanceInfo\.content\) messages\.unshift\(\{ role: 'system', content: taskGuidanceInfo\.content \}\)/);
 });
 
+test('agent forces a final summarization round when the loop ends without text', () => {
+  assert.match(html, /force one summarization round without tools/);
+  assert.match(html, /tools: \[\], tool_choice: 'none', fullResponse: true/);
+  assert.match(html, /if \(!String\(lastContent \|\| ''\)\.trim\(\) && !agentCancelFlag\.cancelled && history\.length\)/);
+});
+
 test('versioned guidance and all three skills are bundled as assets', () => {
   const assets = ['AGENT.md', 'AGENT_TINY.md', 'AGENT_NORMAL.md', 'AGENT_ADVANCED.md',
     'agent-skills/web-research.md', 'agent-skills/document-analysis.md', 'agent-skills/report-writing.md'];
