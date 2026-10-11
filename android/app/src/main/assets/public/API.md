@@ -12,33 +12,6 @@ This is the full ForgeHost reference for workspace builds. The compact API summa
 iframe by the host before `ready`. **All host APIs are async (Promises).
 Always `await` + `try/catch`.** Never invent other native bridges.
 
-## Standalone browser export
-
-Use **Export HTML** (preview toolbar or a saved app's long-press menu) for a
-single-file browser export with a small compatibility runtime. The separate
-**Share** action remains the original Forge/AAForge mini-app share; it does
-not create the standalone runtime. Export defaults to **not embedding Forge-saved AI
-keys**; the recipient can enter their own provider key when the app first
-calls `ForgeHost.ai.chat` (held in tab memory only). To embed credentials,
-the exporter must explicitly select provider/key pairs and check a separate
-warning acknowledgement. Embedded keys are recoverable from the HTML/source
-and browser memory, can be copied by anyone receiving the file, and may incur
-provider charges. Do not publish or send such a file to untrusted recipients.
-The exporter does not remove secrets that were already hard-coded in app HTML.
-
-The browser runtime implements a limited subset (browser storage, file picker,
-sharing, basic `ai.chat`/`ai.chatStream`, and `tools.run('image_generate')` for
-exported provider configs). Standalone image generation asks for confirmation
-and can use only compatible exported/session provider keys. Image generation
-tries other explicitly exported compatible keys before asking for one, so a
-CORS/network failure from one provider can fall through to another. When keys
-are embedded, the standalone runtime defaults to an embedded-key provider if
-the Forge-current or saved provider has no exported key. It cannot provide
-Forge-native phone/device APIs or the host-managed
-`ai.agent` / `ai.runTask` loop. Provider requests also depend on that provider
-allowing browser CORS. A standalone export should therefore be tested in the target
-browser; unsupported Forge APIs reject with an explanatory error.
-
 ## Discovery
 
 ```js
@@ -96,7 +69,7 @@ ForgeHost.secrets.get/set/remove/list/clear
 // Use for API tokens the mini-app needs; never put host AI keys in HTML.
 ```
 
-## Host AI (user-configured providers/keys — never embed by default)
+## Host AI (user's configured providers/keys — NEVER embed API keys in HTML)
 
 ```js
 await ForgeHost.ai.isAvailable()           // { available, multimodal, provider, providerId, model, backend, providers, ... }

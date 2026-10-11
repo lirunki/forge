@@ -18680,7 +18680,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
 
     function hasGenerationRepetition(text) {
       const raw = String(text || '');
-      const s = raw.replace(/\\s+/g, ' ').trim();
+      const s = raw.replace(/\s+/g, ' ').trim();
       if (s.length < 240) return false;
       const tail = s.slice(-9000);
       // Exact long-fragment repetition.
@@ -18691,15 +18691,15 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
       const lines = raw.split(/\\r?\\n/).map(x => x.trim()).filter(x => x.length >= 18);
       const counts = new Map();
       for (const line of lines.slice(-240)) {
-        const key = line.toLowerCase().replace(/\\b[a-z_$][\\w$]*\\b/g, 'ID').replace(/\\d+/g, 'N').replace(/\\s+/g, ' ');
+        const key = line.toLowerCase().replace(/\\b[a-z_$][\\w$]*\\b/g, 'ID').replace(/\\d+/g, 'N').replace(/\s+/g, ' ');
         const n = (counts.get(key) || 0) + 1;
         counts.set(key, n);
         if (n >= 3 && (/^(function|const|let|var|if|for|while)\\b/i.test(line) || line.includes('{'))) return true;
       }
       const funcs = tail.match(/function\\s+[a-z_$][\\w$]*\\s*\\([^)]*\\)\\s*\\{/gi) || [];
-      const fnCounts = new Map(funcs.map(f => [f.toLowerCase().replace(/\\s+/g, ''), 0]));
+      const fnCounts = new Map(funcs.map(f => [f.toLowerCase().replace(/\s+/g, ''), 0]));
       for (const f of funcs) {
-        const key = f.toLowerCase().replace(/\\s+/g, '');
+        const key = f.toLowerCase().replace(/\s+/g, '');
         fnCounts.set(key, fnCounts.get(key) + 1);
         if (fnCounts.get(key) >= 3) return true;
       }
@@ -25492,20 +25492,113 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         if (!Array.isArray(content)) return String(content == null ? '' : content);
         return content.map(function(part){ return part && (part.text || part.content) || ''; }).join('\n');
       }
+      function attachmentMime(part, dataUrl) {
+        var match=String(dataUrl||'').match(/^data:([^;,]+)/i);
+        if(match)return match[1].toLowerCase();
+        var mime=String(part.mime||part.type||'').toLowerCase();
+        if(mime.indexOf('/')>=0)return mime;
+        var name=String(part.name||part.filename||'').toLowerCase();
+        var ext=name.split('.').pop();
+        var types={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',svg:'image/svg+xml',txt:'text/plain',md:'text/markdown',csv:'text/csv',json:'application/json',xml:'application/xml',html:'text/html',css:'text/css',js:'text/javascript',ts:'text/plain',yaml:'text/yaml',yml:'text/yaml',log:'text/plain'};
+        if(types[ext])return types[ext];
+        if(part.type==='image'||part.type==='image_url')return 'image/jpeg';
+        return 'application/octet-stream';
+      }
+      function attachmentBase64(part, dataUrl) {
+        var value=String(part.base64||'');
+        if(dataUrl&&/^data:/i.test(dataUrl))value=String(dataUrl).split(',').slice(1).join(',');
+        else if(/^data:/i.test(value))value=value.split(',').slice(1).join(',');
+        return value.replace(/\s+/g,'');
+      }
+      function decodeAttachmentText(base64) {
+        try {
+          var binary=atob(base64), bytes=new Uint8Array(binary.length);
+          for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+          if(typeof TextDecoder!=='undefined')return new TextDecoder('utf-8',{fatal:false}).decode(bytes);
+          return decodeURIComponent(escape(binary));
+        } catch (_) { return ''; }
+      }
+      function normalizeAttachments(attachments, provider) {
+        var parts=[], imageCount=0;
+        (Array.isArray(attachments)?attachments:[]).forEach(function(raw){
+          if(raw==null)return;
+          var part=typeof raw==='string'?( /^(data:|https?:\/\/)/i.test(raw)?{dataUrl:raw,type:'image'}:{base64:raw,type:'image'} ):raw;
+          if(!part||typeof part!=='object')return;
+          if(part.text!=null&&(!part.dataUrl||part.type==='text')){
+            parts.push({type:'text',text:String(part.text).slice(0,80000)});return;
+          }
+          var dataUrl=String(part.dataUrl||(part.image_url&&part.image_url.url)||part.url||'');
+          var mime=attachmentMime(part,dataUrl);
+          var base64=attachmentBase64(part,dataUrl);
+          var name=String(part.name||part.filename||'attachment');
+          if(mime.indexOf('image/')===0){
+            var url=dataUrl;
+            if(!url&&base64)url='data:'+mime+';base64,'+base64;
+            if(!url)throw new Error('Image attachment '+name+' has no browser-readable data URL or base64 data.');
+            if(provider.kind==='gemini'&&!/^data:/i.test(url))throw new Error('Gemini standalone image attachments must be local data URLs; remote image URLs may be blocked by browser CORS.');
+            if(/^data:/i.test(url)&&base64.length*0.75>5*1024*1024)throw new Error('Image attachment too large (max about 5 MB each).');
+            imageCount++;if(imageCount>8)throw new Error('Too many image attachments (max 8).');
+            parts.push({type:'image_url',image_url:{url:url}});return;
+          }
+          var lowerName=name.toLowerCase();
+          var textLike=mime.indexOf('text/')===0||/^(application\/(json|xml|javascript|x-javascript|yaml))$/.test(mime)||/\.(txt|md|csv|json|xml|html|css|js|ts|yaml|yml|log|py|java|sh)$/i.test(lowerName);
+          if(textLike){
+            var text=part.text!=null?String(part.text):decodeAttachmentText(base64);
+            if(text)parts.push({type:'text',text:'\n--- file: '+name+' ('+mime+') ---\n'+text.slice(0,80000)+'\n--- end file ---\n'});
+            else throw new Error('Could not read text attachment '+name+' in this browser.');
+            return;
+          }
+          if(provider.kind==='gemini'&&base64){
+            if(base64.length*0.75>20*1024*1024)throw new Error('File attachment '+name+' is too large for standalone inline send (max about 20 MB).');
+            parts.push({type:'forge_file',name:name,mime:mime,base64:base64});return;
+          }
+          throw new Error('Standalone browser chat supports image and text attachments for this provider; '+name+' ('+mime+') needs Forge or a Gemini provider.');
+        });
+        return parts;
+      }
+      function attachToLatestUser(messages, attachments, provider) {
+        if(!Array.isArray(attachments)||!attachments.length)return messages;
+        var added=normalizeAttachments(attachments,provider);
+        if(!added.length)return messages;
+        var out=messages.map(function(message){return Object.assign({},message);});
+        var index=-1;
+        for(var i=out.length-1;i>=0;i--)if(out[i]&&out[i].role==='user'){index=i;break;}
+        if(index<0){out.push({role:'user',content:added});return out;}
+        var content=out[index].content;
+        var existing=Array.isArray(content)?content.slice():(content==null?[]:[{type:'text',text:String(content)}]);
+        out[index].content=existing.concat(added);
+        return out;
+      }
+      function geminiParts(content) {
+        var list=Array.isArray(content)?content:[content],out=[];
+        list.forEach(function(part){
+          if(part==null)return;
+          if(typeof part==='string'){if(part)out.push({text:part});return;}
+          if(part.type==='text'||part.text!=null){if(part.text)out.push({text:String(part.text)});return;}
+          if(part.type==='forge_file'&&part.base64){out.push({inline_data:{mime_type:part.mime||'application/octet-stream',data:String(part.base64).replace(/\s+/g,'')}});return;}
+          var url=String((part.image_url&&part.image_url.url)||part.dataUrl||part.url||'');
+          if(part.type==='image_url'||part.type==='image'||part.image_url||part.dataUrl){
+            var match=url.match(/^data:([^;,]+);base64,([\s\S]*)$/i);
+            if(!match)throw new Error('Gemini standalone attachments require local base64 data URLs.');
+            out.push({inline_data:{mime_type:match[1].toLowerCase(),data:match[2].replace(/\s+/g,'')}});return;
+          }
+          if(part.content!=null)out.push({text:String(part.content)});
+        });
+        return out;
+      }
       function normalizeBase(base) { return String(base || '').replace(/\/+$/, ''); }
       async function chat(input) {
         var opts = typeof input === 'string' ? { prompt: input } : (input || {});
         var p = activeProvider(opts);
         if (!p) throw new Error('No provider is available in this standalone export.');
-        if (opts.attachments && opts.attachments.length) throw new Error('Standalone runtime does not normalize Forge file attachments yet. Pass browser-supported image_url content parts where supported.');
+        var messages = attachToLatestUser(toMessages(opts), opts.attachments, p);
         var key = getKey(p);
-        var messages = toMessages(opts);
         var model = String(opts.model || p.model || '');
         if (p.kind === 'gemini') {
           var url = normalizeBase(p.base) + '/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
           var contents = messages.filter(function(m){ return m && m.role !== 'system'; }).map(function(m){
             var role = m.role === 'assistant' || m.role === 'model' ? 'model' : 'user';
-            return { role: role, parts: [{ text: messageText(m.content) }] };
+            return { role: role, parts: geminiParts(m.content) };
           });
           var system = messages.filter(function(m){ return m && m.role === 'system'; }).map(function(m){ return messageText(m.content); }).join('\n');
           var body = { contents: contents, generationConfig: {} };
@@ -25621,7 +25714,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         opts = opts || {};
         return new Promise(function(resolve, reject){
           var input = document.createElement('input');
+          var root = document.body || document.documentElement;
+          if (!root) { reject(new Error('Browser file picker is unavailable: document body is not ready.')); return; }
           input.type = 'file'; input.accept = opts.accept || '*/*'; input.multiple = !!opts.multiple;
+          if (opts.capture) input.setAttribute('capture', opts.capture === true ? 'environment' : String(opts.capture));
+          input.style.position='fixed'; input.style.left='-10000px'; input.style.top='0'; input.style.width='1px'; input.style.height='1px'; input.style.opacity='0';
+          var finished = false;
+          function cleanup(){ if(finished)return; finished=true; input.onchange=null; input.oncancel=null; if(input.parentNode)input.parentNode.removeChild(input); else if(input.remove)input.remove(); }
           input.onchange = function(){
             var files = Array.prototype.slice.call(input.files || []);
             Promise.all(files.map(function(file){ return new Promise(function(done, fail){
@@ -25629,12 +25728,37 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
               reader.onload = function(){ var dataUrl = String(reader.result || ''); done({ name: file.name, mime: file.type || 'application/octet-stream', type: file.type || 'application/octet-stream', size: file.size, dataUrl: dataUrl, base64: dataUrl.split(',')[1] || '' }); };
               reader.onerror = function(){ fail(reader.error || new Error('Could not read selected file')); };
               reader.readAsDataURL(file);
-            }); })).then(function(list){ resolve(opts.multiple ? list : (list[0] || null)); }, reject);
+            }); })).then(function(list){ cleanup(); resolve(opts.multiple ? list : (list[0] || null)); }, function(error){ cleanup(); reject(error); });
           };
-          input.oncancel = function(){ resolve(opts.multiple ? [] : null); };
-          input.click();
+          input.oncancel = function(){ cleanup(); resolve(opts.multiple ? [] : null); };
+          root.appendChild(input);
+          try { input.click(); } catch (e) { cleanup(); reject(new Error('Browser could not open the file picker: '+(e&&e.message||e))); }
         });
       }
+      function browserCameraAvailable() {
+        try { var input=document.createElement('input'); return ('capture' in input) || !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+        catch (_) { return false; }
+      }
+      function browserPhotoResult(file) {
+        if (!file) return Promise.resolve(null);
+        var mime=file.mime||file.type||'image/jpeg';
+        var result={name:file.name||'photo',mime:mime,type:mime,format:mime.indexOf('/')>=0?mime.split('/')[1]:'jpeg',size:file.size||0,bytes:file.size||0,dataUrl:file.dataUrl||'',base64:file.base64||'',width:0,height:0};
+        if (typeof Image==='undefined' || !result.dataUrl) return Promise.resolve(result);
+        return new Promise(function(resolve){
+          var image=new Image();
+          image.onload=function(){result.width=image.naturalWidth||image.width||0;result.height=image.naturalHeight||image.height||0;resolve(result);};
+          image.onerror=function(){resolve(result);};
+          image.src=result.dataUrl;
+        });
+      }
+      var camera = {
+        isAvailable: async function(){var available=browserCameraAvailable();return {available:available,browser:true,native:false,method:available?'file-input-capture':null};},
+        requestPermission: async function(){return {granted:true,browser:true,promptOnUse:true,note:'The browser or operating system handles camera permission when capture starts.'};},
+        takePhoto: async function(opts){opts=opts||{};var file=await pickFiles({accept:'image/*',multiple:false,capture:opts.facing==='front'?'user':'environment'});return browserPhotoResult(file);},
+        pickPhoto: async function(opts){opts=opts||{};var file=await pickFiles({accept:'image/*',multiple:false});return browserPhotoResult(file);},
+        cleanupTempPhotos: async function(){return {ok:true,cleaned:0,browser:true};},
+        cleanupTemp: async function(){return {ok:true,cleaned:0,browser:true};},
+      };
       var state = {
         get: async function(key){ return storageGet('state_' + key, null); },
         set: async function(key, value){ if (key && typeof key === 'object') { Object.keys(key).forEach(function(k){ storageSet('state_' + k, key[k]); }); } else storageSet('state_' + key, value); return { ok: true }; },
@@ -25661,19 +25785,20 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       };
       var host = {
         getAppInfo: async function(){ return { id: appId, title: appTitle, standalone:true }; },
-        getCapabilities: async function(){ return { native:false, browser:true, ai:providers.length>0, files:true, share:!!navigator.share, storage:true, camera:false, mic:false, location:false, smsCompose:false, contacts:false, termux:false, jobs:false, notify:false }; },
+        getCapabilities: async function(){ return { native:false, browser:true, ai:providers.length>0, files:true, share:!!navigator.share, storage:true, camera:browserCameraAvailable(), mic:false, location:false, smsCompose:false, contacts:false, termux:false, jobs:false, notify:false }; },
         ai: ai,
         tools: tools,
         state: state,
         storage: { get:async function(k){return storageGet('storage_'+k,null);}, set:async function(k,v){storageSet('storage_'+k,v);return {ok:true};}, remove:async function(k){localStorage.removeItem(prefix+'storage_'+k);return {ok:true};}, list:async function(){return Object.keys(localStorage).filter(function(k){return k.indexOf(prefix+'storage_')===0;}).map(function(k){return k.slice((prefix+'storage_').length);});}, clear:async function(){Object.keys(localStorage).filter(function(k){return k.indexOf(prefix+'storage_')===0;}).forEach(function(k){localStorage.removeItem(k);});return {ok:true};} },
-        files: { isAvailable:async function(){return {available:true};}, pick:pickFiles },
+        files: { isAvailable:async function(){return {available:!!(document.createElement&&document.createElement('input')) ,browser:true};}, pick:pickFiles },
+        camera: camera,
         share: async function(opts){opts=opts||{}; if(navigator.share){await navigator.share({title:opts.title||appTitle,text:opts.text||'',url:opts.url});return {ok:true};} if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(opts.text||opts.url||'');return {ok:true,shared:'clipboard'};} throw new Error('Browser sharing is unavailable.'); },
         http: { get:async function(url,opts){var r=await fetch(url,opts||{});return {ok:r.ok,status:r.status,text:await r.text()};}, post:async function(url,body,headers){var r=await fetch(url,{method:'POST',headers:headers||{'Content-Type':'application/json'},body:typeof body==='string'?body:JSON.stringify(body)});return {ok:r.ok,status:r.status,text:await r.text()};} },
         toast: async function(message){console.info(message);return {ok:true};},
         permissions: { get:async function(){return {};}, request:async function(){return {granted:false,unsupported:true};}, requestPack:async function(){return {granted:false,unsupported:true};} },
         on: function(){return function(){};}, off: function(){},
       };
-      ['camera','mic','contacts','location','sms','phone','apps','termux','radio','notifications','notify','jobs','device','clipboard','qr','tts','audio','fs','keepAwake','secrets'].forEach(function(name){
+      ['mic','contacts','location','sms','phone','apps','termux','radio','notifications','notify','jobs','device','clipboard','qr','tts','audio','fs','keepAwake','secrets'].forEach(function(name){
         host[name] = new Proxy({}, { get:function(_,method){ return function(){return unsupported(name+'.'+String(method));}; } });
       });
       window.ForgeHost = window.ForgeHost || host;

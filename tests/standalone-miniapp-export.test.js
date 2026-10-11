@@ -111,12 +111,19 @@ test('export runtime exposes browser APIs and clearly rejects Forge-only agent A
   assert.match(source, /for this tab only/);
 });
 
-test('standalone docs explain no-secret default, exposure warning, and browser limits', () => {
-  const docs = fs.readFileSync('docs/api.md','utf8');
-  assert.match(docs, /not embedding Forge-saved AI\s+keys/);
-  assert.match(docs, /Embedded keys are recoverable/);
-  assert.match(docs, /`tools\.run\('image_generate'\)`/);
-  assert.match(docs, /host-managed\s+`ai\.agent` \/\s*`ai\.runTask` loop/);
+test('browser-only export details are separate from the ForgeHost API reference', () => {
+  const apiDocs=fs.readFileSync('docs/api.md','utf8');
+  const builderApi=fs.readFileSync('www/API.md','utf8');
+  const exportDocs=fs.readFileSync('docs/standalone-export.md','utf8');
+  assert.doesNotMatch(apiDocs,/Standalone browser export|browser runtime implements a limited subset/);
+  assert.doesNotMatch(builderApi,/Standalone browser export|browser runtime implements a limited subset/);
+  assert.match(apiDocs,/Forge Host API reference/);
+  assert.match(exportDocs,/not embed Forge-saved AI keys by default/);
+  assert.match(exportDocs,/camera\.takePhoto/);
+  assert.match(exportDocs,/ai\.chat\(\{attachments\}\)/);
+  assert.match(exportDocs,/Gemini `inline_data`/);
+  assert.match(exportDocs,/capture` hint/);
+  assert.match(exportDocs,/host-managed `ForgeHost\.ai\.agent\(\)`/);
 });
 
 async function exerciseStandaloneImageTool() {
@@ -174,6 +181,73 @@ async function exerciseImageFallbackAndNoPrompt() {
   assert.equal(prompts,0,'xAI-only export must not prompt for a key for the keyless default provider');
 }
 
+async function exerciseBrowserMediaPickers() {
+  const generated=api.buildStandaloneRuntimeSource(app,providerData,[]);
+  const queued=[
+    {name:'one.jpg',type:'image/jpeg',size:7,dataUrl:'data:image/jpeg;base64,QUJD'},
+    {name:'two.txt',type:'text/plain',size:4,dataUrl:'data:text/plain;base64,VEVTVA=='},
+    {name:'gallery.png',type:'image/png',size:5,dataUrl:'data:image/png;base64,UE5H'},
+    {name:'capture.jpg',type:'image/jpeg',size:6,dataUrl:'data:image/jpeg;base64,SE9U'},
+  ];
+  const inputs=[], children=[];
+  const body={appendChild(input){children.push(input);input.parentNode=body;},removeChild(input){const i=children.indexOf(input);if(i>=0)children.splice(i,1);input.parentNode=null;}};
+  const document={readyState:'complete',body,getElementById(){return null;},createElement(tag){if(tag!=='input')return {style:{},remove(){}};const input={type:'',accept:'',multiple:false,capture:'',style:{},files:[],setAttribute(k,v){this[k]=v;},click(){this.files=this.multiple?[queued.shift(),queued.shift()]:[queued.shift()];if(this.onchange)this.onchange();},remove(){body.removeChild(this);}};inputs.push(input);return input;}};
+  function FakeFileReader(){this.readAsDataURL=function(file){this.result=file.dataUrl;this.onload();};}
+  function FakeImage(){}
+  Object.defineProperty(FakeImage.prototype,'src',{set(){this.naturalWidth=640;this.naturalHeight=480;this.onload();}});
+  const ctx={window:{},navigator:{},document,FileReader:FakeFileReader,Image:FakeImage,localStorage:{getItem(){return null;},setItem(){},removeItem(){}},fetch:async()=>({ok:true,json:async()=>({})}),console};
+  vm.runInNewContext(generated,ctx);
+  const picked=await ctx.window.ForgeHost.files.pick({accept:'image/*,text/*',multiple:true});
+  assert.equal(picked.length,2);
+  assert.equal(picked[0].name,'one.jpg');
+  assert.equal(picked[0].base64,'QUJD');
+  assert.equal(picked[1].dataUrl,'data:text/plain;base64,VEVTVA==');
+  assert.equal(inputs[0].accept,'image/*,text/*');
+  assert.equal(inputs[0].multiple,true);
+  assert.equal(children.length,0,'temporary browser inputs must be removed after selection');
+  const gallery=await ctx.window.ForgeHost.camera.pickPhoto({quality:85});
+  assert.equal(gallery.name,'gallery.png');
+  assert.equal(gallery.width,640);
+  assert.equal(inputs[1].accept,'image/*');
+  assert.equal(inputs[1].capture,'','gallery picker should not force camera capture');
+  const shot=await ctx.window.ForgeHost.camera.takePhoto({facing:'front'});
+  assert.equal(shot.name,'capture.jpg');
+  assert.equal(shot.base64,'SE9U');
+  assert.equal(inputs[2].capture,'user');
+  assert.equal((await ctx.window.ForgeHost.camera.isAvailable()).available,true);
+  assert.equal((await ctx.window.ForgeHost.camera.requestPermission()).promptOnUse,true);
+  assert.equal((await ctx.window.ForgeHost.getCapabilities()).camera,true);
+  assert.equal(children.length,0);
+}
+
+async function exerciseChatAttachments() {
+  let openAiBody=null,openAiCalls=0;
+  const oaiSource=api.buildStandaloneRuntimeSource(app,providerData,[{id:'openai',key:'image-chat-key'}]);
+  const oaiCtx={window:{prompt(){throw new Error('embedded key should not prompt');}},navigator:{},document:{readyState:'complete',body:{appendChild(){}},getElementById(){return null;},createElement(){return {style:{},remove(){}};}},localStorage:{getItem(){return null;},setItem(){},removeItem(){}},fetch:async function(url,init){openAiCalls++;openAiBody=JSON.parse(init.body);return {ok:true,json:async()=>({choices:[{message:{content:'image understood'}}]})};},console};
+  vm.runInNewContext(oaiSource,oaiCtx);
+  const oaiResult=await oaiCtx.window.ForgeHost.ai.chat({prompt:'Describe this picture',attachments:[{name:'photo.jpg',mime:'image/jpeg',dataUrl:'data:image/jpeg;base64,QUJD'},{name:'notes.txt',mime:'text/plain',text:'blue car'}]});
+  assert.equal(oaiResult.content,'image understood');
+  assert.equal(openAiCalls,1);
+  const oaiContent=openAiBody.messages[0].content;
+  assert.equal(oaiContent[0].text,'Describe this picture');
+  assert.deepEqual(oaiContent[1],{type:'image_url',image_url:{url:'data:image/jpeg;base64,QUJD'}});
+  assert.match(oaiContent[2].text,/blue car/);
+  await assert.rejects(oaiCtx.window.ForgeHost.ai.chat({prompt:'read',attachments:[{name:'doc.pdf',mime:'application/pdf',base64:'JVBERi0='}]}),/needs Forge or a Gemini provider/);
+  assert.equal(openAiCalls,1,'unsupported binary file should fail before network fetch');
+
+  let geminiBody=null;
+  const geminiData={selectedProvider:'gemini',providers:[{id:'gemini',label:'Gemini',base:'https://generativelanguage.googleapis.com/v1beta',model:'gemini-2.5-flash',auth:'query',kind:'gemini',key:''}]};
+  const geminiSource=api.buildStandaloneRuntimeSource(app,geminiData,[{id:'gemini',key:'gemini-file-key'}]);
+  const geminiCtx={window:{prompt(){throw new Error('embedded key should not prompt');}},navigator:{},document:{readyState:'complete',body:{appendChild(){}},getElementById(){return null;},createElement(){return {style:{},remove(){}};}},localStorage:{getItem(){return null;},setItem(){},removeItem(){}},fetch:async function(url,init){geminiBody=JSON.parse(init.body);return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:'gemini read'}]}}]})};},console};
+  vm.runInNewContext(geminiSource,geminiCtx);
+  const geminiResult=await geminiCtx.window.ForgeHost.ai.chat({prompt:'Read these',attachments:[{name:'photo.png',mime:'image/png',dataUrl:'data:image/png;base64,UE5H'},{name:'report.pdf',mime:'application/pdf',base64:'JVBERi0='}]});
+  assert.equal(geminiResult.content,'gemini read');
+  const geminiParts=geminiBody.contents[0].parts;
+  assert.equal(geminiParts[0].text,'Read these');
+  assert.deepEqual(geminiParts[1],{inline_data:{mime_type:'image/png',data:'UE5H'}});
+  assert.deepEqual(geminiParts[2],{inline_data:{mime_type:'application/pdf',data:'JVBERi0='}});
+}
+
 async function exerciseAzureStandaloneChat() {
   const azureData = {
     selectedProvider:'azure',
@@ -226,11 +300,15 @@ async function exerciseStandaloneChat(selectedKeys, expectedKey, expectPrompt) {
   console.log('✓ xAI-only export overrides a stale keyless Cheaper Inference selection without prompting');
   await exerciseImageFallbackAndNoPrompt();
   console.log('✓ image generation tries exported keys before prompting and falls back from Cheaper Inference to xAI');
+  await exerciseBrowserMediaPickers();
+  console.log('✓ standalone file picker and browser camera/gallery capture APIs return attachment data');
+  await exerciseChatAttachments();
+  console.log('✓ standalone chat sends browser image/text attachments and Gemini inline files');
   await exerciseAzureStandaloneChat();
   console.log('✓ Azure embedded-key export uses resource/deployment URL and api-key auth');
   await exerciseChatCorsDiagnostic();
   console.log('✓ failed browser fetch reports actionable CORS/file-origin guidance');
   await exerciseStandaloneChat([{id:'openai',key:'explicitly-selected-key'}], 'explicitly-selected-key', false);
   console.log('✓ explicitly selected embedded key is used without prompting');
-  console.log('\n' + (passed + 6) + ' tests passed.');
+  console.log('\n' + (passed + 8) + ' tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
