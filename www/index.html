@@ -26306,14 +26306,16 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
   }); };
 
   // ——— Agent exerciser (1010 plan: runTask + workspace + task_run_script) ————
-  var agOut = document.getElementById('agOut');
-  var agPicked = null;
-  var agActiveId = '';
-  function agSet(cls, text){ agOut.className = cls || ''; agOut.textContent = text; }
-  function agAppend(text){ agOut.textContent += String(text == null ? '' : text); agOut.scrollTop = agOut.scrollHeight; }
+  // Wrapped so a missing element / ForgeHost surface can never halt the
+  // kitchen-sink boot (fillAi / renderCaps must always run).
+  var agOut = null, agPicked = null, agActiveId = '';
+  function agSet(cls, text){ if (agOut) { agOut.className = cls || ''; agOut.textContent = text; } }
+  function agAppend(text){ if (agOut) { agOut.textContent += String(text == null ? '' : text); agOut.scrollTop = agOut.scrollHeight; } }
   function agSafeJson(x, n){ try { var s = (typeof x === 'string') ? x : JSON.stringify(x); return s.length > (n||160) ? s.slice(0, (n||160)) + '…' : s; } catch(_) { return String(x).slice(0, n||160); } }
-  function agBusy(busy){ document.getElementById('agRun').disabled = busy; document.getElementById('agScript').disabled = busy; document.getElementById('agStop').hidden = !busy; }
+  function agBusy(busy){ var b; if ((b = document.getElementById('agRun'))) b.disabled = busy; if ((b = document.getElementById('agScript'))) b.disabled = busy; if ((b = document.getElementById('agStop'))) b.hidden = !busy; }
   function agWorkspaceId(){ return 'ks-agent'; }
+  try {
+  agOut = document.getElementById('agOut');
 
   document.getElementById('agRun').onclick = function(){ safe(async function(){
     if (!H().ai || typeof H().ai.runTask !== 'function') throw new Error('ai.runTask unavailable — update Forge');
@@ -26402,6 +26404,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     var r = await H().ai.workspace.clear({ workspaceId: agWorkspaceId() });
     log(r, r.ok ? 'ok' : 'err');
   }); };
+  } catch (agInitErr) { console.error('[Kitchen Sink] agent init failed', agInitErr); }
 
   // boot
   fillAi().catch(function(){});
