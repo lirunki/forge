@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101b36" />
+  <title>Glow Garden</title>
+  <style>:root{--bg:#101b36;--panel:#182746;--panel2:#213255;--ink:#f5f2e9;--muted:#aab6cb;--gold:#ffd778;--mint:#9be0c5;--lav:#b9b5f5;--line:#334466;--danger:#f4a8ae}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-height:100vh}button{font:inherit;border:0;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}#app{max-width:560px;margin:auto;min-height:100vh;padding:env(safe-area-inset-top) 22px env(safe-area-inset-bottom);overflow:hidden}.topbar{height:76px;display:flex;align-items:center;justify-content:space-between}.brand{font-weight:600;letter-spacing:.01em;font-size:15px;color:#e4e7ed;display:flex;align-items:center;gap:9px}.brand-dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 13px var(--gold)}.icon-btn,.pause-btn{background:transparent;color:var(--muted);font-size:25px;width:44px;height:44px;border-radius:50%}.icon-btn:active,.pause-btn:active{background:var(--panel)}.screen{display:none;animation:in .35s ease}.screen.active{display:block}@keyframes in{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}.hero{position:relative;padding:52px 3px 42px}.moon{position:absolute;right:27px;top:26px;font-size:48px;color:var(--gold);transform:rotate(-22deg);text-shadow:0 0 28px #fbcf6970}.spark{position:absolute;color:var(--lav);font-size:22px}.spark-a{right:79px;top:8px}.spark-b{right:4px;top:90px;color:var(--mint)}.spark-c{left:180px;top:27px;color:var(--gold);font-size:30px}.eyebrow{text-transform:uppercase;letter-spacing:.19em;font-size:11px;font-weight:700;color:var(--mint);margin:0 0 15px}.hero h1{font:600 47px/1.05 Fraunces,serif;letter-spacing:-.03em;margin:0 0 22px}.hero h1 em{font-style:normal;color:var(--gold)}.intro{color:var(--muted);font-size:15px;line-height:1.65;max-width:360px;margin:0}.home-actions{display:grid;gap:12px}.primary,.soft{min-height:56px;padding:0 20px;border-radius:17px;display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:15px}.primary{background:var(--gold);color:#1b2845;box-shadow:0 8px 22px #fbd37325}.primary b{font-size:23px;font-weight:400}.soft{background:var(--panel);color:#e4e8ef;border:1px solid var(--line);justify-content:center;gap:11px}.soft span{border:1px solid #71809b;border-radius:50%;width:18px;height:18px;display:grid;place-items:center;font-size:12px}.streak-card{margin-top:28px;border-top:1px solid var(--line);padding:20px 2px;display:flex;align-items:center;gap:13px}.streak-icon{width:37px;height:37px;border-radius:13px;background:#26375a;color:var(--gold);display:grid;place-items:center;font-size:20px}.streak-card strong,.streak-card small{display:block}.streak-card strong{font-size:13px}.streak-card small{color:var(--muted);font-size:12px;margin-top:4px}.mini-arrow{margin-left:auto;font-size:27px;color:var(--muted)}.game-head{display:flex;justify-content:space-between;align-items:flex-start;padding-top:30px}.game-head h2,h2{font:600 33px/1.1 Fraunces,serif;margin:0;letter-spacing:-.02em}.pause-btn{border:1px solid var(--line);font-size:18px;color:var(--muted)}.progress{height:5px;background:#263657;border-radius:9px;margin:25px 0 12px;overflow:hidden}.progress div{height:100%;width:25%;background:var(--gold);transition:width .3s}.hint{color:var(--muted);font-size:13px;margin:0 0 23px}.garden{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;padding:8px 0}.firefly{aspect-ratio:1;border-radius:25px;background:var(--panel);border:1px solid var(--line);position:relative;transition:.2s;min-height:92px}.firefly:after{content:'';position:absolute;width:25px;height:25px;border-radius:50%;background:#50627f;left:50%;top:50%;transform:translate(-50%,-50%);transition:.25s}.firefly.glow{background:#465071;box-shadow:0 0 30px #f9d7784c}.firefly.glow:after{background:var(--gold);box-shadow:0 0 25px 9px #ffd7788c}.firefly.clicked:after{background:var(--mint);box-shadow:0 0 20px 7px #9be0c578}.firefly:active{transform:scale(.94)}.game-footer{margin-top:25px;display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:12px}.small{min-height:43px;border-radius:13px;font-size:12px;padding:0 14px}.centered{text-align:center;padding-top:55px}.result-orbit{width:112px;height:112px;margin:0 auto 30px;border-radius:50%;border:1px solid #4a5876;display:grid;place-items:center;box-shadow:0 0 0 14px #182746,0 0 0 15px #334466}.result-star{font-size:48px;color:var(--gold);text-shadow:0 0 27px #ffd778}.centered h2{max-width:320px;margin:0 auto 15px}.result-copy{color:var(--muted);line-height:1.6;font-size:14px;max-width:290px;margin:0 auto}.result-stats{display:flex;justify-content:center;gap:65px;margin:31px 0}.result-stats strong,.result-stats small{display:block}.result-stats strong{font:600 28px Fraunces;color:var(--gold)}.result-stats small{font-size:11px;color:var(--muted);margin-top:5px}.centered .primary,.centered .soft{width:100%;margin-top:11px}.centered .soft{background:transparent;border:0;min-height:45px}.setting-list{margin:28px 0 22px;border-top:1px solid var(--line)}.setting{display:flex;justify-content:space-between;align-items:center;min-height:78px;border-bottom:1px solid var(--line)}.setting strong,.setting small{display:block}.setting strong{font-size:14px}.setting small{color:var(--muted);font-size:12px;margin-top:5px}.setting input{display:none}.setting i{width:47px;height:27px;background:#334466;border-radius:30px;position:relative}.setting i:after{content:'';position:absolute;width:21px;height:21px;top:3px;left:3px;background:#aab6cb;border-radius:50%;transition:.2s}.setting input:checked+i{background:#637a69}.setting input:checked+i:after{left:23px;background:var(--mint)}.about-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;gap:14px;margin-bottom:22px}.about-card>span{font-size:25px;color:var(--gold)}.about-card strong{font-size:14px}.about-card p{color:var(--muted);font-size:12px;line-height:1.55;margin:7px 0 0}.wide{width:100%}.modal{position:fixed;inset:0;background:#0b1428d9;display:grid;place-items:end center;padding:18px;z-index:4}.modal[hidden]{display:none}.modal-card{background:#1b2b4a;border:1px solid #405173;border-radius:25px;padding:27px 23px 22px;max-width:510px;width:100%;position:relative;box-shadow:0 -10px 40px #07102480}.close{position:absolute;right:16px;top:12px;background:transparent;color:var(--muted);font-size:29px}.modal-icon{color:var(--gold);font-size:32px}.modal-card h2{font-size:30px;margin:5px 0 19px}.modal-card ol{padding-left:22px;color:var(--muted);line-height:1.7;font-size:14px}.modal-card li{padding:5px 0}.modal-card li b{color:var(--ink)}.modal-card>p{font-size:13px;line-height:1.5;color:var(--muted);margin:18px 0}.modal-card .primary{width:100%}.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,20px);background:#e9f2eb;color:#17253a;padding:11px 17px;border-radius:15px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:5}.toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+  <main id="app" aria-live="polite">
+    <div class="topbar">
+      <button class="icon-btn" id="homeBtn" aria-label="Back to home">⌂</button>
+      <div class="brand"><span class="brand-dot"></span><span>Glow Garden</span></div>
+      <button class="icon-btn" id="settingsBtn" aria-label="Open settings">⚙</button>
+    </div>
+
+    <section id="home" class="screen active">
+      <div class="hero">
+        <div class="moon">☾</div>
+        <div class="spark spark-a">✦</div><div class="spark spark-b">✧</div><div class="spark spark-c">·</div>
+        <p class="eyebrow">A quiet little place</p>
+        <h1>Welcome to<br><em>your garden.</em></h1>
+        <p class="intro">Notice the lights. Remember their order. There is no rush, and every try is a good try.</p>
+      </div>
+      <div class="home-actions">
+        <button class="primary" id="playBtn"><span>Enter the garden</span><b>→</b></button>
+        <button class="soft" id="howBtn">How to play <span>i</span></button>
+      </div>
+      <div class="streak-card"><div class="streak-icon">✦</div><div><strong id="bestText">Your garden is waiting</strong><small id="roundText">A gentle memory game</small></div><div class="mini-arrow">›</div></div>
+    </section>
+
+    <section id="game" class="screen">
+      <div class="game-head"><div><p class="eyebrow">Round <span id="roundNum">1</span></p><h2 id="gameTitle">Watch the lights</h2></div><button class="pause-btn" id="pauseBtn">Ⅱ</button></div>
+      <div class="progress"><div id="progressFill"></div></div>
+      <p class="hint" id="hint">The garden will glow in a moment.</p>
+      <div class="garden" id="garden" aria-label="Garden of lights"></div>
+      <div class="game-footer"><button class="soft small" id="repeatBtn">↻ Repeat pattern</button><span id="levelLabel">Level 1 · 3 lights</span></div>
+    </section>
+
+    <section id="result" class="screen centered">
+      <div class="result-orbit"><div class="result-star">✦</div></div>
+      <p class="eyebrow" id="resultEyebrow">Beautifully done</p>
+      <h2 id="resultTitle">The garden remembers.</h2>
+      <p class="result-copy" id="resultCopy">You noticed all the lights in the right order.</p>
+      <div class="result-stats"><div><strong id="resultScore">3</strong><small>lights found</small></div><div><strong id="resultRound">1</strong><small>round reached</small></div></div>
+      <button class="primary" id="nextBtn">Grow the garden <b>→</b></button>
+      <button class="soft" id="homeResultBtn">Rest in the garden</button>
+    </section>
+
+    <section id="settings" class="screen">
+      <p class="eyebrow">Make it yours</p><h2>Garden settings</h2>
+      <div class="setting-list">
+        <label class="setting"><span><strong>Quiet mode</strong><small>Keep the garden completely silent</small></span><input type="checkbox" id="quietToggle" checked><i></i></label>
+        <label class="setting"><span><strong>Gentle glow</strong><small>Use softer, slower light changes</small></span><input type="checkbox" id="gentleToggle" checked><i></i></label>
+        <label class="setting"><span><strong>Extra time</strong><small>Take as long as you need to answer</small></span><input type="checkbox" id="timeToggle" checked><i></i></label>
+      </div>
+      <div class="about-card"><span>✿</span><div><strong>Made for calm focus</strong><p>Glow Garden has no countdowns, lives, or wrong-answer sounds. If a pattern feels tricky, simply repeat it.</p></div></div>
+      <button class="soft wide" id="closeSettings">Save and return</button>
+    </section>
+
+    <div class="modal" id="howModal" hidden><div class="modal-card"><button class="close" id="closeModal">×</button><div class="modal-icon">✦</div><h2>How to play</h2><ol><li><b>Watch</b> as the fireflies glow, one by one.</li><li><b>Remember</b> the path they made.</li><li><b>Tap</b> the same lights in the same order.</li></ol><p>There is no timer. You can repeat the pattern whenever you want.</p><button class="primary" id="modalStart">I’m ready <b>→</b></button></div></div>
+    <div class="toast" id="toast"></div>
+  </main>
+  <script >
+(()=>{const host=window.ForgeHost||window.forge;const $=s=>document.querySelector(s);const screens=['home','game','result','settings'];let round=1,pattern=[],input=[],busy=false,best=0;let settings={quiet:true,gentle:true,extra:true};
+function show(name){screens.forEach(x=>$('#'+x).classList.toggle('active',x===name));window.scrollTo(0,0)}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2300)}
+async function load(){try{const d=host&&await host.state.get('glowGarden');if(d){best=d.best||0;settings={...settings,...(d.settings||{})};['quietToggle','gentleToggle','timeToggle'].forEach((id,i)=>$('#'+id).checked=Object.values(settings)[i]);$('#bestText').textContent=best?`Best: ${best} lights reached`:'Your garden is waiting'}}catch(e){}}
+async function save(){try{await host?.state.set('glowGarden',{best,settings})}catch(e){}}
+function makePattern(){const count=Math.min(3+round-1,9);let a=[];while(a.length<count){const n=Math.floor(Math.random()*9);if(!a.includes(n))a.push(n)}return a}
+function renderGarden(){const g=$('#garden');g.innerHTML='';for(let i=0;i<9;i++){const b=document.createElement('button');b.className='firefly';b.setAttribute('aria-label',`Firefly ${i+1}`);b.onclick=()=>tap(i);g.appendChild(b)}}
+function glow(i){const b=$$('.firefly')[i];if(!b)return;b.classList.add('glow');setTimeout(()=>b.classList.remove('glow'),settings.gentle?700:430)}
+function $$(s){return [...document.querySelectorAll(s)]}
+function start(){pattern=makePattern();input=[];busy=true;show('game');renderGarden();$('#roundNum').textContent=round;$('#levelLabel').textContent=`Level ${round} · ${pattern.length} lights`;$('#gameTitle').textContent='Watch the lights';$('#hint').textContent='Look closely. The garden is showing your path.';$('#progressFill').style.width='0%';setTimeout(playPattern,650)}
+async function playPattern(){busy=true;input=[];$('#hint').textContent='Watch the glowing path…';for(let i=0;i<pattern.length;i++){glow(pattern[i]);if(!settings.quiet){try{await host?.tts?.speak(String(i+1),{lang:'en-US',route:'speaker'})}catch(e){}}await new Promise(r=>setTimeout(r,settings.gentle?900:620))}busy=false;$('#hint').textContent='Your turn. Tap the same lights.';$('#gameTitle').textContent='Your turn';}
+function tap(i){if(busy)return;input.push(i);const b=$$('.firefly')[i];b.classList.add('clicked');setTimeout(()=>b.classList.remove('clicked'),280);$('#progressFill').style.width=(input.length/pattern.length*100)+'%';if(pattern[input.length-1]!==i){busy=true;$('#hint').textContent='That path changed a little. Try it again.';setTimeout(()=>playPattern(),700);return}if(input.length===pattern.length){busy=true;best=Math.max(best,pattern.length);save();setTimeout(()=>{fillResult(true);show('result')},520)}}
+function fillResult(ok){$('#resultEyebrow').textContent='Beautifully done';$('#resultTitle').textContent=round>=5?'Your garden is glowing.':'The garden remembers.';$('#resultCopy').textContent=`You noticed all ${pattern.length} lights in the right order.`;$('#resultScore').textContent=pattern.length;$('#resultRound').textContent=round}
+$('#playBtn').onclick=()=>{round=1;start()};$('#modalStart').onclick=()=>{$('#howModal').hidden=true;round=1;start()};$('#howBtn').onclick=()=>$('#howModal').hidden=false;$('#closeModal').onclick=()=>$('#howModal').hidden=true;$('#pauseBtn').onclick=()=>{if(!busy){busy=true;toast('Paused — take your time');setTimeout(()=>{busy=false;toast('Ready when you are')},1200)}};$('#repeatBtn').onclick=()=>{if(!busy)playPattern()};$('#nextBtn').onclick=()=>{round++;start()};$('#homeResultBtn').onclick=()=>show('home');$('#homeBtn').onclick=()=>show('home');$('#settingsBtn').onclick=()=>show('settings');$('#closeSettings').onclick=()=>{settings={quiet:$('#quietToggle').checked,gentle:$('#gentleToggle').checked,extra:$('#timeToggle').checked};save();show('home');toast('Your garden was updated')};load()})();
+</script>
+</body>
+</html>

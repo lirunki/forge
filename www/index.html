@@ -1480,7 +1480,6 @@ termux-reload-settings</div>
           <div class="preview-title" data-i18n="lib.title">Saved apps</div>
           <button class="btn secondary small" id="btnImportLib" type="button" data-i18n="lib.import">Import</button>
           <button class="btn secondary small" id="btnRefreshLib" type="button" data-i18n="common.refresh">Refresh</button>
-          <button class="btn secondary small" id="btnInstallKitchen" type="button" data-i18n="lib.kitchen">Kitchen sink</button>
           <input type="file" id="importFile" accept=".html,.htm,text/html" hidden />
         </div>
         <div class="status-line" id="libStatus"></div>
@@ -27172,7 +27171,6 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     el.btnOpenWindow?.addEventListener('click', () => currentApp && openAppInNewWindow(currentApp));
     el.btnExport?.addEventListener('click', exportCurrentApp);
     el.btnRefreshLib?.addEventListener('click', renderLibrary);
-  document.getElementById('btnInstallKitchen')?.addEventListener('click', installKitchenSink);
     el.btnDriveConnect?.addEventListener('click', async () => {
       try {
         await ensureDriveConnected({ forcePick: true });

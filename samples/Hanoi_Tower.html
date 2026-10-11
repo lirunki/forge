@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Hanoi Tower</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; }
+  body {
+    font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
+    background:linear-gradient(160deg,#1a1a2e 0%,#16213e 55%,#0f3460 100%);
+    color:#eef2f7; display:flex; flex-direction:column;
+    height:100vh; height:100dvh; overflow:hidden;
+    user-select:none; -webkit-user-select:none; touch-action:manipulation;
+  }
+  header { text-align:center; padding:14px 12px 8px; flex-shrink:0; }
+  h1 { font-size:22px; font-weight:800; letter-spacing:1px; }
+  h1 span { color:#f5b942; }
+  .stats { display:flex; justify-content:center; gap:16px; margin-top:8px; }
+  .stat { display:flex; flex-direction:column; gap:1px; min-width:46px; }
+  .stat span { font-size:10px; color:#8fa3c0; text-transform:uppercase; letter-spacing:1px; }
+  .stat b { font-size:16px; color:#fff; }
+
+  .board { flex:1; display:flex; justify-content:space-around; padding:6px 10px 4px; min-height:0; }
+  .tower { flex:1; max-width:34%; min-width:0; display:flex; flex-direction:column; cursor:pointer; position:relative; }
+  .stack { flex:1; width:100%; position:relative; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; min-height:0; }
+  .pole { position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:10px; height:calc(100% - 6px); background:linear-gradient(#5a6b85,#3a4a63); border-radius:6px 6px 0 0; }
+  .disks { width:100%; max-width:150px; position:relative; z-index:2; display:flex; flex-direction:column-reverse; align-items:center; padding-bottom:2px; }
+  .disk {
+    flex:0 0 auto; margin:2px 0; border-radius:999px; position:relative;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; color:rgba(255,255,255,.92); text-shadow:0 1px 2px rgba(0,0,0,.45);
+    box-shadow:0 3px 6px rgba(0,0,0,.35), inset 0 2px 3px rgba(255,255,255,.35);
+    transition:transform .18s ease, box-shadow .18s ease;
+  }
+  .disk.selected { transform:translateY(-12px) scale(1.05); box-shadow:0 10px 18px rgba(0,0,0,.5), 0 0 16px rgba(255,255,255,.5); }
+  .tower.active .pole { background:linear-gradient(#f5b942,#c98a1e); box-shadow:0 0 14px rgba(245,185,66,.55); }
+  .base { width:100%; max-width:150px; height:14px; flex-shrink:0; background:linear-gradient(#5a6b85,#2c3a52); border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,.4); }
+  .label { font-size:11px; color:#7d90ad; margin-top:6px; letter-spacing:2px; text-transform:uppercase; text-align:center; }
+
+  .controls { flex-shrink:0; padding:10px 16px calc(12px + env(safe-area-inset-bottom)); background:rgba(0,0,0,.25); backdrop-filter:blur(8px); }
+  .btn-row { display:flex; gap:10px; }
+  button { flex:1; border:none; border-radius:14px; padding:15px 8px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; transition:transform .1s, opacity .2s; font-family:inherit; touch-action:manipulation; }
+  button:active { transform:scale(.96); }
+  button:disabled { opacity:.4; pointer-events:none; }
+  #autoBtn { background:linear-gradient(135deg,#f5b942,#e07b39); color:#1a1a2e; }
+  #autoBtn.running { background:linear-gradient(135deg,#e05c5c,#a83232); color:#fff; }
+  #resetBtn { background:rgba(255,255,255,.12); }
+
+  .speed-row { display:flex; align-items:center; gap:12px; margin-top:12px; }
+  .speed-row label { font-size:12px; color:#9fb3d1; white-space:nowrap; }
+  .dial { flex:1; height:34px; }
+  .dial input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:34px; background:transparent; margin:0; }
+  .dial input[type=range]::-webkit-slider-runnable-track { height:10px; border-radius:5px; background:linear-gradient(90deg,#3fae6a,#f5b942,#e05c5c); }
+  .dial input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; margin-top:-9px; border-radius:50%; background:#fff; border:3px solid #f5b942; box-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer; }
+  .speed-val { font-size:12px; font-weight:700; color:#f5b942; width:56px; text-align:right; white-space:nowrap; }
+
+  .diff-row { display:flex; gap:8px; margin-top:10px; justify-content:center; }
+  .diff-row button { flex:0 1 auto; padding:9px 16px; font-size:13px; background:rgba(255,255,255,.08); border-radius:10px; }
+  .diff-row button.on { background:#f5b942; color:#1a1a2e; }
+
+  .toast { position:fixed; top:18px; left:50%; transform:translateX(-50%) translateY(-90px); background:#3fae6a; color:#fff; padding:12px 22px; border-radius:14px; font-weight:700; font-size:15px; box-shadow:0 6px 20px rgba(0,0,0,.5); transition:transform .35s cubic-bezier(.34,1.56,.64,1); z-index:99; white-space:nowrap; }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .confetti { position:fixed; top:-12px; width:9px; height:14px; z-index:98; pointer-events:none; animation:fall linear forwards; }
+  @keyframes fall { to { transform:translateY(110vh) rotate(720deg); opacity:.2; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>HANOI <span>TOWER</span></h1>
+  <div class="stats">
+    <div class="stat"><span>Moves</span><b id="moveCount">0</b></div>
+    <div class="stat"><span>Min</span><b id="minMoves">7</b></div>
+    <div class="stat"><span>Best</span><b id="bestMoves">—</b></div>
+    <div class="stat"><span>Disks</span><b id="diskLabel">3</b></div>
+  </div>
+</header>
+
+<div class="board" id="board">
+  <div class="tower" data-i="0">
+    <div class="stack"><div class="pole"></div><div class="disks"></div></div>
+    <div class="base"></div><div class="label">A</div>
+  </div>
+  <div class="tower" data-i="1">
+    <div class="stack"><div class="pole"></div><div class="disks"></div></div>
+    <div class="base"></div><div class="label">B</div>
+  </div>
+  <div class="tower" data-i="2">
+    <div class="stack"><div class="pole"></div><div class="disks"></div></div>
+    <div class="base"></div><div class="label">C</div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="btn-row">
+    <button id="autoBtn">▶ Auto Solve</button>
+    <button id="resetBtn">↺ Reset</button>
+  </div>
+  <div class="speed-row">
+    <label>Speed</label>
+    <div class="dial"><input type="range" id="speed" min="1" max="10" value="4"></div>
+    <div class="speed-val" id="speedVal">4×</div>
+  </div>
+  <div class="diff-row" id="diffRow">
+    <button data-n="3" class="on">3</button>
+    <button data-n="4">4</button>
+    <button data-n="5">5</button>
+    <button data-n="6">6</button>
+    <button data-n="7">7</button>
+    <button data-n="8">8</button>
+  </div>
+</div>
+
+<div class="toast" id="toast">🎉 Solved!</div>
+
+<script>
+(function(){
+  var host = (typeof ForgeHost !== 'undefined') ? ForgeHost : (window.ForgeHost || null);
+  var COLORS = ['#e05c5c','#f5b942','#f0e05c','#7be495','#5cc9e0','#5c7ce0','#b45ce0','#e05c9e'];
+  var towers = [[],[],[]], n = 3, moves = 0, selected = -1;
+  var autoRunning = false, autoTimer = null, won = false, best = {};
+  var seq = [], seqIdx = 0;
+
+  var board = document.getElementById('board');
+  var moveEl = document.getElementById('moveCount');
+  var minEl = document.getElementById('minMoves');
+  var bestEl = document.getElementById('bestMoves');
+  var diskLbl = document.getElementById('diskLabel');
+  var autoBtn = document.getElementById('autoBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var speedEl = document.getElementById('speed');
+  var speedVal = document.getElementById('speedVal');
+  var diffRow = document.getElementById('diffRow');
+  var toast = document.getElementById('toast');
+
+  function shade(hex, amt){
+    var num = parseInt(hex.slice(1), 16);
+    var r = Math.max(0, Math.min(255, (num >> 16) + amt));
+    var g = Math.max(0, Math.min(255, ((num >> 8) & 255) + amt));
+    var b = Math.max(0, Math.min(255, (num & 255) + amt));
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+
+  // Disks are sized in PIXELS measured from the real pole width, so they
+  // always render (no percentage-of-auto-width collapse).
+  function render(){
+    for (var i = 0; i < 3; i++){
+      var towerEl = board.children[i];
+      var stack = towerEl.querySelector('.stack');
+      var d = towerEl.querySelector('.disks');
+      var W = d.clientWidth || stack.clientWidth || 100;
+      var H = stack.clientHeight || 240;
+      var dh = Math.max(13, Math.min(26, Math.floor((H - 10) / Math.max(n, 1)) - 3));
+      d.innerHTML = '';
+      towers[i].forEach(function(sz, idx){
+        var el = document.createElement('div');
+        el.className = 'disk' + (idx === towers[i].length - 1 && selected === i ? ' selected' : '');
+        var frac = (n > 1) ? (sz - 1) / (n - 1) : 1;
+        var w = Math.max(30, Math.round(W * (0.32 + 0.68 * frac)));
+        el.style.width = w + 'px';
+        el.style.height = dh + 'px';
+        el.style.background = 'linear-gradient(180deg,' + COLORS[sz - 1] + ',' + shade(COLORS[sz - 1], -34) + ')';
+        if (dh >= 16){
+          el.style.fontSize = Math.min(12, dh - 7) + 'px';
+          el.textContent = sz;
+        }
+        d.appendChild(el);
+      });
+      towerEl.classList.toggle('active', selected === i);
+    }
+    moveEl.textContent = moves;
+  }
+
+  function reset(){
+    stopAuto(); won = false; selected = -1; moves = 0;
+    towers = [[],[],[]];
+    for (var i = n; i >= 1; i--) towers[0].push(i);
+    minEl.textContent = Math.pow(2, n) - 1;
+    diskLbl.textContent = n;
+    bestEl.textContent = (best[n] != null ? best[n] : '—');
+    render();
+  }
+
+  function tryMove(from, to){
+    if (from === to || from < 0 || to < 0 || !towers[from].length) return false;
+    var d = towers[from][towers[from].length - 1];
+    if (towers[to].length && towers[to][towers[to].length - 1] < d) return false;
+    towers[from].pop(); towers[to].push(d); moves++;
+    render();
+    if (!won && towers[2].length === n){ won = true; onWin(); }
+    return true;
+  }
+
+  function onWin(){
+    var wasAuto = autoRunning;
+    stopAuto();
+    if (wasAuto){
+      toast.textContent = '🤖 Auto-solved in ' + moves + ' moves!';
+    } else if (best[n] == null || moves < best[n]){
+      best[n] = moves;
+      bestEl.textContent = moves;
+      saveState();
+      toast.textContent = '🎉 New best: ' + moves + ' moves!';
+    } else {
+      toast.textContent = '🎉 Solved in ' + moves + ' moves!';
+    }
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 2600);
+    celebrate();
+  }
+
+  board.addEventListener('click', function(e){
+    if (autoRunning) return;
+    var t = e.target.closest('.tower'); if (!t) return;
+    var i = +t.getAttribute('data-i');
+    if (selected === -1){
+      if (towers[i].length){ selected = i; render(); }
+    } else if (i === selected){
+      selected = -1; render();
+    } else {
+      var ok = tryMove(selected, i);
+      selected = -1; render();
+      if (!ok) shake(t);
+    }
+  });
+
+  function shake(el){
+    el.style.transition = 'transform .08s'; el.style.transform = 'translateX(4px)';
+    setTimeout(function(){ el.style.transform = 'translateX(-4px)'; }, 80);
+    setTimeout(function(){ el.style.transform = ''; el.style.transition = ''; }, 160);
+  }
+
+  // ---- Auto solver: smallest disk cycles, other disk move is forced ----
+  function solveSequence(){
+    var s = [], pegs = [[],[],[]], i;
+    for (i = n; i >= 1; i--) pegs[0].push(i);
+    var total = Math.pow(2, n) - 1;
+    var smallAt = 0;
+    var cycle = (n % 2 === 1) ? [0, 2, 1] : [0, 1, 2];
+    function nextInCycle(p){ return cycle[(cycle.indexOf(p) + 1) % 3]; }
+    for (var m = 1; m <= total; m++){
+      if (m % 2 === 1){
+        var to = nextInCycle(smallAt);
+        pegs[to].push(pegs[smallAt].pop());
+        s.push([smallAt, to]); smallAt = to;
+      } else {
+        var a = (smallAt + 1) % 3, b = (smallAt + 2) % 3, from, to2;
+        if (!pegs[a].length){ from = b; to2 = a; }
+        else if (!pegs[b].length){ from = a; to2 = b; }
+        else if (pegs[a][pegs[a].length - 1] < pegs[b][pegs[b].length - 1]){ from = a; to2 = b; }
+        else { from = b; to2 = a; }
+        pegs[to2].push(pegs[from].pop());
+        s.push([from, to2]);
+      }
+    }
+    return s;
+  }
+
+  function speedMs(){
+    var v = +speedEl.value; // 1..10
+    return Math.round(900 / Math.pow(1.42, v - 1)); // ~900ms .. ~45ms
+  }
+  function updateSpeedLabel(){
+    var v = +speedEl.value;
+    speedVal.textContent = (v >= 9 ? '⚡' : v <= 2 ? '🐢' : '') + v + '×';
+    if (autoRunning){
+      if (autoTimer){ clearTimeout(autoTimer); autoTimer = null; }
+      scheduleNext();
+    }
+  }
+  speedEl.addEventListener('input', updateSpeedLabel);
+  speedEl.addEventListener('change', saveState);
+
+  function startAuto(){
+    if (won) reset();
+    stopAuto();
+    towers = [[],[],[]];
+    for (var i = n; i >= 1; i--) towers[0].push(i);
+    moves = 0; selected = -1; render();
+    seq = solveSequence(); seqIdx = 0;
+    autoRunning = true;
+    autoBtn.textContent = '⏸ Stop'; autoBtn.classList.add('running');
+    scheduleNext();
+  }
+  function scheduleNext(){
+    if (!autoRunning) return;
+    if (seqIdx >= seq.length){ stopAuto(); return; }
+    autoTimer = setTimeout(function(){
+      if (!autoRunning) return;
+      var mv = seq[seqIdx++];
+      if (mv) tryMove(mv[0], mv[1]);
+      if (autoRunning) scheduleNext();
+    }, speedMs());
+  }
+  function stopAuto(){
+    if (autoTimer){ clearTimeout(autoTimer); autoTimer = null; }
+    autoRunning = false;
+    autoBtn.textContent = '▶ Auto Solve'; autoBtn.classList.remove('running');
+  }
+  autoBtn.addEventListener('click', function(){ autoRunning ? stopAuto() : startAuto(); });
+  resetBtn.addEventListener('click', function(){ reset(); saveState(); });
+
+  diffRow.addEventListener('click', function(e){
+    var b = e.target.closest('button'); if (!b) return;
+    var nn = +b.getAttribute('data-n'); if (nn === n) return;
+    n = nn;
+    Array.prototype.forEach.call(diffRow.children, function(x){
+      x.classList.toggle('on', x === b);
+    });
+    reset(); saveState();
+  });
+
+  function celebrate(){
+    for (var i = 0; i < 40; i++){
+      (function(){
+        var c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.left = Math.random() * 100 + 'vw';
+        c.style.background = COLORS[i % COLORS.length];
+        c.style.animationDuration = (1.6 + Math.random() * 1.8) + 's';
+        c.style.animationDelay = (Math.random() * .5) + 's';
+        document.body.appendChild(c);
+        setTimeout(function(){ c.remove(); }, 4200);
+      })();
+    }
+  }
+
+  // ---- Persist difficulty / speed / best scores via ForgeHost state ----
+  function saveState(){
+    if (!host || !host.state || !host.state.set) return;
+    try {
+      Promise.resolve(host.state.set('hanoi', { best: best, n: n, speed: +speedEl.value })).catch(function(){});
+    } catch (e) {}
+  }
+  function loadState(){
+    if (!host || !host.state || !host.state.get) return;
+    try {
+      Promise.resolve(host.state.get('hanoi')).then(function(v){
+        if (!v || typeof v !== 'object') return;
+        if (v.best && typeof v.best === 'object') best = v.best;
+        if (v.speed >= 1 && v.speed <= 10) speedEl.value = v.speed;
+        if (v.n >= 3 && v.n <= 8){
+          n = v.n;
+          Array.prototype.forEach.call(diffRow.children, function(x){
+            x.classList.toggle('on', +x.getAttribute('data-n') === n);
+          });
+        }
+        updateSpeedLabel();
+        reset();
+      }).catch(function(){});
+    } catch (e) {}
+  }
+  if (host && host.on){ try { host.on('ready', loadState); } catch (e) {} }
+
+  window.addEventListener('resize', render);
+  window.addEventListener('orientationchange', function(){ setTimeout(render, 120); });
+
+  reset();
+  loadState();
+})();
+</script>
+</body>
+</html>

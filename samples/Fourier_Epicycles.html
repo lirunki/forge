@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Fourier Epicycles</title>
+<style>:root{
+  --bg:#0b0f1a; --panel:#121a2e; --panel2:#1a2540; --ink:#e8eefc;
+  --muted:#8290b5; --accent:#5cc8ff; --accent2:#ff6ec7; --good:#4ade80;
+  --line:#26324f;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; height:100%; background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  overscroll-behavior:none; touch-action:none;}
+#app{display:flex; flex-direction:column; height:100dvh;}
+
+.topbar{display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; background:linear-gradient(180deg,#0e1426,#0b0f1a);
+  border-bottom:1px solid var(--line);}
+.title{font-weight:700; font-size:18px; letter-spacing:.3px;}
+.chip{background:var(--panel2); color:var(--ink); border:1px solid var(--line);
+  border-radius:999px; padding:8px 16px; font-size:14px; font-weight:600;}
+.chip:active{transform:scale(.96);}
+
+.stage-wrap{position:relative; flex:1; min-height:0; overflow:hidden;}
+#stage{position:absolute; inset:0; width:100%; height:100%; display:block;
+  background:radial-gradient(circle at 50% 45%, #131c33 0%, #0a0e18 80%);}
+.hint{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  color:var(--muted); font-size:15px; pointer-events:none; text-align:center;
+  transition:opacity .3s;}
+.hint.hide{opacity:0;}
+
+.panel{background:var(--panel); border-top:1px solid var(--line);
+  padding:12px 14px calc(14px + env(safe-area-inset-bottom)); display:flex;
+  flex-direction:column; gap:12px;}
+.row{display:flex; align-items:center; gap:10px;}
+.presets{flex-wrap:wrap; gap:8px;}
+.preset{flex:1 1 auto; min-width:84px; background:var(--panel2); color:var(--ink);
+  border:1px solid var(--line); border-radius:12px; padding:10px 6px; font-size:13px;
+  font-weight:600;}
+.preset:active{transform:scale(.96); border-color:var(--accent);}
+.preset.active{border-color:var(--accent); color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset;}
+
+.ctrl{justify-content:center; gap:14px;}
+.big{width:64px; height:64px; border-radius:50%; border:none; cursor:pointer;
+  background:linear-gradient(145deg,var(--accent),#3a9fd6); color:#04121f;
+  font-size:26px; font-weight:800; box-shadow:0 4px 14px rgba(92,200,255,.35);}
+.big:active{transform:scale(.94);}
+.mid{background:var(--panel2); color:var(--ink); border:1px solid var(--line);
+  border-radius:12px; padding:12px 16px; font-size:14px; font-weight:600;}
+.mid:active{transform:scale(.96);}
+
+.slider{flex-direction:column; align-items:stretch; gap:6px;}
+.slider label{font-size:13px; color:var(--muted); display:flex; justify-content:space-between;}
+.slider label span{color:var(--accent); font-weight:700;}
+input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:6px;
+  border-radius:6px; background:var(--panel2); outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:24px; height:24px;
+  border-radius:50%; background:var(--accent); box-shadow:0 2px 6px rgba(0,0,0,.4);}
+input[type=range]::-moz-range-thumb{width:24px; height:24px; border:none; border-radius:50%;
+  background:var(--accent);}
+</style>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="title">🌀 Fourier Epicycles</div>
+      <button id="modeBtn" class="chip">Draw</button>
+    </header>
+
+    <div class="stage-wrap">
+      <canvas id="stage"></canvas>
+      <div id="hint" class="hint">Draw a shape with your finger</div>
+    </div>
+
+    <div class="panel">
+      <div class="row presets" id="presets">
+        <button class="preset" data-preset="circle">⭕ Circle</button>
+        <button class="preset" data-preset="heart">❤️ Heart</button>
+        <button class="preset" data-preset="star">⭐ Star</button>
+        <button class="preset" data-preset="infinity">∞ Infinity</button>
+        <button class="preset" data-preset="butterfly">🦋 Butterfly</button>
+      </div>
+
+      <div class="row ctrl">
+        <button id="playBtn" class="big">▶</button>
+        <button id="clearTrailBtn" class="mid">Clear trail</button>
+        <button id="resetBtn" class="mid">Reset</button>
+      </div>
+
+      <div class="row slider">
+        <label>Terms <span id="termsVal">50</span></label>
+        <input type="range" id="terms" min="1" max="200" value="50" />
+      </div>
+      <div class="row slider">
+        <label>Speed <span id="speedVal">1.0×</span></label>
+        <input type="range" id="speed" min="1" max="40" value="10" />
+      </div>
+      <div class="row slider">
+        <label>Trail <span id="trailVal">on</span></label>
+        <input type="range" id="trail" min="0" max="1" value="1" step="1" />
+      </div>
+    </div>
+  </div>
+  <script >
+/* Fourier Epicycles toy — single canvas, draw or preset */
+(function(){
+  "use strict";
+
+  const canvas = document.getElementById('stage');
+  const ctx = canvas.getContext('2d');
+  const hint = document.getElementById('hint');
+
+  // ---- state ----
+  let mode = 'draw';            // 'draw' | 'play'
+  let playing = false;
+  let path = [];                // complex points [{x,y}] of the shape (centered, normalized)
+  let coeffs = [];              // [{k, re, im, amp, phase}] sorted by amp desc
+  let trail = [];                // reconstructed points
+  let t = 0;                    // parameter 0..2π
+  let terms = 50;
+  let speed = 1.0;              // multiplier
+  let trailOn = true;
+  let scale = 1, offX = 0, offY = 0; // shape->canvas transform
+  let dpr = 1;
+  let W=0,H=0;
+
+  // ---- canvas sizing ----
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio||1, 2.5);
+    const r = canvas.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W*dpr);
+    canvas.height = Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    fitShape();
+  }
+  window.addEventListener('resize', resize);
+
+  // ---- presets (parametric shapes, sampled) ----
+  function sample(fn, n){
+    const pts=[]; for(let i=0;i<n;i++){ const u=i/n; const p=fn(u); pts.push({x:p[0],y:p[1]}); }
+    return pts;
+  }
+  const presets = {
+    circle: u=>[Math.cos(2*Math.PI*u), Math.sin(2*Math.PI*u)],
+    heart:  u=>{const a=2*Math.PI*u; return [16*Math.pow(Math.sin(a),3),
+      -(13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a))];},
+    star:  u=>{const a=2*Math.PI*u; const r=1+0.45*Math.cos(5*a); return [r*Math.cos(a), -r*Math.sin(a)];},
+    infinity: u=>{const a=2*Math.PI*u; return [Math.cos(a)/(1+Math.sin(a)*Math.sin(a)),
+      Math.sin(a)*Math.cos(a)/(1+Math.sin(a)*Math.sin(a))];},
+    butterfly: u=>{const a=2*Math.PI*u;
+      const d=Math.exp(Math.cos(a))-2*Math.cos(4*a)-Math.pow(Math.sin(a/12),5);
+      return [Math.sin(a)*d, -Math.cos(a)*d];}
+  };
+
+  // ---- DFT (discrete Fourier transform) treating path as complex signal ----
+  function computeDFT(pts){
+    const N = pts.length;
+    const X = new Array(N);
+    for(let k=0;k<N;k++){
+      let re=0, im=0;
+      for(let n=0;n<N;n++){
+        const phi = 2*Math.PI*k*n/N;
+        re += pts[n].x*Math.cos(phi) + pts[n].y*Math.sin(phi);
+        im += pts[n].y*Math.cos(phi) - pts[n].x*Math.sin(phi);
+      }
+      re/=N; im/=N;
+      // map DFT bin k to true (signed) frequency so epicycles spin at natural rates
+      const freq = k <= N/2 ? k : k - N;
+      X[k] = {k, freq, re, im, amp:Math.hypot(re,im), phase:Math.atan2(im,re)};
+    }
+    // sort by amplitude desc (keep dominant terms first)
+    X.sort((a,b)=>b.amp - a.amp);
+    return X;
+  }
+
+  // ---- fit shape to canvas ----
+  function fitShape(){
+    if(!path.length) return;
+    let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
+    for(const p of path){
+      if(p.x<minx)minx=p.x; if(p.x>maxx)maxx=p.x;
+      if(p.y<miny)miny=p.y; if(p.y>maxy)maxy=p.y;
+    }
+    const sw=maxx-minx||1, sh=maxy-miny||1;
+    const pad=46;
+    const s=Math.min((W-2*pad)/sw, (H-2*pad)/sh);
+    scale=s; offX=(W-sw*s)/2 - minx*s; offY=(H-sh*s)/2 - miny*s;
+  }
+  function toCanvas(p){ return {x:p.x*scale+offX, y:p.y*scale+offY}; }
+
+  // ---- set a new path ----
+  function setPath(pts){
+    path = pts;
+    coeffs = computeDFT(pts);
+    trail = [];
+    t = 0;
+    fitShape();
+    if(mode==='play'){ playing=true; updatePlayBtn(); }
+  }
+
+  // ---- drawing input ----
+  let drawing=false; let raw=[];
+  function getPt(e){
+    const r=canvas.getBoundingClientRect();
+    const cx = (e.touches?e.touches[0].clientX:e.clientX)-r.left;
+    const cy = (e.touches?e.touches[0].clientY:e.clientY)-r.top;
+    return {x:cx, y:cy};
+  }
+  function startDraw(e){
+    if(mode!=='draw') return;
+    e.preventDefault(); drawing=true; raw=[]; hint.classList.add('hide');
+    const p=getPt(e); raw.push(p); drawScene();
+  }
+  function moveDraw(e){
+    if(!drawing) return; e.preventDefault();
+    const p=getPt(e);
+    const last=raw[raw.length-1];
+    if(Math.hypot(p.x-last.x,p.y-last.y)>3) raw.push(p);
+    drawScene();
+  }
+  function endDraw(e){
+    if(!drawing) return; drawing=false;
+    if(raw.length<8){ raw=[]; drawScene(); return; }
+    // resample to uniform spacing along arc length -> N points
+    const N=256;
+    const pts=resample(raw,N);
+    // convert to centered coords (canvas->shape space inverse)
+    // We'll just store raw canvas coords then center/normalize for DFT,
+    // then fitShape recomputes transform from the normalized path.
+    let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
+    for(const p of pts){ if(p.x<minx)minx=p.x; if(p.x>maxx)maxx=p.x; if(p.y<miny)miny=p.y; if(p.y>maxy)maxy=p.y; }
+    const cx=(minx+maxx)/2, cy=(miny+maxy)/2;
+    const norm = pts.map(p=>({x:p.x-cx, y:p.y-cy}));
+    setPath(norm);
+    drawScene();
+    // auto-animate the sketch
+    setMode('play');
+  }
+  function resample(pts,N){
+    // cumulative arc length
+    const d=[0]; for(let i=1;i<pts.length;i++) d[i]=d[i-1]+Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);
+    const total=d[d.length-1]; if(total<=0) return pts.slice();
+    const out=[]; let j=0;
+    for(let i=0;i<N;i++){
+      const target=total*i/N;
+      while(j<d.length-1 && d[j+1]<target) j++;
+      const seg=d[j+1]-d[j]||1;
+      const f=(target-d[j])/seg;
+      out.push({x:pts[j].x+(pts[j+1].x-pts[j].x)*f, y:pts[j].y+(pts[j+1].y-pts[j].y)*f});
+    }
+    return out;
+  }
+  canvas.addEventListener('touchstart',startDraw,{passive:false});
+  canvas.addEventListener('touchmove',moveDraw,{passive:false});
+  canvas.addEventListener('touchend',endDraw);
+  canvas.addEventListener('mousedown',startDraw);
+  canvas.addEventListener('mousemove',moveDraw);
+  window.addEventListener('mouseup',endDraw);
+
+  // ---- reconstruction point at parameter t ----
+  function reconstruct(t){
+    let x=0,y=0;
+    const use = coeffs.slice(0, Math.min(terms, coeffs.length));
+    for(const c of use){
+      const r=c.amp;
+      const ang = c.freq*t + c.phase;          // signed freq * t in [0,2π)
+      x += r*Math.cos(ang);
+      y += r*Math.sin(ang);
+    }
+    return {x,y};
+  }
+
+  // ---- rendering ----
+  function drawScene(){
+    ctx.clearRect(0,0,W,H);
+
+    // drawing in progress
+    if(drawing && raw.length>1){
+      ctx.strokeStyle='rgba(92,200,255,.9)'; ctx.lineWidth=3; ctx.lineJoin='round'; ctx.lineCap='round';
+      ctx.beginPath();
+      ctx.moveTo(raw[0].x,raw[0].y);
+      for(let i=1;i<raw.length;i++) ctx.lineTo(raw[i].x,raw[i].y);
+      ctx.stroke();
+      return;
+    }
+    if(!path.length) return;
+
+    // faint original path
+    ctx.strokeStyle='rgba(130,144,181,.28)'; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for(let i=0;i<path.length;i++){
+      const p=toCanvas(path[i]); if(i===0)ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+    }
+    ctx.closePath(); ctx.stroke();
+
+    // trail
+    if(trailOn && trail.length>1){
+      ctx.strokeStyle='rgba(255,110,199,.9)'; ctx.lineWidth=2.5; ctx.lineJoin='round';
+      ctx.beginPath();
+      for(let i=0;i<trail.length;i++){
+        const p=toCanvas(trail[i]); if(i===0)ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+      }
+      ctx.stroke();
+    }
+
+    // epicycles
+    if(mode==='play'){
+      drawEpicycles(t);
+    }
+  }
+
+  function drawEpicycles(t){
+    let px=0, py=0; // in shape space
+    const use = coeffs.slice(0, Math.min(terms, coeffs.length));
+    ctx.lineWidth=1.2;
+    for(let i=0;i<use.length;i++){
+      const c=use[i];
+      const r=c.amp;
+      const ang = c.freq*t + c.phase;
+      const nx = px + r*Math.cos(ang);
+      const ny = py + r*Math.sin(ang);
+      const a = toCanvas({x:px,y:py});
+      const b = toCanvas({x:nx,y:ny});
+      // circle
+      const cr = Math.abs(r*scale);
+      if(cr>0.6){
+        ctx.strokeStyle = i===0 ? 'rgba(92,200,255,.5)' : 'rgba(130,160,210,.22)';
+        ctx.beginPath(); ctx.arc(a.x,a.y,cr,0,2*Math.PI); ctx.stroke();
+      }
+      // radius line
+      ctx.strokeStyle = 'rgba(255,255,255,.45)';
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      px=nx; py=ny;
+    }
+    // tip dot
+    const tip = toCanvas({x:px,y:py});
+    ctx.fillStyle = '#ff6ec7';
+    ctx.beginPath(); ctx.arc(tip.x,tip.y,4.5,0,2*Math.PI); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=1; ctx.stroke();
+    return {x:px,y:py};
+  }
+
+  // ---- animation loop ----
+  let last=0;
+  function loop(ts){
+    requestAnimationFrame(loop);
+    if(mode!=='play' || !playing || !path.length) return;
+    if(!last) last=ts;
+    const dt=(ts-last)/1000; last=ts;
+    // one full cycle = 2π. base angular speed = 2π / 8s, scaled by speed
+    const base = 2*Math.PI/8;
+    t += base*speed*dt;
+    if(t>=2*Math.PI){ t -= 2*Math.PI; }
+    const p = reconstruct(t);
+    trail.push(p);
+    if(trail.length>2000) trail.shift();
+    drawScene();
+  }
+  requestAnimationFrame(loop);
+
+  // ---- controls ----
+  const modeBtn=document.getElementById('modeBtn');
+  const playBtn=document.getElementById('playBtn');
+  const clearTrailBtn=document.getElementById('clearTrailBtn');
+  const resetBtn=document.getElementById('resetBtn');
+  const termsEl=document.getElementById('terms');
+  const termsVal=document.getElementById('termsVal');
+  const speedEl=document.getElementById('speed');
+  const speedVal=document.getElementById('speedVal');
+  const trailEl=document.getElementById('trail');
+  const trailVal=document.getElementById('trailVal');
+
+  function updatePlayBtn(){ playBtn.textContent = playing ? '⏸' : '▶'; }
+  function setMode(m){
+    mode=m; modeBtn.textContent = m==='draw'?'Draw':'Play';
+    if(m==='play'){
+      if(!path.length){ loadPreset('heart'); }
+      playing=true; hint.classList.add('hide');
+    } else {
+      playing=false; trail=[]; raw=[]; path=[]; coeffs=[];
+      hint.classList.remove('hide');
+    }
+    updatePlayBtn(); drawScene();
+    document.querySelectorAll('.preset').forEach(b=>b.classList.remove('active'));
+  }
+  modeBtn.addEventListener('click',()=> setMode(mode==='draw'?'play':'draw'));
+
+  playBtn.addEventListener('click',()=>{
+    if(mode!=='play') setMode('play');
+    playing=!playing; updatePlayBtn();
+  });
+  clearTrailBtn.addEventListener('click',()=>{ trail=[]; drawScene(); });
+  resetBtn.addEventListener('click',()=>{ t=0; trail=[]; drawScene(); });
+
+  termsEl.addEventListener('input',()=>{
+    terms=+termsEl.value; termsVal.textContent=terms;
+    if(mode==='play'){ trail=[]; }
+    drawScene();
+  });
+  speedEl.addEventListener('input',()=>{
+    speed=(+speedEl.value)/10; speedVal.textContent=speed.toFixed(1)+'×';
+  });
+  trailEl.addEventListener('input',()=>{
+    trailOn=+trailEl.value===1; trailVal.textContent=trailOn?'on':'off';
+    if(!trailOn) trail=[]; drawScene();
+  });
+
+  function loadPreset(name){
+    const pts = sample(presets[name], 256);
+    setPath(pts);
+    document.querySelectorAll('.preset').forEach(b=>b.classList.toggle('active', b.dataset.preset===name));
+    hint.classList.add('hide');
+    setMode('play');
+  }
+  document.querySelectorAll('.preset').forEach(b=>{
+    b.addEventListener('click',()=> loadPreset(b.dataset.preset));
+  });
+
+  // ---- init ----
+  resize();
+  // start with a preset so the app isn't empty
+  loadPreset('heart');
+})();
+
+</script>
+</body>
+</html>

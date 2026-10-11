@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1.0'>
+<title>Profile Crawler</title>
+<style>
+:root{--bg:#0b1220;--surface:#151f31;--surface2:#1d2a42;--accent:#6366f1;--text:#e2e8f0;--muted:#8fa3bf;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);padding-bottom:48px}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--surface);position:sticky;top:0;z-index:5;border-bottom:1px solid #26344d}
+h1{font-size:18px;margin:0}
+.icon-btn{width:38px;height:38px;border-radius:9999px;background:var(--surface2);border:none;color:var(--text);font-size:17px;display:flex;align-items:center;justify-content:center}
+.card{background:var(--surface);margin:12px;border-radius:14px;padding:14px;border:1px solid #26344d}
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+input,select,textarea{width:100%;background:var(--bg);border:1px solid #33456a;color:var(--text);border-radius:10px;padding:11px 12px;font-size:15px}
+textarea{height:60px;resize:vertical}
+.btnrow{display:flex;gap:8px;margin-top:14px}
+button{cursor:pointer}
+.primary{flex:1;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:13px 8px;font-size:15px;font-weight:600}
+.ghost{background:var(--surface2);color:var(--text);border:none;border-radius:12px;padding:13px 14px;font-size:14px}
+.hidden{display:none!important}
+#status{font-size:12px;color:var(--muted);margin-top:10px;min-height:16px;word-break:break-all}
+#login-status{font-size:12px;margin-top:8px;min-height:15px;color:var(--muted);word-break:break-word}
+.toolbar{display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin:8px 0 6px;gap:6px;flex-wrap:wrap}
+#count{font-size:13px;color:var(--muted)}
+.small{padding:7px 12px;font-size:12px;border-radius:9px}
+.tablewrap{overflow-x:auto;margin:0 12px;border:1px solid #26344d;border-radius:12px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th{background:var(--surface2);font-size:12px;color:var(--muted);text-align:left;padding:10px}
+td{padding:10px;border-top:1px solid #22304a;font-size:14px;vertical-align:top}
+td a{color:#93c5fd;text-decoration:none;font-weight:600;word-break:break-word}
+td.extra{font-size:12px;color:var(--muted);max-width:220px}
+.st{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:6px}
+.st-pending{background:#64748b}.st-queued{background:#3b82f6}
+.st-working{background:var(--warn);animation:pulse 1s infinite}
+.st-done{background:var(--ok)}.st-error{background:var(--err)}
+@keyframes pulse{50%{opacity:.3}}
+.empty{padding:44px 16px;text-align:center;color:var(--muted);font-size:14px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;z-index:10}
+.modal.open{display:flex}
+.sheet{background:var(--surface);width:100%;border-radius:20px 20px 0 0;padding:20px;max-height:85vh;overflow:auto}
+.sheet h3{margin:0 0 6px}
+.fopt{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid #22304a;font-size:15px;color:var(--text);cursor:pointer;margin:0}
+.fopt input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);flex:none}
+.hint{font-size:11px;color:var(--muted);margin-top:4px}
+#html-view{background:var(--bg);border:1px solid #33456a;border-radius:10px;padding:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:45vh;overflow:auto;margin-top:10px;color:#c9d6ea;font-family:ui-monospace,Menlo,Consolas,monospace}
+</style>
+</head>
+<body>
+<header><h1>🕷️ Profile Crawler</h1><div style="display:flex;gap:8px"><button class='icon-btn' id='vault-btn' aria-label='Site Vault'>🗄️</button><button class='icon-btn' id='settings-btn' aria-label='Settings'>⚙️</button></div></header>
+<div class='card'>
+<label>Base URL (listing page)</label>
+<input id='base-url' placeholder='https://example.com/list' inputmode='url'>
+<div class='hint'>Pre-filled with the TNABoard member-search results page.</div>
+<label>Profile link regex</label>
+<input id='link-regex' placeholder='tnaboard\.com/community/members/'>
+<div class='hint'>Tested against the raw href, the resolved absolute URL, its path and the URL-decoded form — so relative links (e.g. /community/members/name.12345/) and absolute links both match. Duplicates of the same member are merged automatically.</div>
+<label>Authentication</label>
+<select id='auth-mode'>
+<option value='none'>None (public site)</option>
+<option value='basic'>Basic auth (HTTP header)</option>
+<option value='form'>Form login (username + password → cookie session)</option>
+</select>
+<div id='auth-fields' class='hidden'>
+<label>Username</label>
+<input id='auth-user' placeholder='username' autocomplete='off'>
+<label>Password</label>
+<input id='auth-pass' type='password' placeholder='password' autocomplete='off'>
+<div id='form-auth-extra' class='hidden'>
+<div class='btnrow'>
+<button class='ghost' id='test-login' style='flex:1'>🔑 Test Login</button>
+<button class='ghost' id='clear-session'>🚪 Clear session</button>
+</div>
+<div id='login-status'></div>
+<div class='hint'>Logs in via the site form, keeps the cookie session and attaches it to every crawl/fillup request automatically. Login URLs &amp; field names configurable in ⚙️ Settings.</div>
+</div>
+</div>
+<div class='btnrow'>
+<button id='crawl-btn' class='primary'>🕷️ Crawl</button>
+<button id='crawl-stop' class='ghost hidden'>⏹</button>
+<button id='fill-btn' class='primary'>📝 Fillup</button>
+<button id='fill-stop' class='ghost hidden'>⏹</button>
+</div>
+<div id='status'>Enter a base URL and regex, then press Crawl.</div>
+</div>
+<div class='toolbar'>
+<span id='count'>0 profiles</span>
+<span>
+<button class='ghost small' id='filter-btn'>🔍 Filter</button>
+<button class='ghost small' id='html-btn'>📄 HTML</button>
+<button class='ghost small' id='clear-html-btn' title='Clear HTML'>🗑️</button>
+<select id='sort-select' class='ghost small' style='font-size:12px;padding:6px 8px;vertical-align:middle'>
+<option value=''>Sort</option>
+<option value='price-low'>Price low→high</option>
+<option value='price-high'>Price high→low</option>
+</select>
+<button class='ghost small' id='export-btn'>Export CSV</button>
+<button class='ghost small' id='clear-btn'>Clear</button>
+</span>
+</div>
+<div class='tablewrap'>
+<table>
+<thead><tr><th>Name</th><th>Price (incall 1h)</th><th>Services</th><th>Extra</th></tr></thead>
+<tbody id='tbody'></tbody>
+</table>
+</div>
+<div id='empty' class='empty'>No profiles yet.<br>Crawl a listing page to populate the table.</div>
+<div id='filter-modal' class='modal'>
+<div class='sheet'>
+<h3>Filter by service</h3>
+<div id='filter-list'></div>
+<div style='margin-top:16px'>
+<h4 style='margin:0 0 6px;font-size:13px;color:var(--muted)'>Price range</h4>
+<div style='display:flex;gap:8px'>
+<input id='f-price-min' type='number' placeholder='Min' style='flex:1;font-size:14px'>
+<input id='f-price-max' type='number' placeholder='Max' style='flex:1;font-size:14px'>
+</div>
+<div class='hint' style='margin-top:4px'>Only profiles with numeric prices in range will show when set.</div>
+</div>
+<div class='btnrow'>
+<button class='primary' id='filter-clear'>Clear all</button>
+<button class='ghost' id='filter-done'>Done</button>
+</div>
+</div>
+</div>
+<div id='html-modal' class='modal'>
+<div class='sheet'>
+<h3>Downloaded HTML</h3>
+<div class='hint'>Raw HTML of the pages fetched by the last Crawl (most recent first, up to 5 kept).</div>
+<label>Page</label>
+<select id='html-select'></select>
+<div class='btnrow'>
+<button class='ghost' id='html-copy'>📋 Copy</button>
+<button class='ghost' id='html-share'>📤 Share</button>
+<button class='ghost' id='html-clear'>🗑️ Clear</button>
+<button class='primary' id='html-close'>Close</button>
+</div>
+<pre id='html-view'></pre>
+</div>
+</div>
+<div id='settings-modal' class='modal'>
+<div class='sheet'>
+<h3>Settings</h3>
+<label>LLM Provider (for fillup)</label>
+<select id='provider-select'></select>
+<label>Parallel fillups (1–8)</label>
+<input id='parallel' type='number' min='1' max='8' value='3'>
+<label>Max pages to crawl</label>
+<input id='max-pages' type='number' min='1' max='200' value='20'>
+<label>Next-page link text regex (blank = auto: rel=next / next / older / more / »)</label>
+<input id='next-regex' placeholder='(next|siguiente)'>
+<label>Delay between page requests (ms)</label>
+<input id='delay' type='number' min='0' max='10000' value='400'>
+<label>Extra-info page suffix (appended to profile URL)</label>
+<input id='profile-suffix' placeholder='/about'>
+<div class='hint'>During Fillup, each profile is also fetched at profile URL + this suffix (e.g. …/member.123/about). Any extra price/services found there are merged, and other notable details (age, location, contact, notes) fill the “Extra” column. Leave blank to skip.</div>
+<label>Extra instructions for LLM</label>
+<textarea id='extra-instr' placeholder='e.g. Focus on USD prices only. Extract any mention of availability.' style='height:60px; font-size:14px;'></textarea>
+<div class='hint'>These will be added to the extraction prompt for price, services and extra details.</div>
+<h3 style='margin-top:18px'>Form login (advanced)</h3>
+<label>Login page URL (GET — grabs CSRF token &amp; cookies)</label>
+<input id='login-page-url' inputmode='url'>
+<label>Login POST URL</label>
+<input id='login-post-url' inputmode='url'>
+<label>Username field name</label>
+<input id='login-user-field'>
+<label>Password field name</label>
+<input id='login-pass-field'>
+<label>Extra POST fields (comma-separated key=value; value “auto” = CSRF token)</label>
+<input id='login-extra'>
+<label>Logged-out marker regex (blank = auto-detect)</label>
+<input id='login-marker'>
+<div class='btnrow'>
+<button class='primary' id='settings-save'>Save</button>
+<button class='ghost' id='settings-cancel'>Cancel</button>
+</div>
+</div>
+</div>
+<div id='vault-modal' class='modal'>
+<div class='sheet'>
+<h3>🗄️ Site Vault</h3>
+<div class='hint'>Save and quickly load different site setups (URL, regex, user/pass).</div>
+<div id='vault-list' style='max-height:280px;overflow:auto;margin:12px 0 8px'></div>
+<div class='btnrow'>
+<button class='primary' id='vault-save'>💾 Save Current</button>
+<button class='ghost' id='vault-close'>Close</button>
+</div>
+</div>
+</div>
+<script>
+function F(){return window.ForgeHost||window.forge}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function $(id){return document.getElementById(id)}
+var DEFAULT_BASE='https://www.tnaboard.com/community/membersearch/results?profile_type=provider&username=&field_value_elitemembership';
+var settings={providerId:'',parallel:3,maxPages:20,nextRegex:'',delay:400,baseUrl:DEFAULT_BASE,linkRegex:'tnaboard\\.com/community/members/',profileSuffix:'',extraInstructions:'',authUser:'',authMode:'form',loginPageUrl:'https://www.tnaboard.com/login/',loginPostUrl:'https://www.tnaboard.com/login/login',loginUserField:'login',loginPassField:'password',loginExtra:'remember=1,_xfToken=auto',loginMarker:''};
+var authPass='',cookies={},lastLogin=0,loginOk=null;
+var rows=[],serviceFilterState={},filterMode='any',currentSort='',priceMin='',priceMax='';
+var htmlPages=[];
+var siteVault=[];
+var crawlRunning=false,crawlPaused=false,crawlAbort=false;
+var fillRunning=false,fillPaused=false,fillAbort=false;
+async function init(){
+  try{var s=await F().storage.get('crawler_settings');if(s)settings=Object.assign(settings,s)}catch(e){}
+  try{var p=await F().secrets.get('crawler_pass');if(typeof p==='string')authPass=p}catch(e){}
+  try{var c=await F().secrets.get('crawler_cookies');if(c){var j=JSON.parse(c);if(j&&typeof j==='object')cookies=j}}catch(e){}
+  try{var r=await F().storage.get('crawler_rows');if(Array.isArray(r))rows=r}catch(e){}
+  try{var h=await F().storage.get('crawler_htmlpages');if(Array.isArray(h))htmlPages=h.slice(0,5)}catch(e){}
+  try{var v=await F().storage.get('crawler_vault');if(Array.isArray(v))siteVault=v}catch(e){}
+  if(!settings.baseUrl)settings.baseUrl=DEFAULT_BASE;
+  if(!settings.linkRegex)settings.linkRegex='tnaboard\\.com/community/members/';
+  $('base-url').value=settings.baseUrl;
+  $('link-regex').value=settings.linkRegex;
+  $('auth-user').value=settings.authUser||'';
+  $('auth-pass').value=authPass;
+  $('auth-mode').value=settings.authMode||'none';
+  updateAuthUI();
+  if(settings.authMode==='form'&&Object.keys(cookies).length)setLoginStatus('Saved session: '+Object.keys(cookies).length+' cookie(s)');
+  renderTable();updateButtons();updateFilterBtn();updateHtmlBtn();wire();
+}
+function wire(){
+  $('settings-btn').addEventListener('click',openSettings);
+  $('crawl-btn').addEventListener('click',crawl);
+  $('crawl-stop').addEventListener('click',stopCrawl);
+  $('fill-btn').addEventListener('click',fillup);
+  $('fill-stop').addEventListener('click',stopFill);
+  $('filter-btn').addEventListener('click',openFilter);
+  $('html-btn').addEventListener('click',openHtmlModal);
+  $('html-close').addEventListener('click',hideHtmlModal);
+  $('html-modal').addEventListener('click',function(e){if(e.target.id==='html-modal')hideHtmlModal()});
+  $('html-copy').addEventListener('click',copyHtml);
+  $('html-share').addEventListener('click',shareHtml);
+  $('html-select').addEventListener('change',renderHtmlView);
+  $('clear-html-btn').addEventListener('click',clearHtml);
+  $('html-clear').addEventListener('click',clearHtml);
+  $('export-btn').addEventListener('click',exportCsv);
+  $('clear-btn').addEventListener('click',clearAll);
+  $('auth-mode').addEventListener('change',updateAuthUI);
+  $('test-login').addEventListener('click',testLogin);
+  $('clear-session').addEventListener('click',clearSession);
+  $('filter-clear').addEventListener('click',clearFilters);
+  $('filter-done').addEventListener('click',hideFilter);
+  $('filter-modal').addEventListener('click',function(e){if(e.target.id==='filter-modal')hideFilter()});
+  $('settings-save').addEventListener('click',saveSettings);
+  $('settings-cancel').addEventListener('click',hideSettings);
+  $('settings-modal').addEventListener('click',function(e){if(e.target.id==='settings-modal')hideSettings()});
+  $('sort-select').addEventListener('change',function(){currentSort=this.value;renderTable();});
+  $('vault-btn').addEventListener('click',openVault);
+  $('vault-save').addEventListener('click',saveToVault);
+  $('vault-close').addEventListener('click',hideVault);
+  $('vault-modal').addEventListener('click',function(e){if(e.target.id==='vault-modal')hideVault()});
+}
+function updateAuthUI(){
+  var m=$('auth-mode').value;
+  $('auth-fields').classList.toggle('hidden',m==='none');
+  $('form-auth-extra').classList.toggle('hidden',m!=='form');
+}
+function setLoginStatus(t){$('login-status').textContent=t}
+function setStatus(t){$('status').textContent=t}
+async function persistSettings(){try{await F().storage.set('crawler_settings',settings)}catch(e){}}
+async function persistRows(){try{await F().storage.set('crawler_rows',rows)}catch(e){}}
+async function persistHtmlPages(){try{await F().storage.set('crawler_htmlpages',htmlPages)}catch(e){}}
+async function persistAuth(){
+  try{if(authPass)await F().secrets.set('crawler_pass',authPass);else await F().secrets.remove('crawler_pass')}catch(e){}
+}
+async function persistCookies(){try{await F().secrets.set('crawler_cookies',JSON.stringify(cookies))}catch(e){}}
+function readAuthInputs(){
+  settings.authUser=$('auth-user').value.trim();
+  authPass=$('auth-pass').value;
+  settings.authMode=$('auth-mode').value;
+}
+function cookieHeader(){
+  var names=Object.keys(cookies);if(!names.length)return null;
+  return names.map(function(n){return n+'='+cookies[n]}).join('; ');
+}
+function absorbCookies(res){
+  var sets=[];
+  function pushSC(x){x=String(x).replace(/^set-cookie\s*:\s*/i,'');if(x.indexOf('=')>0)sets.push(x)}
+  function scanObj(h){
+    if(!h||typeof h!=='object')return;
+    Object.keys(h).forEach(function(k){
+      if(!/set-cookie/i.test(k))return;
+      var v=h[k];
+      if(Array.isArray(v))v.forEach(function(x){pushSC(x)});
+      else if(typeof v==='string')pushSC(v);
+    });
+  }
+  if(res&&typeof res==='object'){
+    scanObj(res.headers);
+    if(res.rawHeaders)scanObj(res.rawHeaders);
+    if(Array.isArray(res.setCookie))res.setCookie.forEach(function(x){pushSC(x)});
+    else if(typeof res.setCookie==='string')pushSC(res.setCookie);
+    if(Array.isArray(res.cookies))res.cookies.forEach(function(x){pushSC(x)});
+    if(Array.isArray(res.headers))res.headers.forEach(function(x){if(typeof x==='string'&&/^set-cookie/i.test(x))pushSC(x)});
+  }
+  sets.forEach(function(sc){
+    var first=String(sc).split(';')[0],eq=first.indexOf('=');
+    if(eq<=0)return;
+    var n=first.slice(0,eq).trim(),v=first.slice(eq+1).trim();
+    if(v==='deleted')delete cookies[n];else cookies[n]=v;
+  });
+  if(sets.length)persistCookies();
+}
+function buildHeaders(){
+  var h={};
+  if(settings.authMode==='basic'&&(settings.authUser||authPass)){
+    try{h['Authorization']='Basic '+btoa(unescape(encodeURIComponent(settings.authUser+':'+authPass)))}catch(e){}
+  }
+  if(settings.authMode==='form'){
+    var c=cookieHeader();if(c)h['Cookie']=c;
+  }
+  return Object.keys(h).length?h:undefined;
+}
+function bodyOf(res){
+  if(typeof res==='string')return res;
+  if(res&&typeof res==='object'){
+    if(typeof res.body==='string')return res.body;
+    if(typeof res.data==='string')return res.data;
+    if(typeof res.text==='string')return res.text;
+    if(typeof res.content==='string')return res.content;
+    if(res.body&&typeof res.body==='object')return String(res.body.text||res.body.data||JSON.stringify(res.body));
+  }
+  return String(res);
+}
+function looksLoggedOut(t){
+  if(settings.loginMarker){try{return new RegExp(settings.loginMarker,'i').test(t)}catch(e){}}
+  if(/(log\s*in\s+or\s+sign\s+up)|(you\s*must\s+be\s+logged)/i.test(t))return true;
+  return /name=['"]login['"]/i.test(t)&&/<input[^>]*type=['"]?password/i.test(t);
+}
+async function doLogin(){
+  lastLogin=Date.now();
+  if(!settings.authUser||!authPass){setLoginStatus('Enter username & password first');loginOk=false;return false}
+  setLoginStatus('Logging in…');
+  var token='';
+  try{
+    var lp=await F().http.get(settings.loginPageUrl||settings.loginPostUrl,buildHeaders());
+    absorbCookies(lp);
+    var lhtml=bodyOf(lp);
+    var m=lhtml.match(/name=['"]_xfToken['"][^>]*value=['"]([^'"]*)['"]/)||lhtml.match(/value=['"]([^'"]*)['"][^>]*name=['"]_xfToken['"]/)||lhtml.match(/name=['"](csrf|_token|token)['"][^>]*value=['"]([^'"]*)['"]/);
+    if(m)token=m[2]||m[1]||'';
+  }catch(e){}
+  var parts=[];
+  parts.push(encodeURIComponent(settings.loginUserField||'login')+'='+encodeURIComponent(settings.authUser));
+  parts.push(encodeURIComponent(settings.loginPassField||'password')+'='+encodeURIComponent(authPass));
+  String(settings.loginExtra||'').split(',').forEach(function(p){
+    p=p.trim();if(!p)return;var i=p.indexOf('=');if(i<=0)return;
+    var k=p.slice(0,i).trim(),v=p.slice(i+1).trim();
+    if(/token/i.test(k)&&v==='auto')v=token;
+    parts.push(encodeURIComponent(k)+'='+encodeURIComponent(v));
+  });
+  var h=buildHeaders()||{};
+  h['Content-Type']='application/x-www-form-urlencoded';
+  try{
+    var res=await F().http.post(settings.loginPostUrl,parts.join('&'),h);
+    absorbCookies(res);
+  }catch(e){loginOk=false;setLoginStatus('Login request failed: '+((e&&e.message)||e));return false}
+  try{
+    var v=await F().http.get(settings.loginPageUrl||settings.loginPostUrl,buildHeaders());
+    absorbCookies(v);
+    loginOk=!looksLoggedOut(bodyOf(v));
+  }catch(e){loginOk=Object.keys(cookies).length>0}
+  setLoginStatus(loginOk?'✅ Logged in ('+Object.keys(cookies).length+' cookie(s) in session)':'❌ Login failed — check credentials & field names in Settings');
+  return loginOk;
+}
+async function ensureLogin(){
+  if(settings.authMode!=='form')return true;
+  if(loginOk===true)return true;
+  return await doLogin();
+}
+async function testLogin(){
+  readAuthInputs();await persistSettings();await persistAuth();
+  await doLogin();
+}
+async function clearSession(){
+  cookies={};loginOk=null;lastLogin=0;
+  try{await F().secrets.remove('crawler_cookies')}catch(e){}
+  setLoginStatus('Session cleared');
+}
+async function fetchText(url,isRetry){
+  var res=await F().http.get(url,buildHeaders());
+  absorbCookies(res);
+  var text=bodyOf(res);
+  if(settings.authMode==='form'&&!isRetry&&looksLoggedOut(text)&&Date.now()-lastLogin>15000){
+    var ok=await doLogin();
+    if(ok)return await fetchText(url,true);
+  }
+  return text;
+}
+function recordHtml(url,html){
+  htmlPages.unshift({url:url,html:html});
+  if(htmlPages.length>5)htmlPages.length=5;
+  persistHtmlPages();
+  updateHtmlBtn();
+  if($('html-modal').classList.contains('open')){buildHtmlSelect();renderHtmlView()}
+}
+function updateHtmlBtn(){
+  $('html-btn').textContent=htmlPages.length?('📄 HTML ('+htmlPages.length+')'):'📄 HTML';
+}
+function openHtmlModal(){
+  if(!htmlPages.length){setStatus('No downloaded HTML yet — run Crawl first');return}
+  $('html-modal').classList.add('open');
+  buildHtmlSelect();renderHtmlView();
+}
+function hideHtmlModal(){$('html-modal').classList.remove('open')}
+function buildHtmlSelect(){
+  var sel=$('html-select');sel.innerHTML='';
+  htmlPages.forEach(function(p,i){
+    var o=document.createElement('option');o.value=String(i);
+    o.textContent=(i+1)+'. '+(p.url.length>60?p.url.slice(0,57)+'…':p.url);
+    sel.appendChild(o);
+  });
+  sel.value='0';
+}
+function currentHtmlPage(){
+  var i=parseInt($('html-select').value)||0;
+  return htmlPages[i]||null;
+}
+function renderHtmlView(){
+  var p=currentHtmlPage();
+  $('html-view').textContent=p?p.html:'';
+}
+async function copyHtml(){
+  var p=currentHtmlPage();if(!p)return;
+  try{await F().clipboard.write(p.html);try{await F().toast('HTML copied')}catch(e){}}
+  catch(e){setStatus('Copy failed')}
+}
+async function shareHtml(){
+  var p=currentHtmlPage();if(!p)return;
+  try{await F().share({title:'page.html',text:p.html})}
+  catch(e){try{await F().clipboard.write(p.html);await F().toast('Shared via clipboard')}catch(e2){setStatus('Share failed')}}
+}
+function clearHtml(){
+  if(!htmlPages.length){setStatus('No HTML pages to clear');return;}
+  if(!confirm('Clear all '+htmlPages.length+' downloaded HTML page(s)?')) return;
+  htmlPages=[];
+  persistHtmlPages();
+  updateHtmlBtn();
+  if($('html-modal').classList.contains('open')) hideHtmlModal();
+  setStatus('HTML files cleared');
+}
+function normalizeProfileUrl(url){
+  var m=url.match(/^(https?:\/\/[^\/]+\/community\/members\/[^\/?#]+)/i);
+  if(m)return m[1]+'/';
+  return url;
+}
+function extractLinks(html,baseUrl,regex){
+  var doc=new DOMParser().parseFromString(html,'text/html'),out=[],seenPage={};
+  doc.querySelectorAll('a[href]').forEach(function(a){
+    var href=a.getAttribute('href');
+    if(!href||href.charAt(0)==='#'||href.indexOf('javascript:')===0)return;
+    var u;try{u=new URL(href,baseUrl)}catch(e){return}
+    var abs=u.href,path=u.pathname,dec=abs;
+    try{dec=decodeURIComponent(abs)}catch(e){}
+    var hit=false;
+    [abs,href,path,dec].forEach(function(s){
+      if(hit||typeof s!=='string'||!s)return;
+      try{regex.lastIndex=0;if(regex.test(s))hit=true}catch(e){}
+    });
+    if(!hit)return;
+    var norm=normalizeProfileUrl(abs);
+    if(seenPage[norm])return;
+    seenPage[norm]=1;
+    var name=(a.textContent||'').replace(/\s+/g,' ').trim();
+    out.push({url:norm,name:name||norm});
+  });
+  return out;
+}
+function findNext(html,baseUrl){
+  var doc=new DOMParser().parseFromString(html,'text/html');
+  var hrefs=[];
+  var rel=doc.querySelector('a[rel=next],link[rel=next]');
+  if(rel&&rel.getAttribute('href'))hrefs.push(rel.getAttribute('href'));
+  var rx=null;
+  try{rx=settings.nextRegex?new RegExp(settings.nextRegex,'i'):/^(next|older|more|siguiente|»|›|>)|next\s*(»|›|>|page)/i}catch(e){rx=null}
+  if(rx)doc.querySelectorAll('a[href]').forEach(function(a){
+    var t=(a.textContent||'').replace(/\s+/g,' ').trim();
+    if(rx.test(t))hrefs.push(a.getAttribute('href'));
+  });
+  for(var i=0;i<hrefs.length;i++){
+    try{var u=new URL(hrefs[i],baseUrl).href;if(u!==baseUrl)return u}catch(e){}
+  }
+  var cur=0;try{cur=parseInt(new URL(baseUrl).searchParams.get('page')||'0')||0}catch(e){}
+  var best=null,bestPage=1e9;
+  doc.querySelectorAll('a[href]').forEach(function(a){
+    var href=a.getAttribute('href');if(!href)return;
+    var uu;try{uu=new URL(href,baseUrl)}catch(e){return}
+    var pg=parseInt(uu.searchParams.get('page')||'');if(!pg)return;
+    if(pg>cur&&pg<bestPage){best=uu.href;bestPage=pg}
+  });
+  return best;
+}
+function pageText(html){
+  var doc=new DOMParser().parseFromString(html,'text/html');
+  doc.querySelectorAll('script,style,noscript,svg').forEach(function(n){n.remove()});
+  return (doc.body?doc.body.textContent:'').replace(/\s+/g,' ').trim();
+}
+function parsePrice(str){
+  if(!str) return null;
+  var match = String(str).match(/[\$€£]?\s*(\d+[\.,]?\d*)/);
+  if(match) return parseFloat(match[1].replace(',','.'));
+  return null;
+}
+async function extractFields(text,url){
+  var prompt='You extract structured data from a profile webpage. From the text below extract: 1) price: the incall rate for 1 hour (include currency, e.g. "150 EUR"); empty string if not found. 2) services: the service acronyms/codes offered (e.g. GFE, DFK, CIM) as one comma-separated string; empty string if none. 3) extra: any other notable details (age, location, contact info, availability, special notes) as one short string; empty string if none. Reply ONLY with compact JSON like {"price":"...","services":"...","extra":"..."} and nothing else.';
+  if(settings.extraInstructions){ prompt += '\n\nExtra instructions: ' + settings.extraInstructions; }
+  prompt += '\n\nURL: '+url+'\n\nTEXT: '+text.slice(0,8000);
+  var r=await F().ai.chat({prompt:prompt,providerId:settings.providerId||undefined});
+  var c=(r&&(r.content||r.text))||String(r);
+  var m=String(c).match(/\{[\s\S]*\}/);
+  if(m){try{var j=JSON.parse(m[0]);return{price:String(j.price||''),services:Array.isArray(j.services)?j.services.join(', '):String(j.services||''),extra:String(j.extra||'')}}catch(e){}}
+  return{price:'',services:'',extra:''};
+}
+function mergeServices(a,b){
+  var seen={},out=[];
+  String(a||'').split(',').concat(String(b||'').split(',')).forEach(function(x){x=x.trim();if(x&&!seen[x]){seen[x]=1;out.push(x)}});
+  return out.join(', ');
+}
+function extraUrl(url){
+  var s=String(settings.profileSuffix||'').trim();
+  if(!s)return url;
+  if(s.charAt(0)!=='/')s='/'+s;
+  return String(url).replace(/\/+$/,'')+s;
+}
+async function crawl(){
+  if(crawlRunning){crawlPaused=!crawlPaused;updateButtons();return}
+  var base=$('base-url').value.trim();
+  var src=$('link-regex').value.trim();
+  if(!base||!src){setStatus('Enter base URL and profile link regex');return}
+  var regex;try{regex=new RegExp(src,'i')}catch(e){setStatus('Invalid regex: '+e.message);return}
+  settings.baseUrl=base;settings.linkRegex=src;readAuthInputs();
+  await persistSettings();await persistAuth();
+  crawlRunning=true;crawlPaused=false;crawlAbort=false;updateButtons();
+  var lg=await ensureLogin();
+  if(!lg)setStatus('Login not verified — trying anyway…');
+  var seen={};rows.forEach(function(r){seen[r.url]=1});
+  var url=base,pages=0,added=0;
+  try{
+    while(url&&pages<settings.maxPages){
+      while(crawlPaused&&!crawlAbort)await sleep(250);
+      if(crawlAbort)break;
+      pages++;
+      setStatus('Crawling page '+pages+': '+url);
+      var html;
+      try{html=await fetchText(url)}catch(e){setStatus('Fetch failed: '+((e&&e.message)||e));break}
+      recordHtml(url,html);
+      var links=extractLinks(html,url,regex);
+      links.forEach(function(l){
+        if(!seen[l.url]){seen[l.url]=1;rows.push({url:l.url,name:l.name,price:'',services:'',extra:'',status:'pending'});added++}
+      });
+      renderTable();persistRows();
+      setStatus('Page '+pages+': '+links.length+' profile link(s), '+added+' new so far');
+      if(!links.length)break;
+      url=findNext(html,url);
+      if(url)await sleep(settings.delay||400);
+    }
+    setStatus(crawlAbort?'Crawl stopped':'Crawl done: '+added+' new profile(s) across '+pages+' page(s) — press Fillup to extract prices & services');
+  }finally{crawlRunning=false;crawlPaused=false;updateButtons();persistRows()}
+}
+function stopCrawl(){crawlAbort=true;crawlPaused=false;updateButtons()}
+async function fillup(){
+  if(fillRunning){fillPaused=!fillPaused;updateButtons();return}
+  var queue=rows.filter(function(r){return r.status==='pending'||r.status==='queued'||r.status==='error'});
+  if(!queue.length){setStatus('Nothing to fill — crawl first');return}
+  readAuthInputs();await persistSettings();await persistAuth();
+  fillRunning=true;fillPaused=false;fillAbort=false;updateButtons();
+  var lg=await ensureLogin();
+  if(!lg)setStatus('Login not verified — trying anyway…');
+  queue.forEach(function(r){r.status='queued'});
+  renderTable();
+  var idx=0,done=0;
+  var worker=async function(){
+    while(true){
+      while(fillPaused&&!fillAbort)await sleep(250);
+      if(fillAbort)return;
+      var i=idx++;if(i>=queue.length)return;
+      var row=queue[i];row.status='working';renderTable();
+      try{
+        var html=await fetchText(row.url);
+        var f=await extractFields(pageText(html),row.url);
+        row.price=f.price;row.services=f.services;row.extra=f.extra||'';
+        if(String(settings.profileSuffix||'').trim()){
+          try{
+            var exUrl=extraUrl(row.url);
+            var ehtml=await fetchText(exUrl);
+            var ef=await extractFields(pageText(ehtml),exUrl);
+            if(!row.price&&ef.price)row.price=ef.price;
+            if(ef.services)row.services=mergeServices(row.services,ef.services);
+            if(ef.extra)row.extra=(row.extra?row.extra+' · ':'')+ef.extra;
+          }catch(e){}
+        }
+        row.status='done';
+        refreshFilterListIfOpen();
+      }catch(e){row.status='error';row.err=(e&&e.message)||String(e)}
+      done++;
+      setStatus('Fillup: '+done+' / '+queue.length+(fillPaused?' (paused)':''));
+      renderTable();
+      if(done%5===0)persistRows();
+    }
+  };
+  var n=Math.max(1,Math.min(8,parseInt(settings.parallel)||3));
+  var ws=[];for(var k=0;k<n;k++)ws.push(worker());
+  await Promise.all(ws);
+  fillRunning=false;fillPaused=false;updateButtons();persistRows();
+  setStatus(fillAbort?'Fillup stopped':'Fillup complete');
+}
+function stopFill(){fillAbort=true;fillPaused=false;updateButtons()}
+function allServices(){
+  var s={};
+  rows.forEach(function(r){
+    String(r.services||'').split(',').forEach(function(x){x=x.trim();if(x)s[x]=1});
+  });
+  return Object.keys(s).sort();
+}
+function rowMatches(r){
+  var sv=String(r.services||'').split(',').map(function(x){return x.trim()}).filter(function(x){return x});
+  var excluded = Object.keys(serviceFilterState).filter(function(k){ return serviceFilterState[k]==='exclude'; });
+  for(var i=0; i<excluded.length; i++){
+    if(sv.indexOf(excluded[i]) >= 0) return false;
+  }
+  var required = Object.keys(serviceFilterState).filter(function(k){ return serviceFilterState[k]==='include'; });
+  if(required.length > 0){
+    if(filterMode === 'all'){
+      for(var i=0; i<required.length; i++){
+        if(sv.indexOf(required[i]) < 0) return false;
+      }
+    } else {
+      var hasAny = false;
+      for(var i=0; i<required.length; i++){
+        if(sv.indexOf(required[i]) >= 0){ hasAny=true; break; }
+      }
+      if(!hasAny) return false;
+    }
+  }
+  var priceOk = true;
+  if(priceMin || priceMax){
+    var pr = parsePrice(r.price);
+    if(pr === null) priceOk = false;
+    else {
+      if(priceMin && pr < parseFloat(priceMin)) priceOk = false;
+      if(priceMax && pr > parseFloat(priceMax)) priceOk = false;
+    }
+  }
+  return priceOk;
+}
+function openFilter(){$('filter-modal').classList.add('open');buildFilterList();wirePriceFilters();}
+function hideFilter(){$('filter-modal').classList.remove('open')}
+function buildFilterList(){
+  var c=$('filter-list');c.innerHTML='';
+  var modeWrap = document.createElement('div');
+  modeWrap.style.marginBottom='10px';
+  modeWrap.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Required services match mode:</div>
+    <div style="display:flex;gap:8px">
+      <button id="fmode-any" class="ghost small" style="flex:1">ANY true</button>
+      <button id="fmode-all" class="ghost small" style="flex:1">ALL true</button>
+    </div>
+  `;
+  c.appendChild(modeWrap);
+  var anyB = modeWrap.querySelector('#fmode-any');
+  var allB = modeWrap.querySelector('#fmode-all');
+  function setModeStyles(){
+    anyB.style.background = (filterMode==='any' ? 'var(--accent)' : 'var(--surface2)');
+    anyB.style.color = (filterMode==='any' ? '#fff' : 'var(--text)');
+    allB.style.background = (filterMode==='all' ? 'var(--accent)' : 'var(--surface2)');
+    allB.style.color = (filterMode==='all' ? '#fff' : 'var(--text)');
+  }
+  anyB.onclick = function(){ filterMode='any'; setModeStyles(); renderTable(); updateFilterBtn(); };
+  allB.onclick = function(){ filterMode='all'; setModeStyles(); renderTable(); updateFilterBtn(); };
+  setModeStyles();
+  var hint = document.createElement('div');
+  hint.className='hint';
+  hint.style.marginBottom='8px';
+  hint.textContent = 'Tap service to cycle: clear (ignore) → checked (require) → greyed (exclude)';
+  c.appendChild(hint);
+  var svcs=allServices();
+  if(!svcs.length){
+    var empty=document.createElement('div');
+    empty.className='empty';
+    empty.style.padding='24px';
+    empty.innerHTML='No services discovered yet.<br>Run Fillup to extract services.';
+    c.appendChild(empty);
+    return;
+  }
+  svcs.forEach(function(s){
+    var lab=document.createElement('label');lab.className='fopt';
+    var cb=document.createElement('input');cb.type='checkbox';
+    var state = serviceFilterState[s] || '';
+    if(state==='include'){
+      cb.checked=true; cb.indeterminate=false;
+    }else if(state==='exclude'){
+      cb.checked=false; cb.indeterminate=true;
+    }else{
+      cb.checked=false; cb.indeterminate=false;
+    }
+    cb.onclick = function(ev){
+      ev.preventDefault();
+      var st = serviceFilterState[s] || '';
+      if(!st) serviceFilterState[s]='include';
+      else if(st==='include') serviceFilterState[s]='exclude';
+      else { delete serviceFilterState[s]; }
+      buildFilterList();
+      renderTable();
+      updateFilterBtn();
+    };
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(' '+s));
+    c.appendChild(lab);
+  });
+  if($('f-price-min')) $('f-price-min').value = priceMin||'';
+  if($('f-price-max')) $('f-price-max').value = priceMax||'';
+}
+function wirePriceFilters(){
+  var minEl = $('f-price-min');
+  var maxEl = $('f-price-max');
+  if(minEl){ minEl.oninput = function(){ priceMin = minEl.value.trim(); renderTable(); updateFilterBtn(); }; }
+  if(maxEl){ maxEl.oninput = function(){ priceMax = maxEl.value.trim(); renderTable(); updateFilterBtn(); }; }
+}
+function refreshFilterListIfOpen(){
+  if($('filter-modal').classList.contains('open'))buildFilterList();
+}
+function clearFilters(){
+  serviceFilterState={};
+  filterMode='any';
+  priceMin='';
+  priceMax='';
+  buildFilterList();
+  renderTable();
+  updateFilterBtn();
+}
+function updateFilterBtn(){
+  var reqCount = Object.keys(serviceFilterState).filter(function(k){return serviceFilterState[k]==='include';}).length;
+  var exCount = Object.keys(serviceFilterState).filter(function(k){return serviceFilterState[k]==='exclude';}).length;
+  var has = reqCount || exCount || priceMin || priceMax;
+  var b=$('filter-btn');
+  if(!has){
+    b.textContent='🔍 Filter';
+  } else {
+    var parts=[];
+    if(reqCount) parts.push(reqCount+' req');
+    if(exCount) parts.push(exCount+' ex');
+    if(priceMin||priceMax) parts.push('price');
+    b.textContent='🔍 Filter ('+parts.join(', ')+')';
+  }
+}
+function renderTable(){
+  var tb=$('tbody');tb.innerHTML='';
+  var filled=rows.filter(function(r){return r.status==='done'}).length;
+  var shown=rows.filter(rowMatches);
+  if(currentSort==='price-low'){
+    shown=shown.slice().sort(function(a,b){
+      var pa=parsePrice(a.price)||999999;
+      var pb=parsePrice(b.price)||999999;
+      return pa-pb;
+    });
+  }else if(currentSort==='price-high'){
+    shown=shown.slice().sort(function(a,b){
+      var pa=parsePrice(a.price)||-1;
+      var pb=parsePrice(b.price)||-1;
+      return pb-pa;
+    });
+  }
+  var hasF = Object.keys(serviceFilterState).length || priceMin || priceMax || currentSort;
+  $('count').textContent=rows.length+' profile(s) · '+filled+' filled'+(hasF?' · '+shown.length+' shown':'');
+  $('empty').style.display=shown.length?'none':'block';
+  $('empty').innerHTML=(!shown.length&&rows.length)?'No rows match the active filters.':'No profiles yet.<br>Crawl a listing page to populate the table.';
+  shown.forEach(function(r){
+    var tr=document.createElement('tr');
+    var td1=document.createElement('td');
+    var a=document.createElement('a');a.href='#';a.textContent=r.name||r.url;
+    a.onclick=function(ev){ev.preventDefault();try{F().openUrl(r.url)}catch(e){}};
+    td1.appendChild(a);
+    var st=document.createElement('span');st.className='st st-'+(r.status||'pending');
+    st.title=r.status+(r.err?' — '+r.err:'');td1.appendChild(st);
+    var td2=document.createElement('td');td2.textContent=r.price||'—';
+    var td3=document.createElement('td');td3.textContent=r.services||'—';
+    var td4=document.createElement('td');td4.className='extra';td4.textContent=r.extra||'—';
+    tr.appendChild(td1);tr.appendChild(td2);tr.appendChild(td3);tr.appendChild(td4);tb.appendChild(tr);
+  });
+}
+function updateButtons(){
+  var cb=$('crawl-btn');
+  cb.textContent=crawlRunning?(crawlPaused?'▶️ Resume Crawl':'⏸️ Pause Crawl'):'🕷️ Crawl';
+  $('crawl-stop').classList.toggle('hidden',!crawlRunning);
+  var fb=$('fill-btn');
+  fb.textContent=fillRunning?(fillPaused?'▶️ Resume Fillup':'⏸️ Pause Fillup'):'📝 Fillup';
+  $('fill-stop').classList.toggle('hidden',!fillRunning);
+}
+function exportCsv(){
+  if(!rows.length){setStatus('Nothing to export');return}
+  var data= (Object.keys(serviceFilterState).length || priceMin || priceMax) ? rows.filter(rowMatches):rows;
+  var csv='name,url,price,services,extra\n'+data.map(function(r){
+    return '"'+[r.name,r.url,r.price,r.services,r.extra].map(function(v){return String(v||'').replace(/"/g,'""')}).join('","')+'"';
+  }).join('\n');
+  F().share({title:'profiles.csv',text:csv}).catch(function(){return F().clipboard.write(csv)})
+   .then(function(){setStatus('Exported')}).catch(function(){setStatus('Export failed')});
+}
+async function clearAll(){
+  if(!rows.length)return;
+  if(!confirm('Clear all '+rows.length+' row(s)?'))return;
+  rows=[];serviceFilterState={};filterMode='any';currentSort='';priceMin='';priceMax='';
+  if($('sort-select')) $('sort-select').value='';
+  if($('f-price-min')) $('f-price-min').value='';
+  if($('f-price-max')) $('f-price-max').value='';
+  renderTable();persistRows();updateFilterBtn();setStatus('Cleared');
+}
+async function openSettings(){
+  $('settings-modal').classList.add('open');
+  $('parallel').value=settings.parallel;
+  $('max-pages').value=settings.maxPages;
+  $('next-regex').value=settings.nextRegex||'';
+  $('delay').value=settings.delay;
+  $('profile-suffix').value=settings.profileSuffix||'';
+  $('extra-instr').value=settings.extraInstructions||'';
+  $('login-page-url').value=settings.loginPageUrl||'';
+  $('login-post-url').value=settings.loginPostUrl||'';
+  $('login-user-field').value=settings.loginUserField||'';
+  $('login-pass-field').value=settings.loginPassField||'';
+  $('login-extra').value=settings.loginExtra||'';
+  $('login-marker').value=settings.loginMarker||'';
+  var sel=$('provider-select');sel.innerHTML='';
+  var o0=document.createElement('option');o0.value='';o0.textContent='Default';sel.appendChild(o0);
+  try{
+    var menu=await F().ai.listProviders();
+    (menu.providers||[]).forEach(function(p){var o=document.createElement('option');o.value=p.id;o.textContent=p.label||p.id;sel.appendChild(o)});
+  }catch(e){}
+  sel.value=settings.providerId||'';
+}
+function hideSettings(){$('settings-modal').classList.remove('open')}
+async function saveSettings(){
+  settings.providerId=$('provider-select').value;
+  settings.parallel=parseInt($('parallel').value)||3;
+  settings.maxPages=parseInt($('max-pages').value)||20;
+  settings.nextRegex=$('next-regex').value.trim();
+  settings.delay=parseInt($('delay').value)||400;
+  settings.profileSuffix=$('profile-suffix').value.trim();
+  settings.extraInstructions=$('extra-instr').value.trim();
+  settings.loginPageUrl=$('login-page-url').value.trim();
+  settings.loginPostUrl=$('login-post-url').value.trim();
+  settings.loginUserField=$('login-user-field').value.trim()||'login';
+  settings.loginPassField=$('login-pass-field').value.trim()||'password';
+  settings.loginExtra=$('login-extra').value.trim();
+  settings.loginMarker=$('login-marker').value.trim();
+  await persistSettings();hideSettings();
+  try{await F().toast('Settings saved')}catch(e){}
+}
+async function persistVault(){try{await F().storage.set('crawler_vault',siteVault)}catch(e){}}
+function openVault(){
+  $('vault-modal').classList.add('open');
+  renderVaultList();
+}
+function hideVault(){$('vault-modal').classList.remove('open')}
+function renderVaultList(){
+  var c=$('vault-list');c.innerHTML='';
+  if(!siteVault.length){
+    var empty=document.createElement('div');
+    empty.className='empty';
+    empty.style.padding='20px';
+    empty.textContent='No saved configurations. Set up a base URL and auth then tap Save Current.';
+    c.appendChild(empty);
+    return;
+  }
+  siteVault.forEach(function(cfg){
+    var d=document.createElement('div');
+    d.style.cssText='padding:8px 0;border-bottom:1px solid #22304a;';
+    var nameDiv=document.createElement('div');
+    nameDiv.style.fontWeight='600';
+    nameDiv.textContent=cfg.name;
+    var urlDiv=document.createElement('div');
+    urlDiv.style.fontSize='12px';
+    urlDiv.style.color='var(--muted)';
+    urlDiv.style.wordBreak='break-all';
+    urlDiv.textContent=cfg.baseUrl||'';
+    d.appendChild(nameDiv);
+    d.appendChild(urlDiv);
+    var btns=document.createElement('div');
+    btns.style.marginTop='6px';
+    btns.style.display='flex';
+    btns.style.gap='6px';
+    var loadBtn=document.createElement('button');
+    loadBtn.className='ghost small';
+    loadBtn.textContent='Load';
+    loadBtn.onclick=function(){loadConfig(cfg);};
+    var delBtn=document.createElement('button');
+    delBtn.className='ghost small';
+    delBtn.textContent='🗑️';
+    delBtn.onclick=async function(){
+      if(!confirm('Delete configuration "'+cfg.name+'"?'))return;
+      siteVault=siteVault.filter(function(x){return x.id!=cfg.id;});
+      await persistVault();
+      renderVaultList();
+    };
+    btns.appendChild(loadBtn);
+    btns.appendChild(delBtn);
+    d.appendChild(btns);
+    c.appendChild(d);
+  });
+}
+function loadConfig(cfg){
+  $('base-url').value=cfg.baseUrl||'';
+  $('link-regex').value=cfg.linkRegex||'';
+  $('auth-mode').value=cfg.authMode||'none';
+  $('auth-user').value=cfg.authUser||'';
+  if(cfg.authPass){
+    authPass=cfg.authPass;
+    $('auth-pass').value=cfg.authPass;
+  }
+  updateAuthUI();
+  hideVault();
+  setStatus('Loaded: '+cfg.name);
+}
+async function saveToVault(){
+  readAuthInputs();
+  var base=$('base-url').value.trim();
+  var suggested='New Site';
+  if(base){
+    try{suggested=new URL(base).hostname;}catch(e){suggested=base.substring(0,30);}
+  }
+  var name=prompt('Name for this site configuration:',suggested);
+  if(!name)return;
+  var cfg={
+    id:Date.now(),
+    name:name,
+    baseUrl:base,
+    linkRegex:$('link-regex').value.trim(),
+    authMode:$('auth-mode').value,
+    authUser:$('auth-user').value.trim(),
+    authPass:authPass
+  };
+  siteVault=siteVault.filter(function(x){return x.name!==name;});
+  siteVault.push(cfg);
+  await persistVault();
+  renderVaultList();
+  try{await F().toast('Saved to vault')}catch(e){}
+}
+window.addEventListener('load',init);
+</script>
+</body>
+</html>

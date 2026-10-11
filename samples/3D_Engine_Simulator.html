@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>3D Engine Simulator</title>
+<style>* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body {
+  width:100%; height:100%; overflow:hidden;
+  background:#070b14;
+  font-family:-apple-system,system-ui,'Segoe UI',Roboto,sans-serif;
+  color:#e0e6f0; user-select:none;
+}
+
+#stage { position:fixed; inset:0; }
+#canvas { display:block; width:100%; height:100%; touch-action:none; }
+
+.topbar {
+  position:fixed; top:0; left:0; right:0; z-index:10;
+  padding:14px 18px 10px;
+  padding-top:max(14px, env(safe-area-inset-top));
+  background:linear-gradient(180deg, rgba(7,11,20,.92) 0%, rgba(7,11,20,0) 100%);
+  display:flex; align-items:center; justify-content:space-between;
+  pointer-events:none;
+}
+.topbar .title {
+  font-size:14px; font-weight:700; letter-spacing:.6px;
+  color:#7dd3fc; text-shadow:0 0 14px rgba(125,211,252,.35);
+}
+.topbar .rpm {
+  font-size:13px; font-weight:700; color:#fbbf24;
+  font-variant-numeric:tabular-nums;
+}
+
+.panel {
+  position:fixed; bottom:0; left:0; right:0; z-index:10;
+  padding:12px 16px max(20px, env(safe-area-inset-bottom));
+  background:linear-gradient(0deg, rgba(7,11,20,.96) 40%, rgba(7,11,20,0) 100%);
+}
+
+.cycle-row { display:flex; gap:10px; margin-bottom:12px; }
+.cyl-card {
+  flex:1; padding:10px 12px; border-radius:12px;
+  background:rgba(15,23,42,.75); border:1px solid rgba(71,85,105,.45);
+  text-align:center; backdrop-filter:blur(10px);
+}
+.cyl-card .cname { font-size:10px; color:#64748b; font-weight:700; letter-spacing:.8px; margin-bottom:4px; }
+.cyl-card .phase { font-size:13px; font-weight:700; min-height:18px; }
+.cyl-bar { height:4px; border-radius:2px; margin-top:8px; background:#1e293b; overflow:hidden; }
+.cyl-bar .fill { height:100%; border-radius:2px; width:0%; }
+
+.slider-row { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+.slider-row .label { font-size:12px; font-weight:600; color:#94a3b8; min-width:48px; }
+.slider-row .val {
+  font-size:13px; font-weight:700; color:#fbbf24; min-width:68px;
+  text-align:right; font-variant-numeric:tabular-nums;
+}
+
+input[type=range] {
+  -webkit-appearance:none; appearance:none;
+  flex:1; height:6px; border-radius:3px;
+  background:linear-gradient(90deg, #1e3a5f, #3b82f6);
+  outline:none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:26px; height:26px; border-radius:50%;
+  background:radial-gradient(circle at 35% 35%, #93c5fd, #2563eb);
+  border:2px solid #1e40af; cursor:pointer;
+  box-shadow:0 2px 8px rgba(37,99,235,.5);
+}
+input[type=range]::-moz-range-thumb {
+  width:26px; height:26px; border-radius:50%;
+  background:radial-gradient(circle at 35% 35%, #93c5fd, #2563eb);
+  border:2px solid #1e40af; cursor:pointer;
+}
+
+.btn-row { display:flex; gap:10px; justify-content:center; }
+.btn {
+  flex:1; max-width:140px; padding:12px 14px; border:none; border-radius:12px;
+  font-size:14px; font-weight:600; color:#e0e6f0; cursor:pointer;
+  background:rgba(30,41,59,.85); border:1px solid rgba(71,85,105,.5);
+  transition:transform .12s, background .12s;
+  min-height:44px;
+}
+.btn:active { transform:scale(.96); background:rgba(51,65,85,.95); }
+.btn.active { background:rgba(59,130,246,.28); border-color:#3b82f6; color:#93c5fd; }
+
+.hint {
+  position:fixed; top:46%; left:50%; transform:translate(-50%,-50%);
+  font-size:13px; color:#64748b; text-align:center; pointer-events:none;
+  z-index:5; opacity:.7; transition:opacity .5s; white-space:nowrap;
+}
+.hint.hide { opacity:0; }
+
+.toast {
+  position:fixed; top:58px; left:50%; transform:translateX(-50%);
+  padding:8px 16px; border-radius:8px; font-size:12px; font-weight:600;
+  background:rgba(15,23,42,.95); border:1px solid rgba(59,130,246,.4);
+  color:#93c5fd; z-index:20; opacity:0; transition:opacity .3s; pointer-events:none;
+}
+.toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="canvas"></canvas>
+</div>
+
+<div class="topbar">
+  <div class="title">⚙️ 2-CYL 4-STROKE ENGINE</div>
+  <div class="rpm" id="rpm">0 RPM</div>
+</div>
+
+<div class="hint" id="hint">Drag to rotate • Pinch to zoom</div>
+<div class="toast" id="toast"></div>
+
+<div class="panel">
+  <div class="cycle-row">
+    <div class="cyl-card">
+      <div class="cname">CYLINDER 1</div>
+      <div class="phase" id="c1phase">Intake</div>
+      <div class="cyl-bar"><div class="fill" id="c1bar"></div></div>
+    </div>
+    <div class="cyl-card">
+      <div class="cname">CYLINDER 2</div>
+      <div class="phase" id="c2phase">Intake</div>
+      <div class="cyl-bar"><div class="fill" id="c2bar"></div></div>
+    </div>
+  </div>
+
+  <div class="slider-row">
+    <div class="label">Speed</div>
+    <input type="range" id="speed" min="0" max="100" value="17" data-forge-persist>
+    <div class="val" id="speedVal">0 RPM</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn active" id="playBtn">⏸ Pause</button>
+    <button class="btn" id="viewBtn">🔄 View</button>
+  </div>
+</div>
+
+<script >
+function rotX(p, a) {
+  var c = Math.cos(a), s = Math.sin(a);
+  return [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c];
+}
+function rotY(p, a) {
+  var c = Math.cos(a), s = Math.sin(a);
+  return [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c];
+}
+function rotZ(p, a) {
+  var c = Math.cos(a), s = Math.sin(a);
+  return [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2]];
+}
+function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+function cross(a, b) {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+function hypot3(v) { return Math.hypot(v[0], v[1], v[2]); }
+function norm(v) {
+  var l = hypot3(v) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+function scale3(v, s) { return [v[0] * s, v[1] * s, v[2] * s]; }
+
+function hexToRgb(h) {
+  h = h.replace('#', '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)];
+}
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(function (v) {
+    return Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  }).join('');
+}
+function shade(hex, f) {
+  var rgb = hexToRgb(hex);
+  return rgbToHex(rgb[0] * f, rgb[1] * f, rgb[2] * f);
+}
+function mix(c1, c2, t) {
+  var a = hexToRgb(c1), b = hexToRgb(c2);
+  t = Math.max(0, Math.min(1, t));
+  return rgbToHex(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
+}
+
+function transformVert(v, mesh) {
+  var p = v;
+  if (mesh.scale) p = [p[0] * mesh.scale[0], p[1] * mesh.scale[1], p[2] * mesh.scale[2]];
+  if (mesh.spin) p = rotY(p, mesh.spin);
+  if (mesh.rot) {
+    if (mesh.rot[0]) p = rotX(p, mesh.rot[0]);
+    if (mesh.rot[1]) p = rotY(p, mesh.rot[1]);
+    if (mesh.rot[2]) p = rotZ(p, mesh.rot[2]);
+  }
+  if (mesh.pos) p = add(p, mesh.pos);
+  return p;
+}
+
+</script>
+<script >
+function meshBase(verts, faces) {
+  return {
+    verts: verts,
+    faces: faces,
+    pos: [0, 0, 0],
+    rot: [0, 0, 0],
+    scale: null,
+    visible: true,
+    cull: true,
+    alpha: 1,
+    stroke: null,
+    specular: 0
+  };
+}
+
+function makeBox(w, h, d, color) {
+  var hw = w / 2, hh = h / 2, hd = d / 2;
+  var v = [
+    [-hw, -hh, -hd], [hw, -hh, -hd], [hw, hh, -hd], [-hw, hh, -hd],
+    [-hw, -hh,  hd], [hw, -hh,  hd], [hw, hh,  hd], [-hw, hh,  hd]
+  ];
+  var c = color;
+  var faces = [
+    { idx: [0, 1, 2, 3], color: shade(c, 0.88) },
+    { idx: [5, 4, 7, 6], color: shade(c, 0.72) },
+    { idx: [4, 0, 3, 7], color: shade(c, 0.58) },
+    { idx: [1, 5, 6, 2], color: shade(c, 0.95) },
+    { idx: [3, 2, 6, 7], color: shade(c, 1.05) },
+    { idx: [4, 5, 1, 0], color: shade(c, 0.48) }
+  ];
+  return meshBase(v, faces);
+}
+
+function makeBoxFromTo(x0, y0, z0, x1, y1, z1, color) {
+  var m = makeBox(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0), color);
+  m.pos = [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2];
+  return m;
+}
+
+function makeCylinderY(r, h, segs, color, open) {
+  var verts = [], faces = [];
+  var i, a, x, z, ni, b0, t0, b1, t1;
+  for (i = 0; i < segs; i++) {
+    a = (i / segs) * Math.PI * 2;
+    x = Math.cos(a) * r;
+    z = Math.sin(a) * r;
+    verts.push([x, 0, z]);
+    verts.push([x, h, z]);
+  }
+  for (i = 0; i < segs; i++) {
+    ni = (i + 1) % segs;
+    b0 = i * 2; t0 = i * 2 + 1; b1 = ni * 2; t1 = ni * 2 + 1;
+    faces.push({ idx: [b0, b1, t1, t0], color: color });
+  }
+  if (!open) {
+    var bf = [], tf = [];
+    for (i = segs - 1; i >= 0; i--) bf.push(i * 2);
+    faces.push({ idx: bf, color: shade(color, 0.55) });
+    for (i = 0; i < segs; i++) tf.push(i * 2 + 1);
+    faces.push({ idx: tf, color: shade(color, 0.85) });
+  }
+  return meshBase(verts, faces);
+}
+
+function makeCylinderX(r, len, segs, color, open) {
+  var verts = [], faces = [];
+  var i, a, y, z, ni, b0, t0, b1, t1;
+  var h = len / 2;
+  for (i = 0; i < segs; i++) {
+    a = (i / segs) * Math.PI * 2;
+    y = Math.cos(a) * r;
+    z = Math.sin(a) * r;
+    verts.push([-h, y, z]);
+    verts.push([h, y, z]);
+  }
+  for (i = 0; i < segs; i++) {
+    ni = (i + 1) % segs;
+    b0 = i * 2; t0 = i * 2 + 1; b1 = ni * 2; t1 = ni * 2 + 1;
+    faces.push({ idx: [b0, b1, t1, t0], color: color });
+  }
+  if (!open) {
+    var left = [], right = [];
+    for (i = segs - 1; i >= 0; i--) left.push(i * 2);
+    for (i = 0; i < segs; i++) right.push(i * 2 + 1);
+    faces.push({ idx: left, color: shade(color, 0.55) });
+    faces.push({ idx: right, color: shade(color, 0.85) });
+  }
+  return meshBase(verts, faces);
+}
+
+function makeTube(rOut, rIn, h, segs, color) {
+  var verts = [], faces = [];
+  var i, a, ni, o0, o1, i0, i1, no0, no1, ni0, ni1;
+  for (i = 0; i < segs; i++) {
+    a = (i / segs) * Math.PI * 2;
+    var c = Math.cos(a), s = Math.sin(a);
+    verts.push([c * rOut, 0, s * rOut]);
+    verts.push([c * rOut, h, s * rOut]);
+    verts.push([c * rIn, 0, s * rIn]);
+    verts.push([c * rIn, h, s * rIn]);
+  }
+  for (i = 0; i < segs; i++) {
+    ni = (i + 1) % segs;
+    o0 = i * 4; o1 = i * 4 + 1;
+    i0 = i * 4 + 2; i1 = i * 4 + 3;
+    no0 = ni * 4; no1 = ni * 4 + 1;
+    ni0 = ni * 4 + 2; ni1 = ni * 4 + 3;
+    faces.push({ idx: [o0, no0, no1, o1], color: color });
+    faces.push({ idx: [ni0, i0, i1, ni1], color: shade(color, 0.75) });
+  }
+  var m = meshBase(verts, faces);
+  m.cull = true;
+  return m;
+}
+
+function makeDiskY(r, segs, color) {
+  var verts = [[0, 0, 0]];
+  var i, a;
+  for (i = 0; i < segs; i++) {
+    a = (i / segs) * Math.PI * 2;
+    verts.push([Math.cos(a) * r, 0, Math.sin(a) * r]);
+  }
+  var top = [], bot = [];
+  for (i = 0; i < segs; i++) top.push(1 + i);
+  for (i = segs - 1; i >= 0; i--) bot.push(1 + i);
+  return meshBase(verts, [
+    { idx: top, color: color },
+    { idx: bot, color: shade(color, 0.7) }
+  ]);
+}
+
+function makeRod(w, d, color) {
+  var hw = w / 2, hd = d / 2;
+  var v = [
+    [-hw, 0, -hd], [hw, 0, -hd], [hw, 1, -hd], [-hw, 1, -hd],
+    [-hw, 0,  hd], [hw, 0,  hd], [hw, 1,  hd], [-hw, 1,  hd]
+  ];
+  var c = color;
+  var faces = [
+    { idx: [0, 1, 2, 3], color: shade(c, 0.9) },
+    { idx: [5, 4, 7, 6], color: shade(c, 0.7) },
+    { idx: [4, 0, 3, 7], color: shade(c, 0.55) },
+    { idx: [1, 5, 6, 2], color: shade(c, 1.0) },
+    { idx: [3, 2, 6, 7], color: shade(c, 1.08) },
+    { idx: [4, 5, 1, 0], color: shade(c, 0.45) }
+  ];
+  return meshBase(v, faces);
+}
+
+function makePolyCylinder(r, h, segs, color, open) {
+  return makeCylinderY(r, h, segs, color, open);
+}
+
+</script>
+<script >
+function Renderer(canvas) {
+  this.canvas = canvas;
+  this.ctx = canvas.getContext('2d');
+  this.meshes = [];
+  this.camRX = -0.42;
+  this.camRY = 0.62;
+  this.zoom = 1.05;
+  this.lightKey = norm([0.45, -0.75, -0.35]);
+  this.lightFill = norm([-0.55, -0.25, -0.45]);
+  this.lightRim = norm([0.15, -0.15, 0.9]);
+  this.ambient = 0.32;
+  this.resize();
+  window.addEventListener('resize', this.resize.bind(this));
+}
+
+Renderer.prototype.resize = function () {
+  var dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  var w = window.innerWidth, h = window.innerHeight;
+  this.canvas.width = w * dpr;
+  this.canvas.height = h * dpr;
+  this.canvas.style.width = w + 'px';
+  this.canvas.style.height = h + 'px';
+  this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  this.cw = w; this.ch = h;
+  this.cx = w / 2; this.cy = h * 0.42;
+};
+
+Renderer.prototype.project = function (p) {
+  var q = rotX(p, this.camRX);
+  q = rotY(q, this.camRY);
+  var fov = 540 * this.zoom;
+  var dist = 13;
+  var z = q[2] + dist;
+  if (z < 0.15) z = 0.15;
+  return [this.cx + (q[0] / z) * fov, this.cy - (q[1] / z) * fov, z, q];
+};
+
+Renderer.prototype.computeLighting = function (ncam, baseColor, specular) {
+  var keyDot = Math.max(0, -dot(ncam, this.lightKey));
+  var fillDot = Math.max(0, -dot(ncam, this.lightFill)) * 0.5;
+  var rimDot = Math.max(0, -dot(ncam, this.lightRim)) * 0.4;
+  var intensity = this.ambient + keyDot * 0.72 + fillDot + rimDot;
+  intensity = Math.min(1.25, intensity);
+  var rgb = hexToRgb(baseColor);
+  var r = rgb[0] * intensity;
+  var g = rgb[1] * intensity;
+  var b = rgb[2] * intensity;
+  r += keyDot * 22;
+  g += keyDot * 10;
+  b += fillDot * 18;
+  r += rimDot * 12;
+  g += rimDot * 14;
+  b += rimDot * 20;
+  if (specular && keyDot > 0) {
+    var spec = Math.pow(keyDot, specular) * 70;
+    r += spec; g += spec; b += spec * 0.95;
+  }
+  return rgbToHex(r, g, b);
+};
+
+Renderer.prototype.render = function () {
+  var ctx = this.ctx;
+  var w = this.cw, h = this.ch;
+  ctx.clearRect(0, 0, w, h);
+
+  var bg = ctx.createRadialGradient(this.cx, this.cy * 0.7, 30, this.cx, h * 0.55, Math.max(w, h) * 0.72);
+  bg.addColorStop(0, '#1c2a48');
+  bg.addColorStop(0.45, '#101828');
+  bg.addColorStop(1, '#06080f');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+
+  var floor = ctx.createRadialGradient(this.cx, this.cy + h * 0.28, 10, this.cx, this.cy + h * 0.28, w * 0.42);
+  floor.addColorStop(0, 'rgba(56, 140, 255, 0.07)');
+  floor.addColorStop(1, 'rgba(56, 140, 255, 0)');
+  ctx.fillStyle = floor;
+  ctx.fillRect(0, 0, w, h);
+
+  var opaque = [];
+  var trans = [];
+  var mi, mesh, vi, v, tv, fi, face, pts, avgZ, v0, v1, v2, n, ncam, lit, obj;
+  var isTrans, specular, baseColor, ii, p;
+
+  for (mi = 0; mi < this.meshes.length; mi++) {
+    mesh = this.meshes[mi];
+    if (mesh.visible === false) continue;
+    tv = [];
+    for (vi = 0; vi < mesh.verts.length; vi++) {
+      tv.push(transformVert(mesh.verts[vi], mesh));
+    }
+    isTrans = mesh.alpha !== undefined && mesh.alpha < 0.999;
+    specular = mesh.specular || 0;
+
+    for (fi = 0; fi < mesh.faces.length; fi++) {
+      face = mesh.faces[fi];
+      if (!face.idx || face.idx.length < 3) continue;
+      pts = [];
+      avgZ = 0;
+      for (ii = 0; ii < face.idx.length; ii++) {
+        p = this.project(tv[face.idx[ii]]);
+        pts.push(p);
+        avgZ += p[2];
+      }
+      avgZ /= pts.length;
+
+      v0 = tv[face.idx[0]];
+      v1 = tv[face.idx[1]];
+      v2 = tv[face.idx[2]];
+      n = norm(cross(sub(v1, v0), sub(v2, v0)));
+      ncam = rotX(n, this.camRX);
+      ncam = rotY(ncam, this.camRY);
+
+      if (mesh.cull !== false && ncam[2] >= 0.02) continue;
+
+      baseColor = face.color || mesh.color || '#888888';
+      lit = this.computeLighting(ncam, baseColor, specular);
+      obj = {
+        pts: pts,
+        z: avgZ,
+        color: lit,
+        stroke: mesh.stroke,
+        alpha: mesh.alpha == null ? 1 : mesh.alpha,
+        emissive: mesh.emissive || 0,
+        glowColor: mesh.glowColor
+      };
+      if (isTrans) trans.push(obj);
+      else opaque.push(obj);
+    }
+  }
+
+  opaque.sort(function (a, b) { return b.z - a.z; });
+  trans.sort(function (a, b) { return b.z - a.z; });
+
+  this._drawFaces(ctx, opaque, false);
+  this._drawFaces(ctx, trans, true);
+};
+
+Renderer.prototype._drawFaces = function (ctx, faces, translucent) {
+  var i, f, j;
+  for (i = 0; i < faces.length; i++) {
+    f = faces[i];
+    ctx.beginPath();
+    ctx.moveTo(f.pts[0][0], f.pts[0][1]);
+    for (j = 1; j < f.pts.length; j++) ctx.lineTo(f.pts[j][0], f.pts[j][1]);
+    ctx.closePath();
+    if (translucent) ctx.globalAlpha = f.alpha;
+    ctx.fillStyle = f.color;
+    ctx.fill();
+    if (f.stroke) {
+      ctx.strokeStyle = f.stroke;
+      ctx.lineWidth = translucent ? 0.8 : 0.45;
+      ctx.stroke();
+    }
+    if (translucent) ctx.globalAlpha = 1;
+  }
+};
+
+</script>
+<script >
+var PHASES = [
+  { name: 'INTAKE', color: '#3b82f6', label: 'Intake' },
+  { name: 'COMPRESSION', color: '#fbbf24', label: 'Compression' },
+  { name: 'POWER', color: '#ef4444', label: 'Power' },
+  { name: 'EXHAUST', color: '#94a3b8', label: 'Exhaust' }
+];
+
+function EngineModel() {
+  this.crankAngle = 0;
+  this.speed = 2.0;
+  this.running = true;
+  this.boreR = 0.50;
+  this.crankR = 0.66;
+  this.rodLen = 1.92;
+  this.cylSpacing = 1.78;
+  this.segs = 24;
+  this.crankY = 0;
+  this.pistonH = 0.58;
+  this.pinOffset = 0.26;
+  this.linerBase = 0.92;
+  this.linerH = 2.28;
+  this._cycleInfo = [];
+  this.buildMeshes();
+}
+
+EngineModel.prototype.buildMeshes = function () {
+  var S = this.segs;
+  var R = this.boreR;
+  var span = this.cylSpacing;
+  var xL = -span / 2;
+  var xR = span / 2;
+  var blockW = span + R * 2 + 0.85;
+  var caseD = 1.85;
+  var colCase = '#4d5d72';
+  var colCaseDark = '#3a4a5e';
+  var colPiston = '#d5dbe4';
+  var colRod = '#c4a574';
+  var colCrank = '#8b909c';
+  var colFly = '#5c6270';
+  var colPin = '#9aa3b2';
+
+  this.meshes = [];
+  this.pistons = [];
+  this.rods = [];
+  this.crankPins = [];
+  this.crankWebs = [];
+  this.glowMeshes = [];
+  this.boreMeshes = [];
+  this.flySpokes = [];
+  this.flyMarks = [];
+
+  function add(m, extra) {
+    if (extra) {
+      for (var k in extra) m[k] = extra[k];
+    }
+    this.meshes.push(m);
+    return m;
+  }
+  add = add.bind(this);
+
+  // ---- Cutaway crankcase: U-shape, OPEN through the bores (no top slab) ----
+  var base = makeBox(blockW + 0.35, 0.22, caseD + 0.45, '#2c3a4e');
+  base.pos = [0, -1.02, 0];
+  base.stroke = '#1a2838';
+  add(base);
+
+  var leftW = makeBox(0.22, 1.55, caseD, colCase);
+  leftW.pos = [-blockW / 2 + 0.05, -0.18, 0];
+  leftW.stroke = '#2a3a4e';
+  leftW.specular = 8;
+  add(leftW);
+
+  var rightW = makeBox(0.22, 1.55, caseD, colCase);
+  rightW.pos = [blockW / 2 - 0.05, -0.18, 0];
+  rightW.stroke = '#2a3a4e';
+  rightW.specular = 8;
+  add(rightW);
+
+  var rear = makeBox(blockW - 0.1, 1.55, 0.18, colCaseDark);
+  rear.pos = [0, -0.18, caseD / 2 - 0.05];
+  rear.stroke = '#2a3a4e';
+  add(rear);
+
+  var frontLip = makeBox(blockW - 0.1, 0.42, 0.16, colCaseDark);
+  frontLip.pos = [0, -0.72, -caseD / 2 + 0.04];
+  add(frontLip);
+
+  var bed = makeBox(blockW - 0.35, 0.16, caseD - 0.2, '#35465a');
+  bed.pos = [0, -0.88, 0];
+  add(bed);
+
+  var centerWeb = makeBox(0.28, 0.62, 1.15, colCase);
+  centerWeb.pos = [0, -0.42, 0.08];
+  centerWeb.stroke = '#2a3a4e';
+  add(centerWeb);
+
+  var mainCapL = makeBox(0.34, 0.38, 0.55, '#5a6578');
+  mainCapL.pos = [xL, -0.28, 0];
+  mainCapL.specular = 10;
+  add(mainCapL);
+  var mainCapR = makeBox(0.34, 0.38, 0.55, '#5a6578');
+  mainCapR.pos = [xR, -0.28, 0];
+  mainCapR.specular = 10;
+  add(mainCapR);
+  var mainCapC = makeBox(0.34, 0.38, 0.55, '#5a6578');
+  mainCapC.pos = [0, -0.28, 0];
+  mainCapC.specular = 10;
+  add(mainCapC);
+
+  // ---- Glass cylinder liners (hollow tubes, no solid block through them) ----
+  var c, xoff, liner, head, plug, ceramic, glow, piston, wrist, rod, web, pin;
+  for (c = 0; c < 2; c++) {
+    xoff = c === 0 ? xL : xR;
+
+    liner = makeTube(R + 0.045, R - 0.01, this.linerH, S, '#9ec4ea');
+    liner.pos = [xoff, this.linerBase, 0];
+    liner.alpha = 0.20;
+    liner.cull = false;
+    liner.stroke = 'rgba(170,210,255,0.40)';
+    liner.specular = 28;
+    add(liner);
+    this.boreMeshes.push(liner);
+
+    // Individual head cap — does NOT span across both bores
+    head = makeBox(R * 2.15, 0.36, R * 2.15, '#5a6c82');
+    head.pos = [xoff, this.linerBase + this.linerH + 0.18, 0];
+    head.stroke = '#2a3a4e';
+    head.specular = 12;
+    add(head);
+
+    plug = makeCylinderY(0.07, 0.42, 8, '#d8d8de', false);
+    plug.pos = [xoff, this.linerBase + this.linerH + 0.36, 0];
+    plug.specular = 26;
+    add(plug);
+    ceramic = makeCylinderY(0.11, 0.22, 8, '#f0ece6', false);
+    ceramic.pos = [xoff, this.linerBase + this.linerH + 0.70, 0];
+    add(ceramic);
+
+    glow = makeDiskY(R * 0.82, S, '#1e293b');
+    glow.pos = [xoff, this.linerBase + 1, 0];
+    glow.cull = false;
+    glow.alpha = 0.85;
+    add(glow);
+    this.glowMeshes.push(glow);
+
+    piston = makeCylinderY(R * 0.92, this.pistonH, S, colPiston, false);
+    piston.stroke = '#8a93a2';
+    piston.specular = 22;
+    add(piston);
+    this.pistons.push(piston);
+
+    var crown = makeDiskY(R * 0.92, S, '#e8edf4');
+    crown.cull = false;
+    crown.specular = 18;
+    add(crown);
+    piston.crown = crown;
+
+    wrist = makeCylinderX(0.075, R * 1.15, 10, colPin, false);
+    wrist.specular = 16;
+    add(wrist);
+    piston.wrist = wrist;
+
+    rod = makeRod(0.16, 0.28, colRod);
+    rod.stroke = '#6a5438';
+    rod.specular = 14;
+    add(rod);
+    this.rods.push(rod);
+
+    var bigEnd = makeCylinderX(0.16, 0.22, 10, shade(colRod, 0.85), false);
+    bigEnd.specular = 12;
+    add(bigEnd);
+    rod.bigEnd = bigEnd;
+
+    var smallEnd = makeCylinderX(0.11, 0.20, 10, shade(colRod, 0.9), false);
+    smallEnd.specular = 12;
+    add(smallEnd);
+    rod.smallEnd = smallEnd;
+  }
+
+  // Thin head bridge at the REAR only (does not cut through bores)
+  var bridge = makeBox(span + R * 0.4, 0.14, 0.22, '#4a5c70');
+  bridge.pos = [0, this.linerBase + this.linerH + 0.18, R + 0.22];
+  add(bridge);
+
+  // ---- Crankshaft along X ----
+  var shaftLen = blockW + 0.55;
+  var shaft = makeCylinderX(0.15, shaftLen, 14, colCrank, false);
+  shaft.pos = [0, this.crankY, 0];
+  shaft.specular = 16;
+  add(shaft);
+
+  for (c = 0; c < 2; c++) {
+    xoff = c === 0 ? xL : xR;
+    web = makeBox(0.13, this.crankR * 1.55, 0.42, colCrank);
+    web.stroke = '#3a3f48';
+    web.specular = 11;
+    add(web);
+    this.crankWebs.push(web);
+
+    var cw = makeBox(0.13, this.crankR * 0.85, 0.55, '#6a7080');
+    cw.stroke = '#3a3f48';
+    cw.specular = 10;
+    add(cw);
+    web.counter = cw;
+
+    pin = makeCylinderX(0.11, 0.34, 12, '#a8a0b4', false);
+    pin.stroke = '#5a5468';
+    pin.specular = 20;
+    add(pin);
+    this.crankPins.push(pin);
+  }
+
+  // Flywheel + visible spokes so rotation reads
+  var flyX = shaftLen / 2 + 0.12;
+  var fly = makeCylinderX(1.05, 0.22, 28, colFly, false);
+  fly.pos = [flyX, this.crankY, 0];
+  fly.stroke = '#2e323c';
+  fly.specular = 18;
+  add(fly);
+  this.flywheel = fly;
+
+  var hub = makeCylinderX(0.28, 0.28, 12, '#7a8090', false);
+  hub.pos = [flyX, this.crankY, 0];
+  hub.specular = 16;
+  add(hub);
+
+  var s;
+  for (s = 0; s < 6; s++) {
+    var spoke = makeRod(0.09, 0.12, '#6e7482');
+    spoke.specular = 14;
+    add(spoke);
+    this.flySpokes.push(spoke);
+  }
+
+  var mark = makeBox(0.08, 0.28, 0.18, '#ef4444');
+  mark.specular = 8;
+  add(mark);
+  this.flyMarks.push(mark);
+};
+
+EngineModel.prototype.pistonPinY = function (angle) {
+  var R = this.crankR, L = this.rodLen;
+  var sinA = Math.sin(angle);
+  var cosA = Math.cos(angle);
+  return this.crankY + R * cosA + Math.sqrt(Math.max(0, L * L - R * R * sinA * sinA));
+};
+
+EngineModel.prototype.update = function (dt) {
+  if (this.running) this.crankAngle += this.speed * dt;
+  var a = this.crankAngle;
+  var R = this.crankR;
+  var L = this.rodLen;
+  var span = this.cylSpacing;
+
+  var c, xoff, angle, cpY, cpZ, ppY, dy, dz, len, rodA, pistonBottom;
+  var totalDeg, cylDeg, phaseIdx, phase, phaseProgress, glowI, glowColor;
+
+  for (c = 0; c < 2; c++) {
+    xoff = (c === 0 ? -1 : 1) * (span / 2);
+    angle = a + c * Math.PI;
+
+    cpY = this.crankY + R * Math.cos(angle);
+    cpZ = R * Math.sin(angle);
+    ppY = this.pistonPinY(angle);
+
+    pistonBottom = ppY - this.pinOffset;
+    this.pistons[c].pos = [xoff, pistonBottom, 0];
+    this.pistons[c].crown.pos = [xoff, pistonBottom + this.pistonH, 0];
+    this.pistons[c].wrist.pos = [xoff, ppY, 0];
+
+    this.crankPins[c].pos = [xoff, cpY, cpZ];
+
+    // Crank web: beam from main journal toward pin, plus opposite counterweight
+    this.crankWebs[c].pos = [xoff, cpY * 0.5, cpZ * 0.5];
+    this.crankWebs[c].rot = [angle, 0, 0];
+    if (this.crankWebs[c].counter) {
+      this.crankWebs[c].counter.pos = [xoff, -cpY * 0.42, -cpZ * 0.42];
+      this.crankWebs[c].counter.rot = [angle, 0, 0];
+    }
+
+    dy = ppY - cpY;
+    dz = 0 - cpZ;
+    len = Math.hypot(dy, dz) || L;
+    rodA = Math.atan2(dz, dy);
+
+    // Unit rod along +Y, scale to length FIRST, then rotate around X, origin at crank pin
+    this.rods[c].pos = [xoff, cpY, cpZ];
+    this.rods[c].rot = [rodA, 0, 0];
+    this.rods[c].scale = [1, len, 1];
+
+    this.rods[c].bigEnd.pos = [xoff, cpY, cpZ];
+    this.rods[c].smallEnd.pos = [xoff, ppY, 0];
+
+    this.glowMeshes[c].pos = [xoff, pistonBottom + this.pistonH + 0.03, 0];
+
+    totalDeg = ((a * 180 / Math.PI) % 720 + 720) % 720;
+    cylDeg = (totalDeg + c * 360) % 720;
+    phaseIdx = Math.floor(cylDeg / 180);
+    phase = PHASES[phaseIdx];
+    phaseProgress = (cylDeg % 180) / 180;
+
+    glowI = 0;
+    if (phaseIdx === 2) glowI = 1.0 - phaseProgress * 0.75;
+    else if (phaseIdx === 1) glowI = phaseProgress * 0.22;
+
+    glowColor = mix('#152033', phase.color, Math.min(1, glowI + 0.08));
+    this.glowMeshes[c].faces[0].color = glowColor;
+    if (this.glowMeshes[c].faces[1]) this.glowMeshes[c].faces[1].color = glowColor;
+    this.glowMeshes[c].alpha = 0.35 + glowI * 0.6;
+
+    if (this.boreMeshes[c]) {
+      if (phaseIdx === 2 && glowI > 0.12) {
+        this.boreMeshes[c].alpha = 0.20 + glowI * 0.18;
+        this.boreMeshes[c].stroke = 'rgba(255,130,70,' + (0.28 + glowI * 0.45) + ')';
+      } else {
+        this.boreMeshes[c].alpha = 0.20;
+        this.boreMeshes[c].stroke = 'rgba(170,210,255,0.40)';
+      }
+    }
+
+    this._cycleInfo[c] = { phase: phase, phaseIdx: phaseIdx, progress: phaseProgress, glow: glowI };
+  }
+
+  var flyX = this.flywheel.pos[0];
+  var inner = 0.30, spokeLen = 0.68;
+  var s, sa, cr, sr;
+  for (s = 0; s < this.flySpokes.length; s++) {
+    sa = a + (s / this.flySpokes.length) * Math.PI * 2;
+    cr = Math.cos(sa); sr = Math.sin(sa);
+    this.flySpokes[s].pos = [flyX, this.crankY + inner * cr, inner * sr];
+    this.flySpokes[s].rot = [sa, 0, 0];
+    this.flySpokes[s].scale = [1, spokeLen, 1];
+  }
+  if (this.flyMarks[0]) {
+    sa = a;
+    cr = Math.cos(sa); sr = Math.sin(sa);
+    this.flyMarks[0].pos = [flyX, this.crankY + 0.92 * cr, 0.92 * sr];
+    this.flyMarks[0].rot = [sa, 0, 0];
+  }
+};
+
+EngineModel.prototype.getCycleInfo = function () { return this._cycleInfo; };
+EngineModel.prototype.getRPM = function () {
+  return Math.round((this.speed / (2 * Math.PI)) * 60);
+};
+
+</script>
+<script >
+(function () {
+  var canvas = document.getElementById('canvas');
+  var renderer = new Renderer(canvas);
+  var engine = new EngineModel();
+  renderer.meshes = engine.meshes;
+
+  var speedSlider = document.getElementById('speed');
+  var speedVal = document.getElementById('speedVal');
+  var rpmDisplay = document.getElementById('rpm');
+  var playBtn = document.getElementById('playBtn');
+  var viewBtn = document.getElementById('viewBtn');
+  var hint = document.getElementById('hint');
+  var toast = document.getElementById('toast');
+  var cylCards = [
+    { phase: document.getElementById('c1phase'), bar: document.getElementById('c1bar') },
+    { phase: document.getElementById('c2phase'), bar: document.getElementById('c2bar') }
+  ];
+
+  function updateSpeed() {
+    var v = parseFloat(speedSlider.value);
+    engine.speed = (v / 100) * 12;
+    speedVal.textContent = engine.getRPM() + ' RPM';
+  }
+  speedSlider.addEventListener('input', updateSpeed);
+  updateSpeed();
+
+  playBtn.addEventListener('click', function () {
+    engine.running = !engine.running;
+    playBtn.textContent = engine.running ? '⏸ Pause' : '▶ Play';
+    playBtn.classList.toggle('active', engine.running);
+    showToast(engine.running ? 'Engine running' : 'Engine paused');
+  });
+
+  var viewIdx = 0;
+  var views = [
+    { rx: -0.42, ry: 0.62, zoom: 1.05, name: '3/4 view' },
+    { rx: -0.12, ry: 0.0, zoom: 0.92, name: 'Front' },
+    { rx: -1.05, ry: 0.15, zoom: 0.95, name: 'Top' },
+    { rx: -0.35, ry: Math.PI / 2, zoom: 1.05, name: 'Side' }
+  ];
+  viewBtn.addEventListener('click', function () {
+    viewIdx = (viewIdx + 1) % views.length;
+    var v = views[viewIdx];
+    animateCamera(v.rx, v.ry, v.zoom);
+    showToast(v.name);
+  });
+
+  function animateCamera(tx, ty, tz) {
+    var sx = renderer.camRX, sy = renderer.camRY, sz = renderer.zoom;
+    var start = performance.now(), dur = 550;
+    function step(now) {
+      var t = Math.min(1, (now - start) / dur);
+      var e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      renderer.camRX = sx + (tx - sx) * e;
+      renderer.camRY = sy + (ty - sy) * e;
+      renderer.zoom = sz + (tz - sz) * e;
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  var toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1400);
+  }
+
+  var dragging = false, lastX = 0, lastY = 0, lastDist = 0;
+  setTimeout(function () { hint.classList.add('hide'); }, 3800);
+
+  function pointerDown(x, y) {
+    dragging = true; lastX = x; lastY = y;
+    hint.classList.add('hide');
+  }
+  function pointerMove(x, y) {
+    if (!dragging) return;
+    renderer.camRY += (x - lastX) * 0.008;
+    renderer.camRX += (y - lastY) * 0.008;
+    renderer.camRX = Math.max(-Math.PI / 2 + 0.08, Math.min(Math.PI / 2 - 0.08, renderer.camRX));
+    lastX = x; lastY = y;
+  }
+  function pointerUp() { dragging = false; }
+
+  canvas.addEventListener('mousedown', function (e) { pointerDown(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', function (e) { pointerMove(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', pointerUp);
+
+  canvas.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    if (e.touches.length === 1) pointerDown(e.touches[0].clientX, e.touches[0].clientY);
+    else if (e.touches.length === 2) {
+      dragging = false;
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastDist = Math.hypot(dx, dy);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    if (e.touches.length === 1) pointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    else if (e.touches.length === 2) {
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      var dist = Math.hypot(dx, dy);
+      if (lastDist > 0) {
+        renderer.zoom *= dist / lastDist;
+        renderer.zoom = Math.max(0.35, Math.min(3.2, renderer.zoom));
+      }
+      lastDist = dist;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', function (e) {
+    if (e.touches.length === 0) pointerUp();
+  });
+
+  canvas.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    renderer.zoom *= (1 - e.deltaY * 0.001);
+    renderer.zoom = Math.max(0.35, Math.min(3.2, renderer.zoom));
+  }, { passive: false });
+
+  var lastTime = performance.now();
+  function loop(now) {
+    var dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    engine.update(dt);
+    renderer.render();
+    rpmDisplay.textContent = engine.getRPM() + ' RPM';
+    var info = engine.getCycleInfo();
+    for (var c = 0; c < 2; c++) {
+      if (info[c]) {
+        cylCards[c].phase.textContent = info[c].phase.label;
+        cylCards[c].phase.style.color = info[c].phase.color;
+        cylCards[c].bar.style.width = Math.round(info[c].progress * 100) + '%';
+        cylCards[c].bar.style.background = info[c].phase.color;
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  async function persistSpeed() {
+    try {
+      if (window.ForgeHost && ForgeHost.state) await ForgeHost.state.set('speed', speedSlider.value);
+    } catch (e) {}
+  }
+  async function restoreSpeed() {
+    try {
+      if (window.ForgeHost && ForgeHost.state) {
+        var v = await ForgeHost.state.get('speed');
+        if (v != null) { speedSlider.value = v; updateSpeed(); }
+      }
+    } catch (e) {}
+  }
+  speedSlider.addEventListener('change', persistSpeed);
+  restoreSpeed();
+})();
+
+</script>
+</body>
+</html>

@@ -88,6 +88,16 @@ test('attachment picker uses ForgeHost.files.pick', () => {
   assert.match(region, /image\/\*,application\/pdf/, 'must accept image/PDF');
 });
 
+test('Library exposes Kitchen Sink only from the root-folder long-press menu', () => {
+  assert.doesNotMatch(html, /id="btnInstallKitchen"/);
+  assert.doesNotMatch(html, /btnInstallKitchen/);
+  const rootStart=html.indexOf("const rootRow = mkRow('folder-row root-row', 0);");
+  const rootEnd=html.indexOf('const renderChildren =',rootStart);
+  const root=html.slice(rootStart,rootEnd);
+  assert.match(root,/\{ id: 'kitchen', label: t\('lib\.kitchen'\) \}/);
+  assert.match(root,/choice === 'kitchen'\) installKitchenSink\(\)/);
+});
+
 test('the kitchen sink script still parses as valid JS', () => {
   const m = ks.match(/<script>([\s\S]*?)<\/script>/) || ks.match(/<script>([\s\S]*?)<\\\/script>/);
   assert.ok(m, 'script block must exist');

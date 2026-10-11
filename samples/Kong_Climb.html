@@ -1,0 +1,2064 @@
+<!DOCTYPE html>
+<!-- carCompatible: true -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Kong Climb</title>
+  <style>:root {
+  --bg: #07060a;
+  --cabinet: #1a0c10;
+  --bezel: #3a1418;
+  --gold: #f0c040;
+  --amber: #ffcc33;
+  --red: #e02020;
+  --cyan: #48e0ff;
+  --pink: #ff7ab8;
+  --muted: #9aa0b4;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  background: radial-gradient(ellipse at 50% 20%, #1a1020 0%, #07060a 55%);
+  color: #fff;
+  font-family: ui-monospace, "Cascadia Mono", "Courier New", monospace;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+#app {
+  height: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom);
+}
+
+.hud {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  padding: 8px 6px 4px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--amber);
+  text-shadow: 0 0 8px rgba(255, 180, 40, 0.35);
+}
+
+.hud .cell { text-align: center; }
+.hud .label { color: #ff5a5a; font-size: 9px; margin-bottom: 2px; }
+.hud .val { font-size: 14px; font-weight: 700; }
+.hud .lives { color: #ff6b6b; letter-spacing: 2px; }
+
+.stage-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 8px 6px;
+  font-size: 11px;
+  color: var(--cyan);
+}
+
+.stage-bar .bonus { color: var(--amber); }
+
+#wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border: 4px solid #5a1c22;
+  box-shadow:
+    0 0 0 2px #2a0c10,
+    inset 0 0 40px rgba(255, 40, 40, 0.08),
+    0 12px 40px rgba(0,0,0,0.55);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #000;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.62);
+  text-align: center;
+  padding: 16px;
+  gap: 10px;
+}
+
+.overlay.hidden { display: none; }
+
+.overlay h1 {
+  font-size: 28px;
+  color: #ff3b3b;
+  letter-spacing: 3px;
+  text-shadow: 0 3px 0 #5a0000, 0 0 18px rgba(255,40,40,0.6);
+}
+
+.overlay h2 {
+  font-size: 16px;
+  color: var(--amber);
+  letter-spacing: 2px;
+}
+
+.overlay p {
+  color: #d0d4e8;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+.how-high {
+  color: var(--cyan);
+  font-size: 13px;
+  letter-spacing: 2px;
+  animation: blink 1.1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0.25; }
+}
+
+.btn {
+  min-height: 48px;
+  min-width: 160px;
+  padding: 12px 22px;
+  border: 2px solid #ffcc33;
+  background: linear-gradient(#8a1a1a, #4a0808);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn:active { transform: translateY(1px); filter: brightness(1.15); }
+
+.btn.ghost {
+  background: transparent;
+  border-color: #666;
+  color: #ccc;
+  min-width: 120px;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 10px 4px 8px;
+  align-items: center;
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: 58px 58px 58px;
+  grid-template-rows: 52px 52px 52px;
+  gap: 4px;
+  justify-content: start;
+}
+
+.pad {
+  border: 0;
+  border-radius: 10px;
+  background: #2a2e3c;
+  color: #e8e8f0;
+  font-size: 22px;
+  min-width: 52px;
+  min-height: 52px;
+  box-shadow: 0 3px 0 #111;
+}
+
+.pad:active, .pad.held {
+  background: #4a90ff;
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #111;
+}
+
+.pad.empty { visibility: hidden; }
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.jump {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 3px solid #ffd36a;
+  background: radial-gradient(circle at 35% 30%, #ff6a4a, #b01414);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  box-shadow: 0 6px 0 #5a0808;
+}
+
+.jump:active, .jump.held {
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 #5a0808;
+}
+
+.tiny-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tiny {
+  min-width: 44px;
+  min-height: 36px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #1c1c24;
+  color: #bbb;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.hint {
+  text-align: center;
+  font-size: 10px;
+  color: #6a7088;
+  padding-bottom: 4px;
+}
+
+@media (min-height: 780px) {
+  .hud { font-size: 12px; }
+  .pad { min-width: 58px; min-height: 56px; }
+}
+</style>
+</head>
+<body>
+  <div id="app">
+    <div class="hud">
+      <div class="cell">
+        <div class="label">Score</div>
+        <div class="val" id="score">000000</div>
+      </div>
+      <div class="cell">
+        <div class="label">High</div>
+        <div class="val" id="high">000000</div>
+      </div>
+      <div class="cell">
+        <div class="label">Lives</div>
+        <div class="val lives" id="lives">♥♥♥</div>
+      </div>
+    </div>
+    <div class="stage-bar">
+      <span id="stageLabel">25M</span>
+      <span id="levelLabel">L=1</span>
+      <span class="bonus">BONUS <span id="bonus">5000</span></span>
+    </div>
+    <div id="wrap">
+      <canvas id="game" width="240" height="300"></canvas>
+      <div class="overlay" id="overlay">
+        <h1>KONG CLIMB</h1>
+        <h2>HOW HIGH CAN YOU GET?</h2>
+        <p>Climb the site, leap barrels, smash with the hammer, and pull every rivet to drop the ape. Rescue Pauline!</p>
+        <div class="how-high" id="howHigh">TAP START</div>
+        <button class="btn" id="btnStart">Start</button>
+        <button class="btn ghost" id="btnHelp">How to play</button>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="dpad">
+        <button class="pad empty" tabindex="-1"></button>
+        <button class="pad" id="btnUp" data-dir="up">▲</button>
+        <button class="pad empty" tabindex="-1"></button>
+        <button class="pad" id="btnLeft" data-dir="left">◀</button>
+        <button class="pad" id="btnDown" data-dir="down">▼</button>
+        <button class="pad" id="btnRight" data-dir="right">▶</button>
+        <button class="pad empty" tabindex="-1"></button>
+        <button class="pad empty" tabindex="-1"></button>
+        <button class="pad empty" tabindex="-1"></button>
+      </div>
+      <div class="actions">
+        <button class="jump" id="btnJump">JUMP</button>
+        <div class="tiny-row">
+          <button class="tiny" id="btnPause">PAUSE</button>
+          <button class="tiny" id="btnMute">MUTE</button>
+        </div>
+      </div>
+    </div>
+    <div class="hint">Arrows / WASD move · Space jump · P pause</div>
+  </div>
+  <script >
+(function (global) {
+  const Audio = {
+    ctx: null,
+    muted: false,
+    master: null,
+    musicTimer: 0,
+    musicOn: false,
+    hammer: false,
+  };
+
+  function ac() {
+    if (!Audio.ctx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      Audio.ctx = new Ctx();
+      Audio.master = Audio.ctx.createGain();
+      Audio.master.gain.value = 0.18;
+      Audio.master.connect(Audio.ctx.destination);
+    }
+    return Audio.ctx;
+  }
+
+  async function resume() {
+    const c = ac();
+    if (c && c.state === "suspended") {
+      try { await c.resume(); } catch (e) {}
+    }
+  }
+
+  function beep(freq, dur, type, vol, slide) {
+    if (Audio.muted) return;
+    const c = ac();
+    if (!c || !Audio.master) return;
+    const t = c.currentTime;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type || "square";
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, slide), t + dur);
+    g.gain.setValueAtTime(vol || 0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g);
+    g.connect(Audio.master);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  function noise(dur, vol) {
+    if (Audio.muted) return;
+    const c = ac();
+    if (!c || !Audio.master) return;
+    const n = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+    const d = n.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const s = c.createBufferSource();
+    s.buffer = n;
+    const g = c.createGain();
+    g.gain.value = vol || 0.08;
+    s.connect(g);
+    g.connect(Audio.master);
+    s.start();
+  }
+
+  Audio.resume = resume;
+  Audio.toggleMute = function () {
+    Audio.muted = !Audio.muted;
+    if (Audio.master) Audio.master.gain.value = Audio.muted ? 0 : 0.18;
+    return Audio.muted;
+  };
+  Audio.jump = () => beep(420, 0.12, "square", 0.1, 680);
+  Audio.land = () => beep(140, 0.06, "triangle", 0.06);
+  Audio.smash = () => { beep(180, 0.16, "sawtooth", 0.12, 80); noise(0.12, 0.1); };
+  Audio.item = () => { beep(660, 0.08, "square", 0.1); setTimeout(() => beep(880, 0.1, "square", 0.1), 80); };
+  Audio.hammer = () => { beep(300, 0.08, "square", 0.08); beep(500, 0.1, "square", 0.08); };
+  Audio.death = () => { beep(320, 0.4, "square", 0.12, 60); noise(0.2, 0.08); };
+  Audio.win = () => {
+    [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.14, "square", 0.1), i * 120));
+  };
+  Audio.fall = () => beep(200, 0.5, "sawtooth", 0.1, 40);
+  Audio.dk = () => { beep(90, 0.12, "triangle", 0.14); setTimeout(() => beep(70, 0.16, "triangle", 0.14), 90); };
+  Audio.walk = () => beep(180, 0.03, "square", 0.03);
+  Audio.extra = () => { [784, 1046, 1318].forEach((f, i) => setTimeout(() => beep(f, 0.12, "square", 0.1), i * 90)); };
+  Audio.tick = () => beep(880, 0.04, "square", 0.04);
+  Audio.startTune = () => {
+    const notes = [392, 392, 523, 392, 329, 261, 196];
+    notes.forEach((f, i) => setTimeout(() => beep(f, 0.12, "square", 0.09), i * 110));
+  };
+
+  global.DKAudio = Audio;
+})(window);
+
+</script>
+  <script >
+(function (global) {
+  const C = {
+    skin: "#f0c8a0",
+    red: "#e02820",
+    darkRed: "#8a1010",
+    blue: "#2038d0",
+    brown: "#8a4a18",
+    dk: "#6b3410",
+    dkDark: "#3a1c08",
+    dkFace: "#c07838",
+    pink: "#ff6aa8",
+    hair: "#f0d040",
+    girder: "#d02020",
+    girderHi: "#ff5050",
+    rivet: "#f0d020",
+    ladder: "#40c8f0",
+    oil: "#303038",
+    fire: "#ff9020",
+    barrel: "#c06020",
+    barrelB: "#3060d0",
+    hammer: "#e8c040",
+    handle: "#8a5020",
+    white: "#f4f4f4",
+    black: "#101018",
+  };
+
+  function px(ctx, x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round(x), Math.round(y), w, h);
+  }
+
+  function drawGirder(ctx, x1, y1, x2, y2) {
+    const steps = Math.max(2, Math.ceil(Math.abs(x2 - x1) / 8));
+    ctx.strokeStyle = C.girder;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.strokeStyle = C.girderHi;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1 - 2);
+    ctx.lineTo(x2, y2 - 2);
+    ctx.stroke();
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x1 + (x2 - x1) * t;
+      const y = y1 + (y2 - y1) * t;
+      px(ctx, x - 1, y - 3, 2, 2, C.rivet);
+    }
+  }
+
+  function drawLadder(ctx, x, y1, y2, broken) {
+    const top = Math.min(y1, y2);
+    const bot = Math.max(y1, y2);
+    const h = bot - top;
+    ctx.strokeStyle = C.ladder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - 4, top);
+    ctx.lineTo(x - 4, bot);
+    ctx.moveTo(x + 4, top);
+    ctx.lineTo(x + 4, bot);
+    ctx.stroke();
+    const gapStart = broken ? top + h * 0.38 : -1;
+    const gapEnd = broken ? top + h * 0.62 : -1;
+    for (let y = top + 3; y < bot; y += 5) {
+      if (y > gapStart && y < gapEnd) continue;
+      ctx.beginPath();
+      ctx.moveTo(x - 4, y);
+      ctx.lineTo(x + 4, y);
+      ctx.stroke();
+    }
+  }
+
+  function drawMario(ctx, x, y, dir, frame, state) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    if (dir < 0) ctx.scale(-1, 1);
+    const walk = (frame | 0) % 2;
+    if (state === "climb") {
+      px(ctx, -3, 0, 6, 3, C.red);
+      px(ctx, -4, 3, 8, 4, C.skin);
+      px(ctx, -3, 4, 2, 2, C.black);
+      px(ctx, 1, 4, 2, 2, C.black);
+      px(ctx, -4, 7, 8, 6, C.red);
+      px(ctx, -5, 8, 3, 4, C.skin);
+      px(ctx, 2, 8, 3, 4, C.skin);
+      px(ctx, -4, 13, 3, 3, C.blue);
+      px(ctx, 1, 13, 3, 3, C.blue);
+    } else if (state === "hammer") {
+      const up = frame % 2 === 0;
+      px(ctx, -3, 1, 7, 3, C.red);
+      px(ctx, -4, 4, 8, 4, C.skin);
+      px(ctx, 1, 5, 2, 2, C.black);
+      px(ctx, -4, 8, 8, 5, C.red);
+      px(ctx, -3, 13, 3, 3, C.blue);
+      px(ctx, 1, 13, 3, 3, C.blue);
+      if (up) {
+        px(ctx, 4, -6, 3, 8, C.handle);
+        px(ctx, 1, -10, 9, 5, C.hammer);
+      } else {
+        px(ctx, 5, 6, 8, 3, C.handle);
+        px(ctx, 12, 4, 5, 8, C.hammer);
+      }
+    } else if (state === "jump") {
+      px(ctx, -3, 0, 7, 3, C.red);
+      px(ctx, -4, 3, 8, 4, C.skin);
+      px(ctx, 1, 4, 2, 2, C.black);
+      px(ctx, -5, 7, 10, 5, C.red);
+      px(ctx, -6, 8, 3, 3, C.skin);
+      px(ctx, 4, 8, 3, 3, C.skin);
+      px(ctx, -4, 12, 3, 4, C.blue);
+      px(ctx, 2, 12, 3, 4, C.blue);
+    } else if (state === "dead") {
+      px(ctx, -5, 6, 10, 6, C.red);
+      px(ctx, -3, 4, 6, 4, C.skin);
+      px(ctx, -2, 5, 2, 2, C.black);
+      px(ctx, 1, 5, 2, 2, C.black);
+    } else {
+      px(ctx, -3, 0, 7, 3, C.red);
+      px(ctx, -1, -1, 4, 2, C.red);
+      px(ctx, -4, 3, 8, 4, C.skin);
+      px(ctx, 1, 4, 2, 2, C.black);
+      px(ctx, -2, 6, 3, 1, C.darkRed);
+      px(ctx, -4, 7, 8, 6, C.red);
+      px(ctx, 3, 8, 3, 3, C.skin);
+      px(ctx, -5, 8, 2, 3, C.skin);
+      px(ctx, -3, 13, 3, 3, walk ? C.blue : C.darkRed);
+      px(ctx, 1, 13, 3, 3, walk ? C.darkRed : C.blue);
+    }
+    ctx.restore();
+  }
+
+  function drawDK(ctx, x, y, frame, pose) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    const stomp = pose === "stomp" ? -2 : 0;
+    px(ctx, -14, 6 + stomp, 28, 18, C.dk);
+    px(ctx, -16, 10 + stomp, 6, 8, C.dk);
+    px(ctx, 10, 10 + stomp, 6, 8, C.dk);
+    px(ctx, -10, -2 + stomp, 20, 14, C.dk);
+    px(ctx, -8, 2 + stomp, 16, 10, C.dkFace);
+    px(ctx, -6, 4 + stomp, 3, 3, C.black);
+    px(ctx, 3, 4 + stomp, 3, 3, C.black);
+    px(ctx, -4, 9 + stomp, 8, 3, C.black);
+    px(ctx, -2, 14 + stomp, 4, 6, C.red);
+    if (pose === "throw") {
+      px(ctx, 12, 0, 8, 8, C.dk);
+      px(ctx, 16, -8, 8, 6, C.barrel);
+    } else {
+      px(ctx, -18, 4 + stomp, 8, 8, C.dk);
+      px(ctx, 10, 4 + stomp, 8, 8, C.dk);
+    }
+    px(ctx, -12, 22 + stomp, 8, 5, C.dkDark);
+    px(ctx, 4, 22 + stomp, 8, 5, C.dkDark);
+    ctx.restore();
+  }
+
+  function drawPauline(ctx, x, y, frame) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    px(ctx, -3, 0, 7, 4, C.hair);
+    px(ctx, -3, 4, 6, 4, C.skin);
+    px(ctx, 0, 5, 2, 2, C.black);
+    px(ctx, -4, 8, 8, 8, C.pink);
+    px(ctx, -5, 10, 2, 4, C.skin);
+    px(ctx, 3, 10, 2, 4, C.skin);
+    px(ctx, -3, 16, 2, 3, C.red);
+    px(ctx, 1, 16, 2, 3, C.red);
+    if (frame % 40 < 28) {
+      ctx.fillStyle = C.white;
+      ctx.fillRect(8, -10, 28, 10);
+      ctx.fillStyle = C.red;
+      ctx.font = "7px monospace";
+      ctx.fillText("HELP!", 10, -2);
+    }
+    ctx.restore();
+  }
+
+  function drawBarrel(ctx, x, y, rot, blue) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    ctx.rotate(rot);
+    px(ctx, -5, -4, 10, 8, blue ? C.barrelB : C.barrel);
+    px(ctx, -5, -4, 10, 2, "#f0d0a0");
+    px(ctx, -5, 2, 10, 2, "#f0d0a0");
+    if (blue) {
+      px(ctx, -2, -1, 4, 3, "#101018");
+    }
+    ctx.restore();
+  }
+
+  function drawFire(ctx, x, y, frame) {
+    const f = frame % 4;
+    px(ctx, x - 4, y - 2, 8, 6, f < 2 ? "#ff4010" : "#ff9010");
+    px(ctx, x - 2, y - 6, 4, 5, "#ffe060");
+    px(ctx, x - 3, y + 3, 2, 3, "#202028");
+    px(ctx, x + 1, y + 3, 2, 3, "#202028");
+    px(ctx, x - 2, y - 1, 2, 2, C.white);
+  }
+
+  function drawHammerPickup(ctx, x, y) {
+    px(ctx, x - 1, y - 8, 2, 10, C.handle);
+    px(ctx, x - 6, y - 12, 12, 5, C.hammer);
+  }
+
+  function drawOil(ctx, x, y, flame) {
+    px(ctx, x - 8, y - 12, 16, 14, C.oil);
+    px(ctx, x - 6, y - 10, 12, 4, "#505058");
+    ctx.fillStyle = "#f0d040";
+    ctx.font = "6px monospace";
+    ctx.fillText("OIL", x - 8, y - 2);
+    if (flame) {
+      px(ctx, x - 3, y - 20, 6, 8, frameColor(flame));
+      px(ctx, x - 1, y - 24, 3, 5, "#ffe060");
+    }
+  }
+
+  function frameColor(t) {
+    return (t | 0) % 2 === 0 ? "#ff4010" : "#ffb010";
+  }
+
+  function drawRivet(ctx, x, y) {
+    px(ctx, x - 3, y - 4, 6, 6, C.rivet);
+    px(ctx, x - 1, y - 2, 2, 2, "#fff6a0");
+  }
+
+  function drawItem(ctx, x, y, kind) {
+    if (kind === "hat") {
+      px(ctx, x - 6, y - 4, 12, 3, C.pink);
+      px(ctx, x - 3, y - 7, 6, 4, C.pink);
+    } else if (kind === "purse") {
+      px(ctx, x - 4, y - 6, 8, 7, C.red);
+      px(ctx, x - 1, y - 8, 2, 3, C.hammer);
+    } else {
+      px(ctx, x, y - 10, 2, 8, C.white);
+      px(ctx, x - 6, y - 10, 8, 5, C.pink);
+    }
+  }
+
+  function drawPie(ctx, x, y) {
+    px(ctx, x - 7, y - 3, 14, 5, "#6a3a18");
+    px(ctx, x - 6, y - 5, 12, 3, "#c07030");
+  }
+
+  function drawSpring(ctx, x, y, rot) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    ctx.rotate(rot || 0);
+    ctx.strokeStyle = "#d0d4e0";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-4, 6);
+    ctx.lineTo(-2, -2);
+    ctx.lineTo(2, 4);
+    ctx.lineTo(4, -4);
+    ctx.stroke();
+    px(ctx, -5, -6, 10, 3, "#e02820");
+    ctx.restore();
+  }
+
+  function drawHeart(ctx, x, y, broken) {
+    ctx.fillStyle = broken ? "#804050" : "#ff4060";
+    px(ctx, x - 6, y, 5, 5, ctx.fillStyle);
+    px(ctx, x + 1, y, 5, 5, ctx.fillStyle);
+    px(ctx, x - 4, y + 3, 8, 6, ctx.fillStyle);
+    if (broken) {
+      ctx.strokeStyle = "#fff";
+      ctx.beginPath();
+      ctx.moveTo(x - 2, y - 2);
+      ctx.lineTo(x + 4, y + 10);
+      ctx.stroke();
+    }
+  }
+
+  function drawLift(ctx, x, y, w) {
+    px(ctx, x, y - 3, w, 4, C.girder);
+    px(ctx, x + 2, y - 2, 2, 2, C.rivet);
+    px(ctx, x + w - 4, y - 2, 2, 2, C.rivet);
+  }
+
+  global.DKDraw = {
+    C, drawGirder, drawLadder, drawMario, drawDK, drawPauline,
+    drawBarrel, drawFire, drawHammerPickup, drawOil, drawRivet,
+    drawItem, drawPie, drawSpring, drawHeart, drawLift,
+  };
+})(window);
+
+</script>
+  <script >
+(function (global) {
+  const STAGES = {
+    "25m": {
+      id: "25m",
+      name: "25M",
+      kind: "barrels",
+      bonus: 5000,
+      spawn: { x: 28, y: 268 },
+      goal: { x: 168, y: 20, w: 56, h: 22 },
+      dk: { x: 52, y: 22 },
+      pauline: { x: 186, y: 8 },
+      oil: { x: 22, y: 272 },
+      platforms: [
+        { x1: 8, y1: 272, x2: 232, y2: 266 },
+        { x1: 16, y1: 226, x2: 224, y2: 236 },
+        { x1: 16, y1: 198, x2: 224, y2: 188 },
+        { x1: 16, y1: 150, x2: 224, y2: 160 },
+        { x1: 16, y1: 122, x2: 224, y2: 112 },
+        { x1: 16, y1: 74, x2: 224, y2: 84 },
+        { x1: 36, y1: 52, x2: 210, y2: 52 },
+        { x1: 160, y1: 34, x2: 226, y2: 34 }
+      ],
+      ladders: [
+        { x: 208, y1: 236, y2: 266 },
+        { x: 52, y1: 226, y2: 270, broken: true },
+        { x: 116, y1: 230, y2: 268 },
+        { x: 28, y1: 198, y2: 226 },
+        { x: 164, y1: 190, y2: 234, broken: true },
+        { x: 208, y1: 188, y2: 236 },
+        { x: 72, y1: 152, y2: 196 },
+        { x: 140, y1: 156, y2: 192, broken: true },
+        { x: 28, y1: 150, y2: 198 },
+        { x: 208, y1: 160, y2: 188 },
+        { x: 28, y1: 122, y2: 150 },
+        { x: 96, y1: 116, y2: 154 },
+        { x: 200, y1: 112, y2: 160 },
+        { x: 28, y1: 74, y2: 122 },
+        { x: 120, y1: 78, y2: 118, broken: true },
+        { x: 208, y1: 52, y2: 84 },
+        { x: 60, y1: 52, y2: 76, broken: true },
+        { x: 184, y1: 34, y2: 52 }
+      ],
+      hammers: [
+        { x: 108, y: 228 },
+        { x: 48, y: 72 }
+      ],
+      items: []
+    },
+    "50m": {
+      id: "50m",
+      name: "50M",
+      kind: "factory",
+      bonus: 6000,
+      spawn: { x: 24, y: 266 },
+      goal: { x: 150, y: 28, w: 60, h: 22 },
+      dk: { x: 120, y: 16 },
+      pauline: { x: 168, y: 6 },
+      oil: { x: 120, y: 168 },
+      platforms: [
+        { x1: 8, y1: 270, x2: 232, y2: 270, conveyor: 1 },
+        { x1: 8, y1: 214, x2: 104, y2: 214 },
+        { x1: 136, y1: 214, x2: 232, y2: 214 },
+        { x1: 8, y1: 168, x2: 232, y2: 168, conveyor: -1 },
+        { x1: 36, y1: 122, x2: 204, y2: 122, conveyor: 1 },
+        { x1: 8, y1: 76, x2: 92, y2: 76 },
+        { x1: 148, y1: 76, x2: 232, y2: 76 },
+        { x1: 100, y1: 46, x2: 204, y2: 46 }
+      ],
+      ladders: [
+        { x: 32, y1: 214, y2: 270 },
+        { x: 208, y1: 214, y2: 270 },
+        { x: 70, y1: 168, y2: 214 },
+        { x: 170, y1: 168, y2: 214 },
+        { x: 52, y1: 122, y2: 168 },
+        { x: 188, y1: 122, y2: 168 },
+        { x: 70, y1: 76, y2: 122 },
+        { x: 176, y1: 46, y2: 76, moving: true, xMin: 152, xMax: 204, vx: 0.32 },
+        { x: 188, y1: 46, y2: 76 }
+      ],
+      hammers: [{ x: 120, y: 154 }],
+      items: [
+        { x: 48, y: 202, kind: "hat" },
+        { x: 196, y: 110, kind: "purse" }
+      ]
+    },
+    "75m": {
+      id: "75m",
+      name: "75M",
+      kind: "elevators",
+      bonus: 7000,
+      spawn: { x: 26, y: 162 },
+      goal: { x: 168, y: 22, w: 56, h: 22 },
+      dk: { x: 204, y: 12 },
+      pauline: { x: 168, y: 4 },
+      pit: true,
+      platforms: [
+        { x1: 8, y1: 166, x2: 54, y2: 166 },
+        { x1: 8, y1: 122, x2: 42, y2: 122 },
+        { x1: 8, y1: 84, x2: 38, y2: 84 },
+        { x1: 90, y1: 150, x2: 148, y2: 150 },
+        { x1: 98, y1: 114, x2: 142, y2: 114 },
+        { x1: 104, y1: 78, x2: 138, y2: 78 },
+        { x1: 158, y1: 214, x2: 232, y2: 214 },
+        { x1: 168, y1: 178, x2: 232, y2: 178 },
+        { x1: 180, y1: 142, x2: 232, y2: 142 },
+        { x1: 192, y1: 106, x2: 232, y2: 106 },
+        { x1: 158, y1: 70, x2: 232, y2: 70 },
+        { x1: 156, y1: 42, x2: 224, y2: 42 }
+      ],
+      ladders: [
+        { x: 24, y1: 122, y2: 166 },
+        { x: 20, y1: 84, y2: 122 },
+        { x: 120, y1: 114, y2: 150 },
+        { x: 120, y1: 78, y2: 114 },
+        { x: 210, y1: 178, y2: 214 },
+        { x: 216, y1: 142, y2: 178 },
+        { x: 220, y1: 106, y2: 142 },
+        { x: 210, y1: 70, y2: 106 },
+        { x: 176, y1: 42, y2: 70 }
+      ],
+      lifts: [
+        { x: 58, y: 240, w: 28, yMin: 46, yMax: 252, vy: -0.52 },
+        { x: 58, y: 140, w: 28, yMin: 46, yMax: 252, vy: -0.52 },
+        { x: 150, y: 56, w: 28, yMin: 46, yMax: 252, vy: 0.52 },
+        { x: 150, y: 156, w: 28, yMin: 46, yMax: 252, vy: 0.52 }
+      ],
+      hammers: [],
+      items: [
+        { x: 24, y: 72, kind: "parasol" },
+        { x: 120, y: 66, kind: "hat" }
+      ]
+    },
+    "100m": {
+      id: "100m",
+      name: "100M",
+      kind: "rivets",
+      bonus: 8000,
+      spawn: { x: 28, y: 266 },
+      goal: null,
+      dk: { x: 120, y: 20 },
+      pauline: { x: 168, y: 6 },
+      platforms: [
+        { x1: 16, y1: 270, x2: 224, y2: 270 },
+        { x1: 16, y1: 214, x2: 224, y2: 214 },
+        { x1: 16, y1: 158, x2: 224, y2: 158 },
+        { x1: 16, y1: 102, x2: 224, y2: 102 },
+        { x1: 88, y1: 54, x2: 152, y2: 54 }
+      ],
+      ladders: [
+        { x: 40, y1: 214, y2: 270 },
+        { x: 200, y1: 214, y2: 270 },
+        { x: 80, y1: 158, y2: 214 },
+        { x: 160, y1: 158, y2: 214 },
+        { x: 40, y1: 102, y2: 158 },
+        { x: 200, y1: 102, y2: 158 },
+        { x: 120, y1: 54, y2: 102 }
+      ],
+      rivets: [
+        { x: 70, y: 270 }, { x: 170, y: 270 },
+        { x: 70, y: 214 }, { x: 170, y: 214 },
+        { x: 70, y: 158 }, { x: 170, y: 158 },
+        { x: 70, y: 102 }, { x: 170, y: 102 }
+      ],
+      hammers: [
+        { x: 120, y: 198 },
+        { x: 48, y: 86 }
+      ],
+      items: [
+        { x: 100, y: 258, kind: "purse" },
+        { x: 200, y: 146, kind: "hat" },
+        { x: 36, y: 90, kind: "parasol" }
+      ]
+    }
+  };
+
+  function sequenceFor(loop) {
+    if (loop <= 1) return ["25m", "100m"];
+    if (loop === 2) return ["25m", "75m", "100m"];
+    return ["25m", "50m", "75m", "100m"];
+  }
+
+  function cloneStage(id) {
+    return JSON.parse(JSON.stringify(STAGES[id]));
+  }
+
+  global.DKLevels = { STAGES, sequenceFor, cloneStage };
+})(window);
+
+</script>
+  <script >
+(function (global) {
+  const W = 240, H = 300;
+  const GRAVITY = 0.18;
+  const JUMP_V = -2.62;
+  const WALK = 1.05;
+  const CLIMB = 0.8;
+  const MAX_FALL = 3.2;
+  const HAMMER_TIME = 420;
+  const PLAYER_HW = 4;
+  const PLAYER_H = 16;
+
+  const ITEM_PTS = { hat: 300, purse: 500, parasol: 800 };
+  const SMASH_PTS = [300, 500, 800];
+
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function platY(p, x) {
+    const dx = p.x2 - p.x1;
+    if (Math.abs(dx) < 0.001) return p.y1;
+    const t = clamp((x - p.x1) / dx, 0, 1);
+    return lerp(p.y1, p.y2, t);
+  }
+  function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+  function dist2(ax, ay, bx, by) {
+    const dx = ax - bx, dy = ay - by;
+    return dx * dx + dy * dy;
+  }
+
+  function createGame(canvas, ui) {
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+
+    const input = { left: false, right: false, up: false, down: false, jump: false, jumpPressed: false };
+    let jumpLatch = false;
+
+    const G = {
+      mode: "title",
+      score: 0,
+      high: 0,
+      lives: 3,
+      loop: 1,
+      seq: [],
+      seqIndex: 0,
+      extraGiven: false,
+      bonus: 5000,
+      bonusTick: 0,
+      frame: 0,
+      stage: null,
+      player: null,
+      barrels: [],
+      fires: [],
+      pies: [],
+      springs: [],
+      popups: [],
+      particles: [],
+      throwTimer: 0,
+      pieTimer: 0,
+      springTimer: 0,
+      fireTimer: 0,
+      dkPose: "idle",
+      dkPoseT: 0,
+      hammerCombo: 0,
+      paused: false,
+      muted: false,
+      winT: 0,
+      dieT: 0,
+      introT: 0,
+      oilFlame: 0,
+      message: "",
+    };
+
+    function diff() {
+      return 1 + (G.loop - 1) * 0.16;
+    }
+
+    function addScore(n, x, y) {
+      G.score += n;
+      if (x != null) G.popups.push({ x, y, t: 50, text: String(n) });
+      if (!G.extraGiven && G.score >= 7000) {
+        G.extraGiven = true;
+        G.lives++;
+        DKAudio.extra();
+        G.popups.push({ x: W / 2, y: 40, t: 80, text: "1UP" });
+      }
+      if (G.score > G.high) {
+        G.high = G.score;
+        ui.onHigh(G.high);
+      }
+      ui.onScore(G.score, G.lives, G.high);
+    }
+
+    function resetRun() {
+      G.score = 0;
+      G.lives = 3;
+      G.loop = 1;
+      G.extraGiven = false;
+      G.seq = DKLevels.sequenceFor(G.loop);
+      G.seqIndex = 0;
+      ui.onScore(G.score, G.lives, G.high);
+      startStage(G.seq[0], true);
+    }
+
+    function startStage(id, intro) {
+      const stage = DKLevels.cloneStage(id);
+      stage.gaps = [];
+      stage.ladders.forEach((L) => {
+        if (L.moving) {
+          L.baseX = L.x;
+          L.dir = 1;
+        }
+      });
+      if (stage.rivets) stage.rivets.forEach((r) => { r.gone = false; });
+      if (stage.hammers) stage.hammers.forEach((h) => { h.taken = false; });
+      if (stage.items) stage.items.forEach((it) => { it.taken = false; });
+      G.stage = stage;
+      G.bonus = stage.bonus;
+      G.bonusTick = 0;
+      G.barrels = [];
+      G.fires = [];
+      G.pies = [];
+      G.springs = [];
+      G.popups = [];
+      G.particles = [];
+      G.throwTimer = 36;
+      G.pieTimer = 30;
+      G.springTimer = 20;
+      G.fireTimer = stage.kind === "barrels" ? 70 : 90;
+      G.frame = 0;
+      G.dkPose = "idle";
+      G.dkPoseT = 0;
+      G.hammerCombo = 0;
+      G.oilFlame = 0;
+      G.winT = 0;
+      G.dieT = 0;
+      G.player = {
+        x: stage.spawn.x,
+        y: stage.spawn.y,
+        vx: 0,
+        vy: 0,
+        dir: 1,
+        onGround: false,
+        climbing: false,
+        hammer: 0,
+        hammerFrame: 0,
+        walkFrame: 0,
+        fallFrom: stage.spawn.y,
+        dead: false,
+        jumpOver: new Set(),
+        ride: null,
+      };
+      snapPlayerToGround(true);
+      G.mode = intro ? "intro" : "playing";
+      G.introT = intro ? 90 : 0;
+      G.paused = false;
+      ui.onStage(stage.name, G.loop, G.bonus);
+      if (intro) DKAudio.startTune();
+    }
+
+    function snapPlayerToGround(force) {
+      const g = groundAt(G.player.x, G.player.y + 2, 10);
+      if (g) {
+        G.player.y = g.y;
+        G.player.onGround = true;
+        G.player.vy = 0;
+      } else if (force) {
+        G.player.onGround = false;
+      }
+    }
+
+    function allPlatforms() {
+      const list = G.stage.platforms.map((p) => ({ ...p, kind: "girder" }));
+      if (G.stage.lifts) {
+        G.stage.lifts.forEach((L) => {
+          list.push({ x1: L.x, y1: L.y, x2: L.x + L.w, y2: L.y, kind: "lift", lift: L });
+        });
+      }
+      return list;
+    }
+
+    function inGap(p, x) {
+      for (const g of G.stage.gaps) {
+        if (Math.abs(g.y - platY(p, x)) < 5 && Math.abs(x - g.x) < 9) return true;
+      }
+      return false;
+    }
+
+    function groundAt(x, y, range) {
+      let best = null, bestAbs = range;
+      for (const p of allPlatforms()) {
+        if (x < p.x1 - 1 || x > p.x2 + 1) continue;
+        if (inGap(p, x)) continue;
+        const py = platY(p, x);
+        const d = y - py;
+        if (d >= -3 && d <= range && Math.abs(d) <= bestAbs + 0.01) {
+          bestAbs = Math.abs(d);
+          best = { p, y: py };
+        }
+      }
+      return best;
+    }
+
+    function ladderAt(x, y, wantClimb) {
+      let found = null;
+      for (const L of G.stage.ladders) {
+        if (Math.abs(x - L.x) > 6) continue;
+        const top = Math.min(L.y1, L.y2);
+        const bot = Math.max(L.y1, L.y2);
+        if (L.broken) {
+          const gap0 = top + (bot - top) * 0.36;
+          const gap1 = top + (bot - top) * 0.64;
+          const inLower = y >= gap1 - 2 && y <= bot + 2;
+          const inUpper = y >= top - 4 && y <= gap0 + 2;
+          if (!inLower && !inUpper) continue;
+          if (wantClimb && y > gap0 && y < gap1) continue;
+        } else if (y < top - 6 || y > bot + 4) continue;
+        found = L;
+      }
+      return found;
+    }
+
+    function kill(reason) {
+      if (G.mode !== "playing" || G.player.dead) return;
+      G.player.dead = true;
+      G.player.hammer = 0;
+      G.player.climbing = false;
+      G.mode = "dying";
+      G.dieT = 90;
+      DKAudio.death();
+      burst(G.player.x, G.player.y - 8, "#e02820");
+    }
+
+    function burst(x, y, color) {
+      for (let i = 0; i < 10; i++) {
+        G.particles.push({
+          x, y,
+          vx: (Math.random() - 0.5) * 2.2,
+          vy: -Math.random() * 2,
+          t: 24 + Math.random() * 16,
+          color,
+        });
+      }
+    }
+
+    function completeStage() {
+      if (G.mode !== "playing") return;
+      G.mode = "clear";
+      G.winT = 140;
+      addScore(G.bonus, G.player.x, G.player.y - 20);
+      G.bonus = 0;
+      DKAudio.win();
+      ui.onBonus(0);
+    }
+
+    function nextAfterClear() {
+      const wasRivet = G.stage.kind === "rivets";
+      G.seqIndex++;
+      if (G.seqIndex >= G.seq.length) {
+        G.loop++;
+        G.seq = DKLevels.sequenceFor(G.loop);
+        G.seqIndex = 0;
+      }
+      startStage(G.seq[G.seqIndex], true);
+      if (wasRivet) G.message = "HOW HIGH CAN YOU GET?";
+    }
+
+    function loseLife() {
+      G.lives--;
+      ui.onScore(G.score, G.lives, G.high);
+      if (G.lives <= 0) {
+        G.mode = "gameover";
+        ui.onGameOver(G.score, G.high);
+      } else {
+        startStage(G.stage.id, false);
+        G.mode = "playing";
+      }
+    }
+
+    function spawnBarrel(wild) {
+      const dk = G.stage.dk;
+      G.barrels.push({
+        x: dk.x + 18,
+        y: dk.y + 28,
+        vx: wild ? 0 : 0.7 * diff(),
+        vy: wild ? 1.1 : 0,
+        rot: 0,
+        blue: wild || Math.random() < 0.18,
+        wild: !!wild,
+        climbing: false,
+        smashed: false,
+        scored: false,
+      });
+      G.dkPose = "throw";
+      G.dkPoseT = 18;
+      DKAudio.dk();
+    }
+
+    function spawnFire(x, y) {
+      if (G.fires.length >= 5) return;
+      G.fires.push({
+        x, y,
+        vx: Math.random() < 0.5 ? 0.35 : -0.35,
+        vy: 0,
+        climbing: false,
+        frame: 0,
+        fast: G.stage.kind === "rivets",
+      });
+      G.oilFlame = 40;
+    }
+
+    function spawnPie() {
+      const belts = G.stage.platforms.filter((p) => p.conveyor);
+      if (!belts.length) return;
+      const p = belts[Math.floor(Math.random() * belts.length)];
+      const fromLeft = p.conveyor > 0;
+      G.pies.push({
+        x: fromLeft ? p.x1 + 8 : p.x2 - 8,
+        y: p.y1 - 4,
+        vx: p.conveyor * 0.55 * diff(),
+        plat: p,
+      });
+    }
+
+    function spawnSpring() {
+      const dk = G.stage.dk;
+      G.springs.push({
+        x: dk.x - 10,
+        y: dk.y + 8,
+        vx: -1.35 * diff(),
+        phase: 0,
+        falling: false,
+      });
+    }
+
+    function updateMoving() {
+      const d = diff();
+      if (G.stage.lifts) {
+        G.stage.lifts.forEach((L) => {
+          L.y += L.vy * d * 0.85;
+          if (L.y < L.yMin) { L.y = L.yMin; L.vy = Math.abs(L.vy); }
+          if (L.y > L.yMax) { L.y = L.yMax; L.vy = -Math.abs(L.vy); }
+        });
+      }
+      G.stage.ladders.forEach((L) => {
+        if (!L.moving) return;
+        L.x += L.vx * L.dir;
+        if (L.x < L.xMin) { L.x = L.xMin; L.dir = 1; }
+        if (L.x > L.xMax) { L.x = L.xMax; L.dir = -1; }
+      });
+    }
+
+    function updatePlayer() {
+      const p = G.player;
+      if (p.dead) return;
+      const st = G.stage;
+
+      if (p.hammer > 0) {
+        p.hammer--;
+        p.hammerFrame++;
+        if (p.hammer === 0) G.hammerCombo = 0;
+      }
+
+      const canClimb = p.hammer <= 0;
+      const lad = canClimb ? ladderAt(p.x, p.y, true) : null;
+
+      if (p.climbing) {
+        if (!lad || p.hammer > 0) {
+          p.climbing = false;
+        } else {
+          p.x = lad.x;
+          p.vx = 0;
+          p.vy = 0;
+          if (input.up) p.y -= CLIMB;
+          else if (input.down) p.y += CLIMB;
+          if (input.left) p.dir = -1;
+          if (input.right) p.dir = 1;
+          const top = Math.min(lad.y1, lad.y2);
+          const bot = Math.max(lad.y1, lad.y2);
+          if (p.y <= top + 1 && !input.up) {
+            p.climbing = false;
+            p.y = top;
+            p.onGround = true;
+          }
+          if (p.y > bot) {
+            p.climbing = false;
+            p.y = bot;
+          }
+          if (input.jumpPressed && p.hammer <= 0) {
+            p.climbing = false;
+            p.vy = JUMP_V;
+            p.onGround = false;
+            p.fallFrom = p.y;
+            DKAudio.jump();
+          }
+          p.walkFrame++;
+          p.x = clamp(p.x, 10, W - 10);
+          return;
+        }
+      }
+
+      if (canClimb && lad && (input.up || input.down)) {
+        const top = Math.min(lad.y1, lad.y2);
+        const bot = Math.max(lad.y1, lad.y2);
+        if ((input.up && p.y > top + 2) || (input.down && p.y < bot - 2 && p.onGround)) {
+          p.climbing = true;
+          p.x = lad.x;
+          p.vx = 0;
+          p.vy = 0;
+          p.onGround = false;
+          return;
+        }
+      }
+
+      let wish = 0;
+      if (input.left) { wish -= 1; p.dir = -1; }
+      if (input.right) { wish += 1; p.dir = 1; }
+      p.vx = wish * (p.hammer ? WALK * 0.85 : WALK);
+
+      const gNow = groundAt(p.x, p.y + 3, 5);
+      if (gNow && gNow.p.conveyor && p.onGround) {
+        p.vx += gNow.p.conveyor * 0.45;
+      }
+
+      if (p.onGround && gNow && gNow.p.lift) {
+        p.y = gNow.y;
+        p.ride = gNow.p.lift;
+        p.y += gNow.p.lift.vy * diff() * 0.85;
+        if (p.y < 36 && gNow.p.lift.vy < 0) kill("crush");
+      } else {
+        p.ride = null;
+      }
+
+      if (input.jumpPressed && p.onGround && p.hammer <= 0) {
+        p.vy = JUMP_V;
+        p.onGround = false;
+        p.fallFrom = p.y;
+        p.jumpOver = new Set();
+        DKAudio.jump();
+      }
+
+      if (!p.onGround) {
+        p.vy = Math.min(MAX_FALL, p.vy + GRAVITY);
+      }
+
+      p.x += p.vx;
+      p.x = clamp(p.x, 10, W - 10);
+      p.y += p.vy;
+
+      if (p.vx !== 0 && p.onGround) p.walkFrame++;
+
+      if (p.vy >= 0) {
+        const g = groundAt(p.x, p.y, p.onGround ? 6 : Math.max(4, p.vy + 3));
+        if (g) {
+          const fell = p.fallFrom != null ? (p.y - p.fallFrom) : 0;
+          p.y = g.y;
+          if (!p.onGround) {
+            if (fell > 56) { kill("fall"); return; }
+            DKAudio.land();
+          }
+          p.vy = 0;
+          p.onGround = true;
+          p.fallFrom = p.y;
+        } else {
+          if (p.onGround) p.fallFrom = p.y;
+          p.onGround = false;
+        }
+      } else {
+        p.onGround = false;
+      }
+
+      if (st.pit && p.y > H - 8) kill("pit");
+      if (p.y > H + 8) kill("fall");
+
+      if (st.hammers) {
+        st.hammers.forEach((h) => {
+          if (h.taken) return;
+          if (Math.abs(p.x - h.x) < 8 && Math.abs(p.y - h.y) < 12) {
+            h.taken = true;
+            p.hammer = HAMMER_TIME;
+            p.climbing = false;
+            G.hammerCombo = 0;
+            DKAudio.hammer();
+          }
+        });
+      }
+      if (st.items) {
+        st.items.forEach((it) => {
+          if (it.taken) return;
+          if (Math.abs(p.x - it.x) < 8 && Math.abs(p.y - it.y) < 12) {
+            it.taken = true;
+            addScore(ITEM_PTS[it.kind] || 300, it.x, it.y - 10);
+            DKAudio.item();
+          }
+        });
+      }
+      if (st.rivets) {
+        st.rivets.forEach((r) => {
+          if (r.gone) return;
+          if (Math.abs(p.x - r.x) < 7 && Math.abs(p.y - r.y) < 8) {
+            r.gone = true;
+            st.gaps.push({ x: r.x, y: r.y, w: 16 });
+            addScore(100, r.x, r.y - 10);
+            DKAudio.smash();
+            burst(r.x, r.y, "#f0d020");
+            if (st.rivets.every((q) => q.gone)) {
+              completeStage();
+              return;
+            }
+          }
+        });
+      }
+
+      if (st.goal && p.hammer <= 0) {
+        const g = st.goal;
+        if (p.x > g.x && p.x < g.x + g.w && p.y > g.y && p.y < g.y + g.h + 10) {
+          completeStage();
+          return;
+        }
+      }
+
+      const dk = st.dk;
+      if (Math.abs(p.x - dk.x) < 16 && Math.abs(p.y - (dk.y + 24)) < 16) kill("dk");
+    }
+
+    function smashEnemy(e, ptsX, ptsY) {
+      const pts = SMASH_PTS[Math.min(G.hammerCombo, SMASH_PTS.length - 1)];
+      G.hammerCombo++;
+      addScore(pts, ptsX, ptsY);
+      DKAudio.smash();
+      burst(ptsX, ptsY, "#ff9020");
+    }
+
+    function hammerHits(x, y) {
+      const p = G.player;
+      if (p.hammer <= 0) return false;
+      const up = (p.hammerFrame % 16) < 8;
+      if (up) {
+        return Math.abs(x - p.x) < 10 && y < p.y - 4 && y > p.y - 22;
+      }
+      const fx = p.x + p.dir * 12;
+      return Math.abs(x - fx) < 10 && Math.abs(y - (p.y - 6)) < 10;
+    }
+
+    function bodyHits(x, y, r) {
+      const p = G.player;
+      if (p.dead) return false;
+      const up = p.hammer > 0 && (p.hammerFrame % 16) < 8;
+      const hw = up ? 3 : PLAYER_HW;
+      return Math.abs(x - p.x) < hw + r && y < p.y && y > p.y - PLAYER_H + 2;
+    }
+
+    function updateBarrels() {
+      const speed = 0.7 * diff();
+      for (const b of G.barrels) {
+        if (b.smashed) continue;
+        if (hammerHits(b.x, b.y)) {
+          b.smashed = true;
+          smashEnemy(b, b.x, b.y);
+          continue;
+        }
+        if (bodyHits(b.x, b.y, 5)) { kill("barrel"); return; }
+
+        if (!G.player.dead && !G.player.onGround && G.player.vy < 0.5) {
+          if (Math.abs(b.x - G.player.x) < 10 && b.y > G.player.y - 4 && b.y < G.player.y + 12) {
+            if (!b.scored) {
+              b.scored = true;
+              addScore(100, G.player.x, G.player.y - 18);
+            }
+          }
+        }
+
+        if (b.wild && !b.climbing) {
+          const lad = ladderAt(b.x, b.y, true);
+          if (lad && Math.random() < 0.08) {
+            b.climbing = true;
+            b.x = lad.x;
+          }
+        }
+
+        if (b.climbing) {
+          b.y += 0.9 * diff();
+          b.rot += 0.2;
+          const g = groundAt(b.x, b.y, 4);
+          if (g && Math.random() < 0.12) {
+            b.climbing = false;
+            b.y = g.y - 5;
+          }
+          if (b.y > H) b.smashed = true;
+          continue;
+        }
+
+        const g = groundAt(b.x, b.y + 6, 8);
+        if (g) {
+          b.y = g.y - 5;
+          b.vy = 0;
+          const slope = (g.p.y2 - g.p.y1) / Math.max(1, g.p.x2 - g.p.x1);
+          if (Math.abs(slope) > 0.005) b.vx = (slope > 0 ? 1 : -1) * speed;
+          else if (Math.abs(b.vx) < 0.1) b.vx = speed;
+          b.x += b.vx;
+          b.rot += b.vx * 0.2;
+          if (b.x < g.p.x1 - 2 || b.x > g.p.x2 + 2) {
+            b.vy = 0.6;
+          }
+          if (!b.wild && Math.random() < 0.01 * diff()) {
+            const lad = ladderAt(b.x, b.y + 4, true);
+            if (lad && G.player.y > b.y) {
+              b.climbing = true;
+              b.x = lad.x;
+            }
+          }
+        } else {
+          b.vy = Math.min(2.4, b.vy + GRAVITY);
+          b.y += b.vy;
+          b.x += b.vx * 0.3;
+          b.rot += 0.15;
+        }
+
+        if (G.stage.oil && b.blue && Math.abs(b.x - G.stage.oil.x) < 12 && Math.abs(b.y - (G.stage.oil.y - 8)) < 16) {
+          b.smashed = true;
+          spawnFire(G.stage.oil.x + 10, G.stage.oil.y - 16);
+        }
+        if (b.y > H + 10 || b.x < -10 || b.x > W + 10) b.smashed = true;
+      }
+      G.barrels = G.barrels.filter((b) => !b.smashed);
+    }
+
+    function updateFires() {
+      const spd = (G.stage.kind === "rivets" ? 0.55 : 0.38) * diff();
+      for (const f of G.fires) {
+        f.frame++;
+        if (hammerHits(f.x, f.y - 2)) {
+          f.dead = true;
+          smashEnemy(f, f.x, f.y);
+          continue;
+        }
+        if (bodyHits(f.x, f.y - 2, 4)) { kill("fire"); return; }
+
+        if (f.climbing) {
+          f.y += f.climbDir * 0.55 * diff();
+          const g = groundAt(f.x, f.y, 5);
+          if (g && Math.random() < 0.08) {
+            f.climbing = false;
+            f.y = g.y;
+          }
+          if (f.y < 40 || f.y > H - 10) f.climbing = false;
+          continue;
+        }
+
+        const g = groundAt(f.x, f.y + 3, 6);
+        if (g) {
+          f.y = g.y;
+          f.x += f.vx;
+          if (f.x < g.p.x1 + 4 || f.x > g.p.x2 - 4) f.vx *= -1;
+          if (Math.random() < 0.01) f.vx *= -1;
+          if (Math.random() < 0.012) {
+            const lad = ladderAt(f.x, f.y, true);
+            if (lad) {
+              f.climbing = true;
+              f.x = lad.x;
+              f.climbDir = G.player.y < f.y ? -1 : 1;
+            }
+          }
+          if (G.player.x > f.x + 20 && f.vx < 0 && Math.random() < 0.02) f.vx = spd;
+          if (G.player.x < f.x - 20 && f.vx > 0 && Math.random() < 0.02) f.vx = -spd;
+        } else {
+          f.y += 0.8;
+          if (f.y > H) f.dead = true;
+        }
+      }
+      G.fires = G.fires.filter((f) => !f.dead);
+    }
+
+    function updatePies() {
+      for (const pie of G.pies) {
+        pie.x += pie.vx;
+        const g = groundAt(pie.x, pie.y + 6, 8);
+        if (g) pie.y = g.y - 4;
+        if (hammerHits(pie.x, pie.y)) {
+          pie.dead = true;
+          smashEnemy(pie, pie.x, pie.y);
+          continue;
+        }
+        if (bodyHits(pie.x, pie.y, 6)) { kill("pie"); return; }
+        if (!G.player.onGround && Math.abs(pie.x - G.player.x) < 10 && pie.y > G.player.y && pie.y < G.player.y + 14) {
+          if (!pie.scored) { pie.scored = true; addScore(100, pie.x, pie.y - 8); }
+        }
+        if (pie.x < 0 || pie.x > W) pie.dead = true;
+        if (G.stage.oil && Math.abs(pie.x - G.stage.oil.x) < 10 && Math.abs(pie.y - G.stage.oil.y) < 20) pie.dead = true;
+      }
+      G.pies = G.pies.filter((p) => !p.dead);
+    }
+
+    function updateSprings() {
+      for (const s of G.springs) {
+        if (!s.falling) {
+          s.x += s.vx;
+          s.phase += 0.18 * diff();
+          s.y = G.stage.dk.y + 10 + Math.abs(Math.sin(s.phase)) * 18;
+          if (s.x < 150) {
+            s.falling = true;
+            s.vy = 1.6;
+            s.vx = 0.15;
+          }
+        } else {
+          s.vy = Math.min(3.2, s.vy + 0.08);
+          s.y += s.vy;
+          s.x += s.vx;
+          if (s.y > 80 && s.y < 230 && s.x < 230) {
+            s.x = clamp(s.x, 196, 226);
+          }
+        }
+        s.rot = (s.rot || 0) + 0.2;
+        if (bodyHits(s.x, s.y, 5) || (Math.abs(s.x - G.player.x) < 7 && Math.abs(s.y - (G.player.y - 8)) < 8)) {
+          kill("spring");
+          return;
+        }
+        if (s.y > H + 10) s.dead = true;
+      }
+      G.springs = G.springs.filter((s) => !s.dead);
+    }
+
+    function updateSpawns() {
+      const st = G.stage;
+      const d = diff();
+      if (st.kind === "barrels") {
+        G.throwTimer--;
+        G.fireTimer--;
+        if (G.throwTimer <= 0 && G.barrels.length < 8) {
+          const wild = G.fires.length < 3 && Math.random() < 0.22;
+          spawnBarrel(wild);
+          G.throwTimer = Math.max(50, 110 / d) + Math.random() * 40;
+        }
+        if (G.fires.length === 0 && G.fireTimer <= 0) {
+          spawnFire(st.oil.x + 12, st.oil.y - 18);
+          G.fireTimer = 240;
+        }
+      }
+      if (st.kind === "factory") {
+        G.pieTimer--;
+        if (G.pieTimer <= 0 && G.pies.length < 6) {
+          spawnPie();
+          G.pieTimer = Math.max(28, 55 / d);
+        }
+        G.fireTimer--;
+        if (G.fireTimer <= 0 && G.fires.length < 4) {
+          spawnFire(30 + Math.random() * 180, 168);
+          G.fireTimer = 180 / d;
+        }
+      }
+      if (st.kind === "elevators") {
+        G.springTimer--;
+        if (G.springTimer <= 0 && G.springs.length < 4) {
+          spawnSpring();
+          G.springTimer = Math.max(22, 40 / d);
+        }
+        G.fireTimer--;
+        if (G.fireTimer <= 0 && G.fires.length < 2) {
+          spawnFire(120, 150);
+          G.fireTimer = 220;
+        }
+      }
+      if (st.kind === "rivets") {
+        G.fireTimer--;
+        if (G.fireTimer <= 0 && G.fires.length < 5) {
+          const side = Math.random() < 0.5 ? 24 : 216;
+          const ys = [270, 214, 158, 102];
+          spawnFire(side, ys[Math.floor(Math.random() * ys.length)]);
+          G.fireTimer = Math.max(70, 140 / d);
+        }
+      }
+    }
+
+    function updateBonus() {
+      G.bonusTick++;
+      if (G.bonusTick >= 50) {
+        G.bonusTick = 0;
+        G.bonus = Math.max(0, G.bonus - 100);
+        ui.onBonus(G.bonus);
+        if (G.bonus <= 1000 && G.bonus % 200 === 0) DKAudio.tick();
+        if (G.bonus <= 0) kill("time");
+      }
+    }
+
+    function updateFx() {
+      G.popups.forEach((p) => { p.t--; p.y -= 0.3; });
+      G.popups = G.popups.filter((p) => p.t > 0);
+      G.particles.forEach((p) => { p.t--; p.x += p.vx; p.y += p.vy; p.vy += 0.08; });
+      G.particles = G.particles.filter((p) => p.t > 0);
+      if (G.dkPoseT > 0) G.dkPoseT--;
+      else G.dkPose = (Math.floor(G.frame / 20) % 2 === 0) ? "idle" : "stomp";
+      if (G.oilFlame > 0) G.oilFlame--;
+    }
+
+    function tick() {
+      G.frame++;
+      if (G.mode === "intro") {
+        G.introT--;
+        updateFx();
+        if (G.introT <= 0) G.mode = "playing";
+        return;
+      }
+      if (G.mode === "dying") {
+        G.dieT--;
+        G.player.walkFrame++;
+        updateFx();
+        if (G.dieT <= 0) loseLife();
+        return;
+      }
+      if (G.mode === "clear") {
+        G.winT--;
+        updateFx();
+        if (G.stage.kind === "rivets") {
+          G.stage.dk.y = Math.min(240, (G.stage.dk.fallY || (G.stage.dk.fallY = G.stage.dk.y)) + (140 - G.winT) * 0.35);
+        }
+        if (G.winT <= 0) nextAfterClear();
+        return;
+      }
+      if (G.mode !== "playing" || G.paused) {
+        input.jumpPressed = false;
+        return;
+      }
+
+      updateMoving();
+      updatePlayer();
+      if (G.mode !== "playing") {
+        updateFx();
+        input.jumpPressed = false;
+        return;
+      }
+      updateSpawns();
+      if (G.stage.kind === "barrels") updateBarrels();
+      updateFires();
+      if (G.stage.kind === "factory") updatePies();
+      if (G.stage.kind === "elevators") updateSprings();
+      updateBonus();
+      updateFx();
+      input.jumpPressed = false;
+    }
+
+    function drawBg() {
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#0a0a12";
+      ctx.fillRect(0, 0, W, 18);
+    }
+
+    function draw() {
+      const D = DKDraw;
+      const st = G.stage;
+      drawBg();
+      if (!st) return;
+
+      st.platforms.forEach((p) => {
+        D.drawGirder(ctx, p.x1, p.y1, p.x2, p.y2);
+        if (p.conveyor) {
+          ctx.fillStyle = "#ffd060";
+          const dir = p.conveyor > 0 ? 1 : -1;
+          const off = (Math.floor(G.frame / 6) % 8) * dir;
+          for (let x = p.x1 + 6; x < p.x2 - 4; x += 16) {
+            const ax = x + off;
+            if (ax < p.x1 + 2 || ax > p.x2 - 6) continue;
+            ctx.fillRect(ax, p.y1 - 3, 4, 1);
+          }
+        }
+      });
+      if (st.lifts) st.lifts.forEach((L) => D.drawLift(ctx, L.x, L.y, L.w));
+      st.ladders.forEach((L) => D.drawLadder(ctx, L.x, L.y1, L.y2, L.broken));
+      if (st.oil) D.drawOil(ctx, st.oil.x, st.oil.y, G.oilFlame || (G.fires.length ? G.frame : 0));
+      if (st.rivets) st.rivets.forEach((r) => { if (!r.gone) D.drawRivet(ctx, r.x, r.y); });
+      if (st.hammers) st.hammers.forEach((h) => { if (!h.taken) D.drawHammerPickup(ctx, h.x, h.y); });
+      if (st.items) st.items.forEach((it) => { if (!it.taken) D.drawItem(ctx, it.x, it.y, it.kind); });
+
+      const p = G.player;
+      let marioState = "walk";
+      if (p.dead) marioState = "dead";
+      else if (p.hammer > 0) marioState = "hammer";
+      else if (p.climbing) marioState = "climb";
+      else if (!p.onGround) marioState = "jump";
+
+      if (G.mode === "clear" && st.kind === "rivets") {
+        D.drawDK(ctx, st.dk.x, st.dk.y, G.frame, "stomp");
+        D.drawPauline(ctx, st.pauline.x, st.pauline.y, G.frame);
+        D.drawHeart(ctx, 120, 80, false);
+      } else {
+        D.drawDK(ctx, st.dk.x, st.dk.y, G.frame, G.dkPose);
+        D.drawPauline(ctx, st.pauline.x, st.pauline.y, G.frame);
+      }
+
+      G.barrels.forEach((b) => D.drawBarrel(ctx, b.x, b.y, b.rot, b.blue));
+      G.fires.forEach((f) => D.drawFire(ctx, f.x, f.y - 4, f.frame));
+      G.pies.forEach((pie) => D.drawPie(ctx, pie.x, pie.y));
+      G.springs.forEach((s) => D.drawSpring(ctx, s.x, s.y, s.rot));
+
+      if (p) D.drawMario(ctx, p.x, p.y - 16, p.dir, p.walkFrame >> 2, marioState);
+
+      if (G.mode === "clear" && st.kind !== "rivets") {
+        D.drawHeart(ctx, st.pauline.x - 10, st.pauline.y + 8, G.winT < 70);
+      }
+
+      G.particles.forEach((q) => {
+        ctx.fillStyle = q.color;
+        ctx.fillRect(q.x, q.y, 2, 2);
+      });
+      ctx.font = "8px monospace";
+      ctx.textAlign = "center";
+      G.popups.forEach((q) => {
+        ctx.fillStyle = "#fff";
+        ctx.fillText(q.text, q.x, q.y);
+      });
+      ctx.textAlign = "left";
+
+      if (G.mode === "intro") {
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(20, 110, 200, 50);
+        ctx.fillStyle = "#48e0ff";
+        ctx.font = "10px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("HOW HIGH CAN YOU GET?", 120, 130);
+        ctx.fillStyle = "#ffcc33";
+        ctx.font = "14px monospace";
+        ctx.fillText(st.name, 120, 150);
+        ctx.textAlign = "left";
+      }
+      if (G.paused && G.mode === "playing") {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = "#ffcc33";
+        ctx.font = "14px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("PAUSED", 120, 150);
+        ctx.textAlign = "left";
+      }
+    }
+
+    function setDir(dir, down) {
+      if (dir === "left") input.left = down;
+      if (dir === "right") input.right = down;
+      if (dir === "up") input.up = down;
+      if (dir === "down") input.down = down;
+    }
+    function setJump(down) {
+      if (down && !jumpLatch) input.jumpPressed = true;
+      jumpLatch = down;
+      input.jump = down;
+    }
+
+    function start() {
+      resetRun();
+    }
+
+    function togglePause() {
+      if (G.mode !== "playing") return;
+      G.paused = !G.paused;
+    }
+
+    return {
+      G, input, tick, draw, setDir, setJump, start, togglePause,
+      isTitle: () => G.mode === "title" || G.mode === "gameover",
+      setHigh(v) { G.high = v || 0; },
+    };
+  }
+
+  global.createDKGame = createGame;
+})(window);
+
+</script>
+  <script >
+(function () {
+  const canvas = document.getElementById("game");
+  const overlay = document.getElementById("overlay");
+  const btnStart = document.getElementById("btnStart");
+  const btnHelp = document.getElementById("btnHelp");
+  const howHigh = document.getElementById("howHigh");
+  const scoreEl = document.getElementById("score");
+  const highEl = document.getElementById("high");
+  const livesEl = document.getElementById("lives");
+  const bonusEl = document.getElementById("bonus");
+  const stageEl = document.getElementById("stageLabel");
+  const levelEl = document.getElementById("levelLabel");
+  const wrap = document.getElementById("wrap");
+
+  const Host = window.ForgeHost || window.forge || null;
+
+  function pad6(n) {
+    return String(Math.max(0, n | 0)).padStart(6, "0");
+  }
+
+  const ui = {
+    onScore(score, lives, high) {
+      scoreEl.textContent = pad6(score);
+      highEl.textContent = pad6(high);
+      livesEl.textContent = lives > 0 ? "♥".repeat(Math.min(lives, 6)) : "—";
+      persistHigh(high);
+    },
+    onBonus(b) { bonusEl.textContent = String(b); },
+    onStage(name, loop, bonus) {
+      stageEl.textContent = name;
+      levelEl.textContent = "L=" + loop;
+      bonusEl.textContent = String(bonus);
+    },
+    onHigh(high) {
+      highEl.textContent = pad6(high);
+      persistHigh(high);
+    },
+    onGameOver(score, high) {
+      overlay.classList.remove("hidden");
+      overlay.querySelector("h1").textContent = "GAME OVER";
+      overlay.querySelector("h2").textContent = "SCORE " + pad6(score);
+      howHigh.textContent = "HIGH " + pad6(high);
+      overlay.querySelector("p").textContent = "The ape still holds Pauline. Insert another coin of courage.";
+      btnStart.textContent = "Retry";
+      setAwake(false);
+    },
+  };
+
+  const game = createDKGame(canvas, ui);
+
+  async function persistHigh(high) {
+    try {
+      if (Host && Host.state && Host.state.set) await Host.state.set("dk_high", high);
+      else localStorage.setItem("dk_high", String(high));
+    } catch (e) {}
+  }
+
+  async function loadHigh() {
+    try {
+      if (Host && Host.state && Host.state.get) {
+        const v = await Host.state.get("dk_high");
+        if (typeof v === "number") return v;
+        if (v && typeof v === "object" && typeof v.value === "number") return v.value;
+        if (v != null) return parseInt(v, 10) || 0;
+      }
+      return parseInt(localStorage.getItem("dk_high") || "0", 10) || 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function fitCanvas() {
+    const r = wrap.getBoundingClientRect();
+    const scale = Math.min(r.width / 240, r.height / 300);
+    canvas.style.width = Math.floor(240 * scale) + "px";
+    canvas.style.height = Math.floor(300 * scale) + "px";
+  }
+
+  function showHelp() {
+    overlay.classList.remove("hidden");
+    overlay.querySelector("h1").textContent = "HOW TO PLAY";
+    overlay.querySelector("h2").textContent = "RESCUE PAULINE";
+    overlay.querySelector("p").innerHTML =
+      "25M: climb girders, jump barrels, smash with hammers. Blue barrels light the oil drum.<br><br>" +
+      "50M: dodge cement pies on conveyors.<br>75M: ride elevators, duck bouncing springs.<br>" +
+      "100M: pull all 8 rivets so Kong falls.<br><br>" +
+      "Jump = 100 · Smash 300/500/800 · Items 300–800 · leftover bonus at clear. Extra life at 7000.";
+    howHigh.textContent = "GOOD LUCK";
+    btnStart.textContent = game.G.mode === "title" ? "Start" : "Back";
+  }
+
+  let helpOpen = false;
+  let awake = false;
+
+  async function setAwake(on) {
+    if (!Host || !Host.keepAwake) return;
+    try {
+      if (on && !awake) {
+        await Host.keepAwake.start({ title: "Kong Climb", text: "How high can you get?" });
+        awake = true;
+      } else if (!on && awake) {
+        await Host.keepAwake.stop();
+        awake = false;
+      }
+    } catch (e) {}
+  }
+
+  function begin() {
+    if (helpOpen && (game.G.mode === "playing" || game.G.mode === "intro" || game.G.paused)) {
+      helpOpen = false;
+      overlay.classList.add("hidden");
+      if (game.G.mode === "playing") game.G.paused = false;
+      return;
+    }
+    helpOpen = false;
+    overlay.classList.add("hidden");
+    DKAudio.resume();
+    game.start();
+    setAwake(true);
+  }
+
+  btnStart.addEventListener("click", begin);
+  btnHelp.addEventListener("click", () => {
+    helpOpen = true;
+    if (game.G.mode === "playing") game.G.paused = true;
+    showHelp();
+  });
+
+  function bindHold(el, on, off) {
+    const down = (ev) => { ev.preventDefault(); el.classList.add("held"); on(); };
+    const up = (ev) => { ev.preventDefault(); el.classList.remove("held"); off(); };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+    el.addEventListener("pointerleave", up);
+  }
+
+  ["Up", "Down", "Left", "Right"].forEach((name) => {
+    const el = document.getElementById("btn" + name);
+    const dir = name.toLowerCase();
+    bindHold(el, () => game.setDir(dir, true), () => game.setDir(dir, false));
+  });
+  bindHold(document.getElementById("btnJump"), () => game.setJump(true), () => game.setJump(false));
+
+  document.getElementById("btnPause").addEventListener("click", () => game.togglePause());
+  document.getElementById("btnMute").addEventListener("click", () => {
+    const m = DKAudio.toggleMute();
+    document.getElementById("btnMute").textContent = m ? "SOUND" : "MUTE";
+  });
+
+  const keyMap = {
+    ArrowLeft: "left", a: "left", A: "left",
+    ArrowRight: "right", d: "right", D: "right",
+    ArrowUp: "up", w: "up", W: "up",
+    ArrowDown: "down", s: "down", S: "down",
+  };
+  window.addEventListener("keydown", (e) => {
+    if (e.repeat) {
+      if (keyMap[e.key]) e.preventDefault();
+      return;
+    }
+    if (keyMap[e.key]) { e.preventDefault(); game.setDir(keyMap[e.key], true); }
+    if (e.key === " " || e.key === "z" || e.key === "Z" || e.key === "k" || e.key === "K") {
+      e.preventDefault();
+      game.setJump(true);
+    }
+    if (e.key === "p" || e.key === "P") game.togglePause();
+    if (e.key === "Enter" && !overlay.classList.contains("hidden")) begin();
+  });
+  window.addEventListener("keyup", (e) => {
+    if (keyMap[e.key]) { e.preventDefault(); game.setDir(keyMap[e.key], false); }
+    if (e.key === " " || e.key === "z" || e.key === "Z" || e.key === "k" || e.key === "K") {
+      game.setJump(false);
+    }
+  });
+
+  let last = 0;
+  const STEP = 1000 / 60;
+  let acc = 0;
+  function loop(ts) {
+    if (!last) last = ts;
+    acc += Math.min(50, ts - last);
+    last = ts;
+    while (acc >= STEP) {
+      game.tick();
+      acc -= STEP;
+    }
+    game.draw();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener("resize", fitCanvas);
+  fitCanvas();
+
+  (async function boot() {
+    const high = await loadHigh();
+    game.setHigh(high);
+    highEl.textContent = pad6(high);
+    if (Host && Host.on) {
+      try {
+        Host.on("resume", () => { DKAudio.resume(); });
+        Host.on("pause", () => { if (game.G.mode === "playing") game.G.paused = true; });
+      } catch (e) {}
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+
+</script>
+</body>
+</html>

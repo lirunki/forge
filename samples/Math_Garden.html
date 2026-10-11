@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Math Garden</title>
+<style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:#F6F3EC;color:#3B3A38;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:17px;line-height:1.45;padding-bottom:40px}
+header{position:sticky;top:0;z-index:20;background:rgba(246,243,236,.95);backdrop-filter:blur(8px);border-bottom:1px solid #E7E1D6}
+.hbar{display:flex;align-items:center;gap:10px;padding:10px 16px;max-width:520px;margin:0 auto;min-height:62px}
+.back{width:44px;height:44px;flex:0 0 auto;border-radius:14px;border:1px solid #E7E1D6;background:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#3B3A38;line-height:1}
+.back[hidden]{display:none}
+h1{font-size:18px;margin:0;font-weight:700}
+.sub{font-size:12.5px;color:#8A857C;margin:0}
+.wrap{max-width:520px;margin:0 auto;padding:16px}
+.view{display:none}
+.view.on{display:block}
+.hero{background:linear-gradient(160deg,#EAF1EE,#F6F3EC);border:1px solid #E7E1D6;border-radius:22px;padding:20px;margin-bottom:16px}
+.hero h2{margin:0 0 6px;font-size:24px;letter-spacing:-.3px}
+.hero p{margin:0;color:#6E6A63;font-size:15px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:#fff;border:1px solid #E7E1D6;border-radius:20px;padding:16px 14px;text-align:left;cursor:pointer;font:inherit;color:inherit;box-shadow:0 2px 0 #EDE7DC;transition:transform .15s,box-shadow .15s}
+.card:active{transform:translateY(2px);box-shadow:none}
+.card .ico{font-size:30px;line-height:1;margin-bottom:10px}
+.card .ct{font-weight:700;font-size:16px;margin-bottom:3px}
+.card .cd{font-size:12.5px;color:#8A857C}
+.note{background:#fff;border:1px solid #E7E1D6;border-radius:18px;padding:14px 16px;margin-bottom:14px;font-size:15px;color:#4A4844}
+.note b{color:#3B3A38}
+.seesaw{position:relative;height:330px;margin:6px 0 0;transition:transform .85s cubic-bezier(.6,.05,.3,1)}
+.seesaw.noanim{transition:none}
+.seesaw.vflip{animation:vflip .74s cubic-bezier(.45,0,.55,1) both}
+@keyframes vflip{0%{transform:scaleY(1)}50%{transform:scaleY(0)}100%{transform:scaleY(1)}}
+.beam{position:absolute;left:15%;right:15%;top:140px;height:16px;border-radius:9px;background:linear-gradient(180deg,#DCCBA9,#C3AF88);transform-origin:50% 50%;transition:transform .5s cubic-bezier(.34,1.25,.64,1)}
+.fulcrum{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:0;height:0;border-left:46px solid transparent;border-right:46px solid transparent;border-bottom:64px solid #CFBFA4}
+.pan{position:absolute;width:100px;top:146px;transform:translateX(-50%);transition:top .5s cubic-bezier(.34,1.25,.64,1)}
+.panL{left:15%}
+.panR{left:85%}
+.rope{width:2px;height:16px;background:#C3AF88;margin:0 auto}
+.tray{min-height:66px;border-radius:16px;background:#fff;border:2px solid #E7E1D6;padding:8px;display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start;justify-content:center;box-shadow:0 3px 0 #EDE7DC}
+.pcount{text-align:center;font-size:12px;color:#8A857C;font-weight:700;margin-top:6px;white-space:nowrap}
+.unit{width:20px;height:20px;border-radius:50%;background:#E9A178;border:2px solid #D0855A}
+.unit.big{width:30px;height:30px}
+.xblk{width:34px;height:34px;border-radius:11px;background:#8B7BC7;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;border:2px solid #7566B0}
+.xblk.big{width:56px;height:56px;font-size:26px;border-radius:16px}
+.xopen{border:2px dashed #7566B0;border-radius:14px;padding:6px;display:flex;flex-wrap:wrap;gap:4px;background:#F3F0FB;max-width:112px;animation:pop .38s cubic-bezier(.34,1.3,.64,1) both}
+.xopen .unit{width:14px;height:14px}
+.floats{display:flex;gap:8px;justify-content:center;align-items:flex-end;min-height:44px;padding-bottom:2px}
+.balloon{width:24px;height:38px;position:relative;animation:bob 2.6s ease-in-out infinite}
+.balloon i{display:block;width:24px;height:28px;border-radius:50% 50% 48% 48%/46% 46% 54% 54%;border:2px solid;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;font-style:normal}
+.balloon::after{content:'';position:absolute;left:50%;top:27px;width:2px;height:10px;background:#C9BFAE;transform:translateX(-50%);border-radius:2px}
+.balloon.bx i{background:#8B7BC7;border-color:#7566B0;color:#fff}
+.balloon.bu i{background:#F6D4B8;border-color:#D0855A;color:#8A4B22}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.ctl{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E7E1D6;border-radius:18px;padding:10px 12px;margin-top:12px}
+.ctl .lbl{flex:1;font-size:14px;color:#6E6A63}
+.rnd{width:52px;height:52px;border-radius:16px;border:1px solid #E7E1D6;background:#F6F3EC;font-size:26px;font-weight:700;color:#3B3A38;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.rnd:active{background:#EDE7DC}
+.rnd[disabled]{opacity:.35}
+.count{min-width:34px;text-align:center;font-weight:800;font-size:20px}
+.btn{display:block;width:100%;padding:16px;border-radius:18px;border:none;background:#5F8A8B;color:#fff;font:inherit;font-weight:700;font-size:16px;cursor:pointer;margin-top:12px;box-shadow:0 3px 0 #4C7273}
+.btn:active{transform:translateY(2px);box-shadow:none}
+.btn.alt{background:#fff;color:#3B3A38;border:1px solid #E7E1D6;box-shadow:0 3px 0 #EDE7DC}
+.btn[disabled]{opacity:.4}
+.btn[hidden]{display:none}
+.status{margin-top:14px;border-radius:18px;padding:14px 16px;font-weight:700;text-align:center;font-size:15.5px;background:#fff;border:1px solid #E7E1D6}
+.status.ok{background:#EAF3EC;border-color:#C9E0CE;color:#3F6B4A}
+.eq{text-align:center;font-size:26px;font-weight:800;letter-spacing:.5px;margin:4px 0 10px;font-variant-numeric:tabular-nums}
+.eq .x{color:#8B7BC7}
+.eq .n{color:#D0855A}
+.row{display:flex;align-items:center;gap:14px}
+.card2{background:#fff;border:1px solid #E7E1D6;border-radius:20px;padding:16px;margin-bottom:12px}
+.card2 .ct{font-weight:700;font-size:16px}
+.card2 .cd{font-size:13.5px;color:#8A857C;margin-top:2px}
+.blocks{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:60px;background:#F6F3EC;border-radius:16px;padding:12px;border:1px dashed #DDD5C7}
+.pkg{border:2px dashed #C9BFAE;border-radius:14px;padding:8px;display:flex;gap:6px;flex-wrap:wrap;background:#FBF9F5}
+.pkgwrap{display:flex;flex-direction:column;gap:6px}
+.blocks.col{flex-direction:column;align-items:stretch}
+.plabel{font-size:12px;color:#8A857C;font-weight:700}
+.dsgrid{display:flex;gap:18px;align-items:flex-start}
+.dscol{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:14px}
+.dscol.cred{outline:2px dashed #E8A18C;outline-offset:5px;background:rgba(224,122,95,.07)}
+.dscol.cblue{outline:2px dashed #A9C4E4;outline-offset:5px;background:rgba(127,168,212,.09)}
+.dscell{display:flex;gap:6px}
+.dslab{font-size:12px;font-weight:700;color:#8A857C;text-align:center;margin-top:4px;white-space:nowrap}
+.dot{width:22px;height:22px;border-radius:50%}
+.dot.r{background:#E07A5F}
+.dot.b{background:#7FA8D4}
+.dot.g{background:#E9A178}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#6E6A63;margin-top:10px}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;margin-right:5px}
+.spacer{height:10px}
+.sidecard{background:#fff;border:1px solid #E7E1D6;border-radius:20px;padding:14px}
+.sidehead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.sidehead .sl{font-size:11.5px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:#A9A29A}
+.sidehead .amt{font-size:19px;font-weight:800;color:#3B3A38;font-variant-numeric:tabular-nums}
+.eqdiv{text-align:center;font-size:22px;font-weight:800;color:#C4BCAE;margin:7px 0;line-height:1}
+.items{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:44px}
+.groups{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+.grp{position:relative;border:2px dashed #C9BFAE;border-radius:14px;padding:9px 8px 8px;display:flex;gap:6px;flex-wrap:wrap;background:#FBF9F5;animation:pop .38s cubic-bezier(.34,1.3,.64,1) both}
+.gnum{position:absolute;top:-9px;left:9px;background:#F6F3EC;border:1px solid #E7E1D6;font-size:10px;font-weight:800;color:#A9A29A;padding:0 5px;border-radius:7px;line-height:15px}
+@keyframes pop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+.divsent{text-align:center;font-size:15px;font-weight:700;color:#5F8A8B;min-height:22px;margin:-4px 0 12px}
+.seesaw.wide{height:440px}
+.seesaw.wide .beam{left:24%;right:24%}
+.seesaw.wide .pan{width:140px}
+.seesaw.wide .panL{left:24%}
+.seesaw.wide .panR{left:76%}
+.seesaw.wide .tray{min-height:70px;gap:6px}
+.seesaw.wide .grp{padding:8px 6px 6px;gap:5px}
+.seesaw.wide .grp .dot{width:15px;height:15px}
+.seesaw.wide .grp .xblk{width:24px;height:24px;font-size:12px;border-radius:8px;border-width:2px}
+.seesaw.wide .xopen .unit{width:13px;height:13px}
+#ss6 [data-kind]{cursor:pointer;transition:opacity .15s,transform .15s}
+#ss6 [data-kind]:active{opacity:.45;transform:scale(.9)}
+</style>
+</head>
+<body>
+<header>
+<div class="hbar">
+<button class="back" id="back" hidden aria-label="Back">‹</button>
+<div>
+<h1 id="ttl">Math Garden</h1>
+<p class="sub" id="stl">See the math. Keep it level.</p>
+</div>
+</div>
+</header>
+<div class="wrap">
+<section class="view on" id="v-home">
+<div class="hero">
+<h2>Math Garden</h2>
+<p>Math you can see and touch. Nothing moves unless you tap it.</p>
+</div>
+<div class="grid">
+<button class="card" data-go="seesaw"><div class="ico">⚖️</div><div class="ct">Balance</div><div class="cd">Equal means level</div></button>
+<button class="card" data-go="algebra"><div class="ico">🧩</div><div class="ct">Find x</div><div class="cd">Keep it level</div></button>
+<button class="card" data-go="both"><div class="ico">🪄</div><div class="ct">x on both sides</div><div class="cd">Take from each side</div></button>
+<button class="card" data-go="openx"><div class="ico">🗝️</div><div class="ct">Open the x box</div><div class="cd">See what is inside x</div></button>
+<button class="card" data-go="divide"><div class="ico">➗</div><div class="ct">Divide</div><div class="cd">Split into equal groups</div></button>
+<button class="card" data-go="dvbal"><div class="ico">🔀</div><div class="ct">Divide (balance)</div><div class="cd">Split both sides equally</div></button>
+<button class="card" data-go="negx"><div class="ico">🎈</div><div class="ct">Negative x</div><div class="cd">Flip the balance</div></button>
+<button class="card" data-go="shapes"><div class="ico">🔷</div><div class="ct">x and 1</div><div class="cd">Two kinds of things</div></button>
+<button class="card" data-go="packages"><div class="ico">📦</div><div class="ct">Packages</div><div class="cd">Grouping is free</div></button>
+<button class="card" data-go="distributive"><div class="ico">🎁</div><div class="ct">Unpacking</div><div class="cd">Share the times</div></button>
+</div>
+</section>
+<section class="view" id="v-seesaw">
+<div class="note"><b>Rule:</b> the seesaw is level when both sides weigh the same.</div>
+<div class="seesaw" id="ss1">
+<div class="beam"></div>
+<div class="fulcrum"></div>
+<div class="pan panL"><div class="rope"></div><div class="tray trayL"></div></div>
+<div class="pan panR"><div class="rope"></div><div class="tray trayR"></div></div>
+</div>
+<div class="ctl"><span class="lbl">Left side</span><button class="rnd" id="sLm">−</button><span class="count" id="sLc">0</span><button class="rnd" id="sLp">+</button></div>
+<div class="ctl"><span class="lbl">Right side</span><button class="rnd" id="sRm">−</button><span class="count" id="sRc">0</span><button class="rnd" id="sRp">+</button></div>
+<div class="status" id="sStat">Both sides are empty. They are level.</div>
+<button class="btn alt" id="sReset">Start over</button>
+</section>
+<section class="view" id="v-algebra">
+<div class="note"><b>Rule:</b> whatever you take away, take it from <b>both</b> sides. The seesaw stays level.</div>
+<div class="eq" id="aEq"></div>
+<div class="seesaw" id="ss2">
+<div class="beam"></div>
+<div class="fulcrum"></div>
+<div class="pan panL"><div class="rope"></div><div class="tray trayL"></div></div>
+<div class="pan panR"><div class="rope"></div><div class="tray trayR"></div></div>
+</div>
+<button class="btn" id="aTake">Take 1 from each side</button>
+<div class="status" id="aStat"></div>
+<button class="btn alt" id="aNew">New puzzle</button>
+</section>
+<section class="view" id="v-both">
+<div class="note"><b>Rule:</b> x is hiding on <b>both</b> sides. Take the same thing from each side and the seesaw stays level.</div>
+<div class="eq" id="bEq"></div>
+<div class="seesaw" id="ss3">
+<div class="beam"></div>
+<div class="fulcrum"></div>
+<div class="pan panL"><div class="rope"></div><div class="tray trayL"></div><div class="pcount" id="bLc"></div></div>
+<div class="pan panR"><div class="rope"></div><div class="tray trayR"></div><div class="pcount" id="bRc"></div></div>
+</div>
+<button class="btn" id="bTakeX">Take 1 x from each side</button>
+<button class="btn alt" id="bTakeU">Take 1 from each side</button>
+<div class="status" id="bStat"></div>
+<button class="btn alt" id="bNew">New puzzle</button>
+</section>
+<section class="view" id="v-openx">
+<div class="note"><b>Rule:</b> tap any piece to remove it. The buttons take from <b>both</b> sides, so it stays level.</div>
+<div class="eq" id="oxEq"></div>
+<div class="seesaw wide" id="ss6">
+<div class="beam"></div>
+<div class="fulcrum"></div>
+<div class="pan panL"><div class="rope"></div><div class="tray trayL"></div><div class="pcount" id="oxLc"></div></div>
+<div class="pan panR"><div class="rope"></div><div class="tray trayR"></div><div class="pcount" id="oxRc"></div></div>
+</div>
+<button class="btn" id="oxTakeX">Take 1 x from each side</button>
+<button class="btn alt" id="oxTakeU">Take 1 unit from each side</button>
+<button class="btn" id="oxOpen">Open the x box</button>
+<button class="btn alt" id="oxNew">New puzzle</button>
+<div class="status" id="oxStat"></div>
+</section>
+<section class="view" id="v-divide">
+<div class="note"><b>Rule:</b> <b>3x</b> means three mystery amounts. To undo a times, split <b>both</b> sides into the same number of equal groups.</div>
+<div class="eq" id="dvEq"></div>
+<div class="divsent" id="dvSent"></div>
+<div class="sidecard">
+<div class="sidehead"><span class="sl">Left side</span><span class="amt" id="dvLAmt">3x</span></div>
+<div id="dvL"></div>
+</div>
+<div class="eqdiv">=</div>
+<div class="sidecard">
+<div class="sidehead"><span class="sl">Right side</span><span class="amt" id="dvRAmt">12</span></div>
+<div id="dvR"></div>
+</div>
+<div class="status" id="dvStat"></div>
+<button class="btn" id="dvSplit">Split both sides into 3 groups</button>
+<button class="btn alt" id="dvNew">New puzzle</button>
+</section>
+<section class="view" id="v-dvbal">
+<div class="note"><b>Rule:</b> the seesaw is level. <b>3x</b> weighs the same as <b>12</b>. To undo a times, split <b>both</b> sides into the same number of equal groups — the seesaw stays level.</div>
+<div class="eq" id="dvbEq"></div>
+<div class="divsent" id="dvbSent"></div>
+<div class="seesaw wide" id="ss4">
+<div class="beam"></div>
+<div class="fulcrum"></div>
+<div class="pan panL"><div class="rope"></div><div class="tray trayL"></div><div class="pcount" id="dvbLc"></div></div>
+<div class="pan panR"><div class="rope"></div><div class="tray trayR"></div><div class="pcount" id="dvbRc"></div></div>
+</div>
+<div class="status" id="dvbStat"></div>
+<button class="btn" id="dvbSplit">Split both sides into 3 groups</button>
+<button class="btn" id="dvbRemove" hidden>Remove a group from each side</button>
+<button class="btn alt" id="dvbNew">New puzzle</button>
+</section>
+<section class="view" id="v-negx">
+<div class="note"><b>Rule:</b> a 🎈 balloon pulls <b>up</b> — it is a negative. Take 1 from each side until only a balloon is left, then <b>flip the balance 180°</b>: every balloon becomes a block, and every block becomes a balloon.</div>
+<div class="eq" id="nEq"></div>
+<div class="seesaw" id="ss5">
+<div class="beam"></div>
+<div class="fulcrum"></div>
+<div class="pan panL"><div class="floats" id="nLf"></div><div class="rope"></div><div class="tray trayL"></div><div class="pcount" id="nLc"></div></div>
+<div class="pan panR"><div class="floats" id="nRf"></div><div class="rope"></div><div class="tray trayR"></div><div class="pcount" id="nRc"></div></div>
+</div>
+<button class="btn" id="nTake">Take 1 from each side</button>
+<button class="btn" id="nFlip" hidden>Flip the balance 180°</button>
+<div class="status" id="nStat"></div>
+<button class="btn alt" id="nNew">New puzzle</button>
+</section>
+<section class="view" id="v-shapes">
+<div class="card2"><div class="row"><div class="xblk big">x</div><div><div class="ct">x — the mystery amount</div><div class="cd">Big, purple, square. We do not know how much it is yet.</div></div></div></div>
+<div class="card2"><div class="row"><div class="unit big"></div><div><div class="ct">1 — one</div><div class="cd">Small, orange, round. We always know how much this is.</div></div></div></div>
+<div class="note"><b>x and 1 are different shapes.</b> So 3x + 2 means three mystery amounts and two ones. They stay in their own groups.</div>
+<div class="card2">
+<div class="ct">Build it yourself</div>
+<div class="cd">Tap to add. Watch the words change.</div>
+<div class="spacer"></div>
+<div class="blocks" id="shBlocks"></div>
+<div class="eq" id="shEq">nothing yet</div>
+<div class="row" style="gap:10px">
+<button class="btn" id="shX" style="margin-top:0">+ x</button>
+<button class="btn alt" id="shU" style="margin-top:0">+ 1</button>
+</div>
+<button class="btn alt" id="shClear">Clear</button>
+</div>
+</section>
+<section class="view" id="v-packages">
+<div class="note"><b>Rule:</b> moving the boxes around never changes the total.</div>
+<div class="card2">
+<div class="eq" id="pkEq"></div>
+<div class="blocks" id="pkBlocks"></div>
+<div class="status ok" id="pkStat"></div>
+</div>
+<button class="btn" id="pkToggle">Regroup the boxes</button>
+</section>
+<section class="view" id="v-distributive">
+<div class="note"><b>Rule:</b> 3 × (2 + 4) means three boxes, each holding 2 red and 4 blue. Unpacking keeps every ball in place — only the outlines regroup.</div>
+<div class="card2">
+<div class="eq" id="dsEq"></div>
+<div class="blocks" id="dsBlocks"></div>
+<div class="legend"><span><i style="background:#E07A5F"></i>red</span><span><i style="background:#7FA8D4"></i>blue</span></div>
+</div>
+<button class="btn" id="dsToggle">Unpack the boxes</button>
+</section>
+</div>
+<script>
+(function(){
+var H=window.ForgeHost||window.forge;
+var meta={home:['Math Garden','See the math. Keep it level.'],seesaw:['Balance','Equal means level'],algebra:['Find x','Keep it level'],both:['x on both sides','Take from each side'],openx:['Open the x box','See what is hiding inside x'],divide:['Divide','Split both sides equally'],dvbal:['Divide (balance)','Split both sides equally'],negx:['Negative x','Balloons pull up. Flip to flip the sign.'],shapes:['x and 1','Two kinds of things'],packages:['Packages','Grouping is free'],distributive:['Unpacking','Share the times']};
+function go(v){
+var all=document.querySelectorAll('.view');
+for(var i=0;i<all.length;i++) all[i].classList.remove('on');
+document.getElementById('v-'+v).classList.add('on');
+document.getElementById('ttl').textContent=meta[v][0];
+document.getElementById('stl').textContent=meta[v][1];
+document.getElementById('back').hidden=(v==='home');
+window.scrollTo(0,0);
+if(inits[v]) inits[v]();
+try{ if(H&&H.state) H.state.set('view',v); }catch(e){}
+}
+document.getElementById('back').onclick=function(){go('home')};
+var cards=document.querySelectorAll('[data-go]');
+for(var ci=0;ci<cards.length;ci++){ (function(b){ b.onclick=function(){go(b.getAttribute('data-go'))}; })(cards[ci]); }
+
+function makeSeesaw(root,scale){
+var beam=root.querySelector('.beam');
+var panL=root.querySelector('.panL'),panR=root.querySelector('.panR');
+var trayL=root.querySelector('.trayL'),trayR=root.querySelector('.trayR');
+var sc=scale||5;
+var tilt=0;
+function layout(){
+var W=root.clientWidth||340;
+var half=0.35*W;
+var pivotY=140;
+var rad=tilt*Math.PI/180;
+var off=half*Math.sin(rad);
+beam.style.transform='rotate('+(-tilt)+'deg)';
+panL.style.top=(pivotY+off+6)+'px';
+panR.style.top=(pivotY-off+6)+'px';
+}
+function html(arr){
+var s='';
+for(var i=0;i<arr.length;i++){ s+= arr[i]==='x' ? '<div class="xblk">x</div>' : '<div class="unit"></div>'; }
+return s;
+}
+function apply(lh,rh,lw,rw){
+trayL.innerHTML=lh;
+trayR.innerHTML=rh;
+var d=lw-rw;
+tilt=Math.max(-13,Math.min(13,d*sc));
+layout();
+}
+function set(left,right,lw,rw){ apply(html(left),html(right),lw,rw); }
+function setRaw(lh,rh,lw,rw){ apply(lh,rh,lw,rw); }
+window.addEventListener('resize',layout);
+layout();
+return {set:set,setRaw:setRaw,layout:layout};
+}
+
+var ss1=null,bL=0,bR=0;
+function initSeesaw(){
+if(!ss1) ss1=makeSeesaw(document.getElementById('ss1'));
+renderBalance();
+}
+function renderBalance(){
+var L=[],R=[],i;
+for(i=0;i<bL;i++) L.push('u');
+for(i=0;i<bR;i++) R.push('u');
+ss1.set(L,R,bL,bR);
+document.getElementById('sLc').textContent=bL;
+document.getElementById('sRc').textContent=bR;
+var st=document.getElementById('sStat');
+if(bL===bR){
+st.className='status ok';
+st.textContent = bL===0 ? 'Both sides are empty. They are level.' : 'Level! '+bL+' = '+bR+'. Both sides are equal.';
+} else if(bL>bR){
+st.className='status';
+st.textContent='The left side is heavier. Add more to the right.';
+} else {
+st.className='status';
+st.textContent='The right side is heavier. Add more to the left.';
+}
+document.getElementById('sLm').disabled=(bL<=0);
+document.getElementById('sRm').disabled=(bR<=0);
+document.getElementById('sLp').disabled=(bL>=8);
+document.getElementById('sRp').disabled=(bR>=8);
+}
+document.getElementById('sLp').onclick=function(){ if(bL<8){bL++;renderBalance();} };
+document.getElementById('sLm').onclick=function(){ if(bL>0){bL--;renderBalance();} };
+document.getElementById('sRp').onclick=function(){ if(bR<8){bR++;renderBalance();} };
+document.getElementById('sRm').onclick=function(){ if(bR>0){bR--;renderBalance();} };
+document.getElementById('sReset').onclick=function(){ bL=0;bR=0;renderBalance(); };
+
+var ss2=null,alg=null;
+function initAlgebra(){
+if(!ss2) ss2=makeSeesaw(document.getElementById('ss2'));
+if(!alg) newPuzzle(); else renderAlgebra();
+}
+function newPuzzle(){
+var a=1+Math.floor(Math.random()*5);
+var d=1+Math.floor(Math.random()*5);
+alg={a:a,b:a+d,lu:a,ru:a+d,xw:d};
+renderAlgebra();
+}
+function renderAlgebra(){
+var L=['x'],R=[],i;
+for(i=0;i<alg.lu;i++) L.push('u');
+for(i=0;i<alg.ru;i++) R.push('u');
+ss2.set(L,R,alg.xw+alg.lu,alg.ru);
+var left='<span class="x">x</span>'+(alg.lu>0?' + <span class="n">'+alg.lu+'</span>':'');
+document.getElementById('aEq').innerHTML=left+' = <span class="n">'+alg.ru+'</span>';
+var st=document.getElementById('aStat');
+var btn=document.getElementById('aTake');
+if(alg.lu===0){
+st.className='status ok';
+st.textContent='x is alone now. So x = '+alg.ru+'!';
+btn.disabled=true;
+btn.textContent='x is alone';
+} else {
+st.className='status';
+st.textContent='Take the same amount from both sides to set x free.';
+btn.disabled=false;
+btn.textContent='Take 1 from each side';
+}
+}
+document.getElementById('aTake').onclick=function(){
+if(alg&&alg.lu>0){ alg.lu--; alg.ru--; renderAlgebra(); }
+};
+document.getElementById('aNew').onclick=function(){ newPuzzle(); };
+
+var ss3=null,bs=null;
+function initBoth(){
+if(!ss3) ss3=makeSeesaw(document.getElementById('ss3'),1.5);
+if(!bs) newBoth(); else renderBoth();
+}
+function newBoth(){
+var xv,rx,extra,lu,ru,guard=0;
+do{
+xv=2+Math.floor(Math.random()*3);
+rx=1+Math.floor(Math.random()*2);
+extra=1+Math.floor(Math.random()*2);
+lu=Math.floor(Math.random()*3);
+ru=lu+extra*xv;
+guard++;
+}while(ru>9&&guard<80);
+bs={xv:xv,lx:rx+extra,rx:rx,lu:lu,ru:ru};
+renderBoth();
+}
+function sideLabel(xc,uc){
+var p=[];
+if(xc>0) p.push('<span class="x">'+(xc===1?'x':xc+'x')+'</span>');
+if(uc>0) p.push('<span class="n">'+uc+'</span>');
+return p.length?p.join(' + '):'0';
+}
+function countLabel(xc,uc){
+return xc+' x · '+uc+' one'+(uc===1?'':'s');
+}
+function renderBoth(){
+var L=[],R=[],i;
+for(i=0;i<bs.lx;i++) L.push('x');
+for(i=0;i<bs.lu;i++) L.push('u');
+for(i=0;i<bs.rx;i++) R.push('x');
+for(i=0;i<bs.ru;i++) R.push('u');
+ss3.set(L,R,bs.lx*bs.xv+bs.lu,bs.rx*bs.xv+bs.ru);
+document.getElementById('bEq').innerHTML=sideLabel(bs.lx,bs.lu)+' = '+sideLabel(bs.rx,bs.ru);
+document.getElementById('bLc').textContent=countLabel(bs.lx,bs.lu);
+document.getElementById('bRc').textContent=countLabel(bs.rx,bs.ru);
+var st=document.getElementById('bStat');
+if(bs.rx===0&&bs.lu===0){
+st.className='status ok';
+st.textContent='x is alone! '+bs.lx+'x = '+bs.ru+', so x = '+(bs.ru/bs.lx)+'.';
+}else if(bs.rx>0){
+st.className='status';
+st.textContent='x is on both sides. Take 1 x from each side to clear the right.';
+}else{
+st.className='status';
+st.textContent='Only the left has x now. Take 1 from each side to set x free.';
+}
+document.getElementById('bTakeX').disabled=!(bs.lx>0&&bs.rx>0);
+document.getElementById('bTakeU').disabled=!(bs.lu>0&&bs.ru>0);
+}
+document.getElementById('bTakeX').onclick=function(){ if(bs.lx>0&&bs.rx>0){bs.lx--;bs.rx--;renderBoth();} };
+document.getElementById('bTakeU').onclick=function(){ if(bs.lu>0&&bs.ru>0){bs.lu--;bs.ru--;renderBoth();} };
+document.getElementById('bNew').onclick=function(){ newBoth(); };
+
+var ss6=null,ox=null;
+function initOpenX(){
+if(!ss6){
+ss6=makeSeesaw(document.getElementById('ss6'));
+document.getElementById('ss6').addEventListener('click',function(e){
+var el=e.target.closest('[data-kind]');
+if(!el||!ox) return;
+var side=el.getAttribute('data-side'),kind=el.getAttribute('data-kind');
+if(side==='L'){ if(kind==='x'&&ox.lx>0) ox.lx--; else if(kind==='u'&&ox.lu>0) ox.lu--; }
+else { if(kind==='x'&&ox.rx>0) ox.rx--; else if(kind==='u'&&ox.ru>0) ox.ru--; }
+renderOpenX();
+});
+}
+if(!ox) newOpenX(); else renderOpenX();
+}
+function newOpenX(){
+var xv=2+Math.floor(Math.random()*4);
+var lu=1+Math.floor(Math.random()*3);
+var lx=2,rx=1;
+var ru=lu+(lx-rx)*xv;
+ox={xv:xv,lx:lx,rx:rx,lu:lu,ru:ru,open:false};
+renderOpenX();
+}
+function oxUnits(n){ var s='',j; for(j=0;j<n;j++) s+='<div class="unit"></div>'; return s; }
+function oxSide(xc,uc,open,side){
+var s='',i;
+for(i=0;i<xc;i++){
+if(open) s+='<div class="xopen" data-side="'+side+'" data-kind="x" style="animation-delay:'+(i*90)+'ms">'+oxUnits(ox.xv)+'</div>';
+else s+='<div class="xblk" data-side="'+side+'" data-kind="x">x</div>';
+}
+for(i=0;i<uc;i++) s+='<div class="unit" data-side="'+side+'" data-kind="u"></div>';
+return s;
+}
+function oxSym(xc,uc){
+var p=[];
+if(xc>0) p.push('<span class="x">'+(xc===1?'x':xc+'x')+'</span>');
+if(uc>0) p.push('<span class="n">'+uc+'</span>');
+return p.length?p.join(' + '):'0';
+}
+function oxNum(xc,uc){
+var p=[];
+if(xc>0) p.push('<span class="x">'+(xc*ox.xv)+'</span>');
+if(uc>0) p.push('<span class="n">'+uc+'</span>');
+return p.length?p.join(' + '):'0';
+}
+function oxCount(xc,uc,open){
+if(open){
+var p=[];
+if(xc>0) p.push(''+(xc*ox.xv));
+if(uc>0) p.push(''+uc);
+var s=p.length?p.join(' + '):'0';
+return s+' = '+(xc*ox.xv+uc);
+}
+var q=[];
+if(xc>0) q.push(xc===1?'x':xc+'x');
+if(uc>0) q.push(''+uc);
+return q.length?q.join(' + '):'0';
+}
+function renderOpenX(){
+if(!ox) return;
+var lw=ox.lx*ox.xv+ox.lu, rw=ox.rx*ox.xv+ox.ru;
+ss6.setRaw(oxSide(ox.lx,ox.lu,ox.open,'L'), oxSide(ox.rx,ox.ru,ox.open,'R'), lw, rw);
+var eq=document.getElementById('oxEq');
+if(!ox.open) eq.innerHTML=oxSym(ox.lx,ox.lu)+' = '+oxSym(ox.rx,ox.ru);
+else eq.innerHTML=oxNum(ox.lx,ox.lu)+' = '+oxNum(ox.rx,ox.ru);
+document.getElementById('oxLc').textContent=oxCount(ox.lx,ox.lu,ox.open);
+document.getElementById('oxRc').textContent=oxCount(ox.rx,ox.ru,ox.open);
+var st=document.getElementById('oxStat');
+if(lw!==rw){
+st.className='status';
+st.textContent='Not level now: '+lw+' vs '+rw+'.';
+}else if(!ox.open){
+st.className='status';
+st.textContent='Level. Open a box to see what x is.';
+}else{
+st.className='status ok';
+st.textContent='Each x holds '+ox.xv+'. Both sides weigh '+lw+'. So x = '+ox.xv+'.';
+}
+document.getElementById('oxOpen').textContent = ox.open ? 'Close the x box' : 'Open the x box';
+document.getElementById('oxTakeX').disabled=!(ox.lx>0&&ox.rx>0);
+document.getElementById('oxTakeU').disabled=!(ox.lu>0&&ox.ru>0);
+}
+document.getElementById('oxTakeX').onclick=function(){ if(ox&&ox.lx>0&&ox.rx>0){ ox.lx--; ox.rx--; renderOpenX(); } };
+document.getElementById('oxTakeU').onclick=function(){ if(ox&&ox.lu>0&&ox.ru>0){ ox.lu--; ox.ru--; renderOpenX(); } };
+document.getElementById('oxOpen').onclick=function(){ if(ox){ ox.open=!ox.open; renderOpenX(); } };
+document.getElementById('oxNew').onclick=function(){ newOpenX(); };
+
+var dv=null;
+function initDivide(){ if(!dv) newDivide(); else renderDivide(); }
+function newDivide(){
+var N,x,M,g=0;
+do{ N=2+Math.floor(Math.random()*3); x=2+Math.floor(Math.random()*4); M=N*x; g++; }while(M>12&&g<80);
+if(M>12){ N=2; x=3; M=6; }
+dv={N:N,x:x,M:M,split:false};
+renderDivide();
+}
+function dvX(){ return '<div class="xblk">x</div>'; }
+function dvU(){ return '<div class="unit"></div>'; }
+function renderDivide(){
+var N=dv.N,x=dv.x,M=dv.M,i,j;
+document.getElementById('dvLAmt').textContent=N+'x';
+document.getElementById('dvRAmt').textContent=M;
+var L=document.getElementById('dvL'),R=document.getElementById('dvR');
+var st=document.getElementById('dvStat'),btn=document.getElementById('dvSplit'),sent=document.getElementById('dvSent');
+if(!dv.split){
+var lh='';for(i=0;i<N;i++)lh+=dvX();
+L.innerHTML='<div class="items">'+lh+'</div>';
+var rh='';for(i=0;i<M;i++)rh+=dvU();
+R.innerHTML='<div class="items">'+rh+'</div>';
+document.getElementById('dvEq').innerHTML='<span class="x">'+N+'x</span> = <span class="n">'+M+'</span>';
+sent.textContent='';
+st.className='status';
+st.textContent='x is multiplied by '+N+'. Split both sides into '+N+' equal groups to undo the times.';
+btn.textContent='Split both sides into '+N+' groups';
+}else{
+var lh='';
+for(i=0;i<N;i++) lh+='<div class="grp" style="animation-delay:'+(i*80)+'ms"><span class="gnum">'+(i+1)+'</span>'+dvX()+'</div>';
+L.innerHTML='<div class="groups">'+lh+'</div>';
+var rh='';
+for(i=0;i<N;i++){ var inner=''; for(j=0;j<x;j++) inner+=dvU(); rh+='<div class="grp" style="animation-delay:'+(i*80)+'ms"><span class="gnum">'+(i+1)+'</span>'+inner+'</div>'; }
+R.innerHTML='<div class="groups">'+rh+'</div>';
+document.getElementById('dvEq').innerHTML='<span class="x">x</span> = <span class="n">'+x+'</span>';
+sent.textContent=M+' ÷ '+N+' = '+x;
+st.className='status ok';
+st.textContent='Every group holds 1 x and '+x+' ones. So x = '+x+'. Check: '+N+' × '+x+' = '+M+' ✓';
+btn.textContent='Put the groups back';
+}
+}
+document.getElementById('dvSplit').onclick=function(){ if(dv){ dv.split=!dv.split; renderDivide(); } };
+document.getElementById('dvNew').onclick=function(){ newDivide(); };
+
+var ss4=null,dvb=null;
+function initDvBal(){
+if(!ss4) ss4=makeSeesaw(document.getElementById('ss4'));
+if(!dvb) newDvBal(); else renderDvBal();
+}
+function newDvBal(){
+var N,x,M,g=0;
+do{ N=2+Math.floor(Math.random()*2); x=2+Math.floor(Math.random()*3); M=N*x; g++; }while(M>12&&g<80);
+if(M>12){ N=2; x=3; M=6; }
+dvb={N:N,x:x,M:M,phase:'start',g:N};
+renderDvBal();
+}
+function renderDvBal(){
+var N=dvb.N,x=dvb.x,M=dvb.M,i,j;
+var st=document.getElementById('dvbStat'),splitBtn=document.getElementById('dvbSplit'),rmBtn=document.getElementById('dvbRemove'),sent=document.getElementById('dvbSent');
+var lh='',rh='';
+if(dvb.phase==='start'){
+for(i=0;i<N;i++) lh+='<div class="xblk">x</div>';
+for(i=0;i<M;i++) rh+='<div class="unit"></div>';
+document.getElementById('dvbEq').innerHTML='<span class="x">'+N+'x</span> = <span class="n">'+M+'</span>';
+sent.textContent='';
+document.getElementById('dvbLc').textContent=N+' x';
+document.getElementById('dvbRc').textContent=M+' one'+(M===1?'':'s');
+st.className='status';
+st.textContent='Level: '+N+'x weighs the same as '+M+'. Split both sides into '+N+' equal groups to undo the times.';
+splitBtn.textContent='Split both sides into '+N+' groups';
+rmBtn.hidden=true;
+}else{
+var g=dvb.g;
+for(i=0;i<g;i++) lh+='<div class="grp" style="animation-delay:'+(i*80)+'ms"><span class="gnum">'+(i+1)+'</span><div class="xblk">x</div></div>';
+for(i=0;i<g;i++){ var inner=''; for(j=0;j<x;j++) inner+='<div class="unit"></div>'; rh+='<div class="grp" style="animation-delay:'+(i*80)+'ms"><span class="gnum">'+(i+1)+'</span>'+inner+'</div>'; }
+document.getElementById('dvbLc').textContent=g+' group'+(g===1?'':'s')+' · 1 x each';
+document.getElementById('dvbRc').textContent=g+' group'+(g===1?'':'s')+' · '+x+' each';
+if(g===1){
+document.getElementById('dvbEq').innerHTML='<span class="x">x</span> = <span class="n">'+x+'</span>';
+sent.textContent=M+' ÷ '+N+' = '+x;
+st.className='status ok';
+st.textContent='One group left on each side — still level. 1 x weighs the same as '+x+' ones. So x = '+x+'. Check: '+N+' × '+x+' = '+M+' ✓';
+rmBtn.hidden=true;
+}else{
+document.getElementById('dvbEq').innerHTML='<span class="x">'+g+'x</span> = <span class="n">'+(g*x)+'</span>';
+sent.textContent='Both sides split into '+N+' equal groups — still level.';
+st.className='status';
+st.textContent='Level: '+g+'x weighs the same as '+(g*x)+'. Remove a group from each side to get closer to x alone.';
+rmBtn.hidden=false;
+rmBtn.textContent='Remove a group from each side ('+g+' → '+(g-1)+')';
+}
+splitBtn.textContent='Put the groups back';
+}
+ss4.setRaw(lh,rh,dvb.g*x,dvb.g*x);
+}
+document.getElementById('dvbSplit').onclick=function(){
+if(!dvb) return;
+if(dvb.phase==='start'){ dvb.phase='split'; dvb.g=dvb.N; }
+else { dvb.phase='start'; dvb.g=dvb.N; }
+renderDvBal();
+};
+document.getElementById('dvbRemove').onclick=function(){
+if(dvb&&dvb.phase==='split'&&dvb.g>1){ dvb.g--; renderDvBal(); }
+};
+document.getElementById('dvbNew').onclick=function(){ newDvBal(); };
+
+var ss5=null,nx=null;
+function initNegx(){
+if(!ss5) ss5=makeSeesaw(document.getElementById('ss5'));
+if(!nx) newNegx(); else renderNegx();
+}
+function newNegx(){
+var a=1+Math.floor(Math.random()*3);
+var d=1+Math.floor(Math.random()*4);
+nx={a:a,b:a+d,flipped:false,spinning:false};
+renderNegx();
+}
+function balX(){ return '<div class="balloon bx"><i>x</i></div>'; }
+function balU(){ return '<div class="balloon bu"><i>−</i></div>'; }
+function nxUnit(){ return '<div class="unit"></div>'; }
+function nxX(){ return '<div class="xblk">x</div>'; }
+function renderNegx(){
+if(!nx) return;
+var a=nx.a,b=nx.b,fl=nx.flipped,i,d=b-a;
+var lt='',rt='',lf='',rf='';
+if(!fl){
+for(i=0;i<a;i++) lt+=nxUnit();
+lf=balX();
+for(i=0;i<b;i++) rt+=nxUnit();
+}else{
+lt=nxX();
+for(i=0;i<d;i++) rf+=balU();
+}
+ss5.setRaw(lt,rt,0,0);
+document.getElementById('nLf').innerHTML=lf;
+document.getElementById('nRf').innerHTML=rf;
+var eq=document.getElementById('nEq');
+if(!fl&&a>0) eq.innerHTML='<span class="n">'+a+'</span> − <span class="x">x</span> = <span class="n">'+b+'</span>';
+else if(!fl) eq.innerHTML='−<span class="x">x</span> = <span class="n">'+d+'</span>';
+else eq.innerHTML='<span class="x">x</span> = −<span class="n">'+d+'</span>';
+document.getElementById('nLc').textContent = !fl ? (a+' one'+(a===1?'':'s')+' · 1 balloon x') : '1 x';
+document.getElementById('nRc').textContent = !fl ? (b+' one'+(b===1?'':'s')) : (d+' balloon one'+(d===1?'':'s')+' (negative)');
+var st=document.getElementById('nStat'),take=document.getElementById('nTake'),flip=document.getElementById('nFlip');
+if(!fl&&a>0){
+st.className='status';
+st.textContent='x is being subtracted on the left. Take 1 from each side and watch both sides shrink.';
+take.disabled=false; flip.hidden=true;
+}else if(!fl){
+st.className='status';
+st.textContent='Only the balloon is left: −x = '+d+'. A balloon is a negative. Flip the balance 180° to make it positive!';
+take.disabled=true; flip.hidden=false;
+}else{
+st.className='status ok';
+st.textContent='Flipped! −x became x, and '+d+' became −'+d+'. So x = −'+d+'. Check: '+a+' − (−'+d+') = '+a+' + '+d+' = '+b+' ✓';
+take.disabled=true; flip.hidden=true;
+}
+}
+document.getElementById('nTake').onclick=function(){ if(nx&&!nx.flipped&&!nx.spinning&&nx.a>0){ nx.a--; nx.b--; renderNegx(); } };
+document.getElementById('nFlip').onclick=function(){
+if(!nx||nx.flipped||nx.a>0||nx.spinning) return;
+nx.spinning=true;
+var root=document.getElementById('ss5');
+root.classList.add('vflip');
+setTimeout(function(){
+nx.flipped=true;
+renderNegx();
+},370);
+setTimeout(function(){
+root.classList.remove('vflip');
+nx.spinning=false;
+renderNegx();
+},760);
+};
+document.getElementById('nNew').onclick=function(){ if(nx&&nx.spinning) return; newNegx(); };
+
+var sh={x:0,u:0};
+function initShapes(){ renderShapes(); }
+function renderShapes(){
+var h='',i;
+for(i=0;i<sh.x;i++) h+='<div class="xblk">x</div>';
+for(i=0;i<sh.u;i++) h+='<div class="unit"></div>';
+document.getElementById('shBlocks').innerHTML = h || '<span style="color:#A9A29A;font-size:14px">Tap + x or + 1 below.</span>';
+var parts=[];
+if(sh.x>0) parts.push('<span class="x">'+(sh.x===1?'x':sh.x+'x')+'</span>');
+if(sh.u>0) parts.push('<span class="n">'+sh.u+'</span>');
+document.getElementById('shEq').innerHTML = parts.length ? parts.join(' + ') : 'nothing yet';
+}
+document.getElementById('shX').onclick=function(){ if(sh.x<6){sh.x++;renderShapes();} };
+document.getElementById('shU').onclick=function(){ if(sh.u<9){sh.u++;renderShapes();} };
+document.getElementById('shClear').onclick=function(){ sh.x=0;sh.u=0;renderShapes(); };
+
+var pkMode=0;
+function dot(n,cls){ var s='',i; for(i=0;i<n;i++) s+='<div class="dot '+(cls||'g')+'"></div>'; return s; }
+function pkg(n,cls){ return '<div class="pkg">'+dot(n,cls)+'</div>'; }
+function initPackages(){ renderPackages(); }
+function renderPackages(){
+var h;
+if(pkMode===0){ h=pkg(2)+pkg(3)+dot(4); }
+else { h=dot(2)+pkg(3)+pkg(4); }
+document.getElementById('pkBlocks').innerHTML=h;
+document.getElementById('pkEq').innerHTML = pkMode===0 ? '(2 + 3) + 4 = 9' : '2 + (3 + 4) = 9';
+document.getElementById('pkStat').textContent='Both ways make 9. The boxes moved, the total did not.';
+document.getElementById('pkToggle').textContent = pkMode===0 ? 'Regroup as 2 + (3 + 4)' : 'Regroup as (2 + 3) + 4';
+}
+document.getElementById('pkToggle').onclick=function(){ pkMode = pkMode===0?1:0; renderPackages(); };
+
+var dsMode=0;
+function initDistributive(){ renderDistributive(); }
+function renderDistributive(){
+var h='',i;
+if(dsMode===0){
+for(i=0;i<3;i++){ h+='<div class="pkg">'+dot(2,'r')+dot(4,'b')+'</div>'; }
+document.getElementById('dsEq').innerHTML='3 × (2 + 4) = 18';
+document.getElementById('dsToggle').textContent='Unpack the boxes';
+} else {
+h='<div class="dsgrid">';
+h+='<div class="dscol cred">';
+for(i=0;i<3;i++){ h+='<div class="dscell">'+dot(2,'r')+'</div>'; }
+h+='<div class="dslab">3 × 2 = 6</div></div>';
+h+='<div class="dscol cblue">';
+for(i=0;i<3;i++){ h+='<div class="dscell">'+dot(4,'b')+'</div>'; }
+h+='<div class="dslab">3 × 4 = 12</div></div>';
+h+='</div>';
+document.getElementById('dsEq').innerHTML='3×2 + 3×4 = 6 + 12 = 18';
+document.getElementById('dsToggle').textContent='Pack them back';
+}
+document.getElementById('dsBlocks').innerHTML=h;
+document.getElementById('dsBlocks').className='blocks';
+}
+document.getElementById('dsToggle').onclick=function(){ dsMode = dsMode===0?1:0; renderDistributive(); };
+
+var inits={seesaw:initSeesaw,algebra:initAlgebra,both:initBoth,openx:initOpenX,divide:initDivide,dvbal:initDvBal,negx:initNegx,shapes:initShapes,packages:initPackages,distributive:initDistributive};
+
+try{
+if(H&&H.state&&H.state.get){
+H.state.get('view').then(function(v){ if(v&&meta[v]&&v!=='home') go(v); }).catch(function(){});
+}
+}catch(e){}
+})();
+</script>
+</body>
+</html>
