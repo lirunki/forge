@@ -1,16 +1,16 @@
 {
- "schema": 1,
- "updatedAt": "2026-10-11T02:08:53.684Z",
- "channels": {
-  "debug": {
-   "version": "2.7.109",
-   "versionCode": 259,
-   "url": "https://github.com/lirunki/forge/releases"
-  },
-  "fdroid": {
-   "version": "2.7.107",
-   "versionCode": 257,
-   "url": "https://github.com/lirunki/forge/releases"
+  "schema": 1,
+  "updatedAt": "2026-10-11T02:17:00.940942Z",
+  "channels": {
+    "debug": {
+      "version": "2.7.109",
+      "versionCode": 259,
+      "url": "https://github.com/lirunki/forge/releases"
+    },
+    "fdroid": {
+      "version": "2.7.107",
+      "versionCode": 257,
+      "url": "https://github.com/lirunki/forge/releases"
+    }
   }
- }
 }
