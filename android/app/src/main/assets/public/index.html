@@ -14412,6 +14412,13 @@ function setLibrary(list) {
         ? HOST_TOOL_RISK_RANK[String(r || 'safe')]
         : 0;
     }
+    // image_generate is a confirm-tier tool but is offered/runnable at every
+    // riskMax level (safe runs can still generate images). The per-call host
+    // confirmation modal (and "Always allow" memory) still applies; only the
+    // riskMax ceiling is exempt.
+    function toolRiskCeilingExempt(name) {
+      return name === 'image_generate';
+    }
 
     async function toolsEnsurePerms(perms) {
       const list = Array.isArray(perms) ? perms : (perms ? [perms] : []);
@@ -15280,7 +15287,7 @@ function setLibrary(list) {
       const entry = map.get(name);
       if (!entry) throw new Error('Unknown app tool: ' + name);
       const maxRisk = String((opts && (opts.riskMax || opts.maxRisk)) || 'safe');
-      if (toolRiskRank(entry.risk) > toolRiskRank(maxRisk)) {
+      if (!toolRiskCeilingExempt(name) && toolRiskRank(entry.risk) > toolRiskRank(maxRisk)) {
         throw new Error('Tool ' + name + ' blocked by riskMax=' + maxRisk + ' (tool risk=' + entry.risk + ')');
       }
       if (!agentPolicy && toolRiskRank(entry.risk) >= toolRiskRank('sensitive')) {
@@ -15566,7 +15573,7 @@ function setLibrary(list) {
         if (exclude.has(e.name)) return false;
         if (group && String(e.group || '').toLowerCase() !== group) return false;
         if (groups && !groups.has(String(e.group || 'misc').toLowerCase())) return false;
-        if (toolRiskRank(e.risk) > maxRank) return false;
+        if (!toolRiskCeilingExempt(e.name) && toolRiskRank(e.risk) > maxRank) return false;
         if (opts.includeDangerous === false && e.risk === 'danger') return false;
         if (opts.capabilities && !agentToolAvailableForCapabilities(e, opts.capabilities)) return false;
         return true;
@@ -16191,7 +16198,7 @@ function setLibrary(list) {
         const maxRisk = String(opts.riskMax || opts.maxRisk || 'safe');
         if (policy && !policy.allowedToolNames.has(name)) throw new Error('Tool ' + name + ' was not enabled for this agent run');
         if (policy && !policy.allowedRiskSet.has(String(entry.risk || 'safe'))) throw new Error('Tool ' + name + ' risk tier was not approved for this agent run');
-        if (toolRiskRank(entry.risk) > toolRiskRank(maxRisk)) {
+        if (!toolRiskCeilingExempt(name) && toolRiskRank(entry.risk) > toolRiskRank(maxRisk)) {
           throw new Error('Tool ' + name + ' blocked by riskMax=' + maxRisk + ' (tool risk=' + entry.risk + ')');
         }
         if (!policy && toolRiskRank(entry.risk) >= toolRiskRank('sensitive')) {
@@ -25894,6 +25901,38 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
     <button class="sec" id="btnFsRead">fs.read demo</button>
   </div>
 </section>
+
+<section id="tab-agent">
+  <h2>Agent · runTask · workspace · task_run_script</h2>
+  <p class="hint">Exercises the host-managed agent loop added in the 1010 plan: attachments, <code>ForgeHost.ai.runTask()</code>, stock guidance/skills, task workspace CRUD, tool allowlist + risk ceiling, <code>task_run_script</code> (sandboxed script runner with a direct file API), cancellation, and image-generation model fallback.</p>
+
+  <label>Task prompt</label>
+  <textarea id="agTask" placeholder="Describe a task for the host agent…">Use the task workspace to write report.md with a short heading, read it back, then list the workspace. Summarize the final file path and content.</textarea>
+  <div class="grid2">
+    <div><label>Profile</label><select id="agProfile"><option value="auto">auto</option><option value="tiny">tiny</option><option value="normal">normal</option><option value="advanced">advanced</option><option value="large">large</option></select></div>
+    <div><label>Max rounds</label><select id="agRounds"><option>4</option><option selected>6</option><option>8</option><option>12</option></select></div>
+  </div>
+  <div class="grid2">
+    <div><label>Tool preset</label><select id="agPreset"><option value="safe">safe</option><option value="web-research">web-research</option><option value="selected">selected</option><option value="all">all (gated)</option></select></div>
+    <div><label>Risk ceiling</label><select id="agRisk"><option selected>safe</option><option>sensitive</option><option>confirm</option><option>danger</option></select></div>
+  </div>
+  <label>Skills (comma-sep): web-research, document-analysis, report-writing</label>
+  <input id="agSkills" value="report-writing" spellcheck="false"/>
+  <label>Instructions (optional)</label>
+  <input id="agInstr" placeholder="e.g. cite sources; be concise" spellcheck="false"/>
+  <div class="row">
+    <button id="agRun">Run task</button>
+    <button class="sec" id="agScript">Run task_run_script</button>
+    <button class="danger" id="agStop" hidden>Stop</button>
+  </div>
+  <div class="row">
+    <button class="sec" id="agAttach">Pick image/PDF</button>
+    <button class="sec" id="agList">Workspace list</button>
+    <button class="sec" id="agRead">Read report.md</button>
+    <button class="sec" id="agClear">Clear workspace</button>
+  </div>
+  <pre id="agOut" style="background:#05050a;border:1px solid var(--border);border-radius:10px;padding:.55rem;font-size:.74rem;max-height:34vh;overflow:auto;white-space:pre-wrap;word-break:break-word"></pre>
+</section>
 </main>
 <pre id="log" class="muted">Ready. Tap a button — results land here.</pre>
 <script>
@@ -25930,7 +25969,8 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
   // Tabs
   const TABS = [
     ['home','Home'],['perm','Perms'],['state','State'],['ai','AI'],
-    ['media','Media'],['device','Device'],['apps','Apps'],['notify','Notify']
+    ['media','Media'],['device','Device'],['apps','Apps'],['notify','Notify'],
+    ['agent','Agent']
   ];
   const tabs = document.getElementById('tabs');
   TABS.forEach(function(pair, i){
@@ -26263,6 +26303,104 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
   }); };
   document.getElementById('btnFsRead').onclick = function(){ safe(async function(){
     log(await H().fs.read('kitchen-sink-demo.txt', { directory: 'CACHE' }), 'ok');
+  }); };
+
+  // ——— Agent exerciser (1010 plan: runTask + workspace + task_run_script) ————
+  var agOut = document.getElementById('agOut');
+  var agPicked = null;
+  var agActiveId = '';
+  function agSet(cls, text){ agOut.className = cls || ''; agOut.textContent = text; }
+  function agAppend(text){ agOut.textContent += String(text == null ? '' : text); agOut.scrollTop = agOut.scrollHeight; }
+  function agSafeJson(x, n){ try { var s = (typeof x === 'string') ? x : JSON.stringify(x); return s.length > (n||160) ? s.slice(0, (n||160)) + '…' : s; } catch(_) { return String(x).slice(0, n||160); } }
+  function agBusy(busy){ document.getElementById('agRun').disabled = busy; document.getElementById('agScript').disabled = busy; document.getElementById('agStop').hidden = !busy; }
+  function agWorkspaceId(){ return 'ks-agent'; }
+
+  document.getElementById('agRun').onclick = function(){ safe(async function(){
+    if (!H().ai || typeof H().ai.runTask !== 'function') throw new Error('ai.runTask unavailable — update Forge');
+    var task = document.getElementById('agTask').value.trim();
+    if (!task) throw new Error('Enter a task first');
+    agActiveId = 'ks-agent-' + Date.now().toString(36);
+    var thisId = agActiveId;
+    var preset = document.getElementById('agPreset').value;
+    var tools = { preset: preset };
+    if (preset === 'selected') tools.names = ['web_search', 'get_time'];
+    agSet('', '');
+    agAppend('▶ runTask ' + thisId + '\nprofile=' + document.getElementById('agProfile').value + ' preset=' + preset + ' risk=' + document.getElementById('agRisk').value + '\n\n');
+    agBusy(true);
+    try {
+      var r = await H().ai.runTask({
+        id: thisId,
+        task: task,
+        instructions: document.getElementById('agInstr').value.trim() || undefined,
+        profile: document.getElementById('agProfile').value,
+        skills: document.getElementById('agSkills').value.split(',').map(function(s){ return s.trim(); }).filter(Boolean),
+        tools: tools,
+        riskMax: document.getElementById('agRisk').value,
+        maxRounds: parseInt(document.getElementById('agRounds').value, 10) || 6,
+        workspace: { id: agWorkspaceId() },
+        attachments: agPicked ? [agPicked] : [],
+        onToken: function(d){ agAppend(d); },
+        onRound: function(e){ agAppend('\n— round ' + e.round + ' —\n'); },
+        onToolCall: function(e){ agAppend('[tool call] ' + (e.name || '') + (e.nested ? ' (nested)' : '') + '\n'); return true; },
+        onToolResult: function(e){ agAppend('[tool result] ' + (e.name || '') + ': ' + agSafeJson(e.result, 160) + '\n'); },
+      });
+      if (thisId !== agActiveId) return;
+      agAppend('\n\n— done — rounds=' + r.rounds + ' cancelled=' + !!r.cancelled + (r.workspaceId ? ' workspace=' + r.workspaceId + ' artifacts=' + (r.artifactCount||0) : '') + '\n');
+      agAppend('\n' + (r.content || '(no text returned)'));
+      agOut.className = r.cancelled ? 'muted' : 'ok';
+    } finally { if (thisId === agActiveId) agActiveId = ''; agBusy(false); }
+  }); };
+
+  document.getElementById('agScript').onclick = function(){ safe(async function(){
+    if (!H().ai || typeof H().ai.runTask !== 'function') throw new Error('ai.runTask unavailable');
+    agActiveId = 'ks-script-' + Date.now().toString(36);
+    var thisId = agActiveId;
+    agSet('', '');
+    agAppend('▶ task_run_script exerciser ' + thisId + '\n');
+    agBusy(true);
+    try {
+      var r = await H().ai.runTask({
+        id: thisId,
+        task: 'Use task_run_script to run a script that writes a small JSON file to the workspace via api.write, reads it back via api.readText, and forge.finish() with a compact summary. Then list the workspace and summarize what the script produced.',
+        profile: 'normal',
+        skills: ['report-writing'],
+        tools: { preset: 'safe' },
+        riskMax: 'safe',
+        maxRounds: 6,
+        workspace: { id: agWorkspaceId() },
+        onToken: function(d){ agAppend(d); },
+        onRound: function(e){ agAppend('\n— round ' + e.round + ' —\n'); },
+        onToolCall: function(e){ agAppend('[tool call] ' + (e.name || '') + (e.nested ? ' (nested)' : '') + '\n'); return true; },
+        onToolResult: function(e){ agAppend('[tool result] ' + (e.name || '') + ': ' + agSafeJson(e.result, 160) + '\n'); },
+      });
+      if (thisId !== agActiveId) return;
+      agAppend('\n\n— done — rounds=' + r.rounds + ' artifacts=' + (r.artifactCount||0) + '\n\n' + (r.content || '(no text)'));
+      agOut.className = 'ok';
+    } finally { if (thisId === agActiveId) agActiveId = ''; agBusy(false); }
+  }); };
+
+  document.getElementById('agStop').onclick = function(){ safe(async function(){
+    if (!agActiveId) return; log('Cancelling ' + agActiveId, 'muted'); agAppend('\n[cancelling…]\n');
+    try { log(await H().ai.cancel(agActiveId), 'ok'); } catch(e){ log('cancel failed: ' + (e.message||e), 'err'); }
+  }); };
+
+  document.getElementById('agAttach').onclick = function(){ safe(async function(){
+    if (!H().files || !H().files.pick) throw new Error('files.pick unavailable');
+    var r = await H().files.pick({ accept: 'image/*,application/pdf,text/*', multiple: false });
+    if (r) { agPicked = Array.isArray(r) ? r[0] : r; log('Attachment: ' + (agPicked.name||'file') + ' · ' + (agPicked.mime||agPicked.type||'') + ' · ' + (agPicked.size||0) + ' bytes', 'ok'); }
+  }); };
+
+  document.getElementById('agList').onclick = function(){ safe(async function(){
+    var r = await H().ai.workspace.list({ workspaceId: agWorkspaceId() });
+    log(r, r.ok ? 'ok' : 'err');
+  }); };
+  document.getElementById('agRead').onclick = function(){ safe(async function(){
+    var r = await H().ai.workspace.read({ workspaceId: agWorkspaceId(), path: 'report.md' });
+    log(r, r.ok ? 'ok' : 'err');
+  }); };
+  document.getElementById('agClear').onclick = function(){ safe(async function(){
+    var r = await H().ai.workspace.clear({ workspaceId: agWorkspaceId() });
+    log(r, r.ok ? 'ok' : 'err');
   }); };
 
   // boot

@@ -24,6 +24,7 @@ const HOST_TOOL_REGISTRY = ${JSON.stringify(mockRegistry)};
 const HOST_BRIDGE_ALLOW = new Set(['getAppInfo']);
 const appTools = ${JSON.stringify(mockAppTools)};
 function toolRiskRank(r) { return ({safe:0,sensitive:1,confirm:2,danger:3}[String(r || 'safe')] ?? 0); }
+function toolRiskCeilingExempt(name) { return name === 'image_generate'; }
 function listAppTools() { return appTools; }
 function toolsToOpenAI(e) { return {type:'function',function:{name:e.name,parameters:e.parameters||{type:'object',properties:{}}}}; }
 `;

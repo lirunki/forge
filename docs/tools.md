@@ -2,7 +2,7 @@
 
 > Canonical source: `HOST_TOOL_REGISTRY` + `HOST_BRIDGE_ALLOW` in `forge/www/index.html`.
 > This file is a human-readable mirror — regenerate when the registry changes.
-> Version baseline: `2.7.108 / versionCode 258` (28 host tools + app-registered tools).
+> Version baseline: `2.7.109 / versionCode 259` (28 host tools + app-registered tools).
 
 The host exposes a tool catalog over `ForgeHost` bridges so chat/agent mini-apps
 gain power as the host grows. Mini-apps call `ForgeHost.tools.list()` to get
@@ -155,7 +155,7 @@ loop when a mini-app explicitly opts in with `ForgeHost.ai.runTask({ workspace }
 | name | risk | description |
 |------|------|-------------|
 | `tts_speak` | confirm | Speak text with on-device TTS. `text` (req), `lang`, `rate`, `route`. |
-| `image_generate` | confirm | Generate an image from a text prompt, optionally seeded with reference images. Uses the selected AI provider when it supports image generation, then the configured xAI provider as fallback. `prompt` (req), `images` (optional array of data URLs/base64/URLs for image-to-image), `n` (1-4), `model` (optional requested model). Agent runs may set `imageGeneration.models` to an ordered, validated model fallback list. Returns `{ ok, images:[{url, revised_prompt}], count, model, backend }`. |
+| `image_generate` | confirm | Generate an image from a text prompt, optionally seeded with reference images. Uses the selected AI provider when it supports image generation, then the configured xAI provider as fallback. `prompt` (req), `images` (optional array of data URLs/base64/URLs for image-to-image), `n` (1-4), `model` (optional requested model). Agent runs may set `imageGeneration.models` to an ordered, validated model fallback list. Returns `{ ok, images:[{url, revised_prompt}], count, model, backend }`. **Offered and runnable at every `riskMax` level** (the riskMax ceiling is exempt); the per-call host confirmation modal and "Always allow" memory still apply. |
 
 ### meta
 | name | risk | description |
