@@ -62,22 +62,22 @@ loop when a mini-app explicitly opts in with `ForgeHost.ai.runTask({ workspace }
 
 - `task_workspace_list`, `task_workspace_read`, `task_workspace_write`,
   `task_workspace_edit`, and `task_workspace_delete`.
-- `task_run_script` — a sandboxed JS orchestrator (mirrors the Forge-it
-  builder's `run_program`). The model writes a script that batches task
-  workspace tools and authorized host tools deterministically, with no LLM in
-  the middle: `forge.tools.run(name, args)` dispatches to any task workspace
-  tool or host-registry tool approved for the run; `forge.tools.list()` returns
-  the available names; `forge.sleep(ms)`, `forge.print(...)`, and
-  `forge.finish(result)` end the script and return a compact JSON value as the
-  `task_run_script` tool result. The script runs in a throwaway Web Worker
-  (no DOM, no `fetch`/`XHR`/`WebSocket`) and cannot call `task_run_script`
-  (no nesting). Every nested `forge.tools.run` to a host tool is gated by the
-  same host-enforced policy, confirmation modal, and native permissions as a
-  direct agent tool call; task workspace tools are safe. Limits (wall-clock,
-  tool-call count, concurrency, output size) come from the Forge code-mode
-  settings and the `finish` result is capped (default 60 KB) to protect the
-  transcript — write large data to the workspace and `forge.finish` a small
-  summary instead.
+- `task_run_script` — run a JavaScript script to do complex computation,
+  data processing, or validation in a sandboxed Worker (no DOM, no
+  `fetch`/`XHR`/`WebSocket`). The primary interface is a direct workspace file
+  API: `api.readText(path)`, `api.readBase64(path)` (text-only workspaces:
+  throws), `api.write(path, data, mime)`, `api.list()`, `api.print(...)`. Host
+  tools are exposed as a secondary API via `forge.tools.run(name, args)` (any
+  task workspace tool or authorized host tool — see `forge.tools.list()`),
+  plus `forge.sleep(ms)`, `forge.print(...)`, and `forge.finish(result)` to end
+  the script and return a compact JSON value as the `task_run_script` tool
+  result. The script cannot call `task_run_script` (no nesting). Every
+  `forge.tools.run` to a host tool is gated by the same host-enforced policy,
+  confirmation modal, and native permissions as a direct agent tool call; task
+  workspace tools are safe. Limits (wall-clock, tool-call count, concurrency,
+  output size) come from the Forge code-mode settings and the `finish` result is
+  capped (default 60 KB) to protect the transcript — write large data to the
+  workspace via `api.write` and `forge.finish` a small summary instead.
 - Paths are relative to an in-memory workspace scoped by the host to the current
   mini-app ID and workspace ID. Absolute paths and `..` traversal are rejected;
   no arbitrary device path is exposed.

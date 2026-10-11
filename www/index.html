@@ -15814,7 +15814,7 @@ function setLibrary(list) {
       { type: 'function', function: { name: 'task_workspace_write', description: 'Write or replace a UTF-8 text file in this task-scoped virtual workspace. Paths must be relative.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' }, mime: { type: 'string' } }, required: ['path', 'content'] } } },
       { type: 'function', function: { name: 'task_workspace_edit', description: 'Replace text in an existing workspace file. Use read first; replaceAll is optional.', parameters: { type: 'object', properties: { path: { type: 'string' }, find: { type: 'string' }, replace: { type: 'string' }, replaceAll: { type: 'boolean' } }, required: ['path', 'find', 'replace'] } } },
       { type: 'function', function: { name: 'task_workspace_delete', description: 'Delete one file from this task-scoped virtual workspace.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } } },
-      { type: 'function', function: { name: 'task_run_script', description: 'Run a JS script that orchestrates task workspace tools and authorized host tools deterministically (no LLM inside the script). Use it to batch many tool calls in one turn — e.g. loop over search results, compute/validate workspace data, branch on a tool result — then forge.finish(result) with a compact JSON value. The script runs in a sandboxed Worker (no DOM/fetch/XHR/WebSocket) with the API: forge.tools.run(name, args) to call any task workspace tool (task_workspace_*) or authorized host tool (web_search, get_location, etc. — see forge.tools.list()), forge.tools.list(), forge.sleep(ms), forge.print(...), forge.finish(result) to end the script and return its value to you. Each forge.tools.run dispatches through the same host-enforced risk/permission/confirmation policy as a direct tool call; task workspace tools are safe. The script cannot call task_run_script (no nesting). Limits per script: wall-clock, tool-call count, concurrency, output size (see AI settings).', parameters: { type: 'object', properties: { code: { type: 'string', description: 'Plain async JS; top-level await allowed. Call forge.tools.run(name, args) for tool calls, then forge.finish(result) with a compact JSON-serializable value.' }, description: { type: 'string', description: 'One-line description of what the script does (for the log).' } }, required: ['code'] } } },
+      { type: 'function', function: { name: 'task_run_script', description: 'Run a JavaScript script to perform complex computation, data processing, or validation inside a sandboxed Worker (no DOM, no fetch/XHR/WebSocket). The primary use is running scripts — compute/generate/transform data, run algorithms, process workspace files — and return a compact value via forge.finish(result). The script gets a direct file API: api.readText(path), api.readBase64(path) (text-only workspaces: throws), api.write(path, data, mime), api.list(), api.print(...). Host tools are also exposed as a secondary API via forge.tools.run(name, args) (any task workspace tool or authorized host tool — web_search, get_location, etc. — see forge.tools.list()), plus forge.sleep(ms), forge.print(...), and forge.finish(result) to end the script and return its value to you. Each forge.tools.run dispatches through the same host-enforced risk/permission/confirmation policy as a direct tool call; task workspace tools are safe. The script cannot call task_run_script (no nesting). Limits per script: wall-clock, tool-call count, concurrency, output size (see AI settings). Use it to do a complex thing in one turn rather than emitting many round-trip tool calls.', parameters: { type: 'object', properties: { code: { type: 'string', description: 'Plain async JS; top-level await allowed. Use api.readText/write/list for workspace files, forge.tools.run(name, args) to call a host tool, and forge.finish(result) with a compact JSON-serializable value.' }, description: { type: 'string', description: 'One-line description of what the script does (for the log).' } }, required: ['code'] } } },
     ];
     const TASK_WORKSPACE_TOOL_NAMES = new Set(TASK_WORKSPACE_TOOL_SCHEMAS.map(t => t.function.name));
     function runTaskWorkspaceTool(appId, workspaceId, name, args) {
@@ -15875,12 +15875,34 @@ function setLibrary(list) {
         try { return await toolsRun(runOptions); }
         catch (e) { return { ok: false, error: String((e && e.message) || e), tool: name }; }
       };
+      const fileApi = async (method, a) => {
+        a = Array.isArray(a) ? a : [];
+        if (method === 'readText') {
+          const r = runTaskWorkspaceTool(appId, workspaceId, 'task_workspace_read', { path: String(a[0] || '') });
+          if (!r.ok) throw new Error(r.error || 'readText failed');
+          return r.content != null ? r.content : '';
+        }
+        if (method === 'readBase64') throw new Error('readBase64 is not supported for text-only task workspaces');
+        if (method === 'write') {
+          const r = runTaskWorkspaceTool(appId, workspaceId, 'task_workspace_write', { path: String(a[0] || ''), content: String(a[1] == null ? '' : a[1]), mime: a[2] });
+          if (!r.ok) throw new Error(r.error || 'write failed');
+          return true;
+        }
+        if (method === 'list') {
+          const r = runTaskWorkspaceTool(appId, workspaceId, 'task_workspace_list', {});
+          if (!r.ok) throw new Error(r.error || 'list failed');
+          return (r.files || []).map(f => f.path);
+        }
+        if (method === 'print') { if (onPrint) try { onPrint(a); } catch (_) {} return null; }
+        throw new Error('unknown api method: ' + method);
+      };
       const r = await runCodeModeProgram(code, {
         signal: ctx.signal || null,
         limits,
         toolRunner,
         onToolCall: onToolCall || undefined,
         onPrint: onPrint || undefined,
+        fileApi,
       });
       if (!r.ok) return { ok: false, error: 'task_run_script failed: ' + String(r.error || 'unknown') };
       let rStr; try { rStr = JSON.stringify(r.result); } catch (e) { return { ok: false, error: 'task_run_script result not JSON-serializable: ' + (e && e.message) }; }
@@ -22919,8 +22941,18 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       '      finish: function (result) { __finished = true; __rpc("finish", { result: result }); },',
       '    };',
       '    try {',
-      '      const fn = new Function("forge", "return (async () => {" + d.code + "\\n})();");',
-      '      Promise.resolve().then(() => fn(forge)).then(',
+ // Optional direct workspace file API (enabled only when the host sets
+ // api:true in the init message). Lets a script read/write/list workspace
+ // files and print logs as first-class calls, not tool orchestrations.
+ ' const api = d.api ? {',
+ '   readText: function (p) { return __rpc("api", { method: "readText", args: [p] }); },',
+ '   readBase64: function (p) { return __rpc("api", { method: "readBase64", args: [p] }); },',
+ '   write: function (p, data, mime, b64) { return __rpc("api", { method: "write", args: [p, data, mime, b64] }); },',
+ '   list: function () { return __rpc("api", { method: "list", args: [] }); },',
+ '   print: function () { const a = []; for (let i = 0; i < arguments.length; i++) a.push(arguments[i]); __rpc("api", { method: "print", args: a }); },',
+ ' } : null;',
+       '      const fn = new Function("forge", "api", "return (async () => {" + d.code + "\\n})();");',
+      '      Promise.resolve().then(() => fn(forge, api)).then(',
       '        () => { if (!__finished) __rpc("finish", { result: { __implicit: true } }); },',
       '        (err) => self.postMessage({ rpc: "fatal", error: String((err && err.stack) || err) })',
       '      );',
@@ -22942,6 +22974,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       const onPrint = typeof o.onPrint === 'function' ? o.onPrint : null;
       const toolRunner = typeof o.toolRunner === 'function' ? o.toolRunner : null; // async (name, args) => result
       const llmRunner = typeof o.llmRunner === 'function' ? o.llmRunner : null;   // async (opts) => result
+      const fileApi = typeof o.fileApi === 'function' ? o.fileApi : null; // async (method, args) => result
       return new Promise((resolve) => {
         if (typeof code !== 'string' || !code.trim()) return resolve({ ok: false, error: 'code is required' });
         if (code.length > BUILDER_JS_MAX_CODE_BYTES) return resolve({ ok: false, error: 'code too large (>' + BUILDER_JS_MAX_CODE_BYTES + ' bytes)' });
@@ -22986,6 +23019,18 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
               if (type === 'print') {
                 if (onPrint) try { onPrint(data.args && data.args.args); } catch (_) {}
                 return { ok: true, result: null };
+              }
+              if (type === 'api') {
+                const method = String((data.args && data.args.method) || '');
+                const a = (data.args && data.args.args) || [];
+                if (!fileApi) return { ok: false, error: 'file api not available in this run' };
+                if (!method) return { ok: false, error: 'api: method required' };
+                try {
+                  const res = await fileApi(method, a);
+                  return { ok: true, result: res == null ? null : res };
+                } catch (e) {
+                  return { ok: false, error: String((e && e.message) || e) };
+                }
               }
               if (type === 'finish') {
                 if (finished) return { ok: false, error: 'finish called twice' };
@@ -23037,7 +23082,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           };
           worker.onerror = (e) => fail('worker error: ' + ((e && e.message) || 'unknown'));
           // Init: hand over the MessageChannel port + the code
-          try { worker.postMessage({ rpc: 'init', code }, [mc.port2]); } catch (e) { fail('worker init failed: ' + ((e && e.message) || String(e))); }
+          try { worker.postMessage({ rpc: 'init', code, api: !!fileApi }, [mc.port2]); } catch (e) { fail('worker init failed: ' + ((e && e.message) || String(e))); }
         } catch (e) {
           fail('code mode failed to start: ' + ((e && e.message) || String(e)));
         }

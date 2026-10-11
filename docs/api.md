@@ -163,10 +163,10 @@ const taskResult = await taskPromise; // ai.agent result fields + taskId
 // onToolCall can veto only; it cannot add tools or raise risk. Model-facing results
 // are capped at 56,000 JSON characters; sensitive/danger results are redacted from
 // mini-app event/history payloads. If workspace is enabled, the run also receives
-// `task_run_script` — a sandboxed JS orchestrator (like the Forge-it builder's
-// run_program) that batches task workspace + host tools via forge.tools.run and
-// returns a value via forge.finish; nested host-tool calls keep host policy/
-// confirmation/permissions. The result also includes workspaceId, artifacts
+// `task_run_script` — run a JS script (sandboxed Worker, no DOM/fetch) for complex
+// computation with a direct workspace file API (api.readText/write/list/print);
+// host tools are exposed as a secondary API via forge.tools.run, which keeps
+// host policy/confirmation/permissions. The result also includes workspaceId, artifacts
 // (path/mime/bytes/updatedAt), and artifactCount. `ai.workspace.list/read/clear`
 // are scoped to this mini-app; workspace.read supports offset + limit up to
 // 50,000 chars per call.

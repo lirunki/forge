@@ -203,7 +203,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.72rem; padding: 8
       <button class="scenario" data-scenario="smoke">Smoke test</button>
     </div>
     <textarea id="task" placeholder="Describe the task for the agent…">Use the task workspace to write a file at report.md with a short heading, read it back, then list the workspace. Summarize the final file path and content.</textarea>
-    <div class="hint">The agent runs through <code>ForgeHost.ai.runTask()</code> — Forge's existing cancellable agent loop. It receives stock guidance, your selected skills, an optional workspace, and a tool allowlist. With a workspace it also gets <code>task_run_script</code>: a sandboxed JS orchestrator (like the builder's <code>run_program</code>) that batches tool calls via <code>forge.tools.run</code> and returns a value via <code>forge.finish</code>. Host risk checks, confirmations, and native permissions remain authoritative for every nested call.</div>
+    <div class="hint">The agent runs through <code>ForgeHost.ai.runTask()</code> — Forge's existing cancellable agent loop. It receives stock guidance, your selected skills, an optional workspace, and a tool allowlist. With a workspace it also gets <code>task_run_script</code>: run a JS script (sandboxed Worker) to do complex computation — read/write workspace files via <code>api.readText</code>/<code>api.write</code>/<code>api.list</code>, run algorithms, and return a value via <code>forge.finish</code>. Host tools are a secondary API via <code>forge.tools.run</code>, still gated by host risk checks, confirmations, and native permissions.</div>
   </section>
 
   <section class="panel">
@@ -409,7 +409,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.72rem; padding: 8
   var SCENARIOS = {
     workspace: 'Use the task workspace to write a file at report.md with a short heading, read it back, then list the workspace. Summarize the final file path and content.',
     research: 'Use an available safe web search tool to find one current authoritative source about the latest Android stable release. Return its URL and publication date. If no safe web tool is available, say so; do not guess.',
-    script: 'Use task_run_script to write a script that calls forge.tools.run("task_workspace_write", { path: "stats.json", content: JSON.stringify({ generated: true, items: 3, ts: Date.now() }, null, 2) }) then forge.tools.run("task_workspace_read", { path: "stats.json" }) and forge.finish({ written: "stats.json", verified: true }). After the script finishes, list the workspace and summarize what the script produced.',
+    script: 'Use task_run_script to run a script that writes a small JSON summary to the workspace and returns it. For example: await api.write("stats.json", JSON.stringify({ generated: true, items: 3, ts: Date.now() }, null, 2)); const data = await api.readText("stats.json"); forge.finish({ written: "stats.json", content: data }). After the script finishes, list the workspace and summarize what the script produced.',
     report: 'Write a concise one-page report about renewable energy trends. Save it to the workspace at report.md, then summarize the key points.',
     attachment: 'Read the attached document and summarize its main subject in two bullet points. Cite a page or section if available. If you cannot access the attachment, say so; do not guess.',
     smoke: 'Reply with exactly “Task Lab runTask path OK”. Do not call tools.',

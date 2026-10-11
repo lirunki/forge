@@ -45,13 +45,14 @@ test('task_run_script is a reserved task workspace tool name', () => {
   assert.ok(TASK_WORKSPACE_TOOL_NAMES.has('task_run_script'), 'TASK_WORKSPACE_TOOL_NAMES must include task_run_script');
 });
 
-test('schema description documents sandbox, forge.tools.run, forge.finish, and no-nesting', () => {
+test('schema description documents the script sandbox, primary file API, secondary tools, and no-nesting', () => {
   const tool = TASK_WORKSPACE_TOOL_SCHEMAS.find(t => t.function.name === 'task_run_script');
   const d = tool.function.description;
   for (const needle of [
-    'sandboxed Worker', 'forge.tools.run', 'forge.tools.list', 'forge.sleep',
-    'forge.print', 'forge.finish', 'cannot call task_run_script',
-    'host-enforced risk', 'no LLM',
+    'sandboxed Worker', 'api.readText', 'api.write', 'api.list', 'api.print',
+    'forge.tools.run', 'forge.tools.list', 'forge.sleep', 'forge.print',
+    'forge.finish', 'cannot call task_run_script', 'host-enforced risk',
+    'no DOM', 'complex computation',
   ]) {
     assert.ok(d.includes(needle), 'description must mention: ' + needle);
   }
@@ -70,6 +71,35 @@ test('runTaskScript blocks nesting of task_run_script', () => {
 
 test('runTaskScript routes task workspace tools through runTaskWorkspaceTool', () => {
   assert.match(html, /if \(TASK_WORKSPACE_TOOL_NAMES\.has\(name\) && name !== 'task_run_script'\)[\s\S]{0,120}return runTaskWorkspaceTool\(appId, workspaceId, name, a\)/);
+});
+
+test('runTaskScript provides a direct workspace file API (api.readText/write/list/print)', () => {
+  assert.match(html, /const fileApi = async \(method, a\) =>/);
+  assert.match(html, /method === 'readText'\)/);
+  assert.match(html, /method === 'write'\)/);
+  assert.match(html, /method === 'list'\)/);
+  assert.match(html, /method === 'print'\)/);
+  assert.match(html, /runTaskWorkspaceTool\(appId, workspaceId, 'task_workspace_read'/);
+  assert.match(html, /runTaskWorkspaceTool\(appId, workspaceId, 'task_workspace_write'/);
+  assert.match(html, /runTaskWorkspaceTool\(appId, workspaceId, 'task_workspace_list'/);
+  assert.match(html, /fileApi,/);
+});
+
+test('worker source defines a conditional api object gated on the init flag', () => {
+  assert.match(html, /const api = d\.api \? \{/);
+  assert.match(html, /readText: function \(p\) \{ return __rpc\("api", \{ method: "readText"/);
+  assert.match(html, /write: function \(p, data, mime, b64\) \{ return __rpc\("api", \{ method: "write"/);
+  assert.match(html, /\} : null;/);
+  // the script function receives both forge and api
+  assert.match(html, /new Function\("forge", "api", "return \(async \(\) => \{"/);
+  assert.match(html, /fn\(forge, api\)\)/);
+});
+
+test('runCodeModeProgram wires the api RPC and the init flag only when fileApi is set', () => {
+  assert.match(html, /const fileApi = typeof o\.fileApi === 'function' \? o\.fileApi : null/);
+  assert.match(html, /if \(type === 'api'\) \{/);
+  assert.match(html, /if \(!fileApi\) return \{ ok: false, error: 'file api not available in this run' \}/);
+  assert.match(html, /worker\.postMessage\(\{ rpc: 'init', code, api: !!fileApi \}, \[mc\.port2\]\)/);
 });
 
 test('runTaskScript enforces host-tool policy + confirmation before toolsRun', () => {
