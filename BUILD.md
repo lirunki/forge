@@ -217,10 +217,10 @@ Host UI is localized via an inline `FORGE_I18N` dict in `www/index.html` between
 Source dicts + the regeneration script live in `~/downloads/forge/i18n_salvage/`:
 ```
 surgery.py ← reads current forge/www/index.html + dict_*.py, replaces only the i18n block
-dict_en.py            ← canonical English (426 keys incl. gate.*)
-dict_es.py dict_fr.py dict_pt.py dict_ja.py   ← original (double-encoded UTF-8; surgery repairs)
-dict_ko.py            ← Korean (proper UTF-8, 508 keys)
-dict_ja.py            ← includes the 93 Japanese repairs; no separate overlay file is required
+dict_en.py            ← canonical English dictionary (including gate.*)
+dict_es.py dict_fr.py dict_pt.py dict_ja.py   ← recovered dictionaries (legacy mojibake is repaired; new entries may be proper UTF-8)
+dict_ko.py            ← Korean dictionary (proper UTF-8)
+dict_ja.py            ← includes the Japanese repairs; no separate overlay file is required
 ```
 
 ```bash
