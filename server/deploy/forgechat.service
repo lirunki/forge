@@ -1,0 +1,23 @@
+[Unit]
+Description=ForgeChat private standalone-export backend
+Wants=forgechat-import.service
+After=network-online.target ollama.service forgechat-import.service
+
+[Service]
+Type=simple
+User=forgechat
+Group=forgechat
+WorkingDirectory=/opt/forgechat/server
+EnvironmentFile=/etc/forgechat/forgechat.env
+ExecStart=/opt/forgechat/server/.venv/bin/uvicorn forgechat.main:app --host 127.0.0.1 --port 8765 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/forgechat
+
+[Install]
+WantedBy=multi-user.target

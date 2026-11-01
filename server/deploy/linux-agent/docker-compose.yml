@@ -1,0 +1,54 @@
+services:
+  forgechat-linux-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: forgechat-linux-agent:1.0.3
+    container_name: forgechat-linux-agent
+    restart: unless-stopped
+    init: true
+    user: "0:0"
+    environment:
+      FORGE_AGENT_USERNAME: ${FORGECHAT_AGENT_USERNAME:?Run setup.sh to generate private agent credentials}
+      FORGE_AGENT_PASSWORD: ${FORGECHAT_AGENT_PASSWORD:?Run setup.sh to generate private agent credentials}
+      FORGE_AGENT_HOST: 0.0.0.0
+      FORGE_AGENT_PORT: "8787"
+      FORGE_AGENT_WORKSPACE: /workspace
+      FORGE_AGENT_FSROOT: /workspace/fs
+      FORGE_AGENT_HOME: /workspace/home
+      FORGE_AGENT_TMPDIR: /tmp
+      FORGE_AGENT_JOB_UID: "10000"
+      FORGE_AGENT_JOB_GID: "10000"
+    ports:
+      - "127.0.0.1:8788:8787/tcp"
+    volumes:
+      - /var/lib/forgechat/linux-agent/workspace:/workspace:rw
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - KILL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 128
+    ulimits:
+      nofile:
+        soft: 512
+        hard: 1024
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import base64,os,urllib.request; token=base64.b64encode((os.environ['FORGE_AGENT_USERNAME']+':'+os.environ['FORGE_AGENT_PASSWORD']).encode()).decode(); req=urllib.request.Request('http://127.0.0.1:8787/status',headers={'Authorization':'Basic '+token}); urllib.request.urlopen(req,timeout=2).read()"
+      interval: 30s
+      timeout: 4s
+      retries: 3
+      start_period: 5s

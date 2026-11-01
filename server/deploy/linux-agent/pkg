@@ -1,0 +1,211 @@
+#!/bin/bash
+# pkg — Termux-compatible package front-end for the ForgeChat Linux agent.
+#
+# Termux `pkg` installs into a user-writable prefix ($PREFIX) instead of the
+# system root. This wrapper keeps the same model: Debian packages are resolved
+# with apt, downloaded, and extracted into a per-user prefix ($HOME/.local) so
+# jobs running under a read-only root filesystem and an unprivileged UID can
+# still add tools at runtime — exactly how Termux apps self-install deps.
+#
+# Supported subcommands (mirrors Termux pkg):
+#   pkg update                          refresh the package index
+#   pkg install [-y] PKG [PKG...]        install packages + dependencies
+#   pkg uninstall PKG [PKG...]          best-effort: drop from the manifest
+#   pkg upgrade                          re-install all recorded packages
+#   pkg search TERM                       search package names
+#   pkg show PKG                          show package metadata
+#   pkg info PKG                          alias for show
+#   pkg list-installed                    list packages installed via pkg
+#   pkg list-all                          list all available package names
+#   pkg help                              this help
+#
+# Environment overrides:
+#   PKG_PREFIX    install root            (default $HOME/.local)
+#   PKG_APTROOT   apt/dpkg working dir    (default $HOME/.pkg)
+#
+set -eu
+
+PREFIX="${PKG_PREFIX:-$HOME/.local}"
+APTROOT="${PKG_APTROOT:-$HOME/.pkg}"
+APT_LISTS="$APTROOT/lists"
+APT_ARCH="$APTROOT/archives"
+STATUS="$APTROOT/dpkg-status"
+MANIFEST="$APTROOT/installed.list"
+
+export DEBIAN_FRONTEND=noninteractive
+export APT_LISTCHANGES_FRONTEND=none
+
+APT_OPTS=(
+  -o "Dir::State::Lists=$APT_LISTS"
+  -o "Dir::State::Status=$STATUS"
+  -o "Dir::Cache::Archives=$APT_ARCH"
+  -o "Dir::Cache::srcpkgcache=$APTROOT/src.cache"
+  -o "Dir::Cache::pkgcache=$APTROOT/pkg.cache"
+  -o "Dir::Etc::sourcelist=/etc/apt/sources.list"
+  -o "Dir::Etc::sourceparts=/etc/apt/sources.list.d/"
+  -o "Dir::Etc::trusted=/etc/apt/trusted.gpg"
+  -o "Dir::Etc::trustedparts=/etc/apt/trusted.gpg.d/"
+  -o "APT::Install-Recommends=false"
+  -o "APT::Get::AllowUnauthenticated=false"
+  -o "Acquire::AllowInsecureRepositories=false"
+)
+
+_lib_dirs() {
+  # Every directory under the prefix that contains shared objects — Debian
+  # scatters libs (e.g. pulseaudio's libpulsecommon) outside the plain lib dirs.
+  local d
+  find "$PREFIX" -name '*.so*' -type f -printf '%h\n' 2>/dev/null | sort -u \
+    | while IFS= read -r d; do printf '%s:' "$d"; done
+}
+
+init() {
+  : "${DEB_HOST_MULTIARCH:=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)}"
+  mkdir -p "$APT_LISTS/partial" "$APT_ARCH/partial" "$PREFIX/bin" "$PREFIX/lib"
+  if [ ! -s "$STATUS" ]; then
+    # Seed dpkg status from the image so apt only resolves genuinely-missing
+    # dependencies instead of the entire base system closure.
+    if [ -r /var/lib/dpkg/status ]; then
+      cp /var/lib/dpkg/status "$STATUS" 2>/dev/null || : > "$STATUS"
+    else
+      : > "$STATUS"
+    fi
+  fi
+  touch "$MANIFEST"
+}
+
+apt_update() {
+  init
+  apt-get "${APT_OPTS[@]}" update
+}
+
+# Create PATH wrappers in $PREFIX/bin for every executable extracted under
+# $PREFIX so the job shell (which has $PREFIX/bin first on PATH) finds them.
+# Wrappers set LD_LIBRARY_PATH so extracted shared libraries resolve.
+make_wrappers() {
+  local bin src name wrapper libs
+  libs=$(_lib_dirs)
+  for bin in "$PREFIX/usr/bin" "$PREFIX/usr/sbin" "$PREFIX/sbin"; do
+    [ -d "$bin" ] || continue
+    for src in "$bin"/*; do
+      [ -x "$src" ] && [ -f "$src" ] || continue
+      name=$(basename "$src")
+      wrapper="$PREFIX/bin/$name"
+      cat > "$wrapper" <<EOF
+#!/bin/sh
+export LD_LIBRARY_PATH="${libs}\$LD_LIBRARY_PATH"
+export PKG_PREFIX="$PREFIX"
+exec "$src" "\$@"
+EOF
+      chmod 0755 "$wrapper"
+    done
+  done
+}
+
+install_pkgs() {
+  local -a pkgs=() dpkgs=()
+  local arg p
+  while [ $# -gt 0 ]; do
+    arg="$1"; shift
+    case "$arg" in
+      -y|--yes|--assume-yes|--no-install-recommends|--allow-downgrades) ;;
+      --) while [ $# -gt 0 ]; do pkgs+=("$1"); shift; done ;;
+      -*) ;; # ignore unknown flags
+      *) pkgs+=("$arg") ;;
+    esac
+  done
+  if [ ${#pkgs[@]} -eq 0 ]; then
+    echo "pkg: no packages specified" >&2
+    exit 64
+  fi
+  init
+  # Map Termux package names to Debian; skip packages with no Debian equivalent.
+  for p in "${pkgs[@]}"; do
+    case "$p" in
+      deno)
+        echo "pkg: 'deno' has no Debian package; skipping (use the official static binary)" >&2
+        continue ;;
+      termux-*|*termux*)
+        echo "pkg: '$p' is Termux-only; skipping" >&2
+        continue ;;
+      python) dpkgs+=("python3") ;;
+      *) dpkgs+=("$p") ;;
+    esac
+  done
+  if [ ${#dpkgs[@]} -eq 0 ]; then
+    echo "pkg: nothing to install" >&2
+    exit 0
+  fi
+  # Fast path: everything requested is already extracted — just refresh wrappers.
+  local missing=0
+  for p in "${dpkgs[@]}"; do
+    grep -qixF "$p" "$MANIFEST" || missing=1
+  done
+  if [ "$missing" -eq 0 ]; then
+    make_wrappers
+    echo "pkg: already installed in $PREFIX (wrappers refreshed)"
+    return 0
+  fi
+  apt_update
+  # Resolve the full install set (package + deps not already satisfied) and print URIs.
+  local uri_output
+  uri_output=$(apt-get "${APT_OPTS[@]}" install --print-uris -y "${dpkgs[@]}" || true)
+  if [ -z "$uri_output" ]; then
+    echo "pkg: could not resolve packages: ${dpkgs[*]}" >&2
+    exit 1
+  fi
+  : >"$MANIFEST.tmp"
+  local line url deb count=0
+  while IFS= read -r line; do
+    # apt prints: 'http://.../pkg_ver_arch.deb' pkg_ver_arch.deb SIZE SHA256:...
+    url=${line#\'}
+    url=${url%%\'*}
+    case "$url" in
+      http://*|https://*|file://*) ;;
+      *) continue ;;
+    esac
+    deb="$APT_ARCH/$(basename "$url")"
+    if [ ! -s "$deb" ]; then
+      curl -fsSL "$url" -o "$deb" || { echo "pkg: download failed: $url" >&2; exit 1; }
+    fi
+    dpkg-deb -x "$deb" "$PREFIX" || { echo "pkg: extract failed: $deb" >&2; exit 1; }
+    dpkg-deb -f "$deb" Package 2>/dev/null >>"$MANIFEST.tmp" || true
+    count=$((count + 1))
+  done <<<"$uri_output"
+  make_wrappers
+  cat "$MANIFEST.tmp" >>"$MANIFEST" 2>/dev/null || true
+  rm -f "$MANIFEST.tmp"
+  if [ "$count" -eq 0 ]; then
+    echo "pkg: already satisfied — nothing new to install"
+  else
+    echo "pkg: installed ${count} package archive(s) into $PREFIX"
+  fi
+}
+
+uninstall_pkgs() {
+  local p
+  [ $# -gt 0 ] || { echo "pkg: no packages specified" >&2; exit 64; }
+  init
+  for p in "$@"; do
+    # Prefix extraction keeps no per-file ledger; removal drops the manifest entry only.
+    grep -ivxF "$p" "$MANIFEST" >"$MANIFEST.new" 2>/dev/null && mv "$MANIFEST.new" "$MANIFEST" || true
+    echo "pkg: dropped '$p' from the manifest (files under $PREFIX are not deleted)" >&2
+  done
+}
+
+case "${1:-help}" in
+  update) shift; apt_update ;;
+  install) shift; install_pkgs "$@" ;;
+  uninstall|remove|purge) shift; uninstall_pkgs "$@" ;;
+  upgrade)
+    init; apt_update
+    installed=$(sort -u "$MANIFEST" 2>/dev/null | tr '\n' ' ')
+    if [ -n "$installed" ]; then eval "install_pkgs $installed"; else echo "pkg: nothing to upgrade"; fi ;;
+  search) shift; init; apt-cache "${APT_OPTS[@]}" search "$@" ;;
+  show|info) shift; init; apt-cache "${APT_OPTS[@]}" show "$@" ;;
+  list-installed) init; sort -u "$MANIFEST" 2>/dev/null ;;
+  list-all) init; apt-cache "${APT_OPTS[@]}" pkgnames | sort ;;
+  help|--help|-h)
+    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *)
+    echo "pkg: unknown command '$1' (try 'pkg help')" >&2; exit 64 ;;
+esac

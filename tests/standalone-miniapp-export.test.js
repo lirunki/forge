@@ -38,13 +38,48 @@ test('preview and Library expose distinct Export standalone and Share mini-app a
 });
 
 test('export dialog has no Forge-HTML option and keeps both standalone export choices', () => {
-  assert.match(html, /chooseStandaloneExport\(app\)/);
+  assert.match(html, /chooseStandaloneExport\(app,\s*forgeChatEnabled\)/);
   assert.match(html, /mode:'standalone',keys:\[\]/);
   assert.doesNotMatch(html, /Export Forge HTML|data-action="forge"|mode:'forge'/);
   assert.match(html, /Export standalone · no keys/);
+  assert.match(html, /Export for ForgeChat · no keys/);
+  assert.match(html, /data-action="forgechat"/);
   assert.match(html, /Embed selected keys &amp; export/);
   assert.match(html, /standalone-export-panel/);
   assert.match(html, /standalone-export-actions/);
+});
+
+test('ForgeChat hosted runtime implements server TTS and file staging', () => {
+  assert.match(source, /function serverTtsVoices/);
+  assert.match(source, /function serverTtsToAgent/);
+  assert.match(source, /if\(opts\.inline===false\)/);
+  assert.match(source, /tts\/synthesize-to-agent/);
+  assert.match(source, /ttsToFile: async function\(opts\)\{if\(serverMode\)return serverTtsToAgent/);
+  assert.match(source, /if\(serverMode\)\{host\.termux=serverTermux;host\.tts=serverTts;\}/);
+  const videoLingo=fs.readFileSync('samples/VideoLingo.html','utf8');
+  assert.match(videoLingo, /synthesized&&synthesized\.agentPath/);
+  assert.match(videoLingo, /cloudAudio&&cloudAudio\.agentPath/);
+  assert.match(videoLingo, /value="vm">ForgeChat VM \(offline\)/);
+  assert.match(videoLingo, /engine:"local"/);
+  assert.match(videoLingo, /av&&av\.bridge==="backend-agent"/);
+  assert.match(videoLingo, /F\.termux\.writeFile\(upload\)/);
+  assert.match(videoLingo, /The backend-agent command or upload was not approved/);
+  assert.doesNotMatch(videoLingo, /picked=\{name:inputName/, 'retain browser File so processing can be retried after cancel');
+  assert.doesNotMatch(videoLingo, /loadTtsVoices\(\);getFfmpegReady\(\)/, 'ffmpeg agent command must not run during app startup');
+  assert.match(videoLingo, /try\{await getFfmpegReady\(\);status\("Extracting audio/,'ffmpeg remains checked when the user starts processing');
+});
+
+test('ForgeChat HTML export is hidden only for the Play flavor', () => {
+  const gradle = fs.readFileSync('android/app/build.gradle', 'utf8');
+  const appsBridge = fs.readFileSync('android/app/src/main/java/com/forge/live/AppsBridgePlugin.java', 'utf8');
+  assert.match(gradle, /full\s*\{[\s\S]*?buildConfigField "boolean", "FORGECHAT_HTML_EXPORT_ENABLED", "true"/);
+  assert.match(gradle, /play\s*\{[\s\S]*?buildConfigField "boolean", "FORGECHAT_HTML_EXPORT_ENABLED", "false"/);
+  assert.match(appsBridge, /caps\.put\("forgeChatHtmlExport", BuildConfig\.FORGECHAT_HTML_EXPORT_ENABLED\)/);
+  assert.match(html, /forgeChatHtmlExportEnabled\(\)/);
+  assert.match(html, /capabilities\?\.forgeChatHtmlExport === true/);
+  assert.match(html, /if\(!forgeChatEnabled\) panel\.querySelectorAll\('\.forgechat-export-only,\[data-action="forgechat"\]'\)/);
+  assert.match(html, /if\(forgeChatEnabled\) panel\.querySelector\('\[data-action="forgechat"\]'\)/);
+  assert.match(html, /choice\.mode === 'forgechat' && !forgeChatEnabled/);
 });
 
 test('provider-key selection requires explicit acknowledgement and defaults unchecked', () => {
@@ -58,6 +93,16 @@ test('provider-key selection requires explicit acknowledgement and defaults unch
 test('no-secret export source does not contain a configured key', () => {
   const generated = api.buildStandaloneRuntimeSource(app, providerData, []);
   assert.ok(!generated.includes('sk-SUPER-SECRET-test'));
+  assert.ok(generated.includes('"keysEmbedded":false'));
+});
+
+test('ForgeChat export uses a same-origin API path and strips all provider credentials/config', () => {
+  const generated = api.buildStandaloneRuntimeSource(app, providerData, [{id:'openai',key:'NEVER-IN-HTML'}], {mode:'forgechat',apiBase:'/forgechat'});
+  assert.ok(!generated.includes('sk-SUPER-SECRET-test'));
+  assert.ok(!generated.includes('NEVER-IN-HTML'));
+  assert.ok(generated.includes('"backend":"forgechat"'));
+  assert.ok(generated.includes('"apiBase":"/forgechat"'));
+  assert.ok(generated.includes('"providers":[]'));
   assert.ok(generated.includes('"keysEmbedded":false'));
 });
 
@@ -98,14 +143,16 @@ test('embedded credential strings are escaped before insertion into a script ele
   assert.ok(generated.includes('\\u003c/script>'));
 });
 
-test('export runtime exposes browser APIs and clearly rejects Forge-only agent APIs', () => {
+test('export runtime exposes browser APIs, chat-only ForgeChat agent fallback, and rejects Forge-only APIs', () => {
   assert.match(source, /chat: chat/);
   assert.match(source, /chatStream: async function/);
   assert.match(source, /var tools = \{/);
   assert.match(source, /run: async function\(nameOrOpts, args\)/);
   assert.match(source, /image_generate/);
   assert.match(source, /CORS\/network restriction/);
-  assert.match(source, /ai\.agent \(host-managed tools are Forge-only\)/);
+  assert.match(source, /agent: async function\(opts\)/);
+  assert.match(source, /toolMode='chat-only'/);
+  assert.match(source, /toolsUnavailable=true/);
   assert.match(source, /ai\.runTask \(host-managed agent loop is Forge-only\)/);
   assert.match(source, /Enter an API key/);
   assert.match(source, /for this tab only/);
@@ -122,8 +169,10 @@ test('browser-only export details are separate from the ForgeHost API reference'
   assert.match(exportDocs,/camera\.takePhoto/);
   assert.match(exportDocs,/ai\.chat\(\{attachments\}\)/);
   assert.match(exportDocs,/Gemini `inline_data`/);
-  assert.match(exportDocs,/capture` hint/);
-  assert.match(exportDocs,/host-managed `ForgeHost\.ai\.agent\(\)`/);
+  assert.match(exportDocs,/live camera preview/);
+  assert.match(exportDocs,/camera file/);
+  assert.match(exportDocs,/ForgeHost\.ai\.agent\(\)/);
+  assert.match(exportDocs,/toolsUnavailable/);
 });
 
 async function exerciseStandaloneImageTool() {
@@ -181,6 +230,35 @@ async function exerciseImageFallbackAndNoPrompt() {
   assert.equal(prompts,0,'xAI-only export must not prompt for a key for the keyless default provider');
 }
 
+async function exerciseLiveBrowserCameraCapture() {
+  const generated=api.buildStandaloneRuntimeSource(app,providerData,[{id:'openai',key:'camera-test-key'}]);
+  const stopped=[];
+  function element(tag){return {tagName:tag,style:{},children:[],attributes:{},listeners:{},videoWidth:640,videoHeight:480,setAttribute(k,v){this.attributes[k]=v;},appendChild(child){this.children.push(child);child.parentNode=this;},removeChild(child){const i=this.children.indexOf(child);if(i>=0)this.children.splice(i,1);child.parentNode=null;},addEventListener(name,fn){this.listeners[name]=fn;},play(){return Promise.resolve();},getContext(){return {drawImage(){}};},toDataURL(){return 'data:image/jpeg;base64,Q0FN';}};}
+  const body=element('body');
+  const document={readyState:'complete',body,documentElement:body,getElementById(){return null;},createElement:element};
+  let constraints=null,chatBody=null;
+  const mediaDevices={async getUserMedia(value){
+    constraints=value;
+    return {getTracks(){return [{stop(){stopped.push(true);}}]}};
+  }};
+  const ctx={window:{},navigator:{mediaDevices},document,localStorage:{getItem(){return null;},setItem(){},removeItem(){}},fetch:async function(url,init){chatBody=JSON.parse(init.body);return {ok:true,json:async()=>({choices:[{message:{content:'photo received'}}]})};},console};
+  vm.runInNewContext(generated,ctx);
+  const photoPromise=ctx.window.ForgeHost.camera.takePhoto({facing:'back',maxWidth:1024,quality:85});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(constraints.video.facingMode.ideal,'environment');
+  const modal=body.children.find(child=>child.attributes.role==='dialog'),panel=modal.children[0],buttons=panel.children[2].children;
+  assert.equal(buttons[2].textContent,'Take photo');
+  buttons[2].onclick();
+  const photo=await photoPromise;
+  assert.equal(photo.dataUrl,'data:image/jpeg;base64,Q0FN');
+  assert.equal(photo.width,640);
+  assert.equal(stopped.length,1,'camera stream is stopped after the shutter is pressed');
+  assert.equal(body.children.some(child=>child.attributes.role==='dialog'),false,'capture dialog is removed after a photo is taken');
+  const result=await ctx.window.ForgeHost.ai.chat({prompt:'describe this',attachments:[photo]});
+  assert.equal(result.content,'photo received');
+  assert.equal(chatBody.messages[0].content[1].image_url.url,'data:image/jpeg;base64,Q0FN');
+}
+
 async function exerciseBrowserMediaPickers() {
   const generated=api.buildStandaloneRuntimeSource(app,providerData,[]);
   const queued=[
@@ -188,6 +266,8 @@ async function exerciseBrowserMediaPickers() {
     {name:'two.txt',type:'text/plain',size:4,dataUrl:'data:text/plain;base64,VEVTVA=='},
     {name:'gallery.png',type:'image/png',size:5,dataUrl:'data:image/png;base64,UE5H'},
     {name:'capture.jpg',type:'image/jpeg',size:6,dataUrl:'data:image/jpeg;base64,SE9U'},
+    {name:'video.mp4',type:'video/mp4',size:50,dataUrl:'data:video/mp4;base64,TVA='},
+    {name:'too-large.mp4',type:'video/mp4',size:101,dataUrl:'data:video/mp4;base64,TVA='},
   ];
   const inputs=[], children=[];
   const body={appendChild(input){children.push(input);input.parentNode=body;},removeChild(input){const i=children.indexOf(input);if(i>=0)children.splice(i,1);input.parentNode=null;}};
@@ -214,6 +294,13 @@ async function exerciseBrowserMediaPickers() {
   assert.equal(shot.name,'capture.jpg');
   assert.equal(shot.base64,'SE9U');
   assert.equal(inputs[2].capture,'user');
+  const direct=await ctx.window.ForgeHost.files.pick({accept:'video/*',inline:false,maxBytes:100});
+  assert.equal(direct.file.name,'video.mp4');
+  assert.equal(direct.inline,false);
+  assert.equal(direct.base64,undefined,'direct file mode avoids base64 duplication');
+  assert.equal(inputs[3].accept,'video/*');
+  await assert.rejects(()=>ctx.window.ForgeHost.files.pick({inline:false,maxBytes:100}),/exceeds the 100-byte limit/);
+  assert.equal(children.length,0,'direct and rejected file inputs must be removed');
   assert.equal((await ctx.window.ForgeHost.camera.isAvailable()).available,true);
   assert.equal((await ctx.window.ForgeHost.camera.requestPermission()).promptOnUse,true);
   assert.equal((await ctx.window.ForgeHost.getCapabilities()).camera,true);
@@ -287,11 +374,215 @@ async function exerciseStandaloneChat(selectedKeys, expectedKey, expectPrompt) {
   const result=await runtime.window.ForgeHost.ai.chat({prompt:'hi'});
   assert.equal(result.content,'hello');
   assert.equal(requestInit.headers.Authorization,'Bearer '+expectedKey);
+  const agentRounds=[];
+  const agentResult=await runtime.window.ForgeHost.ai.agent({messages:[
+    {role:'user',content:'agent question'},
+    {role:'tool',name:'web_search',content:'previous tool output'},
+  ],onRound(event){agentRounds.push(event.round);}});
+  assert.equal(agentResult.content,'hello');
+  assert.equal(agentResult.toolsUnavailable,true);
+  assert.equal(agentResult.toolMode,'chat-only');
+  assert.deepEqual(agentRounds,[1]);
+  const agentBody=JSON.parse(requestInit.body);
+  assert.equal(agentBody.messages[1].role,'user');
+  assert.match(agentBody.messages[1].content,/Tool result \(web_search\)/);
   assert.equal(prompts,expectPrompt?1:0);
   assert.equal(Array.from(persisted.values()).some(v=>String(v).includes('recipient-session-key')),false,'recipient key must not be persisted');
 }
 
+async function exerciseForgeChatServerRuntime() {
+  const generated = api.buildStandaloneRuntimeSource(app, Object.assign({},providerData,{selectedProvider:'xai'}), [{id:'openai',key:'DO-NOT-SHIP'}], {mode:'forgechat',apiBase:'/forgechat'});
+  const persisted = new Map();
+  const calls = [];
+  let streamStarted;
+  const streamStartedPromise = new Promise(resolve=>{streamStarted=resolve;});
+  const agentDialogs=[];
+  let nativeConfirmCalls=0;
+  let context;
+  function fakeElement(tag){return {tag,style:{},attributes:{},children:[],setAttribute(key,value){this.attributes[key]=value;},appendChild(child){this.children.push(child);child.parentNode=this;return child;},focus(){}};}
+  const fakeBody={children:[],appendChild(node){this.children.push(node);node.parentNode=this;if(node.attributes&&node.attributes['aria-modal']==='true'){const panel=node.children[0],buttons=panel.children[2].children;agentDialogs.push({title:panel.children[0].textContent,message:panel.children[1].textContent});const approved=context.window.nextAgentApproval!==false;context.window.nextAgentApproval=undefined;buttons[approved?1:0].onclick();}},removeChild(node){const index=this.children.indexOf(node);if(index>=0)this.children.splice(index,1);node.parentNode=null;}};
+  context = {
+    window:{location:{origin:'https://forge.example.test',protocol:'https:',pathname:'/forgechat/apps/demo',href:'https://forge.example.test/forgechat/apps/demo'},confirm(){nativeConfirmCalls++;return true;}},
+
+    navigator:{},
+    document:{readyState:'complete',body:fakeBody,getElementById(){return null;},createElement(tag){return fakeElement(tag);}},
+    URL, TextDecoder, AbortController, Blob, btoa, atob,
+    localStorage:{getItem(key){return persisted.has(key)?JSON.stringify(persisted.get(key)):null;},setItem(key,value){persisted.set(key,JSON.parse(value));},removeItem(key){persisted.delete(key);}},
+    fetch:async function(url,init){
+      calls.push({url:String(url),init:init});
+      if(String(url).endsWith('/api/v1/providers'))return {ok:true,status:200,json:async()=>({providers:[{id:'ollama',label:'Local Ollama',kind:'openai',model:'qwen3:0.6b',available:true,imageModels:[]},{id:'xai',label:'xAI',kind:'openai',model:'grok-3',available:true,imageModels:['grok-imagine-image']}],selectedId:'ollama',defaultId:'ollama'})};
+      if(String(url).endsWith('/api/v1/chat/stream')){
+        const prompt=JSON.parse(init.body).messages[0].content;
+        if(prompt==='cancel'){streamStarted(init.signal);return new Promise((resolve,reject)=>init.signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}));}
+        const chunks=['data: {"type":"delta","content":"server "}\n\n','data: {"type":"delta","content":"answer"}\n\n','data: {"type":"done"}\n\n'];
+        let index=0;
+        return {ok:true,status:200,body:{getReader(){return {async read(){return index<chunks.length?{value:new TextEncoder().encode(chunks[index++]),done:false}:{done:true};},async cancel(){}};}}};
+      }
+      if(String(url).endsWith('/api/v1/chat'))return {ok:true,status:200,json:async()=>({ok:true,content:'server answer',text:'server answer',providerId:'ollama',model:'qwen3:0.6b'})};
+      if(String(url).endsWith('/api/v1/transcribe'))return {ok:true,status:200,json:async()=>({text:'recognized speech',segments:[{start:0,end:1.2,text:'recognized speech'}],providerId:'xai'})};
+      if(String(url).endsWith('/api/v1/images/generate'))return {ok:true,status:200,json:async()=>({ok:true,providerId:'xai',model:'grok-imagine-image',count:1,images:[{url:'https://cdn.example/image.png'}]})};
+      if(String(url).includes('/api/v1/tts/voices')){const local=String(url).includes('engine=local');return {ok:true,status:200,json:async()=>({available:true,providerId:local?'vm-local':'xai',engine:local?'local':'xai',voices:[{id:local?'en-us':'eve',name:local?'English':'eve',label:local?'English (en-us)':'eve',locale:local?'en-us':'en'}]})};}
+      if(String(url).endsWith('/api/v1/tts/synthesize-to-agent')){const body=JSON.parse(init.body),local=body.engine==='local';return {ok:true,status:200,json:async()=>({ok:true,agentPath:body.destination,mime:local?'audio/wav':'audio/mpeg',size:8})};}
+      if(String(url).endsWith('/api/v1/tts/synthesize')){const local=JSON.parse(init.body).engine==='local';return {ok:true,status:200,headers:{get(name){return name==='X-Forge-TTS-Engine'?(local?'local':'xai'):null;}},blob:async()=>new Blob([local?'WAV-DATA':'MP3-DATA'],{type:local?'audio/wav':'audio/mpeg'})};}
+      if(String(url).endsWith('/api/v1/agent/status'))return {ok:true,status:200,json:async()=>({ok:true,version:'1.0.0'})};
+      if(String(url).endsWith('/api/v1/agent/exec'))return {ok:true,status:200,json:async()=>({ok:true,stdout:'agent result',exitCode:0,id:'job-1'})};
+      if(String(url).includes('/api/v1/agent/files?path='))return {ok:true,status:200,blob:async()=>new Blob(['agent file'],{type:'text/plain'})};
+      if(String(url).includes('/api/v1/agent/files?destination='))return {ok:true,status:200,json:async()=>({ok:true,path:'fs/out.txt',bytes:5,sha256:'abc'})};
+      throw new Error('unexpected endpoint');
+    },
+    console,
+  };
+  vm.runInNewContext(generated,context);
+  const available=await context.window.ForgeHost.ai.isAvailable();
+  assert.equal(available.available,true);
+  assert.equal(available.providers[0].needsKey,false);
+  assert.equal(calls[0].init.headers['X-ForgeChat-App'],'demo');
+  let delta='';
+  const result=await context.window.ForgeHost.ai.chatStream({prompt:'hello',onDelta(value,meta){if(!meta.done)delta+=value;}});
+  assert.equal(result.content,'server answer');
+  assert.equal(delta,'server answer');
+  const chatCall=calls.find(call=>call.url.endsWith('/api/v1/chat/stream'));
+  assert.ok(chatCall);
+  assert.equal(chatCall.init.credentials,'same-origin');
+  assert.equal(chatCall.init.headers['Content-Type'],'application/json');
+  assert.equal(chatCall.init.headers['X-ForgeChat-App'],'demo');
+  const body=JSON.parse(chatCall.init.body);
+  assert.equal(body.providerId,'ollama');
+  assert.equal(body.model,'qwen3:0.6b');
+  assert.equal(body.messages[0].content,'hello');
+  assert.ok(!chatCall.init.body.includes('DO-NOT-SHIP'));
+  await context.window.ForgeHost.ai.chat({prompt:'describe this',attachments:[{type:'image',mime:'image/png',dataUrl:'data:image/png;base64,aGVsbG8='},{type:'text',name:'notes.txt',mime:'text/plain',text:'keep it concise'}]});
+  const agentRounds=[];
+  const agentResult=await context.window.ForgeHost.ai.agent({messages:[
+    {role:'user',content:'agent hello'},
+    {role:'assistant',content:null,tool_calls:[{id:'call-1'}]},
+    {role:'tool',name:'web_search',content:'tool result'},
+  ],tools:{preset:'safe'},onRound(event){agentRounds.push(event.round);}});
+  assert.equal(agentResult.content,'server answer');
+  assert.equal(agentResult.toolMode,'chat-only');
+  assert.equal(agentResult.toolsUnavailable,true);
+  assert.deepEqual(agentRounds,[1]);
+  const agentCalls=calls.filter(call=>call.url.endsWith('/api/v1/chat/stream'));
+  const agentCall=agentCalls[agentCalls.length-1];
+  assert.ok(agentCall);
+  const agentBody=JSON.parse(agentCall.init.body);
+  assert.equal(agentBody.messages[0].content,'agent hello');
+  assert.equal(agentBody.messages[2].role,'user','prior host tool output is preserved as untrusted plain text');
+  assert.match(agentBody.messages[2].content,/Tool result \(web_search\)/);
+  assert.equal(Object.hasOwn(agentBody,'tools'),false,'host tool schemas must not be sent to the chat server');
+  assert.ok(agentBody.messages.every(message=>Object.keys(message).every(key=>key==='role'||key==='content')));
+  const attachmentCall=calls.find(call=>call.url.endsWith('/api/v1/chat'));
+  assert.ok(attachmentCall);
+  assert.equal(attachmentCall.init.credentials,'same-origin');
+  const attachmentMessages=JSON.parse(attachmentCall.init.body).messages;
+  assert.equal(attachmentMessages[0].content[1].image_url.url,'data:image/png;base64,aGVsbG8=');
+  assert.equal(attachmentMessages[0].content[2].text,'keep it concise');
+  const toolList=await context.window.ForgeHost.tools.list();
+  assert.equal(toolList.count,1);
+  const imageResult=await context.window.ForgeHost.tools.run('image_generate',{prompt:'a green fox',model:'grok-imagine-image'});
+  assert.equal(imageResult.images[0].url,'https://cdn.example/image.png');
+  const imageCall=calls.find(call=>call.url.endsWith('/api/v1/images/generate'));
+  assert.ok(imageCall);
+  assert.equal(imageCall.init.headers['X-ForgeChat-App'],'demo');
+  assert.equal(JSON.parse(imageCall.init.body).providerId,'xai');
+  assert.equal(imageCall.init.body.includes('DO-NOT-SHIP'),false);
+  const nativeConfirmBeforeAgent=nativeConfirmCalls;
+  const transcription=await context.window.ForgeHost.ai.transcribe({dataUrl:'data:audio/mpeg;base64,YXVkaW8=',language:'en',timestamps:true,prompt:'subtitle timing'});
+  assert.equal(transcription.text,'recognized speech');
+  const transcriptionCall=calls.find(call=>call.url.endsWith('/api/v1/transcribe'));
+  assert.ok(transcriptionCall);
+  assert.equal(transcriptionCall.init.credentials,'same-origin');
+  assert.equal(transcriptionCall.init.headers['X-ForgeChat-App'],'demo');
+  const transcriptionBody=JSON.parse(transcriptionCall.init.body);
+  assert.equal(transcriptionBody.dataUrl,'data:audio/mpeg;base64,YXVkaW8=');
+  assert.equal(transcriptionBody.timestamps,true);
+  assert.equal(transcriptionBody.providerId,'ollama');
+  context.window.nextAgentApproval=false;
+  await assert.rejects(()=>context.window.ForgeHost.ai.transcribe({dataUrl:'data:audio/mpeg;base64,Y2FuY2Vs'}),/canceled/);
+  assert.equal(calls.filter(call=>call.url.endsWith('/api/v1/transcribe')).length,1,'unapproved audio never reaches the transcription provider');
+  context.window.nextAgentApproval=true;
+  const agentAvailable=await context.window.ForgeHost.termux.isAvailable();
+  assert.equal(agentAvailable.available,true);
+  const commandResult=await context.window.ForgeHost.termux.exec({script:'echo trusted job',timeoutMs:5000});
+  assert.equal(commandResult.bridge,'backend-agent');
+  const commandCall=calls.find(call=>call.url.endsWith('/api/v1/agent/exec'));
+  assert.ok(commandCall);
+  assert.equal(commandCall.init.credentials,'same-origin');
+  assert.equal(commandCall.init.headers['X-ForgeChat-App'],'demo');
+  assert.equal(JSON.parse(commandCall.init.body).script,'echo trusted job');
+  context.window.nextAgentApproval=false;
+  await assert.rejects(()=>context.window.ForgeHost.termux.exec({script:'echo canceled'}),/canceled/);
+  assert.equal(calls.filter(call=>call.url.endsWith('/api/v1/agent/exec')).length,1,'a canceled command never reaches the backend');
+  context.window.nextAgentApproval=true;
+  const remoteFile=await context.window.ForgeHost.termux.readFile({path:'fs/notes.txt',mime:'text/plain'});
+  assert.equal(remoteFile.bridge,'backend-agent');
+  assert.equal(remoteFile.base64,btoa('agent file'));
+  const uploaded=await context.window.ForgeHost.termux.writeFile({destination:'fs/out.txt',content:'hello',mime:'text/plain'});
+  assert.equal(uploaded.bridge,'backend-agent');
+  const browserVideo=new Blob(['video bytes'],{type:'video/mp4'});
+  const videoUpload=await context.window.ForgeHost.termux.writeFile({destination:'videolingo_test/input.mp4',file:browserVideo,mime:'video/mp4',overwrite:true});
+  assert.equal(videoUpload.bridge,'backend-agent');
+  const browserUploadCall=calls.find(call=>call.url.includes('destination=videolingo_test'));
+  assert.equal(browserUploadCall.init.method,'PUT');
+  assert.equal(browserUploadCall.init.body,browserVideo,'browser File/Blob is streamed directly without base64 duplication');
+  const voices=await context.window.ForgeHost.tts.getVoices();
+  assert.equal(voices.voices[0].id,'eve');
+  assert.deepEqual(voices.options.map(option=>option.value),['eve']);
+  assert.deepEqual(voices.ids,['eve']);
+  assert.equal((await context.window.ForgeHost.ai.listVoices({providerId:'xai'})).engine,'xai');
+  context.window.nextAgentApproval=false;
+  await assert.rejects(()=>context.window.ForgeHost.ai.tts({text:'Canceled synthesis',play:false}),/canceled/);
+  assert.equal(calls.filter(call=>call.url.endsWith('/api/v1/tts/synthesize')).length,0,'canceled TTS text is never sent');
+  assert.equal(agentDialogs.at(-1).title,'Review request');
+  context.window.nextAgentApproval=true;
+  const ttsFile=await context.window.ForgeHost.tts.synthesizeToFile({text:'A subtitle',path:'/sdcard/Download/Forge/Staging/speech.wav',voice:'eve'});
+  assert.match(ttsFile.agentPath,/^tts\/.*\.wav$/);
+  const ttsFileCall=calls.find(call=>call.url.endsWith('/api/v1/tts/synthesize-to-agent'));
+  assert.ok(ttsFileCall);
+  assert.equal(JSON.parse(ttsFileCall.init.body).text,'A subtitle');
+  assert.equal(JSON.parse(ttsFileCall.init.body).format,'wav');
+  assert.match(JSON.parse(ttsFileCall.init.body).destination,/^tts\//);
+  const cloudTts=await context.window.ForgeHost.ai.ttsToFile({text:'Cloud subtitle',providerId:'xai',path:'/sdcard/Download/speech.mp3'});
+  assert.match(cloudTts.agentPath,/^tts\/.*\.mp3$/);
+  const localAvailable=await context.window.ForgeHost.tts.isAvailable({engine:'local'});
+  assert.equal(localAvailable.available,true);
+  assert.equal(localAvailable.engine,'local');
+  const localVoices=await context.window.ForgeHost.tts.getVoices({engine:'local'});
+  assert.equal(localVoices.engine,'local');
+  assert.deepEqual(localVoices.ids,['en-us']);
+  const localFile=await context.window.ForgeHost.tts.synthesizeToFile({engine:'local',text:'No provider call',path:'/tmp/local.mp3',voice:'en-us'});
+  assert.match(localFile.agentPath,/^tts\/.*\.wav$/);
+  assert.match(agentDialogs.at(-1).message,/offline eSpeak NG engine/);
+  assert.match(JSON.parse(calls.filter(call=>call.url.endsWith('/api/v1/tts/synthesize-to-agent')).at(-1).init.body).engine,/^local$/);
+  const localAgentRequest=JSON.parse(calls.filter(call=>call.url.endsWith('/api/v1/tts/synthesize-to-agent')).at(-1).init.body);
+  assert.equal(localAgentRequest.format,'wav');
+  assert.equal(localAgentRequest.engine,'local');
+  assert.equal(Object.hasOwn(localAgentRequest,'providerId'),false);
+  const localAudio=await context.window.ForgeHost.ai.tts({engine:'local',text:'Local speech',play:false,returnAudio:true});
+  assert.equal(localAudio.mime,'audio/wav');
+  assert.equal(JSON.parse(calls.filter(call=>call.url.endsWith('/api/v1/tts/synthesize')).at(-1).init.body).engine,'local');
+  assert.equal(nativeConfirmCalls,nativeConfirmBeforeAgent,'backend-agent approvals use the in-page dialog, not suppressible native confirms');
+  assert.ok(agentDialogs.some(dialog=>dialog.message.includes('Run this command in the private Linux backend agent')));
+  const spoken=await context.window.ForgeHost.ai.tts({text:'Hello',play:false,returnAudio:true});
+  assert.equal(spoken.mime,'audio/mpeg');
+  assert.equal(spoken.base64,btoa('MP3-DATA'));
+  assert.equal(context.window.ForgeHost.getCapabilities && (await context.window.ForgeHost.getCapabilities()).tts,true);
+  const uploadCall=calls.find(call=>call.url.includes('/api/v1/agent/files?destination='));
+  assert.equal(uploadCall.init.method,'PUT');
+  assert.equal(uploadCall.init.body instanceof Blob,true);
+  assert.equal(uploadCall.init.credentials,'same-origin');
+  await assert.rejects(()=>context.window.ForgeHost.ai.configure({apiKey:'forbidden'}),/managed by the ForgeChat server/);
+  const pending=context.window.ForgeHost.ai.chatStream({id:'cancel-me',prompt:'cancel'});
+  const signal=await streamStartedPromise;
+  const cancelled=await context.window.ForgeHost.ai.cancel('cancel-me');
+  assert.equal(cancelled.cancelled,true);
+  assert.equal(signal.aborted,true);
+  await assert.rejects(()=>pending,/cancelled/);
+}
+
 (async function(){
+  await exerciseForgeChatServerRuntime();
+  console.log('✓ ForgeChat runtime calls authenticated same-origin server without exporting keys');
   await exerciseStandaloneChat([], 'recipient-session-key', true);
   console.log('✓ no-secret export prompts for a key and keeps it session-only');
   await exerciseStandaloneImageTool();
@@ -302,6 +593,8 @@ async function exerciseStandaloneChat(selectedKeys, expectedKey, expectPrompt) {
   console.log('✓ image generation tries exported keys before prompting and falls back from Cheaper Inference to xAI');
   await exerciseBrowserMediaPickers();
   console.log('✓ standalone file picker and browser camera/gallery capture APIs return attachment data');
+  await exerciseLiveBrowserCameraCapture();
+  console.log('✓ standalone live camera shutter captures a photo and sends it as a chat attachment');
   await exerciseChatAttachments();
   console.log('✓ standalone chat sends browser image/text attachments and Gemini inline files');
   await exerciseAzureStandaloneChat();
@@ -310,5 +603,5 @@ async function exerciseStandaloneChat(selectedKeys, expectedKey, expectPrompt) {
   console.log('✓ failed browser fetch reports actionable CORS/file-origin guidance');
   await exerciseStandaloneChat([{id:'openai',key:'explicitly-selected-key'}], 'explicitly-selected-key', false);
   console.log('✓ explicitly selected embedded key is used without prompting');
-  console.log('\n' + (passed + 8) + ' tests passed.');
+  console.log('\n' + (passed + 11) + ' tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

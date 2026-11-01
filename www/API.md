@@ -192,15 +192,20 @@ const vs = await ForgeHost.ai.listVoices()   // alias ai.voices({ source:'cloud'
 ```
 Voices — xAI: `eve|ara|leo|rex|sal|luna…` (default `eve`); OpenAI-compat: `alloy|nova…` (default `alloy`). Audio routes are distinct: `speaker` = phone loudspeaker, `earpiece` = phone handset receiver (not Bluetooth), `bluetooth` = connected Bluetooth earphones, `wired` = wired/USB headset. Use `route:'bluetooth'` explicitly for Bluetooth; do not label `earpiece` as Bluetooth. Browser `speechSynthesis` is not reliably routeable.
 
+In ForgeChat-hosted standalone HTML, cloud TTS runs through the VM's configured xAI/OpenAI-compatible provider and keeps credentials server-side. Pass `engine:'local'` to use the VM's offline eSpeak NG engine instead; it does not call a third-party TTS provider and currently outputs WAV. eSpeak NG is a lightweight formant synthesizer, so its voice quality is more synthetic than neural cloud voices. Hosted exports also expose `ForgeHost.tts.getVoices({engine:'local'})` and `ForgeHost.tts.synthesizeToFile({text, path, engine:'local', ...})`; file synthesis stages audio in the private backend-agent workspace and returns `agentPath`, requiring the separate agent-access grant. The browser confirms before synthesis. This server path does not provide Android native TTS or `/sdcard` access.
+
 ### STT (Patch 2)
 ```js
 await ForgeHost.ai.transcribe({ dataUrl: wav.dataUrl, language:'en' })
 // -> { ok, text, transcript, provider, providerId, model, language }
-// needs .stt true (OpenAI/Groq/xAI). NOT Gemini.
+// Direct Forge STT needs an STT-capable provider (OpenAI/Groq/xAI), not Gemini.
 const wav = await ForgeHost.mic.record({ durationMs:2500, sampleRate:16000 })
 await ForgeHost.ai.transcribe({ base64: chunk.base64, encoding:'pcm_s16le', sampleRate:16000, language:'en' })
 // alias: ForgeHost.ai.stt(...)
 ```
+In ForgeChat-hosted standalone HTML, owners can configure an app-specific provider allow-list and default from ForgeChat's Providers page. `ForgeHost.ai.listProviders()` returns only the app's allowed server providers and initializes to that default; `setProvider()` can switch only within the app allow-list. Chat, image, TTS, and transcription endpoints enforce the same server-side restriction. Existing apps without a saved provider selection retain the prior all-configured-provider behavior.
+
+In ForgeChat-hosted standalone HTML, `ai.transcribe` posts audio to the authenticated same-origin ForgeChat endpoint and tries only operator-configured OpenAI-compatible STT providers (including Groq/xAI where configured); API keys remain on the server. The in-page approval prompt explains that audio is sent to the provider and may incur charges. Audio is limited to 12 MiB and Gemini/local Ollama are not used as STT providers. With `timestamps:true`, the result includes normalized `{text, start, end}` segments when the provider returns timestamps.
 
 ### Live translate session (Patches 3–4)
 ```js
@@ -371,6 +376,8 @@ const r = await ForgeHost.termux.exec({ script:'python hello.py', timeoutMs:6000
 // r = { ok, stdout, stderr, exitCode, bridge, err?, errmsg? }
 ```
 Google Play Termux has NO RUN_COMMAND; needs `forge-termux-agent` (localhost:8787). F-Droid/GitHub Termux: `allow-external-apps=true`. Prefer `termux.exec` when output is needed. Never run destructive scripts without an explicit user tap.
+
+ForgeChat-hosted standalone exports may use a separately provisioned Linux Docker agent through a limited `ForgeHost.termux` subset (`isAvailable`, `status`, `exec`, `run`, `readFile`, `writeFile`, `streamFile` with browser File/Blob). This is not Android Termux. The owner must provision the agent and grant other users the distinct high-trust Backend agent access permission. Commands execute in the isolated container, and the browser confirms commands/uploads. See `docs/standalone-export.md` and `server/deploy/linux-agent/README.md`.
 
 ## Keep awake / background
 ```js

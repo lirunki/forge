@@ -1,6 +1,6 @@
 # Forge (phone) session log — LOCKED
 
-## Current prompt profiles and builder modes (2.7.79/209)
+## Current prompt profiles and builder modes (2.7.113/263)
 
 - Prompt profiles are persisted per `providerId::model`: Tiny, Normal, and Advanced.
 - Tiny single-shot uses the bundled `www/TINY_PROMPT.md`; it does not receive workspace tools.
@@ -59,14 +59,34 @@ For any build, release, install, version bump, push, or i18n regen, see
 Don't rediscover the tooling limits / script paths / keystore cert each session —
 it's all there.
 
+## Local Android build — 2026-10-26 (not uploaded to Play)
+
+- **Version:** 2.7.115 / versionCode 265 (bumped from 2.7.113 / 263 using the repo's +2 convention).
+- **Debug APK:** `~/downloads/Forge-debug-rebuilt.apk` and `/sdcard/Download/Forge-debug-rebuilt.apk`; SHA-256 `e12db70b70d6cd5339a7cda224e1662b1fc73cd7b34e878504e686b850fb07ee`.
+- **Google Play AAB:** `release-out/Forge-play-release.aab` and `/sdcard/Download/Forge-play-release.aab`; SHA-256 `f4a5d7e4507c7f075595a28ed67955a280cad63ea7d67c29ad0d870cf577ed8b`.
+- Both contain the **Export for ForgeChat · no keys** option. APK signature verified with `apksigner`; AAB signature verified and matches the documented Play upload-key certificate SHA-256. The Play manifest excludes SMS, call-log, contacts, and `QUERY_ALL_PACKAGES` permissions.
+- Built from the current uncommitted working tree with `forge-build.json` SHA `dev`; artifacts are not a commit-reproducible build and the AAB has not been uploaded to Play Console.
+
+## Latest release and session — 2026-10-11
+
+- **Version:** 2.7.113 / versionCode 263, bumped from 2.7.111 / 261.
+- **Translations:** audited English, Spanish, French, Portuguese, Japanese, and Korean. Filled missing AI prompt/reasoning and runtime strings, restored `{msg}`, `{name}`, and `{kb}` interpolation, and added `tests/i18n-completeness.test.js`. All 639 English keys are covered in every translated locale; localized key parity, non-empty values, placeholders, and static UI references are checked.
+- **Agentic API:** `ForgeHost.ai.runTask()` delegates to the existing `ForgeHost.ai.agent()` loop. Task workspaces are opt-in, app/workspace-scoped, quota-limited virtual storage without device-path access. `task_run_script` is sandboxed and continues to use host-enforced tool policy, risk checks, confirmations, and cancellation; guidance, profiles, and skills are supported.
+- **Standalone HTML export:** Export is separate from AAForge Share. Saved provider keys are excluded by default; embedding requires explicit provider/key selection and acknowledgment. Standalone browser support includes file/gallery/camera picking and normalized chat attachments (text/images, with Gemini inline-file support); Forge-only host APIs remain unavailable outside Forge.
+- **Commit:** `853cd2f` (`complete translations and bump to 2.7.113`), pushed to `origin/main`.
+- **Debug APK:** `~/downloads/Forge-debug-rebuilt.apk` and `/sdcard/Download/Forge-debug-rebuilt.apk`; SHA-256 `902274dedb57363db400cc2c935cd137b0ceadf69a2b9b082bf65b18d9d2bde7`.
+- **Google Play AAB:** `release-out/Forge-play-release.aab` and `/sdcard/Download/Forge-play-release.aab`; SHA-256 `7fd3a9e739606b8facbc0f1a5e00ffdb16e3316161fd4b88c4b4ca9fe2f2b33d`. JAR signature verification passed.
+- **Full release APK:** `release-out/Forge-full-release.apk`; SHA-256 `2bd67b15c74ed3a9fd7aecbbb10508a538b156ea37968c6e35a2790666d9881c`.
+- All tests, translation checks, and `forge_check.sh` passed. Artifacts contain the 2.7.113/263 build stamp for commit `853cd2f`; no device/runtime validation was performed. Pre-existing update-manifest edits were restored after builds and left uncommitted.
+
 ---
 
-## Status (LOCKED baseline 2026-08-07 · host restored 2026-08-10 · refreshed 2026-08-19 @ 2.6.72/102 — session closed)
+## Status (latest release: 2026-10-11 @ 2.7.113/263; original lock history retained)
 
 | Field | Value |
 |--------|--------|
 | Package | `com.forge.live` |
-| Version | **2.7.69 / versionCode 199** — multilingual GitHub demo catalog with localized titles/descriptions, version-aware tour, scrollable demo picker, and current-value rename dialog. Prior state: **2.7.67 / versionCode 197** (code mode gated off on the Google Play build via `BuildConfig.FLAVOR` — checkbox hidden + `isCodeModeEnabled()` forced false on the `play` flavor; full/debug/F-Droid unaffected; prior 2.7.66/196 code-mode orchestration guidance — run_program for orchestration only, static files via fs_write, 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md`, 2.7.64/194 run_program simplification, 2.7.63/193 hybrid write_program rounds, 2.7.62/192 wall-clock 300s→600s fix, 2.7.61/191 code mode feature, 2.7.60/190 resume button, 2.7.56/184 custom languages, 2.7.40/170 FGS notification lifecycle, 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
+| Version | **2.7.113 / versionCode 263** — translation audit completed across six locales; all 639 English keys are covered and placeholder/static-reference checks were added. Commit `853cd2f` pushed to origin/main. Previous release: **2.7.111 / versionCode 261**. Earlier history: **2.7.69/199** (multilingual demo catalog, version-aware tour, and rename dialog) → **2.7.67 / versionCode 197** (code mode gated off on the Google Play build via `BuildConfig.FLAVOR` — checkbox hidden + `isCodeModeEnabled()` forced false on the `play` flavor; full/debug/F-Droid unaffected; prior 2.7.66/196 code-mode orchestration guidance — run_program for orchestration only, static files via fs_write, 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md`, 2.7.64/194 run_program simplification, 2.7.63/193 hybrid write_program rounds, 2.7.62/192 wall-clock 300s→600s fix, 2.7.61/191 code mode feature, 2.7.60/190 resume button, 2.7.56/184 custom languages, 2.7.40/170 FGS notification lifecycle, 2.7.38/168 agentic Reforge + persistent workspace, 2.7.36/166 idempotent Termux agent, 2.7.34/164 web_fetch readability, 2.7.32/162 remote turnkey config, 2.7.30/160 Stop confirm+abandon, 2.7.28/158 fs_edit, 2.7.8/138 agentic builder loop, 2.7.0/130 reasoning separation, 2.6.72/102 insets fix)
 | **Original APK (preserved, untouched)** | `~/downloads/Forge-debug.apk` |
 | **Canonical Gradle APK** | **`~/downloads/Forge-debug-rebuilt.apk`** |
 | Also | `/sdcard/Download/Forge-debug-rebuilt.apk` |
@@ -74,8 +94,8 @@ it's all there.
 | Build | `bash ~/downloads/build_forge.sh` → `assembleDebug` |
 | Install | `adb install -r ~/downloads/Forge-debug-rebuilt.apk` |
 | **Host `www/index.html`** | Canonical host (+ AI tools/attachments + liveTranslate + **Drive backup**) — keep in sync with assets |
-| **Last rebuild** | **2026-09-09 — 2.7.69/199 multilingual demo catalog + rename dialog (`c10ed08`, `1649861`)** · 2026-09-09 — 2.7.67/197 code mode gated off on Play build via `BuildConfig.FLAVOR` (`a550ece`) · 2026-09-08 — 2.7.66/196 code-mode orchestration guidance (`2ac03a2`) · 2026-09-08 — 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md` (`79294e3`) · 2026-09-08 — 2.7.64/194 run_program simplification (`66e364c`) · 2026-09-08 — 2.7.63/193 hybrid write_program rounds (`162ba90`) · 2026-09-08 — 2.7.62/192 wall-clock 300s→600s fix (`399e349`) · 2026-09-07 — 2.7.61/191 code mode feature (`5cf692f`) · 2026-09-07 — 2.7.60/190 resume button (`a304e86`) · 2026-09-07 — 2.7.60/190 custom languages (`7182bf8`) · 2026-08-29 — 2.7.40/170 FGS notification lifecycle · 2.7.38/168 agentic Reforge + persistent workspace · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
-| **Release artifacts** | `release-out/Forge-full-release.apk` + `Forge-play-release.aab` (also `/sdcard/Download/`) · GPL-3.0 · upload-key signed
+| **Last rebuild** | **2026-10-11 — 2.7.113/263 translation completion, debug APK + Play AAB (`853cd2f`)** · AAB signature verified · **2026-09-09 — 2.7.69/199 multilingual demo catalog + rename dialog (`c10ed08`, `1649861`)** · 2026-09-09 — 2.7.67/197 code mode gated off on Play build via `BuildConfig.FLAVOR` (`a550ece`) · 2026-09-08 — 2.7.66/196 code-mode orchestration guidance (`2ac03a2`) · 2026-09-08 — 2.7.65/195 code mode = `run_program` loop tool + `CODEMODE.md` (`79294e3`) · 2026-09-08 — 2.7.64/194 run_program simplification (`66e364c`) · 2026-09-08 — 2.7.63/193 hybrid write_program rounds (`162ba90`) · 2026-09-08 — 2.7.62/192 wall-clock 300s→600s fix (`399e349`) · 2026-09-07 — 2.7.61/191 code mode feature (`5cf692f`) · 2026-09-07 — 2.7.60/190 resume button (`a304e86`) · 2026-09-07 — 2.7.60/190 custom languages (`7182bf8`) · 2026-08-29 — 2.7.40/170 FGS notification lifecycle · 2.7.38/168 agentic Reforge + persistent workspace · 2.7.36/166 idempotent Termux agent (`61ef99e`) · 2.7.34/164 web_fetch readability (`21207ca`) · 2.7.32/162 remote turnkey config (`b090660`)
+| **Release artifacts** | 2.7.113/263: `Forge-debug-rebuilt.apk`, `release-out/Forge-full-release.apk`, and upload-key-signed `release-out/Forge-play-release.aab` (copies in `/sdcard/Download/`); AAB SHA-256 `7fd3a9e739606b8facbc0f1a5e00ffdb16e3316161fd4b88c4b4ca9fe2f2b33d` · GPL-3.0
 
 ### Locked product baseline
 

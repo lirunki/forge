@@ -2098,6 +2098,7 @@ termux-reload-settings</div>
  "export.miniApp": "Forge mini-app",
  "export.nothing": "Nothing to export",
  "export.shareText": "{name} — single-file HTML",
+ "export.serverUpload": "Then sign in at {url} and publish the page.",
  "gen.body": "{label}: {secs}s so far. The model is still working — keep waiting or stop.",
  "gen.extend": "Extend",
  "gen.extendBy": "Extend by",
@@ -2751,6 +2752,7 @@ termux-reload-settings</div>
  "export.miniApp": "mini-app de Forge",
  "export.nothing": "Nada que exportar",
  "export.shareText": "{name} — HTML de un solo archivo",
+ "export.serverUpload": "Luego inicia sesión en {url} y publica la página.",
  "gen.body": "{label}: {secs}s hasta ahora. El modelo sigue trabajando.",
  "gen.extend": "Ampliar",
  "gen.extendBy": "Ampliar por",
@@ -3473,6 +3475,7 @@ termux-reload-settings</div>
  "export.miniApp": "mini-app Forge",
  "export.nothing": "Rien à exporter",
  "export.shareText": "{name} — HTML en fichier unique",
+ "export.serverUpload": "Connectez-vous ensuite à {url} et publiez la page.",
  "gen.body": "{label} : {secs}s écoulées. Le modèle travaille encore.",
  "gen.extend": "Prolonger",
  "gen.extendBy": "Prolonger de",
@@ -4195,6 +4198,7 @@ termux-reload-settings</div>
  "export.miniApp": "mini-app do Forge",
  "export.nothing": "Nada para exportar",
  "export.shareText": "{name} — HTML de arquivo único",
+ "export.serverUpload": "Depois, entre em {url} e publique a página.",
  "gen.body": "{label}: {secs}s decorridos. O modelo ainda está trabalhando.",
  "gen.extend": "Estender",
  "gen.extendBy": "Estender por",
@@ -4917,6 +4921,7 @@ termux-reload-settings</div>
  "export.miniApp": "Forge ミニアプリ",
  "export.nothing": "エクスポートするものがありません",
  "export.shareText": "{name} — 単一ファイルHTML",
+ "export.serverUpload": "次に {url} にサインインしてページを公開してください。",
  "gen.body": "{label}：{secs}秒経過。モデルはまだ処理中です。",
  "gen.extend": "延長",
  "gen.extendBy": "延長時間",
@@ -5639,6 +5644,7 @@ termux-reload-settings</div>
  "export.miniApp": "Forge 미니 앱",
  "export.nothing": "내보낼 항목 없음",
  "export.shareText": "{name} — 단일 파일 HTML",
+ "export.serverUpload": "그런 다음 {url}에 로그인해 페이지를 게시하세요.",
  "gen.body": "{label}: {secs}초 경과. 모델이 아직 작업 중입니다.",
  "gen.extend": "연장",
  "gen.extendBy": "연장 시간",
@@ -25521,6 +25527,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       var appId = String(config.appId || 'standalone-app');
       var providers = Array.isArray(config.providers) ? config.providers : [];
       var appTitle = String(config.title || 'Standalone mini-app');
+      var serverMode = config.backend === 'forgechat';
+      var serverBase = String(config.apiBase || '/forgechat').replace(/\/+$/, '');
+      var serverAppId = '';
+      try { var appPathMatch = String(window.location && window.location.pathname || '').match(/\/apps\/([^/]+)(?:\/|$)/); if (appPathMatch) serverAppId = decodeURIComponent(appPathMatch[1]).replace(/\.html$/i, ''); } catch (_) {}
+      var serverProviderCache = null;
+      var serverStreamControllers = Object.create(null);
       var sessionKeys = Object.create(null);
       providers.forEach(function(p){ if (p && p.id && p.key) sessionKeys[p.id] = String(p.key); });
       var embeddedProviderId = (providers.find(function(p){return p && p.id && sessionKeys[p.id];}) || {}).id || '';
@@ -25565,6 +25577,254 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         if (Array.isArray(opts.messages)) return opts.messages;
         if (Array.isArray(opts.prompt)) return opts.prompt;
         return [{ role: 'user', content: String(opts.prompt == null ? '' : opts.prompt) }];
+      }
+      function serverApiUrl(path) {
+        if (!serverMode) throw new Error('ForgeChat server mode is not enabled.');
+        if (!window.location || !window.location.origin || window.location.origin === 'null' || !/^https?:$/.test(window.location.protocol)) {
+          throw new Error('This ForgeChat export must be hosted over HTTPS on the ForgeChat server. Upload it at ' + serverBase + '/publish; do not open it from file://.');
+        }
+        var url = new URL(serverBase + '/api/v1/' + String(path || '').replace(/^\/+/, ''), window.location.href);
+        if (url.origin !== window.location.origin) throw new Error('ForgeChat API must use the same HTTPS origin as this hosted app.');
+        return url.href;
+      }
+      async function serverRequest(path, options) {
+        var request = Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {});
+        request.headers = Object.assign({}, request.headers || {}, { 'X-ForgeChat-App': serverAppId });
+        var response;
+        try { response = await fetch(serverApiUrl(path), request); }
+        catch (error) { throw new Error('Could not reach the ForgeChat server. Check the HTTPS connection and sign in at ' + serverBase + '/login. Details: ' + String(error && error.message || error)); }
+        var result = await response.json().catch(function(){ return {}; });
+        if (response.status === 401) throw new Error('Your ForgeChat session expired. Sign in again at ' + serverBase + '/login.');
+        if (!response.ok) throw new Error(result.detail || ('ForgeChat server returned HTTP ' + response.status));
+        return result;
+      }
+      async function serverFileResponse(path, options) {
+        var response;
+        try { response = await fetch(serverApiUrl(path), Object.assign({credentials:'same-origin',cache:'no-store'},options||{})); }
+        catch(error) { throw new Error('Could not reach the ForgeChat backend agent. Check the HTTPS connection and sign in again. Details: '+String(error&&error.message||error)); }
+        if(response.status===401)throw new Error('Your ForgeChat session expired. Sign in again at '+serverBase+'/login.');
+        if(!response.ok){var text=await response.text().catch(function(){return '';});var message=text;try{var body=JSON.parse(text);message=body.detail||body.errmsg||text;}catch(_){}throw new Error(message||('Backend agent returned HTTP '+response.status));}
+        return response;
+      }
+      function agentFileBase64(bytes) {
+        var binary='';
+        for(var offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode.apply(null,bytes.subarray(offset,Math.min(offset+32768,bytes.length)));
+        return btoa(binary);
+      }
+      function confirmBackendAgentAction(message) {
+        return new Promise(function(resolve,reject){
+          var doc=window.document||document,root=doc&&(doc.body||doc.documentElement),overlay,panel,title,text,actions,cancel,approve,finished=false;
+          function finish(allowed){if(finished)return;finished=true;if(overlay&&overlay.parentNode)overlay.parentNode.removeChild(overlay);if(allowed)resolve(true);else reject(new Error('Backend agent action canceled.'));}
+          function fallback(){try{if(typeof window.confirm==='function'&&window.confirm(message)){resolve(true);return;}}catch(_){}reject(new Error('Backend agent action canceled.'));}
+          if(!root||typeof root.appendChild!=='function'||!doc.createElement){fallback();return;}
+          overlay=doc.createElement('div');panel=doc.createElement('section');title=doc.createElement('h2');text=doc.createElement('p');actions=doc.createElement('div');cancel=doc.createElement('button');approve=doc.createElement('button');
+          if(!overlay.style||typeof panel.appendChild!=='function'||typeof overlay.appendChild!=='function'){fallback();return;}
+          overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Confirm backend-agent action');overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:18px;background:rgba(3,7,18,.78);';
+          panel.style.cssText='width:min(520px,100%);max-height:calc(100dvh - 36px);overflow:auto;padding:20px;border:1px solid #53627e;border-radius:16px;background:#111827;color:#f8fafc;font:15px system-ui,sans-serif;box-shadow:0 20px 70px #0009;';
+          title.textContent='Review request';title.style.cssText='margin:0 0 10px;font-size:19px;';
+          text.textContent=String(message||'Allow this action in the private Linux backend agent?');text.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;color:#dbe5f2;margin:0 0 18px;';
+          actions.style.cssText='display:flex;justify-content:flex-end;gap:10px;';
+          [cancel,approve].forEach(function(button){button.type='button';button.style.cssText='min-height:44px;padding:0 15px;border:1px solid #53627e;border-radius:10px;background:#26344d;color:#f8fafc;font:inherit;font-weight:650;cursor:pointer;';});
+          cancel.textContent='Cancel';approve.textContent='Approve';approve.style.background='#8b9cff';approve.style.color='#0b1020';
+          cancel.onclick=function(){finish(false);};approve.onclick=function(){finish(true);};overlay.onclick=function(event){if(event.target===overlay)finish(false);};
+          actions.appendChild(cancel);actions.appendChild(approve);panel.appendChild(title);panel.appendChild(text);panel.appendChild(actions);overlay.appendChild(panel);
+          try{root.appendChild(overlay);if(approve.focus)approve.focus();}catch(_){finish(false);}
+        });
+      }
+      var serverTermux = {
+        isAvailable: async function(){if(!serverMode)return {available:false,installed:false,note:'The backend agent is available only in a ForgeChat-hosted export.'};try{var status=await serverRequest('agent/status');return {available:true,installed:true,agentRunning:true,bridge:'backend-agent',agent:status,note:'Private Linux backend agent is online.'};}catch(error){return {available:false,installed:true,agentRunning:false,bridge:'backend-agent',note:String(error&&error.message||error)};}},
+        status: async function(){return serverRequest('agent/status');},
+        exec: async function(opts){if(!serverMode)return unsupported('termux.exec (backend agent is ForgeChat-only)');var job=typeof opts==='string'?{script:opts}:Object.assign({},opts||{}),preview=String(job.script||job.cmdPath||'command').slice(0,180);delete job.files;delete job.confirm;await confirmBackendAgentAction('Run this command in the private Linux backend agent?\\n\\n'+preview);var result=await serverRequest('agent/exec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(job)});result.bridge='backend-agent';return result;},
+        run: async function(opts){if(!serverMode)return unsupported('termux.run (backend agent is ForgeChat-only)');var job=typeof opts==='string'?{script:opts}:Object.assign({},opts||{}),preview=String(job.script||job.cmdPath||'command').slice(0,180);delete job.files;delete job.confirm;await confirmBackendAgentAction('Start this command in the private Linux backend agent?\\n\\n'+preview);job.background=true;job.wait=false;var result=await serverRequest('agent/exec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(job)});result.bridge='backend-agent';return result;},
+        readFile: async function(opts){if(!serverMode)return unsupported('termux.readFile (backend agent is ForgeChat-only)');opts=typeof opts==='string'?{path:opts}:(opts||{});if(!opts.path)throw new Error('path required');var maxBytes=Math.max(1,Math.min(64*1024*1024,Number(opts.maxBytes)||28672000)),mime=String(opts.mime||'application/octet-stream'),query='path='+encodeURIComponent(String(opts.path))+'&maxBytes='+maxBytes+'&mime='+encodeURIComponent(mime),response=await serverFileResponse('agent/files?'+query),blob=await response.blob();if(blob.size>maxBytes)throw new Error('file too large to read ('+blob.size+' > '+maxBytes+')');var bytes=new Uint8Array(await blob.arrayBuffer()),base64=agentFileBase64(bytes);return {ok:true,bridge:'backend-agent',path:String(opts.path),size:bytes.length,mime:mime,base64:base64,dataUrl:'data:'+mime+';base64,'+base64};},
+        writeFile: async function(opts){if(!serverMode)return unsupported('termux.writeFile (backend agent is ForgeChat-only)');opts=opts||{};var destination=String(opts.destination||opts.path||'');if(!destination)throw new Error('destination required');var body=opts.blob||opts.file||opts.content;if(body==null)throw new Error('content, blob, or file required');if(typeof body==='string'&&opts.encoding==='base64'){var raw=atob(body),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);body=new Blob([bytes],{type:opts.mime||'application/octet-stream'});}else if(typeof body==='string')body=new Blob([body],{type:opts.mime||'text/plain;charset=utf-8'});if(typeof Blob==='undefined'||!(body instanceof Blob))throw new Error('content must be text, base64, Blob, or File');await confirmBackendAgentAction('Upload '+body.size+' bytes to the private Linux agent?\\n\\n'+destination+(opts.overwrite===true?'\\n\\nThis may overwrite an existing file.':''));var query='agent/files?destination='+encodeURIComponent(destination),response=await serverFileResponse(query,{method:'PUT',headers:{'Content-Type':opts.mime||body.type||'application/octet-stream','X-Forge-Mkdirs':String(opts.mkdirs!==false),'X-Forge-Overwrite':String(opts.overwrite===true)},body:body}),result=await response.json();result.bridge='backend-agent';return result;},
+        streamFile: async function(opts){opts=opts||{};if(!opts.file&&!opts.blob)throw new Error('Browser streamFile requires a File or Blob in file/blob; native content URIs are unavailable.');return serverTermux.writeFile(opts);},
+        installAgent: async function(){return {ok:false,setupRequired:true,note:'The Docker agent is provisioned by the ForgeChat server administrator; browser exports cannot install or update it.'};},
+        open: function(){return unsupported('termux.open (no Android terminal in a browser)');},
+        stageFile: function(){return unsupported('termux.stageFile (no Android filesystem in a browser)');},
+      };
+      async function serverTranscribe(opts) {
+        if(!serverMode)return unsupported('ai.transcribe');
+        opts=opts||{};
+        var dataUrl=String(opts.dataUrl||opts.url||'');
+        if(!/^data:audio\/[a-z0-9.+-]+;base64,/i.test(dataUrl))throw new Error('ForgeChat transcription requires a local base64 audio data URL.');
+        await confirmBackendAgentAction('Send this audio to a configured ForgeChat speech-to-text provider? The provider will receive the audio and charges may apply.');
+        return serverRequest('transcribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl:dataUrl,language:opts.language||opts.lang,timestamps:opts.timestamps===true,prompt:opts.prompt||'',providerId:opts.providerId||opts.provider||selectedId||undefined,filename:opts.filename||opts.name||undefined})});
+      }
+      async function serverTtsVoices(opts) {
+        if(!serverMode)return unsupported('tts.getVoices (ForgeChat server mode is required)');
+        opts=opts||{};
+        var params=[];if(opts.engine)params.push('engine='+encodeURIComponent(String(opts.engine)));if(opts.providerId)params.push('providerId='+encodeURIComponent(String(opts.providerId)));
+        var suffix=params.length?'?'+params.join('&'):'';
+        var result=await serverRequest('tts/voices'+suffix),voices=Array.isArray(result&&result.voices)?result.voices:[];
+        result.options=voices.map(function(voice){var value=typeof voice==='string'?voice:String(voice&&(voice.id||voice.value||voice.name)||'');return {value:value,label:String(voice&&(voice.label||voice.name||voice.id)||value),voice:voice};}).filter(function(option){return option.value;});
+        result.ids=result.options.map(function(option){return option.value;});
+        result.labels=result.options.map(function(option){return option.label;});
+        result.list=result.ids.slice();
+        return result;
+      }
+      function serverTtsPayload(opts) {
+        opts=opts||{};
+        var text=String(opts.text||opts.prompt||opts.input||'').trim();
+        if(!text)throw new Error('TTS text is required.');
+        var engine=opts.engine;
+        return {text:text,engine:engine,providerId:opts.providerId||opts.provider,voice:opts.voice||opts.voice_id||opts.voiceId,model:opts.model,ttsModel:opts.ttsModel,speechModel:opts.speechModel,language:opts.language||opts.lang,format:engine==='local'?'wav':(opts.format||opts.response_format||'mp3'),speed:opts.speed!=null?opts.speed:opts.rate,pitch:opts.pitch};
+      }
+      async function serverTtsAudio(opts) {
+        if(!serverMode)throw new Error('Server TTS is available only in a ForgeChat-hosted export.');
+        opts=opts||{};
+        if(String(opts.mode||opts.via||'').toLowerCase()==='native')throw new Error('On-device TTS is unavailable in a browser export; use cloud/server TTS.');
+        var payload=serverTtsPayload(opts),response;
+        await confirmBackendAgentAction(payload.engine==='local'?'Synthesize this text locally on the ForgeChat VM with its offline speech engine? No third-party TTS provider will be called.':'Send this text to the configured ForgeChat TTS provider for speech synthesis? The audio will be returned to this browser.');
+        try{response=await fetch(serverApiUrl('tts/synthesize'),{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-ForgeChat-App':serverAppId},body:JSON.stringify(payload)});}
+        catch(error){throw new Error('Could not reach ForgeChat TTS. Details: '+String(error&&error.message||error));}
+        if(response.status===401)throw new Error('Your ForgeChat session expired. Sign in again at '+serverBase+'/login.');
+        if(!response.ok){var message=await response.text().catch(function(){return '';});try{message=JSON.parse(message).detail||message;}catch(_){}throw new Error(message||('ForgeChat TTS returned HTTP '+response.status));}
+        var blob=await response.blob();
+        if(!blob.size)throw new Error('ForgeChat TTS returned empty audio.');
+        var bytes=new Uint8Array(await blob.arrayBuffer()),base64=agentFileBase64(bytes),mime=blob.type||'audio/mpeg';
+        return {ok:true,via:'cloud',engine:response.headers.get('X-Forge-TTS-Engine')||'server-provider',base64:base64,dataUrl:'data:'+mime+';base64,'+base64,mime:mime,format:String(payload.format||'mp3'),bytes:bytes.length,voice:payload.voice||'alloy',providerId:payload.providerId||undefined,spoken:false};
+      }
+      function serverTtsDestination(path,format) {
+        var raw=String(path||'').replace(/\\/g,'/').split('/').pop()||('speech_'+Date.now());
+        var safe=raw.replace(/[^A-Za-z0-9_.-]/g,'_').slice(-140);
+        if(!/\\.(mp3|wav|opus|aac|flac|pcm)$/i.test(safe))safe+='.'+(format||'mp3');
+        return 'tts/'+Date.now()+'_'+safe;
+      }
+      async function serverTtsToAgent(opts) {
+        if(!serverMode)throw new Error('Server TTS file output is available only in a ForgeChat-hosted export.');
+        opts=opts||{};
+        var payload=serverTtsPayload(opts);
+        var requestedPath=String(opts.path||opts.destination||'');
+        if(payload.engine==='local'){payload.format='wav';if(requestedPath&&!/\.wav$/i.test(requestedPath))requestedPath=requestedPath.replace(/\.[A-Za-z0-9]+$/,'')+'.wav';}
+        else if(!opts.format&&!opts.response_format){var extension=(requestedPath.match(/\.([A-Za-z0-9]+)$/)||[])[1];if(extension&&/^(mp3|wav|opus|aac|flac|pcm)$/i.test(extension))payload.format=extension.toLowerCase();}
+        payload.destination=serverTtsDestination(requestedPath,payload.format);
+        await confirmBackendAgentAction(payload.engine==='local'?'Synthesize speech locally on the ForgeChat VM with its offline eSpeak NG engine and save it into the private backend-agent workspace? No third-party TTS provider will be called.':'Synthesize speech with the configured ForgeChat provider and save it into the private backend-agent workspace? The text will be sent to the provider.');
+        var result=await serverRequest('tts/synthesize-to-agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        result.path=result.agentPath;
+        result.saved=true;
+        return result;
+      }
+      async function serverTtsSpeak(opts) {
+        opts=opts||{};
+        var result=await serverTtsAudio(opts);
+        var wantPlay=opts.play!==false&&opts.speak!==false;
+        if(wantPlay){
+          try{var audio=new Audio(result.dataUrl);if(opts.rate!=null)audio.playbackRate=Math.min(4,Math.max(0.25,Number(opts.rate)||1));await audio.play();result.spoken=true;result.played=true;}
+          catch(error){result.spoken=false;result.played=false;result.playError=String(error&&error.message||error);}
+        }
+        if(!opts.returnAudio&&opts.play!==false&&result.spoken){delete result.base64;delete result.dataUrl;}
+        return result;
+      }
+      var serverTts = {
+        isAvailable:async function(opts){opts=opts||{};try{var catalog=await serverTtsVoices(opts);return {available:!!catalog.available,backend:'forgechat-server',engine:catalog.engine||'cloud',providerId:catalog.providerId||'',note:catalog.note||''};}catch(error){return {available:false,backend:'forgechat-server',engine:opts.engine||'cloud',error:String(error&&error.message||error)};}},
+        getVoices:serverTtsVoices,
+        speak:serverTtsSpeak,
+        synthesizeToFile:serverTtsToAgent,
+        stop:async function(){return {ok:true,stopped:false,note:'Completed VM/provider synthesis requests cannot be canceled retroactively.'};},
+      };
+      async function serverProviders() {
+        if (!serverProviderCache) {
+          serverProviderCache = serverRequest('providers').then(function(result){
+            var providers=Array.isArray(result.providers)?result.providers:[],defaultId=String(result.selectedId||result.defaultId||(providers[0]&&providers[0].id)||''),savedId=String(storageGet('provider','')||'');
+            selectedId=providers.some(function(provider){return provider&&provider.id===savedId;})?savedId:defaultId;
+            return {providers:providers,selectedId:defaultId};
+          }).catch(function(error){ serverProviderCache = null; throw error; });
+        }
+        return serverProviderCache;
+      }
+      async function serverChatPayload(input) {
+        var opts = typeof input === 'string' ? { prompt: input } : (input || {});
+        var catalog = await serverProviders();
+        var available = catalog.providers;
+        if (!available.length) throw new Error('No AI provider is configured on the ForgeChat server.');
+        var desired = String(opts.providerId || opts.provider || storageGet('provider', '') || selectedId || catalog.selectedId || '');
+        var provider = available.find(function(p){ return p && p.id === desired; }) || available.find(function(p){ return p && p.id === (config.serverProvider || ''); }) || available.find(function(p){ return p && p.id === catalog.selectedId; }) || available[0];
+        if (!provider) throw new Error('No AI provider is available on the ForgeChat server.');
+        selectedId = String(provider.id);
+        storageSet('provider', selectedId);
+        var messages = toMessages(opts);
+        if (Array.isArray(opts.attachments) && opts.attachments.length) messages = attachToLatestUser(messages, opts.attachments, { kind: provider.kind || 'openai' });
+        if (messages.some(function(message){return Array.isArray(message && message.content) && message.content.some(function(part){return part && part.type==='forge_file';});})) throw new Error('ForgeChat server exports support image and text attachments only; binary documents are not supported yet.');
+        var request = { providerId: selectedId, model: String(opts.model || provider.model || ''), messages: messages };
+        if (opts.temperature != null) request.temperature = opts.temperature;
+        if (opts.max_tokens != null) request.max_tokens = opts.max_tokens;
+        if (opts.response_format != null) request.response_format = opts.response_format;
+        return {opts:opts,provider:provider,request:request};
+      }
+      async function serverChat(input) {
+        var prepared = await serverChatPayload(input);
+        return serverRequest('chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prepared.request), signal: prepared.opts.signal });
+      }
+      async function serverChatStream(input) {
+        var prepared = await serverChatPayload(input), opts = prepared.opts;
+        var streamId = String(opts.id || ('forgechat-' + Date.now() + '-' + Math.random().toString(36).slice(2,10)));
+        var controller = typeof AbortController === 'function' ? new AbortController() : null;
+        var externalSignal = opts.signal, abortListener = null;
+        if (controller && externalSignal) {
+          if (externalSignal.aborted) controller.abort();
+          else { abortListener = function(){controller.abort();}; externalSignal.addEventListener('abort', abortListener, {once:true}); }
+        }
+        if (controller) serverStreamControllers[streamId] = controller;
+        var response;
+        try {
+          response = await fetch(serverApiUrl('chat/stream'), { method:'POST', credentials:'same-origin', cache:'no-store', headers:{'Content-Type':'application/json','X-ForgeChat-App':serverAppId}, body:JSON.stringify(prepared.request), signal:controller ? controller.signal : externalSignal });
+        } catch(error) {
+          if(controller)delete serverStreamControllers[streamId];
+          if(externalSignal&&abortListener)externalSignal.removeEventListener('abort',abortListener);
+          if (controller && controller.signal.aborted) throw new Error('ForgeChat chat was cancelled.');
+          throw new Error('Could not reach the ForgeChat server. Check the HTTPS connection and sign in at ' + serverBase + '/login. Details: ' + String(error&&error.message||error));
+        }
+        var content = '', completed = false, reader = null;
+        function emitData(data) {
+          var event;
+          try { event = JSON.parse(data); } catch (_) { throw new Error('ForgeChat server returned an invalid stream event.'); }
+          if (event.type === 'delta') {
+            var delta = String(event.content || ''); content += delta;
+            if (typeof opts.onToken === 'function') opts.onToken(delta,{id:streamId,delta:delta,done:false});
+            if (typeof opts.onDelta === 'function' && opts.onDelta !== opts.onToken) opts.onDelta(delta,{id:streamId,delta:delta,done:false});
+          } else if (event.type === 'error') throw new Error(event.detail || 'The configured AI provider request failed.');
+          else if (event.type === 'done') completed = true;
+        }
+        try {
+          if (response.status === 401) throw new Error('Your ForgeChat session expired. Sign in again at ' + serverBase + '/login.');
+          if (!response.ok) { var failure=await response.json().catch(function(){return {};}); throw new Error(failure.detail||('ForgeChat server returned HTTP '+response.status)); }
+          if (!response.body || typeof response.body.getReader !== 'function') {
+            var fallback=await serverRequest('chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(prepared.request),signal:controller?controller.signal:externalSignal});
+            content=String(fallback.content||fallback.text||'');
+            if(typeof opts.onToken==='function')opts.onToken(content,{id:streamId,delta:content,done:false});
+            if(typeof opts.onDelta==='function'&&opts.onDelta!==opts.onToken)opts.onDelta(content,{id:streamId,delta:content,done:false});
+            completed=true;
+            return Object.assign({},fallback,{content:content,text:content,id:streamId});
+          }
+          reader=response.body.getReader();
+          var decoder=new TextDecoder('utf-8'),buffer='',dataLines=[];
+          function consumeLine(line){
+            if(line===''){if(dataLines.length){emitData(dataLines.join('\n'));dataLines=[];}return;}
+            if(line.indexOf('data:')===0)dataLines.push(line.slice(5).replace(/^ /,''));
+          }
+          while(true){
+            var part=await reader.read();
+            if(part.done)break;
+            buffer+=decoder.decode(part.value,{stream:true});
+            var lines=buffer.split(/\r?\n/);buffer=lines.pop();
+            lines.forEach(consumeLine);
+          }
+          buffer+=decoder.decode();
+          if(buffer)consumeLine(buffer);
+          if(dataLines.length)emitData(dataLines.join('\n'));
+          if(!completed)throw new Error('ForgeChat stream ended before completion.');
+          if(typeof opts.onToken==='function')opts.onToken('',{id:streamId,delta:'',done:true,content:content});
+          if(typeof opts.onDelta==='function'&&opts.onDelta!==opts.onToken)opts.onDelta('',{id:streamId,delta:'',done:true,content:content});
+          if(typeof opts.onDone==='function')opts.onDone(content,{id:streamId,done:true});
+          if(typeof opts.onFinish==='function')opts.onFinish(content,{id:streamId,done:true});
+          return {ok:true,content:content,text:content,provider:prepared.provider.label,providerId:prepared.provider.id,model:prepared.request.model,usage:null,id:streamId};
+        } finally {
+          if(controller && !completed)controller.abort();
+          if(reader && !completed && typeof reader.cancel==='function')await reader.cancel().catch(function(){});
+          if(controller)delete serverStreamControllers[streamId];
+          if(externalSignal&&abortListener)externalSignal.removeEventListener('abort',abortListener);
+        }
       }
       function messageText(content) {
         if (typeof content === 'string') return content;
@@ -25668,6 +25928,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       function normalizeBase(base) { return String(base || '').replace(/\/+$/, ''); }
       async function chat(input) {
         var opts = typeof input === 'string' ? { prompt: input } : (input || {});
+        if (serverMode) return serverChat(input);
         var p = activeProvider(opts);
         if (!p) throw new Error('No provider is available in this standalone export.');
         var messages = attachToLatestUser(toMessages(opts), opts.attachments, p);
@@ -25721,8 +25982,34 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         content = String(content == null ? '' : content);
         return { ok: true, content: content, text: content, provider: p.label || p.id, providerId: p.id, model: result.model || model, usage: result.usage || null, raw: result };
       }
+      async function generateServerImage(args) {
+        var prompt=String(args.prompt||'').trim();
+        if(!prompt)throw new Error('image_generate: prompt is required.');
+        var catalog=await serverProviders(),requested=String(args.providerId||args.provider||selectedId||catalog.selectedId||''),ordered=[];
+        function addProvider(p){if(p&&p.available&&Array.isArray(p.imageModels)&&p.imageModels.length&&!ordered.some(function(item){return item.id===p.id;}))ordered.push(p);}
+        addProvider(catalog.providers.find(function(p){return p.id===requested;}));
+        addProvider(catalog.providers.find(function(p){return p.id==='xai';}));
+        catalog.providers.forEach(addProvider);
+        if(!ordered.length)throw new Error('No image-generation model is enabled on the ForgeChat server. Configure an image_models entry for a compatible provider.');
+        if(typeof window.confirm!=='function')throw new Error('This browser cannot confirm billable image-generation requests.');
+        if(!window.confirm('Generate an image using the ForgeChat server? The prompt and any attached images will be sent to the configured provider and may incur charges.'))return {ok:false,cancelled:true,images:[],count:0};
+        var requestedModels=Array.isArray(args.models)?args.models.map(function(value){return String(value||'').trim();}).filter(Boolean).slice(0,8):[];
+        if(!requestedModels.length&&args.model)requestedModels=[String(args.model).trim()];
+        var inputImages=(Array.isArray(args.images)?args.images:[]).map(function(value){var image=String(value||'').trim();if(!image)return '';if(/^data:image\//i.test(image))return image;if(/^https?:\/\//i.test(image))throw new Error('ForgeChat image generation accepts attached local image data only.');return 'data:image/png;base64,'+image.replace(/^data:image\/[a-z0-9.+-]+;base64,/i,'');}).filter(Boolean);
+        var errors=[];
+        for(var pi=0;pi<ordered.length;pi++){
+          var provider=ordered[pi],models=requestedModels.length?requestedModels.filter(function(model){return provider.imageModels.indexOf(model)>=0;}):provider.imageModels;
+          for(var mi=0;mi<models.length;mi++){
+            try{return await serverRequest('images/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({providerId:provider.id,model:models[mi],prompt:prompt,n:Math.max(1,Math.min(4,parseInt(args.n,10)||1)),images:inputImages,confirm:true})});}
+            catch(error){errors.push(provider.id+' ['+models[mi]+']: '+String(error&&error.message||error).slice(0,240));}
+          }
+        }
+        if(!errors.length)throw new Error('No configured image-generation provider supports the requested model.');
+        throw new Error('image_generate failed: '+errors.join(' | '));
+      }
       async function generateImage(args) {
         args = args || {};
+        if (serverMode) return generateServerImage(args);
         var prompt = String(args.prompt || '').trim();
         if (!prompt) throw new Error('image_generate: prompt is required.');
         var requestedProvider = String(args.providerId || args.provider || selectedId || '');
@@ -25784,10 +26071,11 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           throw new Error('Standalone browser runtime supports only ForgeHost.tools.run("image_generate", args); tool "'+String(name||'')+'" requires Forge.');
         },
         execute: function(nameOrOpts,args){return tools.run(nameOrOpts,args);},
-        list: async function(){return {ok:true,count:1,tools:[{type:'function',function:{name:'image_generate',description:'Generate an image through a selected browser-accessible provider; asks for confirmation before sending.',parameters:{type:'object',properties:{prompt:{type:'string'},images:{type:'array',items:{type:'string'}},n:{type:'integer',minimum:1,maximum:4},model:{type:'string'}},required:['prompt']}}}],catalog:[{name:'image_generate',group:'media',risk:'confirm',permissions:[],description:'Generate an image through a selected browser-accessible provider; asks for confirmation before sending.'}],bridgeMethods:[],riskMax:'safe'};},
+        list: async function(){if(serverMode){var providers=await serverProviders(),enabled=providers.providers.some(function(p){return p.available&&Array.isArray(p.imageModels)&&p.imageModels.length;});if(!enabled)return {ok:true,count:0,tools:[],catalog:[],bridgeMethods:[],riskMax:'safe'};}return {ok:true,count:1,tools:[{type:'function',function:{name:'image_generate',description:'Generate an image through an enabled provider; confirms before sending the prompt.',parameters:{type:'object',properties:{prompt:{type:'string'},images:{type:'array',items:{type:'string'}},n:{type:'integer',minimum:1,maximum:4},model:{type:'string'}},required:['prompt']}}}],catalog:[{name:'image_generate',group:'media',risk:'confirm',permissions:[],description:'Generate an image through an enabled provider; confirms before sending the prompt.'}],bridgeMethods:[],riskMax:'safe'};},
+
         catalog: async function(){var r=await tools.list();return {ok:true,catalog:r.catalog,bridgeMethods:[]};},
         registry: async function(){return tools.list();},
-        groups: async function(){return ['media'];},
+        groups: async function(){if(!serverMode)return ['media'];var result=await tools.list();return result.count?['media']:[];},
       };
       async function pickFiles(opts) {
         opts = opts || {};
@@ -25801,10 +26089,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
           var finished = false;
           function cleanup(){ if(finished)return; finished=true; input.onchange=null; input.oncancel=null; if(input.parentNode)input.parentNode.removeChild(input); else if(input.remove)input.remove(); }
           input.onchange = function(){
-            var files = Array.prototype.slice.call(input.files || []);
+            var files = Array.prototype.slice.call(input.files || []),maxBytes=Number(opts.maxBytes)||0;
+            if(maxBytes>0&&files.some(function(file){return Number(file.size)>maxBytes;})){cleanup();reject(new Error('Selected file exceeds the '+maxBytes+'-byte limit.'));return;}
+            if(opts.inline===false){var direct=files.map(function(file){return {name:file.name,mime:file.type||'application/octet-stream',type:file.type||'application/octet-stream',size:file.size,file:file,inline:false};});cleanup();resolve(opts.multiple?direct:(direct[0]||null));return;}
             Promise.all(files.map(function(file){ return new Promise(function(done, fail){
               var reader = new FileReader();
-              reader.onload = function(){ var dataUrl = String(reader.result || ''); done({ name: file.name, mime: file.type || 'application/octet-stream', type: file.type || 'application/octet-stream', size: file.size, dataUrl: dataUrl, base64: dataUrl.split(',')[1] || '' }); };
+              reader.onload = function(){ var dataUrl = String(reader.result || ''); done({ name: file.name, mime: file.type || 'application/octet-stream', type: file.type || 'application/octet-stream', size: file.size, dataUrl: dataUrl, base64: dataUrl.split(',')[1] || '', inline:true }); };
               reader.onerror = function(){ fail(reader.error || new Error('Could not read selected file')); };
               reader.readAsDataURL(file);
             }); })).then(function(list){ cleanup(); resolve(opts.multiple ? list : (list[0] || null)); }, function(error){ cleanup(); reject(error); });
@@ -25815,13 +26105,52 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         });
       }
       function browserCameraAvailable() {
-        try { var input=document.createElement('input'); return ('capture' in input) || !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+        try { var input=document.createElement('input'); return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || ('capture' in input); }
         catch (_) { return false; }
+      }
+      function captureLiveBrowserPhoto(opts) {
+        opts=opts||{};
+        var root=document.body||document.documentElement;
+        if(!root||!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=='function')return Promise.reject(new Error('Live camera capture is not available in this browser.'));
+        return new Promise(function(resolve,reject){
+          var overlay=document.createElement('div'),panel=document.createElement('section'),video=document.createElement('video'),status=document.createElement('p'),actions=document.createElement('div');
+          var capture=document.createElement('button'),switchCamera=document.createElement('button'),cancel=document.createElement('button');
+          var stream=null,finished=false,facing=opts.facing==='front'?'user':'environment';
+          overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Take a photo');
+          overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:16px;background:rgba(3,7,18,.92);';
+          panel.style.cssText='width:min(720px,100%);padding:16px;border:1px solid #53627e;border-radius:18px;background:#111827;color:#f8fafc;font:15px system-ui,sans-serif;box-shadow:0 20px 70px #0009;';
+          video.setAttribute('playsinline','');video.autoplay=true;video.muted=true;video.style.cssText='display:block;width:100%;max-height:70vh;min-height:220px;object-fit:contain;background:#030712;border-radius:12px;';
+          status.textContent='Starting camera…';status.style.cssText='min-height:22px;color:#cbd5e1;margin:12px 0;';
+          actions.style.cssText='display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;';
+          [capture,switchCamera,cancel].forEach(function(button){button.type='button';button.style.cssText='padding:10px 14px;border:1px solid #53627e;border-radius:10px;background:#26344d;color:#f8fafc;font:inherit;font-weight:650;cursor:pointer;';});
+          capture.textContent='Take photo';capture.style.background='#8b9cff';capture.style.color='#0b1020';switchCamera.textContent='Switch camera';cancel.textContent='Cancel';
+          actions.appendChild(switchCamera);actions.appendChild(cancel);actions.appendChild(capture);panel.appendChild(video);panel.appendChild(status);panel.appendChild(actions);overlay.appendChild(panel);root.appendChild(overlay);
+          function stopStream(){if(stream){try{stream.getTracks().forEach(function(track){track.stop();});}catch(_){}stream=null;}video.srcObject=null;}
+          function finish(value,error){if(finished)return;finished=true;stopStream();if(overlay.parentNode)overlay.parentNode.removeChild(overlay);if(error)reject(error);else resolve(value);}
+          async function startCamera(){
+            stopStream();status.textContent='Starting camera…';capture.disabled=true;
+            try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facing},width:{ideal:Math.max(320,Math.min(2560,Number(opts.maxWidth)||1280))}}});video.srcObject=stream;await video.play();capture.disabled=false;status.textContent=facing==='user'?'Front camera ready':'Back camera ready';}
+            catch(error){finish(null,error);}
+          }
+          capture.onclick=function(){
+            if(!video.videoWidth||!video.videoHeight){status.textContent='Camera is still starting. Try again in a moment.';return;}
+            try{
+              var limit=Math.max(320,Math.min(2560,Number(opts.maxWidth)||1280)),scale=Math.min(1,limit/video.videoWidth),width=Math.max(1,Math.round(video.videoWidth*scale)),height=Math.max(1,Math.round(video.videoHeight*scale));
+              var canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;canvas.getContext('2d').drawImage(video,0,0,width,height);
+              var quality=Math.max(.5,Math.min(1,(Number(opts.quality)||85)/100)),dataUrl=canvas.toDataURL('image/jpeg',quality),base64=dataUrl.split(',')[1]||'';
+              finish({name:'camera.jpg',mime:'image/jpeg',type:'image/jpeg',size:Math.ceil(base64.length*3/4),width:width,height:height,dataUrl:dataUrl,base64:base64});
+            }catch(error){status.textContent='Could not capture photo: '+String(error&&error.message||error);}
+          };
+          switchCamera.onclick=function(){facing=facing==='user'?'environment':'user';startCamera();};
+          cancel.onclick=function(){finish(null,null);};
+          overlay.onclick=function(event){if(event.target===overlay)finish(null,null);};
+          startCamera();
+        });
       }
       function browserPhotoResult(file) {
         if (!file) return Promise.resolve(null);
         var mime=file.mime||file.type||'image/jpeg';
-        var result={name:file.name||'photo',mime:mime,type:mime,format:mime.indexOf('/')>=0?mime.split('/')[1]:'jpeg',size:file.size||0,bytes:file.size||0,dataUrl:file.dataUrl||'',base64:file.base64||'',width:0,height:0};
+        var result={name:file.name||'photo',mime:mime,type:mime,format:mime.indexOf('/')>=0?mime.split('/')[1]:'jpeg',size:file.size||0,bytes:file.size||0,dataUrl:file.dataUrl||'',base64:file.base64||'',width:file.width||0,height:file.height||0};
         if (typeof Image==='undefined' || !result.dataUrl) return Promise.resolve(result);
         return new Promise(function(resolve){
           var image=new Image();
@@ -25831,9 +26160,9 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         });
       }
       var camera = {
-        isAvailable: async function(){var available=browserCameraAvailable();return {available:available,browser:true,native:false,method:available?'file-input-capture':null};},
-        requestPermission: async function(){return {granted:true,browser:true,promptOnUse:true,note:'The browser or operating system handles camera permission when capture starts.'};},
-        takePhoto: async function(opts){opts=opts||{};var file=await pickFiles({accept:'image/*',multiple:false,capture:opts.facing==='front'?'user':'environment'});return browserPhotoResult(file);},
+        isAvailable: async function(){var available=browserCameraAvailable();return {available:available,browser:true,native:false,method:available&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia?'live-camera':'file-input-capture'};},
+        requestPermission: async function(){return {granted:true,browser:true,promptOnUse:true,note:'The browser or operating system requests camera permission when live capture starts.'};},
+        takePhoto: async function(opts){opts=opts||{};if(navigator.mediaDevices&&typeof navigator.mediaDevices.getUserMedia==='function'){try{return await browserPhotoResult(await captureLiveBrowserPhoto(opts));}catch(error){try{var fallback=await pickFiles({accept:'image/*',multiple:false,capture:opts.facing==='front'?'user':'environment'});if(fallback)return await browserPhotoResult(fallback);return null;}catch(pickerError){var reason=error&&error.name==='NotAllowedError'?'Camera permission was denied':error&&error.name==='NotFoundError'?'No camera was found':error&&error.name==='NotReadableError'?'The camera is busy in another app':'Live camera capture failed';throw new Error(reason+'. Browser camera picker also failed: '+String(pickerError&&pickerError.message||pickerError));}}}var file=await pickFiles({accept:'image/*',multiple:false,capture:opts.facing==='front'?'user':'environment'});return browserPhotoResult(file);},
         pickPhoto: async function(opts){opts=opts||{};var file=await pickFiles({accept:'image/*',multiple:false});return browserPhotoResult(file);},
         cleanupTempPhotos: async function(){return {ok:true,cleaned:0,browser:true};},
         cleanupTemp: async function(){return {ok:true,cleaned:0,browser:true};},
@@ -25847,24 +26176,51 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         save: async function(){ return { ok: true }; }, restore: async function(){ return { ok: true }; },
       };
       var ai = {
-        isAvailable: async function(){ return { available: providers.some(function(p){return !!(p.base&&p.model);}), providers: providers.map(function(p){ return { id:p.id, label:p.label, model:p.model, available:!!(p.base&&p.model), needsKey:!(p.key||sessionKeys[p.id]||p.allowEmptyKey) }; }), providerId: selectedId }; },
-        listProviders: async function(){ return { providers: providers.map(function(p){ return { id:p.id, label:p.label, model:p.model, available:!!(p.base&&p.model), needsKey:!(p.key||sessionKeys[p.id]||p.allowEmptyKey), isSelected:p.id===selectedId }; }), selectedId:selectedId, defaultId:selectedId }; },
+        isAvailable: async function(){
+          if(serverMode){try{var catalog=await serverProviders(),list=catalog.providers.map(function(p){return {id:p.id,label:p.label,model:p.model,available:!!p.available,needsKey:false,isSelected:p.id===selectedId};});if(!selectedId||!list.some(function(p){return p.id===selectedId;}))selectedId=catalog.selectedId||(list[0]&&list[0].id)||'';return {available:list.some(function(p){return p.available;}),providers:list,providerId:selectedId};}catch(e){return {available:false,providers:[],needsLogin:true,error:String(e&&e.message||e)};}}
+          return { available: providers.some(function(p){return !!(p.base&&p.model);}), providers: providers.map(function(p){ return { id:p.id, label:p.label, model:p.model, available:!!(p.base&&p.model), needsKey:!(p.key||sessionKeys[p.id]||p.allowEmptyKey) }; }), providerId: selectedId };
+        },
+        listProviders: async function(){
+          if(serverMode){var catalog=await serverProviders(),list=catalog.providers;if(!selectedId||!list.some(function(p){return p.id===selectedId;}))selectedId=catalog.selectedId||(list[0]&&list[0].id)||'';return {providers:list.map(function(p){return {id:p.id,label:p.label,model:p.model,available:!!p.available,needsKey:false,isSelected:p.id===selectedId};}),selectedId:selectedId,defaultId:catalog.selectedId||selectedId};}
+          return { providers: providers.map(function(p){ return { id:p.id, label:p.label, model:p.model, available:!!(p.base&&p.model), needsKey:!(p.key||sessionKeys[p.id]||p.allowEmptyKey), isSelected:p.id===selectedId }; }), selectedId:selectedId, defaultId:selectedId };
+        },
         menu: async function(){ return this.listProviders(); },
-        getProvider: async function(){ return { providerId:selectedId, id:selectedId }; },
-        setProvider: async function(id){ if (!findProvider(id)) throw new Error('Provider was not included in this standalone export: ' + id); selectedId=String(id); storageSet('provider', selectedId); return { ok:true, providerId:selectedId }; },
+        getProvider: async function(){ if(serverMode){var list=await serverProviders();if(!selectedId)selectedId=list.selectedId||(list.providers[0]&&list.providers[0].id)||'';}return { providerId:selectedId, id:selectedId }; },
+        setProvider: async function(id){ if(serverMode){var list=await serverProviders();if(!list.providers.some(function(p){return p.id===id;}))throw new Error('Provider is not enabled on the ForgeChat server: '+id);selectedId=String(id);storageSet('provider',selectedId);return {ok:true,providerId:selectedId};}if (!findProvider(id)) throw new Error('Provider was not included in this standalone export: ' + id); selectedId=String(id); storageSet('provider', selectedId); return { ok:true, providerId:selectedId }; },
+        listVoices: async function(opts){if(serverMode)return serverTtsVoices(opts||{});return unsupported('ai.listVoices');},
         chat: chat,
-        chatStream: async function(opts){ opts=opts||{}; var result=await chat(opts); if (typeof opts.onToken==='function') opts.onToken(result.content,{done:true}); if (typeof opts.onDelta==='function') opts.onDelta(result.content,{done:true}); return result; },
-        configure: async function(opts){ opts=opts||{}; var id=String(opts.providerId||selectedId); if (!findProvider(id)) throw new Error('Unknown exported provider: '+id); sessionKeys[id]=String(opts.apiKey||opts.key||''); if(opts.model){findProvider(id).model=String(opts.model);} return {ok:true,providerId:id}; },
-        agent: function(){ return unsupported('ai.agent (host-managed tools are Forge-only)'); },
+        chatStream: async function(opts){ opts=opts||{};if(serverMode)return serverChatStream(opts);var result=await chat(opts);if(typeof opts.onToken==='function')opts.onToken(result.content,{done:true});if(typeof opts.onDelta==='function')opts.onDelta(result.content,{done:true});return result; },
+        configure: async function(opts){ opts=opts||{};if(serverMode){if(opts.apiKey||opts.key)throw new Error('Provider keys are managed by the ForgeChat server and cannot be set in the HTML.');if(opts.providerId||opts.provider)return ai.setProvider(opts.providerId||opts.provider);return {ok:true,providerId:selectedId};}var id=String(opts.providerId||selectedId); if (!findProvider(id)) throw new Error('Unknown exported provider: '+id); sessionKeys[id]=String(opts.apiKey||opts.key||''); if(opts.model){findProvider(id).model=String(opts.model);} return {ok:true,providerId:id}; },
+        agent: async function(opts){
+          opts=opts||{};
+          if(Array.isArray(opts.messages))opts.messages=opts.messages.map(function(message){
+            if(!message||typeof message!=='object')return {role:'user',content:String(message||'')};
+            var role=message.role==='system'||message.role==='assistant'||message.role==='user'?message.role:'user';
+            var content=message.content;
+            if(message.role==='tool')content='Tool result ('+String(message.name||'tool')+'):\\n'+messageText(content);
+            if(content==null)content='';
+            return {role:role,content:content};
+          });
+          var result=serverMode?await serverChatStream(opts):await ai.chatStream(opts);
+          result.rounds=1;
+          result.tools=[];
+          result.toolMode='chat-only';
+          result.toolsUnavailable=true;
+          result.warning='This ForgeChat export supports server-backed chat only; Forge host-managed tools are unavailable.';
+          try{if(typeof opts.onChat==='function')opts.onChat({round:1,content:result.content,tool_calls:[]},result);}catch(e){console.error('[ai.agent chat-only onChat]',e);}
+          try{if(typeof opts.onRound==='function')opts.onRound({round:1,toolCalls:[]},result);}catch(e){console.error('[ai.agent chat-only onRound]',e);}
+          return result;
+        },
         runTask: function(){ return unsupported('ai.runTask (host-managed agent loop is Forge-only)'); },
-        cancel: async function(){ return {ok:true,cancelled:false}; },
-        tts: function(){ return unsupported('ai.tts'); },
-        transcribe: function(){ return unsupported('ai.transcribe'); },
+        cancel: async function(id){if(serverMode){var target=String(id||''),cancelled=false;if(target){if(serverStreamControllers[target]){serverStreamControllers[target].abort();cancelled=true;}}else Object.keys(serverStreamControllers).forEach(function(key){serverStreamControllers[key].abort();cancelled=true;});return {ok:true,cancelled:cancelled,id:target||undefined};}return {ok:true,cancelled:false}; },
+        tts: async function(opts){if(serverMode)return serverTtsSpeak(opts||{});return unsupported('ai.tts');},
+        ttsToFile: async function(opts){if(serverMode)return serverTtsToAgent(opts||{});return unsupported('ai.ttsToFile');},
+        transcribe: function(opts){if(serverMode)return serverTranscribe(opts||{});return unsupported('ai.transcribe');},
         liveTranslate: new Proxy({}, { get:function(_,method){ return function(){return unsupported('ai.liveTranslate.'+String(method));}; } }),
       };
       var host = {
         getAppInfo: async function(){ return { id: appId, title: appTitle, standalone:true }; },
-        getCapabilities: async function(){ return { native:false, browser:true, ai:providers.length>0, files:true, share:!!navigator.share, storage:true, camera:browserCameraAvailable(), mic:false, location:false, smsCompose:false, contacts:false, termux:false, jobs:false, notify:false }; },
+        getCapabilities: async function(){ return { native:false, browser:true, ai:serverMode||providers.length>0, files:true, share:!!navigator.share, storage:true, camera:browserCameraAvailable(), tts:serverMode, mic:false, location:false, smsCompose:false, contacts:false, termux:serverMode, jobs:false, notify:false }; },
         ai: ai,
         tools: tools,
         state: state,
@@ -25880,6 +26236,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       ['mic','contacts','location','sms','phone','apps','termux','radio','notifications','notify','jobs','device','clipboard','qr','tts','audio','fs','keepAwake','secrets'].forEach(function(name){
         host[name] = new Proxy({}, { get:function(_,method){ return function(){return unsupported(name+'.'+String(method));}; } });
       });
+      if(serverMode){host.termux=serverTermux;host.tts=serverTts;}
       window.ForgeHost = window.ForgeHost || host;
       window.forge = window.forge || window.ForgeHost;
       if (config.keysEmbedded) {
@@ -25923,13 +26280,15 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       return { providers:runtimeProviders, choices:selected, selectedProvider:currentProviderId() };
     }
 
-    function buildStandaloneRuntimeSource(app, providerData, selectedKeys) {
-      const selected = new Map((selectedKeys||[]).map(x=>[x.id,x.key]));
-      const providers = providerData.providers.map(p=>Object.assign({},p,{key:selected.get(p.id)||''}));
-      let selectedProvider = providerData.selectedProvider;
+    function buildStandaloneRuntimeSource(app, providerData, selectedKeys, runtimeOptions = {}) {
+      const serverBacked = runtimeOptions.mode === 'forgechat';
+      const selected = serverBacked ? new Map() : new Map((selectedKeys||[]).map(x=>[x.id,x.key]));
+      const providers = serverBacked ? [] : providerData.providers.map(p=>Object.assign({},p,{key:selected.get(p.id)||''}));
+      let selectedProvider = serverBacked ? '' : providerData.selectedProvider;
       const configured = providers.find(p=>p.id===selectedProvider);
-      if (selected.size && !selected.has(selectedProvider) && !(configured && configured.allowEmptyKey)) selectedProvider = selectedKeys[0].id;
+      if (!serverBacked && selected.size && !selected.has(selectedProvider) && !(configured && configured.allowEmptyKey)) selectedProvider = selectedKeys[0].id;
       const config = { appId:String(app.id||'standalone'), title:String(app.title||'Standalone mini-app'), providers:providers, selectedProvider:selectedProvider, keysEmbedded:selected.size>0 };
+      if (serverBacked) { config.backend='forgechat'; config.apiBase=String(runtimeOptions.apiBase||'/forgechat'); }
       const safeConfig = JSON.stringify(config).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
       return '('+standaloneRuntimeBootstrap.toString()+')('+safeConfig+');';
     }
@@ -25942,7 +26301,17 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       return '<!doctype html><html><head><meta charset="utf-8">'+script+'</head><body>'+html+'</body></html>';
     }
 
-    function chooseStandaloneExport(app) {
+    async function forgeChatHtmlExportEnabled() {
+      if (!Capacitor.isNativePlatform()) return true;
+      try {
+        const capabilities = await AppsBridge.getCapabilities();
+        return capabilities?.forgeChatHtmlExport === true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function chooseStandaloneExport(app, forgeChatEnabled) {
       const data = standaloneProviderData();
       return new Promise(resolve=>{
         const overlay=document.createElement('div');
@@ -25950,7 +26319,8 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         const panel=document.createElement('section');
         panel.className='standalone-export-panel';
         panel.setAttribute('role','dialog'); panel.setAttribute('aria-modal','true'); panel.setAttribute('aria-labelledby','standalone-export-title');
-        panel.innerHTML='<h2 id="standalone-export-title">Export standalone HTML</h2><p class="standalone-export-copy">Create one HTML file for a regular browser. Forge-only device APIs and host-managed agents are unavailable in standalone mode; unsupported calls will return an explanatory error.</p><div class="standalone-export-warning"><strong>No Forge-saved LLM keys are included by default.</strong> This does not remove secrets already hard-coded in the mini-app. If you choose keys below, they will be readable in the HTML source and browser memory. Anyone receiving the file can copy/use them and may incur provider charges. Do not publish or send a key-embedded export to an untrusted person.</div><div id="standalone-key-choices" class="standalone-export-key-choices"></div><label class="standalone-export-ack"><input id="standalone-ack" type="checkbox"><span>I understand embedded keys are recoverable by anyone with the exported HTML and accept the associated account/cost risk.</span></label><div class="standalone-export-actions"><button class="btn secondary export-cancel" data-action="cancel">Cancel</button><button class="btn" data-action="plain">Export standalone · no keys</button><button class="btn danger export-embed" data-action="embed">Embed selected keys &amp; export</button></div></section>';
+        panel.innerHTML='<h2 id="standalone-export-title">Export standalone HTML</h2><p class="standalone-export-copy forgechat-export-only">Create one HTML file for a regular browser. Forge-only device APIs and host-managed tools are unavailable in standalone mode. A ForgeChat export can use server-backed chat and, only when the server owner provisions it and grants your account access, a private Linux Docker agent; it cannot execute Forge host tools.</p><p class="standalone-export-copy forgechat-export-only">ForgeChat export keeps provider keys on the server. Download the file, then sign in at <code>/forgechat/publish</code> to host the login-protected page. The hosted version will not work from <code>file://</code>.</p><div class="standalone-export-warning"><strong>No Forge-saved LLM keys are included by default.</strong> This does not remove secrets already hard-coded in the mini-app. If you choose keys below, they will be readable in the HTML source and browser memory. Anyone receiving the file can copy/use them and may incur provider charges. Do not publish or send a key-embedded export to an untrusted person.</div><div id="standalone-key-choices" class="standalone-export-key-choices"></div><label class="standalone-export-ack"><input id="standalone-ack" type="checkbox"><span>I understand embedded keys are recoverable by anyone with the exported HTML and accept the associated account/cost risk.</span></label><div class="standalone-export-actions"><button class="btn secondary export-cancel" data-action="cancel">Cancel</button><button class="btn" data-action="plain">Export standalone · no keys</button><button class="btn" data-action="forgechat">Export for ForgeChat · no keys</button><button class="btn danger export-embed" data-action="embed">Embed selected keys &amp; export</button></div></section>';
+        if(!forgeChatEnabled) panel.querySelectorAll('.forgechat-export-only,[data-action="forgechat"]').forEach(function(node){node.remove();});
         overlay.appendChild(panel); document.body.appendChild(overlay);
         const choices=panel.querySelector('#standalone-key-choices');
         if (!data.choices.length) choices.textContent='No saved provider keys are available to embed. Standalone AI can still prompt the recipient for their own key.';
@@ -25971,6 +26341,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         panel.querySelector('[data-action="cancel"]').focus();
         panel.querySelector('[data-action="cancel"]').onclick=()=>close(null);
         panel.querySelector('[data-action="plain"]').onclick=()=>close({mode:'standalone',keys:[]});
+        if(forgeChatEnabled) panel.querySelector('[data-action="forgechat"]').onclick=()=>close({mode:'forgechat',keys:[]});
         panel.querySelector('[data-action="embed"]').onclick=()=>{
           if(!panel.querySelector('#standalone-ack').checked){window.alert('Please acknowledge the API-key exposure warning before embedding keys.');return;}
           const keys=[];
@@ -25989,11 +26360,17 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         reportExport(t('export.nothing'), 'err', source);
         return;
       }
-      const choice = await chooseStandaloneExport(app);
-      if (!choice) return;
+      const forgeChatEnabled = await forgeChatHtmlExportEnabled();
+      const choice = await chooseStandaloneExport(app, forgeChatEnabled);
+      if (!choice || (choice.mode === 'forgechat' && !forgeChatEnabled)) return;
       const filename = safeExportName(app.title);
       const providerData = standaloneProviderData();
-      const html = injectStandaloneRuntime(app, buildStandaloneRuntimeSource(app, providerData, choice.keys));
+      const runtimeOptions = choice.mode === 'forgechat' ? { mode:'forgechat', apiBase:'/forgechat' } : {};
+      const html = injectStandaloneRuntime(app, buildStandaloneRuntimeSource(app, providerData, choice.keys, runtimeOptions));
+      function exportedMessage(name) {
+        const base = t('export.exported', { name:name });
+        return choice.mode === 'forgechat' ? base + ' ' + t('export.serverUpload', { url:'/forgechat/publish' }) : base;
+      }
 
       if (Capacitor.isNativePlatform()) {
         try {
@@ -26016,7 +26393,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
             files: [uri],
             dialogTitle: t('export.dialog'),
           });
-          reportExport(t('export.exported', { name: app.title || filename }), 'ok', source);
+          reportExport(exportedMessage(app.title || filename), 'ok', source);
           return;
         } catch (e) {
           // Fall through to anchor download if share/write fails
@@ -26038,7 +26415,7 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-        reportExport(t('export.exported', { name: filename }), 'ok', source);
+        reportExport(exportedMessage(filename), 'ok', source);
       } catch (e) {
         reportExport(t('export.failed', { msg: e?.message || e }), 'err', source);
       }

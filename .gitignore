@@ -39,5 +39,24 @@ android/keystore.properties
 android/.keystore/
 android/app/keystore.properties
 
+# ForgeChat local virtualenv and credentials/configuration
+server/.venv/
+server/.env
+server/.env.*
+!server/.env.example
+server/providers.local.json
+server/secrets/
+__pycache__/
+*.py[cod]
+
+# Generated graph-query state and build/release artifacts
+release-out/
+check.txt
+graphify-out/cache/last_query_stamp
+graphify-out/.graphify_learning.json
+graphify-out/.vocab.txt
+graphify-out/memory/
+graphify-out/reflections/
+
 # Agent tooling, not project content
 .pi/

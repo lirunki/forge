@@ -1,0 +1,27 @@
+[Unit]
+Description=ForgeChat root-owned provider import helper (local Unix socket only)
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/forgechat/server
+ExecStart=/opt/forgechat/server/.venv/bin/python -m forgechat.import_helper
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ReadWritePaths=/etc/forgechat /var/lib/forgechat
+RuntimeDirectory=forgechat-import
+RuntimeDirectoryMode=0755
+RestrictAddressFamilies=AF_UNIX
+# No network access is required; this is a local-only control socket.
+
+[Install]
+WantedBy=multi-user.target

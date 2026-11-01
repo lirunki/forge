@@ -43,6 +43,7 @@ public class AppsBridgePlugin extends Plugin {
         caps.put("launch", true);
         caps.put("resolve", true);
         caps.put("queryAllPackages", hasQueryAllPackages());
+        caps.put("forgeChatHtmlExport", BuildConfig.FORGECHAT_HTML_EXPORT_ENABLED);
         call.resolve(caps);
     }
 
