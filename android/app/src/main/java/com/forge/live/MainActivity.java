@@ -35,6 +35,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(JobBridgePlugin.class);
         registerPlugin(QrBridgePlugin.class);
         registerPlugin(DriveBridgePlugin.class);
+        registerPlugin(LiteRtLmBridgePlugin.class);
         registerPlugin(OpenHtmlBridgePlugin.class);
         super.onCreate(savedInstanceState);
 

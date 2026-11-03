@@ -138,6 +138,8 @@
                android:roundIcon="@mipmap/ic_launcher_round"
                android:appComponentFactory="androidx.core.app.CoreComponentFactory"
                android:requestLegacyExternalStorage="true">
+    <uses-native-library android:name="libvndksupport.so" android:required="false" />
+    <uses-native-library android:name="libOpenCL.so" android:required="false" />
     <activity android:theme="@style/AppTheme.NoActionBarLaunch"
               android:label="@string/title_activity_main"
               android:name="com.forge.live.MainActivity"
@@ -234,6 +236,11 @@
     <service android:name="com.forge.live.BackgroundForgeService"
              android:enabled="true"
              android:exported="false"
+             android:foregroundServiceType="dataSync" />
+    <service android:name="com.forge.live.LiteRtModelDownloadService"
+             android:enabled="true"
+             android:exported="false"
+             android:stopWithTask="false"
              android:foregroundServiceType="dataSync" />
     <activity android:theme="@style/AppTheme.NoActionBarLaunch"
               android:name="com.forge.live.QrScanActivity"

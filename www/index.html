@@ -1553,6 +1553,24 @@ termux-reload-settings</div>
           <label for="provider" data-i18n="ai.provider">Provider</label>
           <select id="provider"></select>
           <p class="field-hint" id="providerHint"></p>
+          <div id="litertlmControls" class="hidden" style="border:1px solid var(--border);border-radius:12px;padding:0.75rem;margin:0.5rem 0 0.85rem;background:var(--bg);">
+            <strong>Offline models</strong>
+            <button class="btn secondary small" id="btnLiteRtCatalog" type="button">Choose model</button>
+            <span id="litertlmSelectedModel" class="field-hint" style="display:block;margin-top:0.45rem;"></span>
+            <span id="playOfflineForgeNotice" class="field-hint hidden" style="display:block;margin-top:0.45rem;color:var(--warn,#fbbf24);">Offline model chat is available, but building or reforging apps with offline models is temporarily disabled in the Google Play version. Choose a cloud provider to build apps.</span>
+          </div>
+          <div id="litertlmCatalogModal" class="hidden" style="position:fixed;inset:0;z-index:16000;background:rgba(0,0,0,.74);display:grid;place-items:center;padding:1rem;">
+            <div style="width:min(720px,100%);max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:1rem;box-shadow:var(--shadow);">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;"><h2 style="font-size:1.08rem;margin:0;">Offline model catalog</h2><button id="btnLiteRtCatalogClose" class="btn secondary small" type="button">Close</button></div>
+              <p id="litertlmDeviceInfo" class="field-hint" style="margin:0.4rem 0;font-size:0.82rem;"></p>
+              <div style="display:flex;gap:0.45rem;align-items:center;flex-wrap:wrap;margin:0.65rem 0;">
+                <span id="litertlmFolderStatus" class="field-hint" hidden></span>
+              </div>
+              <label style="display:flex;gap:0.5rem;align-items:center;margin:0.5rem 0;"><input id="litertlmCpuFallback" type="checkbox" checked> Allow CPU fallback if GPU acceleration cannot initialize</label>
+              <div id="litertlmModelList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,265px),1fr));gap:0.5rem;margin-top:0.6rem;"></div>
+              <p id="litertlmCatalogStatus" class="field-hint" style="margin-top:0.65rem;"></p>
+            </div>
+          </div>
 
           <div class="settings-block" style="margin:0.15rem 0 0.85rem;">
             <button class="btn secondary small" id="btnAddOai" type="button" data-i18n="ai.addOai">+ Add OpenAI provider</button>
@@ -1825,6 +1843,7 @@ termux-reload-settings</div>
     const JobBridge = registerPlugin('JobBridge');
     const QrBridge = registerPlugin('QrBridge');
     const DriveBridge = registerPlugin('DriveBridge');
+    const LiteRtLmBridge = registerPlugin('LiteRtLm');
     const OpenHtmlBridge = registerPlugin('OpenHtmlBridge');
 
     /* ===================== i18n =====================
@@ -6531,6 +6550,7 @@ termux-reload-settings</div>
         if (caps && caps.flavor) window.__FORGE_BUILD.flavor = String(caps.flavor);
         if (caps && caps.debuggable) window.__FORGE_BUILD.debuggable = true;
         applyCodeModeFlavorVisibility();
+        syncPlayOfflineForgeNotice();
         checkHostedForgeUpdate();
       } catch (_) {}
       try {
@@ -7121,6 +7141,16 @@ termux-reload-settings</div>
       aiQuickSetup: document.getElementById('aiQuickSetup'),
       provider: document.getElementById('provider'),
       providerHint: document.getElementById('providerHint'),
+      litertlmControls: document.getElementById('litertlmControls'),
+      litertlmSelectedModel: document.getElementById('litertlmSelectedModel'),
+      litertlmCatalogModal: document.getElementById('litertlmCatalogModal'),
+      litertlmDeviceInfo: document.getElementById('litertlmDeviceInfo'),
+      litertlmModelList: document.getElementById('litertlmModelList'),
+      litertlmCatalogStatus: document.getElementById('litertlmCatalogStatus'),
+      litertlmFolderStatus: document.getElementById('litertlmFolderStatus'),
+      litertlmCpuFallback: document.getElementById('litertlmCpuFallback'),
+      btnLiteRtCatalog: document.getElementById('btnLiteRtCatalog'),
+      btnLiteRtCatalogClose: document.getElementById('btnLiteRtCatalogClose'),
       apiBase: document.getElementById('apiBase'),
       apiBaseLabel: document.getElementById('apiBaseLabel'),
       apiBaseHint: document.getElementById('apiBaseHint'),
@@ -7478,10 +7508,17 @@ termux-reload-settings</div>
         localStorage.setItem(LS.codeMode, JSON.stringify(m));
       } catch (_) {}
     }
+    function syncPlayOfflineForgeNotice() {
+      try {
+        const notice = document.getElementById('playOfflineForgeNotice');
+        if (notice) notice.classList.toggle('hidden', !isPlayFlavor());
+      } catch (_) {}
+    }
     function syncCodeModeCheckbox() {
       try { if (el.genCodeMode) el.genCodeMode.checked = isCodeModeEnabled(); } catch (_) {}
       try { syncCodeModeLimitsVisibility(); } catch (_) {}
       try { applyCodeModeFlavorVisibility(); } catch (_) {}
+      try { syncPlayOfflineForgeNotice(); } catch (_) {}
     }
     /** Code-mode runtime limits. All configurable in the Builder capabilities
      *  unfoldable (visible only when code mode is opted in for the active
@@ -7742,7 +7779,12 @@ termux-reload-settings</div>
 
     function getProviderMap() {
       const map = { ...BUILTIN_PROVIDERS };
-      for (const c of getCustomProviders()) map[c.id] = customToProvider(c);
+      if (Capacitor.isNativePlatform()) map.litertlm = {
+        id: 'litertlm', label: 'Offline (LiteRT-LM)',
+        hint: 'On-device inference using downloaded LiteRT-LM models. No cloud provider key or network inference.',
+        base: '', models: [], defaultModel: '', builtin: true, local: true, allowEmptyKey: true,
+      };
+      for (const c of getCustomProviders()) if (c.id !== 'litertlm') map[c.id] = customToProvider(c);
       return map;
     }
     function getProvider(id) {
@@ -7787,6 +7829,7 @@ termux-reload-settings</div>
         const prof = getProfiles()[id];
         if (prof?.allowEmptyKey) return true;
         const p = getProvider(id);
+        if (p?.local && id === 'litertlm') return true;
         const base = String(
           (id === currentProviderId() ? el.apiBase?.value : '') ||
           prof?.base || p?.base || ''
@@ -7914,6 +7957,7 @@ termux-reload-settings</div>
     // agentToolCallPending:  `${callId}:${toolCallId}` -> { resolve, timer }
     //                           (mini-app onToolCall veto round-trip)
     const streamAbortControllers = new Map();
+    const liteRtRequestIds = new Set();
     const agentCancelFlags = new Map();
     const agentToolCallPending = new Map();
     const agentToolAccessPending = new Map();
@@ -7969,6 +8013,7 @@ termux-reload-settings</div>
 
     function backendForRuntime(rt) {
       const p = rt?.provider || currentProvider();
+      if (String(rt?.providerId || p.id || '') === 'litertlm') return 'litertlm';
       const base = String(rt?.base || p.base || '').toLowerCase();
       const id = String(rt?.providerId || p.id || '').toLowerCase();
       const label = String(p.label || '').toLowerCase();
@@ -7993,9 +8038,9 @@ termux-reload-settings</div>
         model: rt.model || '',
         available,
         backend,
-        multimodal: true,
-        richAttachments: true,
-        kind: p.custom ? 'custom' : (p.azure ? 'azure' : 'builtin'),
+        multimodal: !p.local,
+        richAttachments: !p.local,
+        kind: p.local ? 'local' : (p.custom ? 'custom' : (p.azure ? 'azure' : 'builtin')),
         custom: !!p.custom,
         isDefault: !!isDefault,
         isSelected: !!isSelected,
@@ -8080,6 +8125,150 @@ termux-reload-settings</div>
       el.aiStatus.className = 'status-line' + (kind ? ' ' + kind : '');
     }
 
+    let liteRtListenerReady = false;
+    let liteRtRuntimeSupported = true;
+    let activeLiteRtDownloadId = '';
+    function setLiteRtStatus(message, error = false) {
+      if (!el.litertlmCatalogStatus) return;
+      el.litertlmCatalogStatus.textContent = String(message || '');
+      el.litertlmCatalogStatus.style.color = error ? 'var(--danger)' : 'var(--muted)';
+    }
+    function formatModelBytes(bytes) {
+      const n = Number(bytes) || 0;
+      return n >= 1024 * 1024 * 1024 ? (n / (1024 * 1024 * 1024)).toFixed(2) + ' GiB' : (n / (1024 * 1024)).toFixed(1) + ' MiB';
+    }
+    function openLiteRtCatalog(autoCloseOnSelect) {
+      if (!Capacitor.isNativePlatform()) {
+        setAiStatus('LiteRT-LM is available only in the Forge Android app.');
+        return;
+      }
+      el.litertlmCatalogModal?.classList.remove('hidden');
+      if (el.litertlmCatalogModal) el.litertlmCatalogModal.dataset.closeOnSelect = autoCloseOnSelect ? '1' : '0';
+      refreshLiteRtCatalog().catch(error => setLiteRtStatus(error?.message || error, true));
+    }
+    function closeLiteRtCatalog() { el.litertlmCatalogModal?.classList.add('hidden'); }
+    async function refreshLiteRtCatalog() {
+      const [catalog, device] = await Promise.all([LiteRtLmBridge.getCatalog(), LiteRtLmBridge.getDeviceInfo()]);
+      const ram = Number(device.availableRamBytes || 0);
+      const storage = Number(device.appStorageAvailableBytes || 0);
+      liteRtRuntimeSupported = device.runtimeSupported !== false;
+      el.litertlmDeviceInfo.textContent = `${device.device || 'Android device'} · ${formatModelBytes(ram)} RAM · ${formatModelBytes(storage)} free storage${liteRtRuntimeSupported ? '' : ' · unsupported ABI (arm64-v8a/x86_64 required)'}`;
+      if (!liteRtRuntimeSupported) setLiteRtStatus('Inference unavailable: this device ABI is not supported by the bundled LiteRT-LM runtime.', true);
+      el.litertlmFolderStatus.textContent = 'Models download from a reviewed Forge catalog, are verified by SHA-256, and stay in app-private storage.';
+      const models = Array.isArray(catalog.models) ? catalog.models : [];
+      el.litertlmModelList.replaceChildren();
+      for (const model of models) {
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:0.6rem;background:var(--bg);min-width:0;';
+        const title = document.createElement('strong'); title.textContent = model.name; title.style.cssText = 'font-size:0.9rem;display:block;line-height:1.25;';
+        const badges = document.createElement('div'); badges.style.cssText = 'display:flex;gap:0.25rem;flex-wrap:wrap;margin-top:0.38rem;';
+        const addBadge = (label, enabled, color) => { const badge=document.createElement('span'); badge.textContent=`${enabled ? '✓' : '–'} ${label}`; badge.style.cssText=`font-size:0.68rem;padding:0.12rem 0.38rem;border-radius:999px;background:${enabled ? color : 'var(--panel)'};color:${enabled ? '#fff' : 'var(--muted)'};`; badges.appendChild(badge); };
+        addBadge('Instruct', !!model.instructSupported, '#217a57');
+        addBadge('Image', !!model.imageInputSupported, '#315f9c');
+        addBadge('Audio', !!model.audioInputSupported, '#74499a');
+        const details = document.createElement('p'); details.className = 'field-hint'; details.style.cssText = 'font-size:0.75rem;line-height:1.35;margin:0.38rem 0 0;';
+        const contextLabel = Number(model.contextTokens) > 0 ? `Max context: ${Number(model.contextTokens).toLocaleString()} tokens` : 'Max context: not published';
+        details.textContent = `${formatModelBytes(model.bytes)} · ${contextLabel} · ${model.license}${model.installed ? ' · Downloaded' : ''}${model.active ? ' · Active' : ''}`;
+        const actions = document.createElement('div'); actions.style.cssText = 'display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.5rem;';
+        if (!model.installed) {
+          const download = document.createElement('button'); download.className = 'btn small'; download.type = 'button'; download.textContent = 'Download'; download.disabled = !liteRtRuntimeSupported || !!activeLiteRtDownloadId;
+          download.addEventListener('click', async () => {
+            activeLiteRtDownloadId = model.id;
+            const cancel = document.createElement('button'); cancel.className = 'btn secondary small'; cancel.type = 'button'; cancel.textContent = 'Cancel download';
+            cancel.addEventListener('click', async () => {
+              cancel.disabled = true; cancel.textContent = 'Cancelling…';
+              try { await LiteRtLmBridge.cancelDownload({ modelId: model.id }); }
+              catch (error) { setLiteRtStatus(error?.message || error, true); }
+            });
+            actions.appendChild(cancel);
+            download.disabled = true; download.textContent = 'Downloading…';
+            setLiteRtStatus('Starting foreground download; the ongoing notification remains while Forge is backgrounded. You can cancel at any time.');
+            try { await LiteRtLmBridge.downloadModel({ modelId: model.id }); setLiteRtStatus('Download complete; SHA-256 verified.'); }
+            catch (error) {
+              const message = String(error?.message || error);
+              if (/cancel/i.test(message)) setLiteRtStatus('Model download cancelled.');
+              else setLiteRtStatus(message, true);
+            } finally {
+              activeLiteRtDownloadId = '';
+              await refreshLiteRtCatalog();
+            }
+          }); actions.appendChild(download);
+        } else {
+          const choose = document.createElement('button'); choose.className = 'btn small'; choose.type = 'button'; choose.textContent = model.active ? 'Selected' : 'Use model'; choose.disabled = !!model.active || !liteRtRuntimeSupported;
+          choose.style.cssText = 'background:#21834f;color:#fff;border:1px solid #32a66a;';
+          choose.addEventListener('click', async () => {
+            choose.disabled = true; choose.textContent = 'Loading…'; setLiteRtStatus('Verifying and loading model into memory. This may take a while the first time…');
+            try {
+              const loaded = await LiteRtLmBridge.selectModel({ modelId: model.id });
+              el.litertlmSelectedModel.textContent = model.name;
+              if (currentProviderId() !== 'litertlm') switchProvider('litertlm', { fromUser: true });
+              await refreshLiteRtCatalog();
+              if (el.litertlmCatalogModal.dataset.closeOnSelect === '1') closeLiteRtCatalog();
+              setAiStatus('Offline model loaded on ' + (loaded.backend || 'device') + ': ' + model.name, 'ok');
+            } catch (error) { setLiteRtStatus(error?.message || error, true); choose.disabled = false; choose.textContent = 'Use model'; }
+          }); actions.appendChild(choose);
+          if (model.active) {
+            const deselect = document.createElement('button'); deselect.className = 'btn secondary small'; deselect.type = 'button'; deselect.textContent = 'Deselect';
+            deselect.style.cssText = 'background:#393a40;color:#f4a340;border:1px solid #d98a32;';
+            deselect.addEventListener('click', async () => {
+              deselect.disabled = true; deselect.textContent = 'Stopping…';
+              setLiteRtStatus('Stopping inference and unloading the offline model…');
+              try {
+                await LiteRtLmBridge.deselectModel();
+                el.litertlmSelectedModel.textContent = '';
+                await refreshLiteRtCatalog();
+                setAiStatus('Offline model stopped and deselected.', 'ok');
+              } catch (error) {
+                setLiteRtStatus(error?.message || error, true); deselect.disabled = false; deselect.textContent = 'Deselect';
+              }
+            }); actions.appendChild(deselect);
+            const test = document.createElement('button'); test.className = 'btn secondary small'; test.type = 'button'; test.textContent = 'Test model';
+            const cancelTest = document.createElement('button'); cancelTest.className = 'btn secondary small'; cancelTest.type = 'button'; cancelTest.textContent = 'Cancel test'; cancelTest.hidden = true;
+            let testRequestId = '';
+            cancelTest.addEventListener('click', async () => {
+              cancelTest.disabled = true; cancelTest.textContent = 'Cancelling…';
+              try { await LiteRtLmBridge.cancelText({ streamId: testRequestId }); }
+              catch (error) { setLiteRtStatus(error?.message || error, true); }
+            });
+            test.addEventListener('click', async () => {
+              test.disabled = true; test.textContent = 'Testing…'; cancelTest.hidden = false; cancelTest.disabled = false;
+              testRequestId = 'litert_test_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+              setLiteRtStatus('Starting local model test… initialization and first-token generation can take time.');
+              try {
+                const result = await liteRtTextCall([{ role: 'user', content: 'Reply with exactly: LiteRT-LM test passed.' }], testRequestId, null, null, null);
+                const sample = String(result?.content || '').trim();
+                setLiteRtStatus(sample ? `Model responded: ${sample.slice(0, 180)}` : 'The model ran but returned an empty response.', !sample);
+              } catch (error) { setLiteRtStatus(error?.message || error, true); }
+              finally { test.disabled = false; test.textContent = 'Test model'; cancelTest.hidden = true; cancelTest.disabled = false; testRequestId = ''; }
+            });
+            actions.append(test, cancelTest);
+          }
+          const remove = document.createElement('button'); remove.className = 'btn secondary small'; remove.type = 'button'; remove.textContent = 'Delete';
+          remove.addEventListener('click', async () => {
+            if (!confirm(`Delete ${model.name} from Forge app storage?`)) return;
+            try { await LiteRtLmBridge.deleteModel({ modelId: model.id }); setLiteRtStatus('Model deleted.'); await refreshLiteRtCatalog(); }
+            catch (error) { setLiteRtStatus(error?.message || error, true); }
+          }); actions.appendChild(remove);
+        }
+        card.append(title, badges, details, actions); el.litertlmModelList.appendChild(card);
+      }
+      const active = models.find(model => model.id === catalog.activeModelId);
+      el.litertlmSelectedModel.textContent = active ? `Selected model: ${active.name}` : 'No offline model selected.';
+      syncAiActiveSummary();
+      if (!liteRtListenerReady && LiteRtLmBridge.addListener) {
+        liteRtListenerReady = true;
+        LiteRtLmBridge.addListener('modelDownload', event => {
+          if (event.error) setLiteRtStatus(event.error, true);
+          else if (event.cancelled) setLiteRtStatus('Model download cancelled.');
+          else if (event.status) setLiteRtStatus(event.status);
+          else if (!event.done) setLiteRtStatus(`Downloading model… ${(Number(event.progress || 0) * 100).toFixed(0)}% (${formatModelBytes(event.bytesReceived || 0)} / ${formatModelBytes(event.totalBytes || 0)})`);
+        }).catch(() => { liteRtListenerReady = false; });
+        LiteRtLmBridge.addListener('localModelProgress', event => {
+          if (event.status) setLiteRtStatus(event.status);
+        }).catch(() => { liteRtListenerReady = false; });
+      }
+    }
+
     function renderProviderSelect(selectId) {
       const map = getProviderMap();
       const customs = getCustomProviders();
@@ -8096,6 +8285,16 @@ termux-reload-settings</div>
         g1.appendChild(opt);
       }
       el.provider.appendChild(g1);
+
+      if (Capacitor.isNativePlatform()) {
+        const localGroup = document.createElement('optgroup');
+        localGroup.label = 'On-device';
+        const localOption = document.createElement('option');
+        localOption.value = 'litertlm';
+        localOption.textContent = 'Offline (LiteRT-LM)';
+        localGroup.appendChild(localOption);
+        el.provider.appendChild(localGroup);
+      }
 
       if (customs.length) {
         const g2 = document.createElement('optgroup');
@@ -8920,10 +9119,12 @@ termux-reload-settings</div>
         only: 'key restored (only saved key)',
       }[keyHow] || (hasKey ? 'key ready' : '');
       setAiStatus(
-        hasKey
-          ? `Provider: ${p.label} · ${howLabel}${hasKey ? ' (' + maskKey(el.apiKey.value) + ')' : ''}`
-          : `Provider: ${p.label}` + (p.custom ? ' · add key if needed' : ' · add API key'),
-        hasKey ? 'ok' : ''
+        nextId === 'litertlm'
+          ? `Provider: ${p.label} · ${el.litertlmSelectedModel?.textContent || 'select or download a model'}`
+          : hasKey
+            ? `Provider: ${p.label} · ${howLabel}${hasKey ? ' (' + maskKey(el.apiKey.value) + ')' : ''}`
+            : `Provider: ${p.label}` + (p.custom ? ' · add key if needed' : ' · add API key'),
+        nextId === 'litertlm' ? 'ok' : (hasKey ? 'ok' : '')
       );
       // Pull live model catalogs (Cheaper Inference public list, custom OAI /models, …)
       if (p.catalogPublicUrl || p.supportsOpenAiModels || p.id === 'cheaperinference') {
@@ -9184,6 +9385,11 @@ termux-reload-settings</div>
     function applyProviderUI(opts = {}) {
       const p = currentProvider();
       const keepModel = !!opts.keepModel;
+      const isLiteRt = p.id === 'litertlm';
+      el.litertlmControls?.classList.toggle('hidden', !isLiteRt);
+      el.blockKey?.classList.toggle('hidden', isLiteRt);
+      el.blockBase?.classList.toggle('hidden', isLiteRt);
+      el.blockAzure?.classList.toggle('hidden', isLiteRt);
       el.providerHint.textContent = tf('ai.hint.' + p.id, p.hint);
       el.apiKeyLabel.textContent = tf('ai.keyLabel.' + p.id, p.keyLabel || 'API key');
       el.apiKey.placeholder = p.keyPlaceholder || 'API key';
@@ -9243,8 +9449,11 @@ termux-reload-settings</div>
         const p = currentProvider();
         if (el.aiActiveProvider) el.aiActiveProvider.textContent = p?.label || p?.id || '—';
         if (el.aiActiveModel) el.aiActiveModel.textContent = el.model?.value?.trim() || p?.defaultModel || '—';
+        const offlineModel = String(el.litertlmSelectedModel?.textContent || '').replace(/^Selected model:\s*/, '').trim();
+        const localReady = !p?.local || (liteRtRuntimeSupported && !!offlineModel && offlineModel !== 'No offline model selected.');
+        if (el.aiActiveModel && p?.local) el.aiActiveModel.textContent = localReady ? offlineModel : 'No offline model selected';
         if (el.aiActiveStatus) {
-          const connected = !!(el.apiKey?.value?.trim() || providerAllowsEmptyKey());
+          const connected = p?.local ? localReady : !!(el.apiKey?.value?.trim() || providerAllowsEmptyKey());
           el.aiActiveStatus.textContent = connected ? t('ai.connected') : t('ui.notConnected');
           el.aiActiveStatus.style.color = connected ? '#35c76f' : 'var(--muted)';
         }
@@ -16853,7 +17062,7 @@ function setLibrary(list) {
           };
         }
         case 'ai.agent': {
-          const agentCallId = params.__agentCallId || ('ag_' + Date.now().toString(36));
+          const agentCallId = params.__agentCallId || ('ag_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10));
           const agentEmit = (type, data) => {
             try { postToMiniApp('ai.agent.event', Object.assign({ callId: agentCallId, type: type }, data || {})); } catch (_) {}
           };
@@ -16944,8 +17153,17 @@ function setLibrary(list) {
               });
               if (taskGuidanceInfo.content) messages.unshift({ role: 'system', content: taskGuidanceInfo.content });
             }
-            if (params.systemHint !== false && tools.length) {
+            if (params.systemHint !== false && tools.length && backendForRuntime(rt) !== 'litertlm') {
               try { messages.unshift({ role: 'system', content: toolsSystemHint({ riskMax: riskMax }, allowedToolEntries) }); } catch (_) {}
+            }
+            if (backendForRuntime(rt) === 'litertlm') {
+              const catalog = await LiteRtLmBridge.getCatalog();
+              const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+              if (!model?.toolCallingSupported && tools.length) {
+                tools = [];
+                allowedToolNames.clear();
+                agentEmit('warning', { message: 'The selected offline model is not verified for tool calling; continuing as local chat without tools.' });
+              }
             }
             if (!messages.length) throw new Error('ai.agent requires messages or prompt');
             if (!messages.some(m => m.role === 'user')) messages.push({ role: 'user', content: 'Please continue.' });
@@ -16969,6 +17187,11 @@ function setLibrary(list) {
               const chatOpts = { tools, tool_choice: toolChoice, fullResponse: true };
               const onDelta = wantStream ? ((delta) => agentEmit('token', { delta })) : null;
               const sig = agentAbortController ? agentAbortController.signal : null;
+              if (backend === 'litertlm') {
+                const catalog = await LiteRtLmBridge.getCatalog();
+                const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+                return await liteRtTextCall(messages, agentCallId + '_round_' + round, onDelta, sig, model?.toolCallingSupported && tools.length ? tools : null);
+              }
               if (backend === 'gemini') {
                 if (wantStream) return await geminiStreamGenerateContent(messages, sig, { tools, tool_choice: toolChoice, fullResponse: true, onDelta });
                 return await geminiGenerateContent(messages, sig, { tools, tool_choice: toolChoice, fullResponse: true });
@@ -17149,7 +17372,7 @@ function setLibrary(list) {
           }
         }
         case 'ai.chatStream': {
-          const streamCallId = params.__streamCallId || ('cs_' + Date.now().toString(36));
+          const streamCallId = params.__streamCallId || ('cs_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10));
           const streamEmit = (delta, meta) => {
             try { postToMiniApp('ai.stream.delta', Object.assign({ callId: streamCallId }, meta || {}, { delta: delta || '' })); } catch (_) {}
           };
@@ -17178,7 +17401,14 @@ function setLibrary(list) {
             let content = '';
             let tool_calls = [];
             let finish_reason = null;
-            if (backend === 'gemini') {
+            if (backend === 'litertlm') {
+              const catalog = await LiteRtLmBridge.getCatalog();
+              const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+              const local = await liteRtTextCall(built.messages, streamCallId, streamEmit, streamSig, model?.toolCallingSupported ? tools : null);
+              content = String(local.content || '');
+              tool_calls = Array.isArray(local.tool_calls) ? local.tool_calls : [];
+              finish_reason = tool_calls.length ? 'tool_calls' : 'stop';
+            } else if (backend === 'gemini') {
               const g = await geminiStreamGenerateContent(built.messages, streamSig, {
                 tools, tool_choice: toolChoice, fullResponse: wantFull || !!tools, onDelta: streamEmit,
               });
@@ -17217,8 +17447,8 @@ function setLibrary(list) {
               id: streamCallId,
               provider: rt.provider?.label || '',
               providerId: rt.providerId, model: rt.model || '', backend,
-              richAttachments: true,
-              multimodal: built.stats.images > 0 || built.stats.files > 0 || fileMeta.inputFiles > 0 || fileMeta.transcribed > 0,
+              richAttachments: backend !== 'litertlm',
+              multimodal: backend !== 'litertlm' && (built.stats.images > 0 || built.stats.files > 0 || fileMeta.inputFiles > 0 || fileMeta.transcribed > 0),
               attachments: built.stats.attachments,
               images: built.stats.images, files: built.stats.files,
               transcribed: fileMeta.transcribed, inputFiles: fileMeta.inputFiles,
@@ -17254,7 +17484,12 @@ function setLibrary(list) {
             let content = '';
             let tool_calls = [];
             let finish_reason = null;
-            if (backend === 'gemini') {
+            if (backend === 'litertlm') {
+              const local = await liteRtTextCall(built.messages, null, null, null, tools);
+              content = String(local.content || '');
+              tool_calls = Array.isArray(local.tool_calls) ? local.tool_calls : [];
+              finish_reason = tool_calls.length ? 'tool_calls' : 'stop';
+            } else if (backend === 'gemini') {
               const g = await geminiGenerateContent(built.messages, null, { tools, tool_choice: toolChoice, fullResponse: wantFull });
               if (g && typeof g === 'object' && !Array.isArray(g)) {
                 content = g.content != null ? String(g.content) : '';
@@ -17298,12 +17533,13 @@ function setLibrary(list) {
               providerId: rt.providerId,
               model: rt.model || '',
               backend,
-              richAttachments: true,
-              multimodal:
+              richAttachments: backend !== 'litertlm',
+              multimodal: backend !== 'litertlm' && (
                 built.stats.images > 0 ||
                 built.stats.files > 0 ||
                 fileMeta.inputFiles > 0 ||
-                fileMeta.transcribed > 0,
+                fileMeta.transcribed > 0
+              ),
               attachments: built.stats.attachments,
               images: built.stats.images,
               files: built.stats.files,
@@ -17400,6 +17636,9 @@ function setLibrary(list) {
           if (flag) { flag.cancelled = true; aborted = true; }
           const cancelToolAccess = agentToolAccessPending.get(cancelId);
           if (cancelToolAccess) { try { cancelToolAccess(); } catch (_) {} aborted = true; }
+          if (Capacitor.isNativePlatform() && !ctrl && liteRtRequestIds.has(cancelId)) {
+            try { LiteRtLmBridge.cancelText({ streamId: cancelId }).catch(() => {}); aborted = true; } catch (_) {}
+          }
           return { ok: true, id: cancelId, aborted };
         }
         case 'ai.agent.toolCallRespond': {
@@ -20551,6 +20790,192 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
       return { messages, stats };
     }
 
+    function liteRtPromptFromMessages(messages) {
+      const system = [];
+      const turns = [];
+      for (const message of (messages || [])) {
+        const role = String(message?.role || 'user').toLowerCase();
+        let content = message?.content;
+        if (Array.isArray(content)) {
+          content = content.map(part => {
+            if (typeof part === 'string') return { type: 'text', text: part };
+            if (part && (part.type === 'text' || typeof part.text === 'string') && !part.image_url) return { type: 'text', text: String(part.text || '') };
+            if (part?.type === 'image_url' || part?.type === 'input_image' || part?.image_url) return { type: 'image_url', image_url: { url: part.image_url?.url || part.url || part.dataUrl || '' } };
+            if (part?.type === 'input_audio' || part?.input_audio) return { type: 'input_audio', input_audio: part.input_audio || {} };
+            if (part?.type === 'forge_file' && part?.base64 && /^image\/(png|jpeg)$/i.test(String(part.mime || part.mimeType || ''))) return { type: 'image_url', image_url: { url: `data:${part.mime || part.mimeType};base64,${part.base64}` } };
+            const mime = String(part?.mime || part?.mimeType || '').toLowerCase();
+            if (part?.type === 'forge_file' && (mime.startsWith('audio/') || /\.(wav)$/i.test(String(part.name || '')))) {
+              const payload = part.base64 || String(part.dataUrl || '').split('base64,')[1] || '';
+              const format = /wav/i.test(mime) || /\.wav$/i.test(String(part.name || '')) ? 'wav' : '';
+              if (!format || !payload) throw new Error('Offline audio currently accepts inline WAV attachments only.');
+              return { type: 'input_audio', input_audio: { data: payload, format } };
+            }
+            throw new Error('This LiteRT-LM model cannot process this file attachment.');
+          });
+        }
+        const text = Array.isArray(content) ? content.filter(part => part.type === 'text').map(part => part.text).join('\n') : String(content ?? '');
+        if (Array.isArray(content) && role === 'user' && content.some(part => part.type === 'image_url' || part.type === 'input_image' || part.type === 'input_audio')) {
+          turns.push({ role: 'user', content });
+          continue;
+        }
+        if (role === 'system') system.push(text);
+        else if (role === 'assistant') turns.push({ role: 'assistant', content: text, ...(Array.isArray(message?.tool_calls) ? { tool_calls: message.tool_calls } : {}) });
+        else if (role === 'tool' || role === 'function') turns.push({ role: role === 'function' ? 'tool' : role, content: text, tool_call_id: message?.tool_call_id || message?.id || '', name: message?.name || '' });
+        else turns.push({ role: 'user', content });
+      }
+      const last = turns.pop();
+      if (!last || !(typeof last.content === 'string' ? last.content.trim() : Array.isArray(last.content) && last.content.some(part => part.type === 'text' ? part.text.trim() : true))) throw new Error('Offline chat needs a non-empty final message.');
+      if (!['user', 'assistant', 'tool'].includes(last.role)) throw new Error('Offline chat received an unsupported message role: ' + last.role);
+      return { systemPrompt: system.join('\n\n'), history: turns, prompt: typeof last.content === 'string' ? last.content : '', promptContent: last.content, promptRole: last.role, promptToolCallId: last.tool_call_id || '' };
+    }
+
+    function liteRtTextBytes(value) {
+      const text = String(value || '');
+      try { return new TextEncoder().encode(text).length; }
+      catch (_) { return unescape(encodeURIComponent(text)).length; }
+    }
+
+    // Conservative estimate for mixed natural language, JSON and code; exact tokenization
+    // belongs to the native model tokenizer. Budget under one token per UTF-8 byte and reserve
+    // extra room for LiteRT's chat template and modality-specific tokens.
+    function liteRtEstimateTokens(value) { return Math.ceil(liteRtTextBytes(value) / 1.25); }
+
+    function liteRtRequestTokenEstimate(request, tools) {
+      const historyTokens = (request.history || []).reduce((sum, message) => {
+        let serialized = '';
+        try { serialized = JSON.stringify(message); } catch (_) { serialized = String(message?.content || ''); }
+        return sum + liteRtEstimateTokens(serialized);
+      }, 0);
+      let promptTokens = 0;
+      if (Array.isArray(request.promptContent)) {
+        for (const part of request.promptContent) {
+          if (part?.type === 'text') promptTokens += liteRtEstimateTokens(part.text);
+          else if (part?.type === 'image_url' || part?.type === 'input_image') promptTokens += 2048;
+          else if (part?.type === 'input_audio') {
+            const encoded = String(part.input_audio?.data || '');
+            promptTokens += Math.max(1536, Math.ceil(encoded.length * 0.75 / 640));
+          }
+        }
+      } else promptTokens = liteRtEstimateTokens(request.prompt);
+      const toolTokens = tools?.length ? liteRtEstimateTokens(JSON.stringify(tools)) : 0;
+      return liteRtEstimateTokens(request.systemPrompt) + historyTokens + promptTokens + toolTokens + 96;
+    }
+
+    function fitLiteRtRequestToContext(request, tools, model) {
+      const contextTokens = Number(model?.contextTokens) > 0 ? Number(model.contextTokens) : 2048;
+      const outputReserve = Math.min(1024, Math.max(256, Math.floor(contextTokens * 0.25)));
+      const inputTokenBudget = Math.max(128, contextTokens - outputReserve - Math.max(96, Math.floor(contextTokens * 0.06)));
+      let removed = 0;
+      const preserveInitialTask = /\bYou are Forge\b/i.test(request.systemPrompt || '');
+      let protectedToolHistory = false;
+      if (request.promptRole === 'tool' && liteRtRequestTokenEstimate(request, tools) > inputTokenBudget) {
+        const callId = String(request.promptToolCallId || '');
+        const anchor = request.history.findIndex(message => message?.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.some(call => String(call?.id || '') === callId));
+        if (anchor >= 0) {
+          const task = preserveInitialTask && request.history[0]?.role === 'user' ? request.history[0] : null;
+          request.history = [ ...(task ? [task] : []), request.history[anchor] ];
+          removed++;
+          protectedToolHistory = true;
+        }
+      }
+      while (!protectedToolHistory && request.history?.length && liteRtRequestTokenEstimate(request, tools) > inputTokenBudget) {
+        // Keep the initial Forge request intact. Else discard one complete oldest
+        // conversation exchange, never leaving half of a function-call/tool response pair.
+        const protectedPrefix = preserveInitialTask ? 1 : 0;
+        const nextUser = request.history.findIndex((message, index) => index > protectedPrefix && message?.role === 'user');
+        const start = protectedPrefix;
+        const end = nextUser >= 0 ? nextUser : request.history.length;
+        if (end <= start) break;
+        removed += request.history.splice(start, end - start).length;
+      }
+      if (liteRtRequestTokenEstimate(request, tools) > inputTokenBudget && request.promptRole === 'tool') {
+        const overheadRequest = { ...request, prompt: '', promptContent: '' };
+        const availableTokens = Math.max(0, inputTokenBudget - liteRtRequestTokenEstimate(overheadRequest, tools));
+        // Tool results (especially workspace reads) can be larger than the model's whole
+        // context. Preserve the beginning where paths/summaries usually occur and cap it.
+        const maxChars = Math.max(0, Math.floor(availableTokens * 0.6));
+        const marker = '\n[Tool output shortened to fit the selected offline model context.]';
+        if (Array.isArray(request.promptContent)) {
+          const textPart = request.promptContent.find(part => part?.type === 'text');
+          if (textPart && typeof textPart.text === 'string') {
+            textPart.text = textPart.text.slice(0, maxChars) + marker;
+            request.prompt = textPart.text;
+          }
+        } else {
+          request.prompt = String(request.prompt || '').slice(0, maxChars) + marker;
+          request.promptContent = request.prompt;
+        }
+      }
+      if (liteRtRequestTokenEstimate(request, tools) > inputTokenBudget) {
+        const userText = typeof request.prompt === 'string' ? request.prompt : (request.promptContent || []).filter(part => part?.type === 'text').map(part => part.text || '').join('\n');
+        if (/Existing app HTML to preserve and update/i.test(userText)) {
+          throw new Error(`This existing app is too large to reforge in the selected Offline model's ${contextTokens.toLocaleString()}-token context. Select a tool-capable model (for workspace editing) or use a cloud model.`);
+        }
+        throw new Error(`This request still exceeds the selected Offline model's ${contextTokens.toLocaleString()}-token context after older turns were removed. Shorten the app description or attachment, or select a model with a larger context window.`);
+      }
+      if (removed) setAiStatus(`Offline model: omitted ${removed} older conversation turn${removed === 1 ? '' : 's'} to fit its context window.`);
+      return request;
+    }
+
+    async function liteRtTextCall(messages, streamId, onDelta, signal, tools) {
+      const request = liteRtPromptFromMessages(messages);
+      const catalog = await LiteRtLmBridge.getCatalog();
+      if (!catalog.activeModelId) throw new Error('Select or download an Offline model in AI settings first.');
+      const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+      if (!model) throw new Error('The selected Offline model is missing from the verified catalog.');
+      fitLiteRtRequestToContext(request, tools, model);
+      const lastPrompt = request.promptContent;
+      const contentParts = Array.isArray(lastPrompt) ? lastPrompt : null;
+      const hasImage = !!contentParts?.some(part => part.type === 'image_url' || part.type === 'input_image');
+      const hasAudio = !!contentParts?.some(part => part.type === 'input_audio');
+      if (contentParts?.some(part => part.type === 'image_url') && !model.imageInputSupported) throw new Error('This LiteRT-LM model only accepts embedded PNG or JPEG images, not remote image URLs.');
+      if (hasImage && !model.imageInputSupported) throw new Error('The selected Offline model is text-only. Select the Qwen3.5 0.8B VL model for image input.');
+      if (hasAudio && !model.audioInputSupported) throw new Error('The selected Offline model does not support audio input.');
+      if (hasAudio && hasImage) throw new Error('A single offline turn cannot combine image and audio attachments.');
+      const requestId = streamId || (onDelta ? 'litert_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) : '');
+      let listener = null;
+      let progressListener = null;
+      const abortLocal = () => {
+        if (requestId) try { LiteRtLmBridge.cancelText({ streamId: requestId }).catch(() => {}); } catch (_) {}
+      };
+      if (signal?.aborted) throw signal.reason || new Error('AI request cancelled');
+      if (requestId) liteRtRequestIds.add(requestId);
+      try {
+        if (LiteRtLmBridge.addListener) {
+          if (onDelta) listener = await LiteRtLmBridge.addListener('localChatDelta', event => {
+            if (event && event.streamId === requestId && event.delta) onDelta(event.delta);
+          });
+          progressListener = await LiteRtLmBridge.addListener('localChatProgress', event => {
+            if (event && event.streamId === requestId && event.status) {
+              setAiStatus('Offline model: ' + event.status);
+              setLiteRtStatus(event.status);
+            }
+          });
+        }
+        signal?.addEventListener('abort', abortLocal, { once: true });
+        if (signal?.aborted) abortLocal();
+        const result = await LiteRtLmBridge.generateText({
+          modelId: catalog.activeModelId,
+          prompt: request.prompt,
+          promptContent: contentParts ? JSON.stringify(contentParts) : '',
+          promptRole: request.promptRole,
+          systemPrompt: request.systemPrompt,
+          history: request.history,
+          // LiteRT tool-call support is explicitly catalog-gated. Ordinary chat on smaller
+          // text-only models must still work even when the host supplies agent tools.
+          tools: model.toolCallingSupported ? (tools || []) : [],
+          streamId: requestId,
+          allowCpuFallback: el.litertlmCpuFallback?.checked !== false && localStorage.getItem('forge_litert_cpu_fallback_v1') !== '0',
+        });
+        return result;
+      } finally {
+        signal?.removeEventListener('abort', abortLocal);
+        if (requestId) liteRtRequestIds.delete(requestId);
+        try { listener?.remove(); } catch (_) {}
+        try { progressListener?.remove(); } catch (_) {}
+      }
+    }
+
     /** Some providers (e.g. certain Grok/HF routes) require a single system msg at index 0. */
     function normalizeChatMessages(messages) {
       const list = Array.isArray(messages) ? messages.slice() : [];
@@ -20711,8 +21136,17 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
       const full = !!(opts.fullResponse || opts.returnToolCalls || tools);
       const toolChoice = opts.tool_choice != null ? opts.tool_choice : (opts.toolChoice != null ? opts.toolChoice : 'auto');
 
+      const backend = backendForRuntime(getAiRuntime());
+      if (backend === 'litertlm') {
+        const local = await liteRtTextCall(messages, 'litert_stream_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), onDelta, signal, tools);
+        const content = String(local.content || '');
+        const toolCalls = Array.isArray(local.tool_calls) ? local.tool_calls : [];
+        if (onDelta) try { onDelta('', { done: true }); } catch (_) {}
+        return full || toolCalls.length ? { content, tool_calls: toolCalls, finish_reason: toolCalls.length ? 'tool_calls' : 'stop' } : content;
+      }
+
       // Gemini native streamGenerateContent?alt=sse
-      if (backendForRuntime(getAiRuntime()) === 'gemini') {
+      if (backend === 'gemini') {
         try {
           const g = await geminiStreamGenerateContent(messages, signal, {
             maxTokens: opts.maxTokens,
@@ -21087,6 +21521,18 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
           return g.content != null ? g.content : '';
         }
         return g;
+      }
+
+      if (backendForRuntime(rt) === 'litertlm') {
+        const tools = normalizeToolsParam(opts.tools || opts.functions);
+        const catalog = await LiteRtLmBridge.getCatalog();
+        const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+        const local = await liteRtTextCall(messages, null, null, null, model?.toolCallingSupported ? tools : null);
+        const toolCalls = Array.isArray(local.tool_calls) ? local.tool_calls : [];
+        if (opts.fullResponse || opts.returnToolCalls || toolCalls.length) {
+          return { content: String(local.content || ''), tool_calls: toolCalls, finish_reason: toolCalls.length ? 'tool_calls' : 'stop' };
+        }
+        return String(local.content || '');
       }
 
       const { url, headers, model } = resolveEndpoint();
@@ -21922,6 +22368,7 @@ Rules: inline all CSS and JavaScript; no external libraries or URLs; use plain J
       const title = app?.title || 'Untitled';
       const summary = app?.summary || '';
       const html = String(app?.html || '');
+      const localOffline = backendForRuntime(getAiRuntime()) === 'litertlm';
       const wantCar = !!opts.wantCar;
       const toolSettings = opts.tools || loadReforgeToolSettings();
       const toolsSection = buildReforgeToolsPromptSection(app, toolSettings);
@@ -22033,20 +22480,23 @@ previousCarCompatible: ${app?.carCompatible ? 'true' : 'false'}
 targetCarCompatible: ${wantCar ? 'true' : 'false'}
 
 ## Existing app HTML (source of truth — reforge this)
-\`\`\`html
-${html}
-\`\`\`
+${localOffline
+  ? 'The existing HTML is seeded into the offline builder workspace. Read and edit it there; do not expect the source to be repeated in this prompt.'
+  : '\`\`\`html\n' + html + '\n\`\`\`'}
 `
       );
     }
 
     async function reforgeAppWithAi(app, opts = {}) {
+      if (isPlayFlavor() && backendForRuntime(getAiRuntime()) === 'litertlm') {
+        throw new Error('Offline model app building and reforging are temporarily disabled in the Google Play version. Choose a cloud provider to reforge apps.');
+      }
       const wantCar = !!opts.wantCar;
       const toolSettings = opts.tools || loadReforgeToolSettings();
       // System: factory rules + reforge emphasis (profile may use compact prompt)
-      const promptProfile = getPromptProfile(activeProviderId, el.model?.value);
+      const promptProfile = backendForRuntime(getAiRuntime()) === 'litertlm' ? 'tiny' : getPromptProfile(activeProviderId, el.model?.value);
       let system = systemPromptForProfile(promptProfile);
-      if (promptProfile === 'tiny') {
+      if (promptProfile === 'tiny' && backendForRuntime(getAiRuntime()) !== 'litertlm') {
         system += '\n\nTINY SINGLE-SHOT PROMPT:\n' + await getTinyPromptMd();
         if (isAgenticLoopEnabled()) system += '\n\nTINY LOOP OPTION: If you need to build in small workspace steps, call read_tiny_loop. Forge will then provide TINY_LOOP.md and expose only fs_read, fs_write, and finish. Otherwise return the required JSON directly.';
       }
@@ -22073,15 +22523,30 @@ Return complete html, not a diff.`;
       }
 
       const userText = buildReforgeUserPrompt(app, { wantCar, tools: toolSettings });
+      let offlineWorkspaceMode = false;
+      if (backendForRuntime(getAiRuntime()) === 'litertlm') {
+        const catalog = await LiteRtLmBridge.getCatalog();
+        const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+        offlineWorkspaceMode = !!model?.toolCallingSupported;
+      }
       if (isAgenticLoopEnabled() || isCodeModeEnabled()) {
         system += '\n\nBUILD OPTION (agentic reforge): If the existing app is large, call read_loop_md and use the workspace tools. The workspace is seeded with the existing index.html. Preserve behavior, then call finish.';
         if (isCodeModeEnabled()) system += '\nCODE MODE: run_program is available as a workspace tool — it runs a JS script that orchestrates many workspace tools in one turn (loops, parallel calls, branching on a tool result) via forge.tools.run(name, args) + forge.finish(result); the return value is fed back to you. Use it ONLY to orchestrate tool calls you would otherwise repeat: static files you can write now (index.html, CSS, JS modules, already-computed data) go through fs_write directly, never wrapped in run_program, and a single tool call is a direct tool call. See CODEMODE.md (loaded after read_loop_md) for the one rule and a worked 10-image example.';
         if (isBuilderResearchEnabled()) system += '\n\nRESEARCH OPTION: After read_loop_md, web_search and web_fetch are available for focused public-web research. Use them sparingly to inform the app; do not expose secrets or make unrelated requests.';
  if (isBuilderAskEnabled()) system += '\n\nUSER QUESTION OPTION: After read_loop_md, ask is available. Use it only for meaningful choices. Offer 2–8 concise options and put your preferred choice first. To let the user type any custom answer, include an option whose entire label is exactly Other. Do NOT use labels such as Other - explanation, Other (explanation), or Other: explanation; any suffix prevents the free-text box from opening.';
       }
+      const offlineReforge = backendForRuntime(getAiRuntime()) === 'litertlm';
+      if (offlineReforge) {
+        system = offlineWorkspaceMode
+          ? 'You are Forge, editing an existing single-file mobile app in Forge’s workspace. Preserve its purpose, behavior, screens, controls, storage keys, and identity. Update only necessary ForgeHost API calls. Use the tiny workspace protocol, inspect the seeded index.html, make minimal safe edits, and finish. Do not rewrite the whole app unless required.'
+          : TINY_MODEL_PROMPT + '\nPreserve the existing app purpose, behavior, controls, storage keys, and identity. Update only necessary ForgeHost API calls. Return the complete updated standalone HTML inside the required JSON.';
+      }
+      const compactReforgePrompt = offlineReforge
+        ? `Update “${app?.title || 'Untitled'}” (${app?.summary || 'no summary'}) for latest ForgeHost. Preserve behavior, screens, controls, storage keys and identity. Only update ForgeHost API integrations. ${wantCar ? 'Keep AAForge compatibility.' : 'Keep standard phone-app behavior.'}${offlineWorkspaceMode ? ' The current HTML is seeded in the builder workspace; read it, make minimal edits, and finish the app.' : '\nExisting app HTML to preserve and update:\n' + String(app?.html || '')}`
+        : userText;
       const msgs = [
         { role: 'system', content: system },
-        { role: 'user', content: userText },
+        { role: 'user', content: compactReforgePrompt },
       ];
 
       await bgStart('Reforge', `Updating “${app.title || 'app'}” for latest ForgeHost…`);
@@ -22092,13 +22557,13 @@ Return complete html, not a diff.`;
       } catch (_) {}
 
       let raw;
-      if (((promptProfile === 'tiny' && isAgenticLoopEnabled()) || (promptProfile !== 'tiny' && (isAgenticLoopEnabled() || isCodeModeEnabled()))) && raw == null) {
+      if ((offlineWorkspaceMode || (!offlineReforge && (promptProfile === 'tiny' ? isAgenticLoopEnabled() : (isAgenticLoopEnabled() || isCodeModeEnabled())))) && raw == null) {
         const built = await runBuilderLoop({
           msgs, signal: abortController?.signal, wantCar, status: (s) => setPreviewStatus(s, ''),
           workspaceSeed: app?.html || null,
           researchEnabled: promptProfile === 'tiny' ? false : isBuilderResearchEnabled(),
           askEnabled: false,
-          tinyLoop: promptProfile === 'tiny',
+          tinyLoop: offlineReforge || promptProfile === 'tiny',
         });
         if (built?.app) {
           const parsed = built.app;
@@ -23769,6 +24234,11 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
     /** One loop round over the active backend (Gemini native or OpenAI-compatible). */
     async function builderRound(messages, tools, signal) {
       const opts = { tools, tool_choice: 'auto', fullResponse: true, jsonMode: 'off', maxTokens: getGenMaxTokens() };
+      if (backendForRuntime(getAiRuntime()) === 'litertlm') {
+        const catalog = await LiteRtLmBridge.getCatalog();
+        const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+        if (model?.contextTokens) opts.maxTokens = Math.max(128, Math.min(opts.maxTokens, Math.floor(Number(model.contextTokens) * 0.25)));
+      }
       if (backendForRuntime(getAiRuntime()) === 'gemini') {
         return await geminiGenerateContent(messages, signal, opts);
       }
@@ -23999,11 +24469,21 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       savePrefs();
       clearBuilderResume();
       // One system message only, and it must be first (provider requirement).
-      const promptProfile = getPromptProfile(activeProviderId, el.model?.value);
+      const localOffline = backendForRuntime(getAiRuntime()) === 'litertlm';
+      if (localOffline && isPlayFlavor()) {
+        throw new Error('Offline model app building and reforging are temporarily disabled in the Google Play version. Choose a cloud provider to build apps.');
+      }
+      let offlineBuilderMode = false;
+      if (localOffline) {
+        const catalog = await LiteRtLmBridge.getCatalog();
+        const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+        offlineBuilderMode = !!model?.toolCallingSupported;
+      }
+      const promptProfile = localOffline ? 'tiny' : getPromptProfile(activeProviderId, el.model?.value);
       let system = systemPromptForProfile(promptProfile);
       if (promptProfile === 'tiny') {
-        system += '\n\nTINY SINGLE-SHOT PROMPT:\n' + await getTinyPromptMd();
-        if (isAgenticLoopEnabled()) system += '\n\nTINY LOOP OPTION: If you need to build in small workspace steps, call read_tiny_loop. Forge will then provide TINY_LOOP.md and expose only fs_read, fs_write, and finish. Otherwise return the required JSON directly.';
+        if (!localOffline) system += '\n\nTINY SINGLE-SHOT PROMPT:\n' + await getTinyPromptMd();
+        if (offlineBuilderMode || isAgenticLoopEnabled()) system += '\n\nTINY LOOP OPTION: Call read_tiny_loop for workspace builds. Forge will provide TINY_LOOP.md and only fs_read, fs_write, and finish; use the workspace and finish with the complete app.';
       }
       genLog('info', 'prompt profile · ' + promptProfile);
 
@@ -24017,11 +24497,16 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
         system += '\n\nThe user attached UI sketch/screenshot image(s). Treat them as the visual target: match structure, spacing hierarchy, and control placement. Invent tasteful styling if the sketch is rough. Still return the full JSON with complete html.';
       }
       if (currentApp?.html) {
-        system += '\n\nCurrent app JSON context (refine this if user is iterating):\n' + JSON.stringify({
-          title: currentApp.title,
-          summary: currentApp.summary,
-          html: currentApp.html,
-        });
+        if (backendForRuntime(getAiRuntime()) === 'litertlm') {
+          // Avoid injecting source twice; the user turn carries it only for single-shot edits.
+          system += '\n\nCurrent app metadata: ' + JSON.stringify({ title: currentApp.title, summary: currentApp.summary });
+        } else {
+          system += '\n\nCurrent app JSON context (refine this if user is iterating):\n' + JSON.stringify({
+            title: currentApp.title,
+            summary: currentApp.summary,
+            html: currentApp.html,
+          });
+        }
       }
       // Agentic builder pointer (per-provider flag): one short paragraph, one tool.
       if (isAgenticLoopEnabled() || isCodeModeEnabled()) {
@@ -24036,14 +24521,20 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       const msgs = [{ role: 'system', content: system }];
       forgeDebugTranscript = [{ direction: 'forge → llm', content: JSON.stringify(msgs) }];
 
+      const offlineSingleShotSource = localOffline && currentApp?.html && !offlineBuilderMode
+        ? `\n\nExisting app HTML to preserve and update:\n${currentApp.html}`
+        : '';
       const latestUser = {
         role: 'user',
-        content: userText,
+        content: userText + offlineSingleShotSource,
         attachments: attachments || [],
       };
 
       // Chat history (user/assistant only). onSend already appended user turn — don't send it twice.
-      let history = chat
+      // Offline app forging is a fresh build request: the chat transcript often contains
+      // complete prior HTML documents and can exceed a small model's entire context window.
+      // Keep the current user request (added below) but do not replay stale conversation turns.
+      let history = localOffline ? [] : chat
         .filter(m => m.role === 'user' || m.role === 'assistant')
         .slice(-12);
       if (history.length && sameUserTurn(history[history.length - 1], latestUser)) {
@@ -24074,13 +24565,13 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // the loop — run_program is a workspace tool). Round 1 offers read_loop_md;
       // if the model never calls it, round-1 content flows into the classic path.
       let raw = null;
-      if (((promptProfile === 'tiny' && isAgenticLoopEnabled()) || (promptProfile !== 'tiny' && (isAgenticLoopEnabled() || isCodeModeEnabled()))) && raw == null) {
+      if ((offlineBuilderMode || (!localOffline && (promptProfile === 'tiny' ? isAgenticLoopEnabled() : (isAgenticLoopEnabled() || isCodeModeEnabled())))) && raw == null) {
         const built = await runBuilderLoop({
           msgs, signal: abortController.signal, wantCar, status,
           workspaceSeed: currentApp?.html || null,
           researchEnabled: promptProfile === 'tiny' ? false : isBuilderResearchEnabled(),
           askEnabled: promptProfile === 'tiny' ? false : isBuilderAskEnabled(),
-          tinyLoop: promptProfile === 'tiny',
+          tinyLoop: localOffline || promptProfile === 'tiny',
         });
         if (built && built.messageOnly) return { messageOnly: built.messageOnly };
         if (built && built.app) {
@@ -24132,7 +24623,12 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       // maxTokens: large mini-app payloads routinely exceed provider default output
       // limits (4k-8k) — without an explicit budget the HTML gets cut off mid-JSON.
       // Budget comes from the AI tab setting (getGenMaxTokens, default 32768).
-      const generationMaxTokens = forgeGenerationMaxTokens(promptProfile);
+      let generationMaxTokens = forgeGenerationMaxTokens(promptProfile);
+      if (backendForRuntime(getAiRuntime()) === 'litertlm') {
+        const catalog = await LiteRtLmBridge.getCatalog();
+        const model = (catalog.models || []).find(item => item.id === catalog.activeModelId);
+        if (model?.contextTokens) generationMaxTokens = Math.max(128, Math.min(generationMaxTokens, Math.floor(Number(model.contextTokens) * 0.25)));
+      }
       if (raw == null) {
         if (isGeminiHostProvider() && attachments?.length) {
           raw = await geminiStreamGenerateContent(msgs, abortController.signal, { jsonMode: true, onDelta, maxTokens: generationMaxTokens });
@@ -26259,6 +26755,8 @@ confirmSideEffects=${s.confirmSideEffects}: if true, confirm() before risk confi
       const runtimeProviders = [];
       for (const id of Object.keys(map)) {
         const p = map[id];
+        // On-device providers cannot be carried into a browser-only HTML export.
+        if (p.local) continue;
         const profile = profiles[id] || {};
         const current = id === currentProviderId();
         const azureResource = String((current ? el.azureResource?.value : '') || profile.azureResource || '').trim();
@@ -27884,6 +28382,14 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
       );
     });
     el.btnTestAi?.addEventListener('click', testConnection);
+    el.btnLiteRtCatalog?.addEventListener('click', () => openLiteRtCatalog(false));
+    el.btnLiteRtCatalogClose?.addEventListener('click', closeLiteRtCatalog);
+    el.litertlmCatalogModal?.addEventListener('click', (event) => { if (event.target === el.litertlmCatalogModal) closeLiteRtCatalog(); });
+
+    el.litertlmCpuFallback?.addEventListener('change', () => {
+      try { localStorage.setItem('forge_litert_cpu_fallback_v1', el.litertlmCpuFallback.checked ? '1' : '0'); } catch (_) {}
+    });
+    try { el.litertlmCpuFallback.checked = localStorage.getItem('forge_litert_cpu_fallback_v1') !== '0'; } catch (_) {}
     el.btnAiActiveTest?.addEventListener('click', testConnection);
     el.btnAiActiveSwitch?.addEventListener('click', () => {
       const section = document.getElementById('aiProviderSettings');
@@ -27922,6 +28428,7 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
 
     el.provider?.addEventListener('change', () => {
       switchProvider(el.provider.value, { fromUser: true });
+      if (el.provider.value === 'litertlm') openLiteRtCatalog(true);
       syncAgenticLoopCheckbox();
       syncBuilderResearchCheckbox();
       syncBuilderAskCheckbox();
@@ -28094,6 +28601,9 @@ code{font-size:.78rem;background:#0a0a12;padding:.05rem .3rem;border-radius:6px}
 
     // Init
     loadPrefs();
+    if (Capacitor.isNativePlatform() && activeProviderId === 'litertlm') {
+      refreshLiteRtCatalog().catch(error => console.warn('LiteRT-LM model state unavailable:', error));
+    }
  // Host-internal cleanup of stale native picker copies from prior runs.
  // This is intentionally not exposed through ForgeHost to mini-apps.
  if (Capacitor.isNativePlatform()) {
